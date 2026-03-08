@@ -291,7 +291,7 @@ fun BubbleUserMessageComposable(
                                 text = userName,
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.SemiBold,
-                                color = Color.Black,
+                                color = if (isProxySender) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                             )
@@ -412,7 +412,7 @@ fun BubbleUserMessageComposable(
                             Text(
                                 text = userName,
                                 style = MaterialTheme.typography.labelSmall,
-                                color = if (isProxySender) MaterialTheme.colorScheme.primary else textColor.copy(alpha = 0.6f),
+                                color = if (isProxySender) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.padding(bottom = 4.dp, end = 4.dp)
                             )
                         }

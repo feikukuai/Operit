@@ -493,11 +493,30 @@ internal fun buildInitRuntimeScript(
             installIfResolvable("dataUtils", function() { return dataUtils; });
 
             ${cryptoJsBridgeScript}
+            installIfResolvable("CryptoJS", function() { return CryptoJS; });
+
             ${jimpJsBridgeScript}
+            installIfResolvable("Jimp", function() { return Jimp; });
+
             ${uiNodeJsScript}
+            installIfResolvable("UINode", function() { return UINode; });
+
             ${androidUtilsJsScript}
+            installIfResolvable("Android", function() { return Android; });
+            installIfResolvable("Intent", function() { return Intent; });
+            installIfResolvable("PackageManager", function() { return PackageManager; });
+            installIfResolvable("ContentProvider", function() { return ContentProvider; });
+            installIfResolvable("SystemManager", function() { return SystemManager; });
+            installIfResolvable("DeviceController", function() { return DeviceController; });
+
             ${okHttp3JsScript}
+            installIfResolvable("OkHttpClientBuilder", function() { return OkHttpClientBuilder; });
+            installIfResolvable("OkHttpClient", function() { return OkHttpClient; });
+            installIfResolvable("RequestBuilder", function() { return RequestBuilder; });
+            installIfResolvable("OkHttp", function() { return OkHttp; });
+
             ${pakoJsBridgeScript}
+            installIfResolvable("pako", function() { return pako; });
         })();
     """.trimIndent()
 }

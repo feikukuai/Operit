@@ -1613,7 +1613,7 @@ private fun ChatStylePreviewCard(
                     )
                 }
             } else {
-                val previewNameColor = Color.Black
+                val previewNameColor = MaterialTheme.colorScheme.onSurface
                 val bubblePreviewMaxWidth = if (bubbleWideLayoutEnabled) 280.dp else 240.dp
                 val userBubbleShape =
                     if (bubbleUserRoundedCornersEnabled) {

@@ -79,6 +79,8 @@ private data class PatchUpdateDialogState(
     val mirrorResults: Map<String, PatchUpdateInstaller.MirrorProbeSummary> = emptyMap(),
     val mirrorCompleted: Int = 0,
     val mirrorTotal: Int = 0,
+    val chainScanCompleted: Int = 0,
+    val chainScanTotal: Int = 0,
     val selectedMirror: String? = null,
     val errorMessage: String? = null
 )
@@ -161,7 +163,9 @@ private fun reducePatchUpdateState(
                 progressPercent = null,
                 readBytes = 0L,
                 totalBytes = null,
-                speedBytesPerSec = 0L
+                speedBytesPerSec = 0L,
+                chainScanCompleted = 0,
+                chainScanTotal = 0
             )
         }
         is PatchUpdateInstaller.ProgressEvent.MirrorProbeStarted -> {
@@ -187,6 +191,13 @@ private fun reducePatchUpdateState(
             base.copy(
                 selectedMirror = event.name,
                 message = context.getString(R.string.patch_update_selected_mirror, event.name)
+            )
+        }
+        is PatchUpdateInstaller.ProgressEvent.ChainScanProgress -> {
+            base.copy(
+                phase = PatchUpdatePhase.VERIFYING_APK,
+                chainScanCompleted = event.scanned,
+                chainScanTotal = event.total
             )
         }
         is PatchUpdateInstaller.ProgressEvent.DownloadProgress -> {
@@ -1250,21 +1261,43 @@ private fun PatchUpdateProgressDialog(
                     PatchUpdatePhase.APPLYING_PATCH,
                     PatchUpdatePhase.VERIFYING_APK,
                     PatchUpdatePhase.READY_TO_INSTALL -> {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                        if (state.phase == PatchUpdatePhase.VERIFYING_APK && state.chainScanTotal > 0) {
+                            val progress =
+                                if (state.chainScanTotal > 0) {
+                                    state.chainScanCompleted.toFloat() / state.chainScanTotal.toFloat()
+                                } else {
+                                    0f
+                                }
+                            LinearProgressIndicator(
+                                progress = progress.coerceIn(0f, 1f),
+                                modifier = Modifier.fillMaxWidth()
+                            )
                             Text(
-                                text =
-                                    if (state.phase == PatchUpdatePhase.READY_TO_INSTALL) {
-                                        stringResource(id = R.string.patch_update_launching_installer)
-                                    } else {
-                                        stringResource(id = R.string.processing)
-                                    },
+                                text = stringResource(
+                                    id = R.string.patch_update_chain_progress,
+                                    state.chainScanCompleted,
+                                    state.chainScanTotal
+                                ),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
+                        } else {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                                Text(
+                                    text =
+                                        if (state.phase == PatchUpdatePhase.READY_TO_INSTALL) {
+                                            stringResource(id = R.string.patch_update_launching_installer)
+                                        } else {
+                                            stringResource(id = R.string.processing)
+                                        },
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                         }
                     }
 

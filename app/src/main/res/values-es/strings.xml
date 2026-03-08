@@ -1301,6 +1301,14 @@
     <string name="chat_settings_bar_right_margin_desc">Ajustar la distancia entre el botón de configuración de chat y el borde derecho de la pantalla, en dp</string>
     <string name="chat_settings_button_end_padding">Margen Final del Botón de Configuración de Chat</string>
     <string name="chat_settings_button_end_padding_desc">Ajustar la distancia entre el botón de configuración de chat y el borde derecho de la pantalla, en dp</string>
+    <string name="global_text_line_height_multiplier">Multiplicador de Altura de Línea de AI Markdown</string>
+    <string name="global_text_line_height_multiplier_desc">Ajusta el multiplicador de altura de línea del contenido Markdown en respuestas de la IA</string>
+    <string name="global_text_letter_spacing">Espaciado entre Letras de AI Markdown</string>
+    <string name="global_text_letter_spacing_desc">Ajusta el espaciado entre letras del contenido Markdown en respuestas de la IA</string>
+    <string name="layout_adjustment_preview_title">Vista previa de AI Markdown</string>
+    <string name="layout_adjustment_preview_desc">El ejemplo de abajo refleja el interlineado y el espaciado entre letras guardados para AI Markdown.</string>
+    <string name="layout_adjustment_preview_plain_text">Esta es una vista previa de texto normal. Puedes observar la separación entre letras y la densidad entre líneas.</string>
+    <string name="layout_adjustment_preview_markdown">Este es el primer párrafo Markdown de vista previa de una respuesta de IA, para observar el interlineado y el espaciado entre letras actuales.\n\nEste es el segundo párrafo Markdown de vista previa de una respuesta de IA, para seguir observando la composición general de múltiples párrafos y listas.\n\n- Elemento de lista AI Markdown uno\n- Elemento de lista AI Markdown dos</string>
     <string name="current_value">Valor Actual</string>
     <string name="closer_to_edge">Más Cerca del Borde</string>
     <string name="farther_from_edge">Más Lejos del Borde</string>

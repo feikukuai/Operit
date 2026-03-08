@@ -229,6 +229,10 @@ class UserPreferencesManager private constructor(private val context: Context) {
         // 注意：全局用户头像和名称设置已移至 DisplayPreferencesManager
         private val CHAT_SETTINGS_BUTTON_END_PADDING = floatPreferencesKey("chat_settings_button_end_padding")
         private val CHAT_AREA_HORIZONTAL_PADDING = floatPreferencesKey("chat_area_horizontal_padding")
+        private val AI_MARKDOWN_LINE_HEIGHT_MULTIPLIER =
+            floatPreferencesKey("global_text_line_height_multiplier")
+        private val AI_MARKDOWN_LETTER_SPACING =
+            floatPreferencesKey("global_text_letter_spacing")
 
         // 最近使用颜色
         private val RECENT_COLORS = stringPreferencesKey("recent_colors")
@@ -749,6 +753,16 @@ class UserPreferencesManager private constructor(private val context: Context) {
             preferences[CHAT_AREA_HORIZONTAL_PADDING] ?: 16f // 默认16dp
         }
 
+    val aiMarkdownLineHeightMultiplier: Flow<Float> =
+        context.userPreferencesDataStore.data.map { preferences ->
+            preferences[AI_MARKDOWN_LINE_HEIGHT_MULTIPLIER] ?: 1f
+        }
+
+    val aiMarkdownLetterSpacing: Flow<Float> =
+        context.userPreferencesDataStore.data.map { preferences ->
+            preferences[AI_MARKDOWN_LETTER_SPACING] ?: 0f
+        }
+
     // 获取最近使用颜色
     val recentColorsFlow: Flow<List<Int>> =
         context.userPreferencesDataStore.data.map { preferences ->
@@ -797,11 +811,25 @@ class UserPreferencesManager private constructor(private val context: Context) {
         }
     }
 
+    suspend fun saveAiMarkdownLineHeightMultiplier(value: Float) {
+        context.userPreferencesDataStore.edit { preferences ->
+            preferences[AI_MARKDOWN_LINE_HEIGHT_MULTIPLIER] = value
+        }
+    }
+
+    suspend fun saveAiMarkdownLetterSpacing(value: Float) {
+        context.userPreferencesDataStore.edit { preferences ->
+            preferences[AI_MARKDOWN_LETTER_SPACING] = value
+        }
+    }
+
     // 重置布局设置
     suspend fun resetLayoutSettings() {
         context.userPreferencesDataStore.edit { preferences ->
             preferences.remove(CHAT_SETTINGS_BUTTON_END_PADDING)
             preferences.remove(CHAT_AREA_HORIZONTAL_PADDING)
+            preferences.remove(AI_MARKDOWN_LINE_HEIGHT_MULTIPLIER)
+            preferences.remove(AI_MARKDOWN_LETTER_SPACING)
         }
     }
 

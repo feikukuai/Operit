@@ -152,7 +152,17 @@ object ApiProviderConfigs {
         ProviderApiConfig(
             providerType = ApiProviderType.DOUBAO,
             defaultModelName = "Doubao-pro-4k",
-            defaultApiEndpoint = "https://ark.cn-beijing.volces.com/api/v3/chat/completions"
+            defaultApiEndpoint = "https://ark.cn-beijing.volces.com/api/v3/chat/completions",
+            endpointOptions = listOf(
+                ProviderEndpointOption(
+                    endpoint = "https://ark.cn-beijing.volces.com/api/v3/chat/completions",
+                    label = "CN standard"
+                ),
+                ProviderEndpointOption(
+                    endpoint = "https://ark.cn-beijing.volces.com/api/coding/v3/chat/completions",
+                    label = "CN coding"
+                )
+            )
         ),
         ProviderApiConfig(
             providerType = ApiProviderType.NVIDIA,

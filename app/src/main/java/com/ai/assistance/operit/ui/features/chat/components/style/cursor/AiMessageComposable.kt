@@ -30,6 +30,7 @@ import com.ai.assistance.operit.data.preferences.DisplayPreferencesManager
 import com.ai.assistance.operit.data.preferences.ToolCollapseMode
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
+import com.ai.assistance.operit.ui.theme.ProvideAiMarkdownTextLayoutSettings
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
@@ -116,7 +117,8 @@ fun AiMessageComposable(
     }
 
     // 移除Card背景，使用直接的Column布局
-    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
+    ProvideAiMarkdownTextLayoutSettings {
+        Column(modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
         // 构建标题 - 分左右两部分显示
         Row(
             modifier = Modifier
@@ -199,6 +201,7 @@ fun AiMessageComposable(
                 )
             }
         }
+    }
 
         // 链接预览弹窗 - 仅在启用弹窗时显示
         if (showLinkDialog && linkToPreview.isNotEmpty() && enableDialogs) {

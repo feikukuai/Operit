@@ -66,6 +66,10 @@ object PatchUpdateInstaller {
             val total: Int
         ) : ProgressEvent()
         data class MirrorSelected(val name: String) : ProgressEvent()
+        data class ChainScanProgress(
+            val scanned: Int,
+            val total: Int
+        ) : ProgressEvent()
         data class DownloadProgress(
             val label: String,
             val readBytes: Long,
@@ -209,9 +213,9 @@ object PatchUpdateInstaller {
             context = context,
             patchUrl = patchUrl,
             metaUrl = metaUrl,
-            mirrorKey = mirrorKey,
             currentBaseSha = baseShaActual,
-            targetMeta = targetMeta
+            targetMeta = targetMeta,
+            onEvent = onEvent
         )
 
         if (chain.isEmpty()) {
@@ -345,9 +349,9 @@ object PatchUpdateInstaller {
         context: Context,
         patchUrl: String,
         metaUrl: String,
-        mirrorKey: String,
         currentBaseSha: String,
-        targetMeta: JSONObject
+        targetMeta: JSONObject,
+        onEvent: (ProgressEvent) -> Unit
     ): List<PatchStep> {
         val targetFormat = targetMeta.optString("format", "")
         if (targetFormat != "apkraw-1") {
@@ -376,6 +380,10 @@ object PatchUpdateInstaller {
         }
 
         val stepsByEdge = LinkedHashMap<String, PatchStep>()
+        val scannableReleases = releases.filterNot { it.draft }
+        if (scannableReleases.isNotEmpty()) {
+            onEvent(ProgressEvent.ChainScanProgress(scanned = 0, total = scannableReleases.size))
+        }
 
         val targetCandidate = parsePatchStep(
             meta = targetMeta,
@@ -388,9 +396,13 @@ object PatchUpdateInstaller {
             stepsByEdge[edge] = targetCandidate
         }
 
+        var scannedReleases = 0
         for (release in releases) {
             coroutineContext.ensureActive()
             if (release.draft) continue
+
+            scannedReleases += 1
+            onEvent(ProgressEvent.ChainScanProgress(scanned = scannedReleases, total = scannableReleases.size))
 
             val metaAsset =
                 release.assets.firstOrNull { it.name.startsWith("patch_") && it.name.endsWith(".json") }
@@ -400,8 +412,7 @@ object PatchUpdateInstaller {
                     ?: release.assets.firstOrNull { it.name.endsWith(".zip") }
             if (metaAsset == null || patchAsset == null) continue
 
-            val metaText = downloadText(selectMirrorUrl(metaAsset.browser_download_url, mirrorKey))
-            val meta = JSONObject(metaText)
+            val meta = parseReleaseBodyAsPatchMeta(release.body) ?: continue
             val candidate = parsePatchStep(
                 meta = meta,
                 patchUrl = patchAsset.browser_download_url,
@@ -501,14 +512,16 @@ object PatchUpdateInstaller {
         return match.groupValues[1] to match.groupValues[2]
     }
 
-    private suspend fun downloadText(url: String): String {
-        val req = Request.Builder().url(url).build()
-        httpClient.newCall(req).execute().use { resp ->
-            if (!resp.isSuccessful) {
-                throw IllegalStateException("HTTP ${resp.code}: ${resp.message}")
-            }
-            val body = resp.body ?: throw IllegalStateException("Empty response body")
-            return body.string()
+    private fun parseReleaseBodyAsPatchMeta(body: String?): JSONObject? {
+        val text = body?.trim().orEmpty()
+        if (text.isBlank()) {
+            return null
+        }
+        return try {
+            JSONObject(text)
+        } catch (e: Exception) {
+            AppLogger.w(TAG, "Skip patch release with invalid JSON body", e)
+            null
         }
     }
 

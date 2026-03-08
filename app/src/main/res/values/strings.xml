@@ -1421,6 +1421,7 @@
     <string name="patch_update_stage_downloading_meta">正在下载补丁元信息</string>
     <string name="patch_update_label_meta">补丁元信息</string>
     <string name="patch_update_stage_resolving_chain">正在解析补丁链路</string>
+    <string name="patch_update_chain_progress">扫描进度：%1$d/%2$d</string>
     <string name="patch_update_stage_downloading_meta_step">正在下载补丁元信息 (%1$d/%2$d)</string>
     <string name="patch_update_label_meta_step">补丁元信息 %1$d/%2$d</string>
     <string name="patch_update_stage_downloading_patch_step">正在下载补丁包 (%1$d/%2$d)</string>
@@ -3082,6 +3083,14 @@
     <string name="chat_settings_button_end_padding_desc">调整聊天设置按钮距离屏幕右边缘的距离，单位为dp</string>
     <string name="chat_area_horizontal_padding">聊天区域水平内边距</string>
     <string name="chat_area_horizontal_padding_desc">调整聊天消息区域距离屏幕左右边缘的距离，单位为dp</string>
+    <string name="global_text_line_height_multiplier">AI Markdown 行距倍率</string>
+    <string name="global_text_line_height_multiplier_desc">调整 AI 回复中 Markdown 正文的行距倍率</string>
+    <string name="global_text_letter_spacing">AI Markdown 字距</string>
+    <string name="global_text_letter_spacing_desc">调整 AI 回复中 Markdown 正文的字间距</string>
+    <string name="layout_adjustment_preview_title">AI Markdown 预览</string>
+    <string name="layout_adjustment_preview_desc">下方示例会展示当前已保存的 AI Markdown 行距与字距效果。</string>
+    <string name="layout_adjustment_preview_plain_text">这是一段普通文本预览。你可以观察字与字之间的距离，以及每一行之间的疏密变化。</string>
+    <string name="layout_adjustment_preview_markdown">这是 AI 回复中的第一段 Markdown 预览，用来观察当前行距与字距。\n\n这是 AI 回复中的第二段 Markdown 预览，用来继续观察多段文本与列表的整体排版。\n\n- AI Markdown 列表项一\n- AI Markdown 列表项二</string>
     <string name="current_value">当前值</string>
     <string name="closer_to_edge">靠近边缘</string>
     <string name="farther_from_edge">远离边缘</string>

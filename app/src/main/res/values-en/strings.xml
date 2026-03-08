@@ -3177,6 +3177,14 @@
     <string name="chat_settings_button_end_padding_desc">Adjust the distance between chat settings button and the right edge of the screen, in dp</string>
     <string name="chat_area_horizontal_padding">Chat Area Horizontal Padding</string>
     <string name="chat_area_horizontal_padding_desc">Adjust the distance between chat message area and the left/right edges of the screen, in dp</string>
+    <string name="global_text_line_height_multiplier">AI Markdown Line Height Multiplier</string>
+    <string name="global_text_line_height_multiplier_desc">Adjust the line-height multiplier for AI reply Markdown content</string>
+    <string name="global_text_letter_spacing">AI Markdown Letter Spacing</string>
+    <string name="global_text_letter_spacing_desc">Adjust the letter spacing for AI reply Markdown content</string>
+    <string name="layout_adjustment_preview_title">AI Markdown Preview</string>
+    <string name="layout_adjustment_preview_desc">The example below reflects the currently saved AI Markdown line spacing and letter spacing.</string>
+    <string name="layout_adjustment_preview_plain_text">This is a plain text preview. You can observe the spacing between letters and the density between lines.</string>
+    <string name="layout_adjustment_preview_markdown">This is the first AI reply Markdown paragraph preview, used to observe the current line spacing and letter spacing.\n\nThis is the second AI reply Markdown paragraph preview, used to continue observing the overall layout of multiple paragraphs and lists.\n\n- AI Markdown list item one\n- AI Markdown list item two</string>
     <string name="current_value">Current Value</string>
     <string name="closer_to_edge">Closer to Edge</string>
     <string name="farther_from_edge">Farther from Edge</string>
@@ -5179,6 +5187,7 @@
     <string name="patch_update_stage_downloading_meta">Downloading patch metadata</string>
     <string name="patch_update_label_meta">Patch metadata</string>
     <string name="patch_update_stage_resolving_chain">Resolving patch chain</string>
+    <string name="patch_update_chain_progress">Scan progress: %1$d/%2$d</string>
     <string name="patch_update_stage_downloading_meta_step">Downloading patch metadata (%1$d/%2$d)</string>
     <string name="patch_update_label_meta_step">Patch metadata %1$d/%2$d</string>
     <string name="patch_update_stage_downloading_patch_step">Downloading patch package (%1$d/%2$d)</string>

@@ -48,6 +48,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import com.ai.assistance.operit.ui.theme.ProvideAiMarkdownTextLayoutSettings
 import kotlinx.coroutines.runBlocking
 
 @SuppressLint("UnusedBoxWithConstraintsScope")
@@ -179,7 +180,8 @@ fun BubbleAiMessageComposable(
         }
     }
 
-    if (bubbleWideLayoutEnabled) {
+    ProvideAiMarkdownTextLayoutSettings {
+        if (bubbleWideLayoutEnabled) {
         val headerVisible = bubbleShowAvatar || roleNameText.isNotEmpty() || metadataText.isNotEmpty()
         val avatarModifier = Modifier
             .size(32.dp)
@@ -239,7 +241,7 @@ fun BubbleAiMessageComposable(
                                 text = roleNameText,
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.SemiBold,
-                                color = Color.Black,
+                                color = MaterialTheme.colorScheme.onSurface,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                             )
@@ -249,7 +251,7 @@ fun BubbleAiMessageComposable(
                             Text(
                                 text = metadataText,
                                 style = MaterialTheme.typography.labelSmall,
-                                color = textColor.copy(alpha = 0.6f),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
                     }
@@ -425,7 +427,7 @@ fun BubbleAiMessageComposable(
                 Text(
                     text = displayText,
                     style = MaterialTheme.typography.labelSmall,
-                    color = textColor.copy(alpha = 0.6f),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(bottom = 4.dp, start = 4.dp)
                 )
             }
@@ -524,6 +526,7 @@ fun BubbleAiMessageComposable(
                 }
             }
         }
+    }
     }
     }
 
