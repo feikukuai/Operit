@@ -25,7 +25,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -45,9 +44,6 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import kotlin.math.roundToInt
 import androidx.compose.ui.zIndex
-import coil.compose.SubcomposeAsyncImage
-import coil.request.CachePolicy
-import coil.request.ImageRequest
 import com.ai.assistance.operit.R
 import com.ai.assistance.operit.core.tools.AIToolHandler
 import com.ai.assistance.operit.core.tools.FileContentData
@@ -500,68 +496,13 @@ fun WorkspaceManager(
                                     workspacePreviewUriFromFile(previewFileState.file)
                                 }
 
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .background(Color.Black),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    when {
-                                        previewFileState.loading -> {
-                                            CircularProgressIndicator(color = Color.White)
-                                        }
-
-                                        previewUri != null -> {
-                                            SubcomposeAsyncImage(
-                                                model = ImageRequest.Builder(context)
-                                                    .data(previewUri)
-                                                    .memoryCachePolicy(CachePolicy.DISABLED)
-                                                    .diskCachePolicy(CachePolicy.DISABLED)
-                                                    .crossfade(false)
-                                                    .build(),
-                                                contentDescription = fileInfo.name,
-                                                modifier = Modifier.fillMaxSize(),
-                                                contentScale = ContentScale.Fit,
-                                                loading = {
-                                                    CircularProgressIndicator(color = Color.White)
-                                                },
-                                                error = {
-                                                    Text(
-                                                        text = previewFileState.errorMessage
-                                                            ?: context.getString(R.string.cannot_open_file, fileInfo.name),
-                                                        color = Color.White,
-                                                        style = MaterialTheme.typography.bodyMedium
-                                                    )
-                                                }
-                                            )
-                                        }
-
-                                        else -> {
-                                            Text(
-                                                text = previewFileState.errorMessage
-                                                    ?: context.getString(R.string.cannot_open_file, fileInfo.name),
-                                                color = Color.White,
-                                                style = MaterialTheme.typography.bodyMedium
-                                            )
-                                        }
-                                    }
-                                    
-                                    // 图片信息叠加层
-                                    Surface(
-                                        modifier = Modifier
-                                            .align(Alignment.BottomStart)
-                                            .padding(16.dp),
-                                        color = Color.Black.copy(alpha = 0.7f),
-                                        shape = RoundedCornerShape(8.dp)
-                                    ) {
-                                        Text(
-                                            text = fileInfo.name,
-                                            modifier = Modifier.padding(8.dp),
-                                            color = Color.White,
-                                            style = MaterialTheme.typography.bodySmall
-                                        )
-                                    }
-                                }
+                                WorkspaceImagePreview(
+                                    fileName = fileInfo.name,
+                                    previewUri = previewUri,
+                                    isSourceLoading = previewFileState.loading,
+                                    errorMessage = previewFileState.errorMessage,
+                                    modifier = Modifier.fillMaxSize()
+                                )
                             }
                             fileInfo.isAudio -> {
                                 val previewFileState by rememberWorkspacePreviewFileState(

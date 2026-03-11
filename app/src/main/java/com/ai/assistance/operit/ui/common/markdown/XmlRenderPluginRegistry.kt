@@ -216,14 +216,29 @@ object XmlRenderPluginRegistry {
             )
         }
 
+        fun buildActionRuntimeOptions(screenPath: String): Map<String, Any?> =
+            mapOf(
+                "packageName" to result.containerPackageName,
+                "containerPackageName" to result.containerPackageName,
+                "toolPkgId" to result.containerPackageName,
+                "__operit_ui_package_name" to result.containerPackageName,
+                "__operit_ui_toolpkg_id" to result.containerPackageName,
+                "uiModuleId" to "xml_render",
+                "__operit_ui_module_id" to "xml_render",
+                "__operit_script_screen" to screenPath,
+                "moduleSpec" to buildModuleSpec(screenPath)
+            )
+
         fun dispatchAction(actionId: String, payload: Any?) {
             val normalizedActionId = actionId.trim()
             if (normalizedActionId.isBlank()) {
                 return
             }
+            val screenPath = result.screenPath.trim()
             jsEngine.dispatchComposeDslActionAsync(
                 actionId = normalizedActionId,
                 payload = payload,
+                runtimeOptions = buildActionRuntimeOptions(screenPath),
                 onIntermediateResult = { intermediateResult ->
                     val parsed = ToolPkgComposeDslParser.parseRenderResult(intermediateResult)
                     if (parsed != null) {

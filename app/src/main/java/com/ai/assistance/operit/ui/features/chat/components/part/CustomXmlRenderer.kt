@@ -317,16 +317,10 @@ class CustomXmlRenderer(
         val tagName = if (content.contains("<thinking")) "thinking" else "think"
         val thinkText = extractContentFromXml(content, tagName).trim()
 
-        val thinkMarkdownStream =
-            remember(xmlStream, tagName) {
-                xmlStream?.let { createThinkMarkdownCharStream(it, tagName) }
-            }
-
         var expandThinkingProcess by rememberLocal(key = "expand_thinking_process_default", defaultValue = false)
         // 仅在"流仍然存在"且标签未闭合时，才判定为进行中。
         // 这样用户取消后（最终消息 contentStream = null）会自动按完成态折叠。
         val isThinkingInProgress = (xmlStream != null) && !isXmlFullyClosed(content)
-        val useStreamingThinkMarkdown = isThinkingInProgress && (thinkMarkdownStream != null)
         val thinkingTitleBaseColor = textColor.copy(alpha = 0.7f)
         val thinkingTitleModifier =
             if (isThinkingInProgress) {
@@ -370,17 +364,28 @@ class CustomXmlRenderer(
             }
 
         var expanded by remember { mutableStateOf(false) }
+        var thinkExpandSession by remember { mutableIntStateOf(0) }
         var skipCollapseAnimationOnce by remember { mutableStateOf(false) }
         val scrollState = rememberScrollState()
         var autoScrollEnabled by remember { mutableStateOf(true) }
         var userHasInteractedWithScroll by remember { mutableStateOf(false) }
         var isProgrammaticScroll by remember { mutableStateOf(false) }
 
+        val thinkMarkdownStream =
+            remember(thinkExpandSession, xmlStream, tagName) {
+                if (thinkExpandSession <= 0) {
+                    null
+                } else {
+                    xmlStream?.let { createThinkMarkdownCharStream(it, tagName) }
+                }
+            }
+        val useStreamingThinkMarkdown = isThinkingInProgress && (thinkMarkdownStream != null)
+
         val accessibilityDesc = stringResource(R.string.thinking_process_block)
 
         // 使用LaunchedEffect来初始化和同步状态，避免在快速重组时状态被意外重置
         LaunchedEffect(isThinkingInProgress, expandThinkingProcess) {
-            expanded = if (isThinkingInProgress) {
+            val targetExpanded = if (isThinkingInProgress) {
                 // 思考过程中，状态由用户偏好决定
                 expandThinkingProcess
             } else {
@@ -388,6 +393,10 @@ class CustomXmlRenderer(
                 skipCollapseAnimationOnce = true
                 false
             }
+            if (targetExpanded && !expanded) {
+                thinkExpandSession += 1
+            }
+            expanded = targetExpanded
         }
 
         LaunchedEffect(expanded, skipCollapseAnimationOnce) {
@@ -452,6 +461,9 @@ class CustomXmlRenderer(
                         // 用户手动交互时始终保留动画
                         skipCollapseAnimationOnce = false
                         val newExpandedValue = !expanded
+                        if (newExpandedValue) {
+                            thinkExpandSession += 1
+                        }
                         expanded = newExpandedValue
                         if (isThinkingInProgress) {
                             expandThinkingProcess = newExpandedValue

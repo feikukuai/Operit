@@ -219,6 +219,25 @@ fun ToolPkgComposeDslToolScreen(
             "toolPkgId" to containerPackageName
         )
 
+    fun buildActionRuntimeOptions(): Map<String, Any?> {
+        val runtimeOptions =
+            mutableMapOf<String, Any?>(
+                "packageName" to containerPackageName,
+                "containerPackageName" to containerPackageName,
+                "toolPkgId" to containerPackageName,
+                "__operit_ui_package_name" to containerPackageName,
+                "__operit_ui_toolpkg_id" to containerPackageName,
+                "uiModuleId" to uiModuleId,
+                "__operit_ui_module_id" to uiModuleId,
+                "__operit_package_lang" to currentLanguage
+            )
+        val currentScreenPath = scriptScreenPath?.trim().orEmpty()
+        if (currentScreenPath.isNotEmpty()) {
+            runtimeOptions["__operit_script_screen"] = currentScreenPath
+        }
+        return runtimeOptions
+    }
+
     fun dispatchAction(actionId: String, payload: Any? = null) {
         val normalizedActionId = actionId.trim()
         if (normalizedActionId.isBlank()) {
@@ -232,7 +251,7 @@ fun ToolPkgComposeDslToolScreen(
             jsEngine.dispatchComposeDslActionAsync(
                 actionId = normalizedActionId,
                 payload = payload,
-                runtimeOptions = mapOf("__operit_package_lang" to currentLanguage),
+                runtimeOptions = buildActionRuntimeOptions(),
                 onIntermediateResult = { intermediateResult ->
                     val parsedIntermediate =
                         ToolPkgComposeDslParser.parseRenderResult(intermediateResult)

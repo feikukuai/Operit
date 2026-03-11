@@ -1994,6 +1994,11 @@ class ChatViewModel(private val context: Context) : ViewModel() {
             return
         }
 
+        if (command.usesDedicatedSession) {
+            executeBackgroundWorkspaceCommand(command, workspacePath, commandText)
+            return
+        }
+
         if (workspaceCommandExecutionJob?.isActive == true) {
             uiStateDelegate.showToast(context.getString(R.string.workspace_command_already_running))
             return
@@ -2005,52 +2010,33 @@ class ChatViewModel(private val context: Context) : ViewModel() {
                 AppLogger.d(TAG, "Executing workspace command: $commandText in $workspacePath")
                 
                 val workspaceDir = File(workspacePath)
-                
-                if (command.usesDedicatedSession) {
-                    // 为长时间运行的命令创建独立会话
-                    val sessionTitle = command.sessionTitle ?: command.label
-                    val dedicatedSessionId = terminal.createSessionAndWait(sessionTitle)
-                    if (dedicatedSessionId == null) {
-                        AppLogger.e(TAG, "Failed to create dedicated terminal session")
+
+                // 使用工作区的共享会话
+                var sharedSessionId = workspaceTerminalSessions[workspacePath]
+
+                // 如果会话不存在或已关闭，创建新会话
+                if (sharedSessionId == null || terminal.terminalState.value.sessions.none { it.id == sharedSessionId }) {
+                    val workspaceName = workspaceDir.name.take(4) // 只取前4位
+
+                    sharedSessionId = terminal.createSessionAndWait("Workspace: $workspaceName")
+                    if (sharedSessionId == null) {
+                        AppLogger.e(TAG, "Failed to create workspace terminal session")
                         uiStateDelegate.showErrorMessage(
-                            context.getString(R.string.chat_create_dedicated_terminal_session_failed)
+                            context.getString(R.string.chat_create_workspace_terminal_session_failed)
                         )
                         return@launch
                     }
-                    sessionId = dedicatedSessionId
-                    
+
+                    // 保存会话 ID
+                    workspaceTerminalSessions[workspacePath] = sharedSessionId
+
                     AppLogger.d(
                         TAG,
-                        "Created dedicated terminal session $sessionId for command: ${command.label}"
+                        "Created new workspace terminal session $sharedSessionId for $workspacePath"
                     )
-                } else {
-                    // 使用工作区的共享会话
-                    var sharedSessionId = workspaceTerminalSessions[workspacePath]
-                    
-                    // 如果会话不存在或已关闭，创建新会话
-                    if (sharedSessionId == null || terminal.terminalState.value.sessions.none { it.id == sharedSessionId }) {
-                        val workspaceName = workspaceDir.name.take(4) // 只取前4位
-                        
-                        sharedSessionId = terminal.createSessionAndWait("Workspace: $workspaceName")
-                        if (sharedSessionId == null) {
-                            AppLogger.e(TAG, "Failed to create workspace terminal session")
-                            uiStateDelegate.showErrorMessage(
-                                context.getString(R.string.chat_create_workspace_terminal_session_failed)
-                            )
-                            return@launch
-                        }
-                        
-                        // 保存会话 ID
-                        workspaceTerminalSessions[workspacePath] = sharedSessionId
-
-                        AppLogger.d(
-                            TAG,
-                            "Created new workspace terminal session $sharedSessionId for $workspacePath"
-                        )
-                    }
-                    
-                    sessionId = sharedSessionId
                 }
+
+                sessionId = sharedSessionId
 
                 val activeSessionId = sessionId ?: return@launch
 
@@ -2109,20 +2095,59 @@ class ChatViewModel(private val context: Context) : ViewModel() {
                     context.getString(R.string.chat_execute_command_failed, e.message ?: "")
                 )
             } finally {
-                val dedicatedSessionId = sessionId
-                if (dedicatedSessionId != null && command.usesDedicatedSession) {
-                    runCatching { terminal.closeSession(dedicatedSessionId) }
-                        .onFailure { error ->
-                            AppLogger.w(
-                                TAG,
-                                "Failed to close dedicated terminal session $dedicatedSessionId",
-                                error
-                            )
-                        }
-                }
                 workspaceCommandExecutionJob = null
             }
         }
+    }
+
+    @RequiresApi(Build.VERSION_CODES.O)
+    private fun executeBackgroundWorkspaceCommand(
+        command: CommandConfig,
+        workspacePath: String,
+        commandText: String
+    ) {
+        viewModelScope.launch {
+            try {
+                AppLogger.d(TAG, "Executing background workspace command: $commandText in $workspacePath")
+
+                val terminalInstance = terminal ?: run {
+                    uiStateDelegate.showErrorMessage(context.getString(R.string.chat_terminal_requires_android_8))
+                    return@launch
+                }
+                val workspaceDir = File(workspacePath)
+                val sessionTitle = command.sessionTitle ?: command.label
+                val dedicatedSessionId = terminalInstance.createSessionAndWait(sessionTitle)
+                if (dedicatedSessionId == null) {
+                    AppLogger.e(TAG, "Failed to create dedicated terminal session")
+                    uiStateDelegate.showErrorMessage(
+                        context.getString(R.string.chat_create_dedicated_terminal_session_failed)
+                    )
+                    return@launch
+                }
+
+                terminalInstance.executeCommand(dedicatedSessionId, "cd \"${workspaceDir.absolutePath}\"")
+                terminalInstance.sendInput(dedicatedSessionId, commandText + "\r")
+                openAiComputerForTerminalSession()
+
+                AppLogger.d(
+                    TAG,
+                    "Background workspace command started in dedicated terminal session $dedicatedSessionId"
+                )
+            } catch (e: Exception) {
+                AppLogger.e(TAG, "Failed to execute background workspace command", e)
+                uiStateDelegate.showErrorMessage(
+                    context.getString(R.string.chat_execute_command_failed, e.message ?: "")
+                )
+            }
+        }
+    }
+
+    private fun openAiComputerForTerminalSession() {
+        if (_showWebView.value) {
+            _showWebView.value = false
+            AppLogger.d(TAG, "工作区已关闭（由于打开后台命令终端）")
+        }
+        _showAiComputer.value = true
     }
 
     fun hideWorkspaceCommandExecutionDialog(workspacePath: String) {

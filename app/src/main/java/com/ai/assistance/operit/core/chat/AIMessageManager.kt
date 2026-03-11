@@ -854,7 +854,7 @@ object AIMessageManager {
         }
     }
 
-    private fun buildPackageWarmupBlock(
+    private suspend fun buildPackageWarmupBlock(
         messagesToSummarize: List<ChatMessage>,
         useEnglish: Boolean
     ): String {
@@ -871,7 +871,6 @@ object AIMessageManager {
             return "$title\n$emptyMessage"
         }
 
-        val packageManager = toolHandler.getOrCreatePackageManager()
         val intro =
             if (useEnglish) {
                 "The following high-frequency packages were automatically activated from the summarized tool usage, and their use_package results are attached for the next-turn warmup."
@@ -879,38 +878,41 @@ object AIMessageManager {
                 "以下根据本次摘要范围内的工具使用频次，自动激活了最高频的工具包，并附上 use_package 的返回结果，供下一轮预热。"
             }
 
-        val body = buildString {
-            appendLine(intro)
-            appendLine()
-            topPackages.forEachIndexed { index, stat ->
-                val resultText =
-                    runCatching { packageManager.usePackage(stat.packageName).trim() }
-                        .getOrElse { throwable ->
-                            if (useEnglish) {
-                                "use_package failed: ${throwable.message ?: "unknown error"}"
-                            } else {
-                                "use_package 调用失败: ${throwable.message ?: "未知错误"}"
+        val body = withContext(Dispatchers.IO) {
+            val packageManager = toolHandler.getOrCreatePackageManager()
+            buildString {
+                appendLine(intro)
+                appendLine()
+                topPackages.forEachIndexed { index, stat ->
+                    val resultText =
+                        runCatching { packageManager.usePackage(stat.packageName).trim() }
+                            .getOrElse { throwable ->
+                                if (useEnglish) {
+                                    "use_package failed: ${throwable.message ?: "unknown error"}"
+                                } else {
+                                    "use_package 调用失败: ${throwable.message ?: "未知错误"}"
+                                }
                             }
-                        }
-                        .ifBlank {
-                            if (useEnglish) {
-                                "use_package returned empty content."
-                            } else {
-                                "use_package 返回为空。"
+                            .ifBlank {
+                                if (useEnglish) {
+                                    "use_package returned empty content."
+                                } else {
+                                    "use_package 返回为空。"
+                                }
                             }
-                        }
 
-                if (useEnglish) {
-                    appendLine("${index + 1}. Package ${stat.packageName} (${stat.count} hits)")
-                } else {
-                    appendLine("${index + 1}. 包 ${stat.packageName}（命中 ${stat.count} 次）")
+                    if (useEnglish) {
+                        appendLine("${index + 1}. Package ${stat.packageName} (${stat.count} hits)")
+                    } else {
+                        appendLine("${index + 1}. 包 ${stat.packageName}（命中 ${stat.count} 次）")
+                    }
+                    appendLine(indentBlock(resultText, "   "))
+                    if (index != topPackages.lastIndex) {
+                        appendLine()
+                    }
                 }
-                appendLine(indentBlock(resultText, "   "))
-                if (index != topPackages.lastIndex) {
-                    appendLine()
-                }
-            }
-        }.trimEnd()
+            }.trimEnd()
+        }
 
         return buildString {
             appendLine(title)

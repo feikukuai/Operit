@@ -168,6 +168,7 @@
 2) TTS（文本转语音）可选引擎：
 - `SIMPLE_TTS`：系统 TTS，基本无需填网络参数。
 - `HTTP_TTS`：需重点填写 `url_template`、`headers`、`http_method`、`content_type`、`request_body`。
+- `OPENAI_WS_TTS`：需填写 `url_template`、`api_key`、`model_name`、`voice_id`。其中 `url_template` 应为 Realtime WebSocket 地址（例如 `wss://api.openai.com/v1/realtime`）。
 - `SILICONFLOW_TTS`：需填写 `api_key`、`model_name`、`voice_id`。
 - `OPENAI_TTS`：需填写 `url_template`、`api_key`、`model_name`、`voice_id`。
 3) STT（语音转文本）可选引擎：
@@ -177,6 +178,7 @@
 4) 最常见填错点（优先检查）：
 - `HTTP_TTS` 的 `headers` 不是合法 JSON（必须是对象）。
 - `HTTP_TTS` 的模板没放 `{text}` 占位符（GET 通常在 URL，POST 通常在 body）。
+- `OPENAI_WS_TTS` 把 HTTP 地址填成了 WebSocket 地址，或把 WebSocket 地址误填成 HTTP 地址。
 - TTS/STT 的 endpoint 路径写错（比如把 chat/completions 写成 audio 接口）。
 - `model_name` 填了不存在的模型或与接口不匹配。
 - 改完配置后没有重新测试语音播报或语音识别。
@@ -383,6 +385,7 @@
 2) TTS (text-to-speech) engines:
 - `SIMPLE_TTS`: system TTS, usually no network fields required.
 - `HTTP_TTS`: mainly fill `url_template`, `headers`, `http_method`, `content_type`, `request_body`.
+- `OPENAI_WS_TTS`: fill `url_template`, `api_key`, `model_name`, `voice_id`. `url_template` should be a Realtime WebSocket endpoint such as `wss://api.openai.com/v1/realtime`.
 - `SILICONFLOW_TTS`: fill `api_key`, `model_name`, `voice_id`.
 - `OPENAI_TTS`: fill `url_template`, `api_key`, `model_name`, `voice_id`.
 3) STT (speech-to-text) engines:
@@ -392,6 +395,7 @@
 4) Most common mistakes (check first):
 - `headers` in `HTTP_TTS` is not valid JSON (must be an object).
 - Missing `{text}` placeholder in HTTP TTS template (typically in URL for GET, in body for POST).
+- `OPENAI_WS_TTS` is configured with an HTTP URL instead of a WebSocket URL, or vice versa.
 - Wrong endpoint path for TTS/STT (for example using chat/completions instead of audio endpoints).
 - `model_name` does not exist or does not match the API.
 - No real retest after saving config.
@@ -575,8 +579,8 @@
         {
           name: "tts_service_type"
           description: {
-            zh: "可选，SIMPLE_TTS/HTTP_TTS/SILICONFLOW_TTS/OPENAI_TTS"
-            en: "Optional, SIMPLE_TTS/HTTP_TTS/SILICONFLOW_TTS/OPENAI_TTS"
+            zh: "可选，SIMPLE_TTS/HTTP_TTS/OPENAI_WS_TTS/SILICONFLOW_TTS/OPENAI_TTS"
+            en: "Optional, SIMPLE_TTS/HTTP_TTS/OPENAI_WS_TTS/SILICONFLOW_TTS/OPENAI_TTS"
           }
           type: string
           required: false
