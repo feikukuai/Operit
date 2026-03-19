@@ -128,13 +128,12 @@ const HistoryChat = (function () {
         return Array.isArray(value) ? value : [];
     }
     async function list_chats_impl(params) {
-        var _a, _b, _c, _d;
-        const query = ((_a = params === null || params === void 0 ? void 0 : params.query) !== null && _a !== void 0 ? _a : '').toString().trim();
-        const matchMode = normalizeMatchMode(params === null || params === void 0 ? void 0 : params.match);
+        const query = (params?.query ?? '').toString().trim();
+        const matchMode = normalizeMatchMode(params?.match);
         const limitRaw = params && params.limit !== undefined ? Number(params.limit) : undefined;
         const limit = limitRaw !== undefined && !isNaN(limitRaw) ? limitRaw : undefined;
-        const sortBy = (params === null || params === void 0 ? void 0 : params.sort_by) ? params.sort_by.toString().trim() : undefined;
-        const sortOrder = (params === null || params === void 0 ? void 0 : params.sort_order) ? params.sort_order.toString().trim().toLowerCase() : undefined;
+        const sortBy = params?.sort_by ? params.sort_by.toString().trim() : undefined;
+        const sortOrder = params?.sort_order ? params.sort_order.toString().trim().toLowerCase() : undefined;
         const listParams = {};
         if (query)
             listParams.query = query;
@@ -147,25 +146,24 @@ const HistoryChat = (function () {
         if (sortOrder)
             listParams.sort_order = sortOrder;
         const listResult = (await toolCall('list_chats', listParams));
-        const chats = asArray(listResult === null || listResult === void 0 ? void 0 : listResult.chats);
+        const chats = asArray(listResult?.chats);
         return {
             success: true,
             message: '对话列表获取完成',
             data: {
-                totalCount: (_b = listResult === null || listResult === void 0 ? void 0 : listResult.totalCount) !== null && _b !== void 0 ? _b : chats.length,
-                currentChatId: (_c = listResult === null || listResult === void 0 ? void 0 : listResult.currentChatId) !== null && _c !== void 0 ? _c : null,
-                matchedCount: (_d = listResult === null || listResult === void 0 ? void 0 : listResult.totalCount) !== null && _d !== void 0 ? _d : chats.length,
+                totalCount: listResult?.totalCount ?? chats.length,
+                currentChatId: listResult?.currentChatId ?? null,
+                matchedCount: listResult?.totalCount ?? chats.length,
                 chats,
             }
         };
     }
     async function find_chat_impl(params) {
-        var _a, _b, _c;
-        const query = ((_a = params === null || params === void 0 ? void 0 : params.query) !== null && _a !== void 0 ? _a : '').toString().trim();
+        const query = (params?.query ?? '').toString().trim();
         if (!query) {
             throw new Error('Missing parameter: query');
         }
-        const matchMode = normalizeMatchMode(params === null || params === void 0 ? void 0 : params.match);
+        const matchMode = normalizeMatchMode(params?.match);
         const indexRaw = params && params.index !== undefined ? Number(params.index) : 0;
         const index = isNaN(indexRaw) ? 0 : indexRaw;
         const findParams = { query };
@@ -174,7 +172,7 @@ const HistoryChat = (function () {
         if (index !== undefined)
             findParams.index = index;
         const findResult = (await toolCall('find_chat', findParams));
-        const picked = (_b = findResult === null || findResult === void 0 ? void 0 : findResult.chat) !== null && _b !== void 0 ? _b : null;
+        const picked = findResult?.chat ?? null;
         if (!picked) {
             throw new Error(`Chat not found by query: ${query}`);
         }
@@ -183,18 +181,17 @@ const HistoryChat = (function () {
             message: '对话查找完成',
             data: {
                 chat: picked,
-                matchedCount: (_c = findResult === null || findResult === void 0 ? void 0 : findResult.matchedCount) !== null && _c !== void 0 ? _c : 1,
+                matchedCount: findResult?.matchedCount ?? 1,
             }
         };
     }
     async function resolveChatId(params) {
-        var _a;
         if (params && typeof params.chat_id === 'string' && params.chat_id.trim()) {
             return params.chat_id.trim();
         }
         const title = params && typeof params.chat_title === 'string' ? params.chat_title.trim() : '';
         const query = params && typeof params.chat_query === 'string' ? params.chat_query.trim() : '';
-        const matchMode = normalizeMatchMode(params === null || params === void 0 ? void 0 : params.match);
+        const matchMode = normalizeMatchMode(params?.match);
         const indexRaw = params && params.chat_index !== undefined ? Number(params.chat_index) : 0;
         const index = isNaN(indexRaw) ? 0 : indexRaw;
         if (!title && !query) {
@@ -206,8 +203,8 @@ const HistoryChat = (function () {
         if (index !== undefined)
             findParams.index = index;
         const findResult = (await toolCall('find_chat', findParams));
-        const picked = (_a = findResult === null || findResult === void 0 ? void 0 : findResult.chat) !== null && _a !== void 0 ? _a : null;
-        if (!(picked === null || picked === void 0 ? void 0 : picked.id)) {
+        const picked = findResult?.chat ?? null;
+        if (!picked?.id) {
             throw new Error(`Chat not found by query: ${needle}`);
         }
         return picked.id;
@@ -223,14 +220,13 @@ const HistoryChat = (function () {
             order,
             limit,
         }));
-        const rawMessages = asArray(result === null || result === void 0 ? void 0 : result.messages);
+        const rawMessages = asArray(result?.messages);
         const text = rawMessages
             .map((m) => {
-            var _a, _b, _c;
-            const role = ((_b = (_a = m.roleName) !== null && _a !== void 0 ? _a : m.sender) !== null && _b !== void 0 ? _b : '').toString() || 'message';
+            const role = (m.roleName ?? m.sender ?? '').toString() || 'message';
             const ts = (m.timestamp !== undefined && m.timestamp !== null) ? String(m.timestamp) : '';
             const header = ts ? `[${ts}] ${role}` : role;
-            return `${header}:\n${((_c = m.content) !== null && _c !== void 0 ? _c : '').toString()}`;
+            return `${header}:\n${(m.content ?? '').toString()}`;
         })
             .join('\n\n');
         return {
@@ -243,8 +239,7 @@ const HistoryChat = (function () {
         };
     }
     async function rename_chat_impl(params) {
-        var _a;
-        const newTitle = ((_a = params === null || params === void 0 ? void 0 : params.new_title) !== null && _a !== void 0 ? _a : '').toString().trim();
+        const newTitle = (params?.new_title ?? '').toString().trim();
         if (!newTitle) {
             throw new Error('Missing parameter: new_title');
         }
@@ -278,8 +273,7 @@ const HistoryChat = (function () {
         };
     }
     async function agent_status_impl(params) {
-        var _a;
-        const chatId = ((_a = params === null || params === void 0 ? void 0 : params.chat_id) !== null && _a !== void 0 ? _a : '').toString().trim();
+        const chatId = (params?.chat_id ?? '').toString().trim();
         if (!chatId) {
             throw new Error('Missing parameter: chat_id');
         }
@@ -293,22 +287,20 @@ const HistoryChat = (function () {
         };
     }
     async function list_character_cards_impl() {
-        var _a;
         const result = (await toolCall('list_character_cards', {}));
-        const cards = asArray(result === null || result === void 0 ? void 0 : result.cards);
+        const cards = asArray(result?.cards);
         return {
             success: true,
             message: '角色卡列表获取完成',
             data: {
-                totalCount: (_a = result === null || result === void 0 ? void 0 : result.totalCount) !== null && _a !== void 0 ? _a : cards.length,
+                totalCount: result?.totalCount ?? cards.length,
                 cards,
             },
         };
     }
     async function chat_with_agent_impl(params) {
-        var _a, _b, _c, _d, _e, _f;
-        const message = ((_a = params === null || params === void 0 ? void 0 : params.message) !== null && _a !== void 0 ? _a : '').toString();
-        const characterCardNameInput = ((_b = params === null || params === void 0 ? void 0 : params.character_card_name) !== null && _b !== void 0 ? _b : '').toString().trim();
+        const message = (params?.message ?? '').toString();
+        const characterCardNameInput = (params?.character_card_name ?? '').toString().trim();
         if (!message.trim()) {
             throw new Error('Missing parameter: message');
         }
@@ -319,7 +311,7 @@ const HistoryChat = (function () {
         let characterCardId = '';
         try {
             const cardResult = (await toolCall('list_character_cards', {}));
-            const cards = asArray(cardResult === null || cardResult === void 0 ? void 0 : cardResult.cards);
+            const cards = asArray(cardResult?.cards);
             const targetCard = cards.find((card) => card.name === characterCardNameInput);
             if (!targetCard) {
                 throw new Error(`Character card not found: ${characterCardNameInput}`);
@@ -327,7 +319,7 @@ const HistoryChat = (function () {
             characterCardName = targetCard.name;
             characterCardId = targetCard.id;
         }
-        catch (_g) {
+        catch {
             if (!characterCardId) {
                 throw new Error(`Character card not found: ${characterCardNameInput}`);
             }
@@ -338,10 +330,10 @@ const HistoryChat = (function () {
                 keep_if_exists: true,
             });
         }
-        catch (_h) {
+        catch {
             // ignore service start errors to avoid blocking agent message
         }
-        let chatId = ((_c = params === null || params === void 0 ? void 0 : params.chat_id) !== null && _c !== void 0 ? _c : '').toString().trim();
+        let chatId = (params?.chat_id ?? '').toString().trim();
         if (!chatId) {
             const lang = (getLang() || '').toLowerCase();
             const group = lang === 'zh' ? '子任务' : 'subTask';
@@ -350,7 +342,7 @@ const HistoryChat = (function () {
                 set_as_current_chat: false,
                 character_card_id: characterCardId,
             }));
-            chatId = ((_d = creation === null || creation === void 0 ? void 0 : creation.chatId) !== null && _d !== void 0 ? _d : '').toString().trim();
+            chatId = (creation?.chatId ?? '').toString().trim();
             if (!chatId) {
                 throw new Error('Failed to create new chat');
             }
@@ -361,12 +353,12 @@ const HistoryChat = (function () {
                 match: 'exact',
                 index: 0,
             }));
-            const boundName = (_f = (_e = findResult === null || findResult === void 0 ? void 0 : findResult.chat) === null || _e === void 0 ? void 0 : _e.characterCardName) !== null && _f !== void 0 ? _f : null;
+            const boundName = findResult?.chat?.characterCardName ?? null;
             if (boundName && boundName !== characterCardName) {
                 throw new Error(`Chat ${chatId} 已绑定角色 ${boundName}，不能与 ${characterCardName} 共用会话`);
             }
         }
-        const timeoutRaw = (params === null || params === void 0 ? void 0 : params.timeout) !== undefined ? Number(params.timeout) : 10;
+        const timeoutRaw = params?.timeout !== undefined ? Number(params.timeout) : 10;
         const timeoutSec = isNaN(timeoutRaw) || timeoutRaw <= 0 ? 10 : timeoutRaw;
         const timeoutMs = Math.min(timeoutSec, 60) * 1000;
         const sendPromise = toolCall('send_message_to_ai', {

@@ -40,20 +40,81 @@ function toTimeoutMs(raw) {
     }
     return Math.floor(value);
 }
+function ensureHttpScheme(raw) {
+    return raw.startsWith("http://") || raw.startsWith("https://") ? raw : `http://${raw}`;
+}
+function parsePort(raw) {
+    if (!raw.trim()) {
+        return null;
+    }
+    const value = Number(raw);
+    if (!Number.isInteger(value) || value < 1 || value > 65535) {
+        return null;
+    }
+    return value;
+}
+function parseAuthority(authority) {
+    const value = authority.includes("@") ? authority.slice(authority.lastIndexOf("@") + 1) : authority;
+    if (!value) {
+        return null;
+    }
+    if (value.startsWith("[")) {
+        const closingIndex = value.indexOf("]");
+        if (closingIndex < 0) {
+            return null;
+        }
+        const host = value.slice(0, closingIndex + 1);
+        const remainder = value.slice(closingIndex + 1);
+        if (!remainder) {
+            return { host, port: null };
+        }
+        if (!remainder.startsWith(":")) {
+            return null;
+        }
+        const port = parsePort(remainder.slice(1));
+        return port == null ? null : { host, port };
+    }
+    const firstColonIndex = value.indexOf(":");
+    const lastColonIndex = value.lastIndexOf(":");
+    if (firstColonIndex < 0) {
+        return { host: value, port: null };
+    }
+    if (firstColonIndex !== lastColonIndex) {
+        return null;
+    }
+    const host = value.slice(0, lastColonIndex);
+    if (!host) {
+        return null;
+    }
+    const port = parsePort(value.slice(lastColonIndex + 1));
+    return port == null ? null : { host, port };
+}
+function parseHttpLikeUrl(raw) {
+    const normalized = ensureHttpScheme(raw.trim());
+    const match = normalized.match(/^(https?):\/\/([^/?#]+)([^?#]*)(\?[^#]*)?(#.*)?$/i);
+    if (!match) {
+        return null;
+    }
+    const authority = parseAuthority(match[2] || "");
+    if (!authority || !authority.host.trim()) {
+        return null;
+    }
+    return {
+        scheme: (match[1] || "").toLowerCase() === "https" ? "https" : "http",
+        host: authority.host.trim(),
+        port: authority.port,
+        path: match[3] || "",
+        search: match[4] || "",
+        hash: match[5] || ""
+    };
+}
 function extractPortFromUrl(raw) {
     const value = raw.trim();
     if (!value) {
         return null;
     }
-    try {
-        const withScheme = value.startsWith("http://") || value.startsWith("https://") ? value : `http://${value}`;
-        const url = new URL(withScheme);
-        const port = Number(url.port || 0);
-        return port >= 1 && port <= 65535 ? port : null;
-    }
-    catch (_a) {
-        return null;
-    }
+    const parsed = parseHttpLikeUrl(value);
+    return parsed?.port ?? null;
 }
 function normalizeBaseUrlInput(input, fallbackBaseUrl) {
     const raw = input.trim().replace(/\/+$/g, "");
@@ -61,22 +122,14 @@ function normalizeBaseUrlInput(input, fallbackBaseUrl) {
         return "";
     }
     const fallbackPort = extractPortFromUrl(fallbackBaseUrl) || 58321;
-    const withScheme = raw.startsWith("http://") || raw.startsWith("https://") ? raw : `http://${raw}`;
-    try {
-        const url = new URL(withScheme);
-        const scheme = (url.protocol || "http:").replace(":", "").toLowerCase() === "https" ? "https" : "http";
-        const host = url.hostname.trim();
-        if (!host) {
-            return withScheme;
-        }
-        const portRaw = Number(url.port || 0);
-        const port = portRaw >= 1 && portRaw <= 65535 ? portRaw : fallbackPort;
-        const path = url.pathname && url.pathname !== "/" ? url.pathname : "";
-        return `${scheme}://${host}:${port}${path}${url.search}${url.hash}`.replace(/\/+$/g, "");
-    }
-    catch (_a) {
+    const withScheme = ensureHttpScheme(raw);
+    const parsed = parseHttpLikeUrl(raw);
+    if (!parsed) {
         return withScheme;
     }
+    const port = parsed.port ?? fallbackPort;
+    const path = parsed.path && parsed.path !== "/" ? parsed.path : "";
+    return `${parsed.scheme}://${parsed.host}:${port}${path}${parsed.search}${parsed.hash}`.replace(/\/+$/g, "");
 }
 function parseConnectionPayload(raw) {
     if (!raw.trim()) {
@@ -98,7 +151,7 @@ function parseConnectionPayload(raw) {
             error: typeof obj.error === "string" ? obj.error.trim() : ""
         };
     }
-    catch (_a) {
+    catch {
         return null;
     }
 }
@@ -113,9 +166,8 @@ async function resolveToolName(ctx, packageName, toolName) {
     return `${packageName}:${toolName}`;
 }
 function resolveRuntimePackageName(ctx, fallback) {
-    var _a, _b;
-    const currentPackageName = String(((_a = ctx.getCurrentPackageName) === null || _a === void 0 ? void 0 : _a.call(ctx)) || "").trim();
-    const currentToolPkgId = String(((_b = ctx.getCurrentToolPkgId) === null || _b === void 0 ? void 0 : _b.call(ctx)) || "").trim();
+    const currentPackageName = String(ctx.getCurrentPackageName?.() || "").trim();
+    const currentToolPkgId = String(ctx.getCurrentToolPkgId?.() || "").trim();
     if (!currentPackageName) {
         return fallback;
     }
@@ -203,7 +255,6 @@ function Screen(ctx) {
         connectionCardState.set(next);
     };
     const checkConnectionByTool = async () => {
-        var _a, _b;
         isCheckingConnectionState.set(true);
         setConnectionCard({
             ...connectionCardState.value,
@@ -263,15 +314,15 @@ function Screen(ctx) {
             const parsed = parseConnectionPayload(rawPayload);
             const resultObj = rawResult && typeof rawResult === "object" ? rawResult : null;
             const successByResultObj = resultObj && typeof resultObj.success === "boolean" ? resultObj.success : null;
-            const actualSuccess = (_b = (_a = parsed === null || parsed === void 0 ? void 0 : parsed.success) !== null && _a !== void 0 ? _a : successByResultObj) !== null && _b !== void 0 ? _b : true;
-            const errorText = firstNonBlank(parsed === null || parsed === void 0 ? void 0 : parsed.error, resultObj && typeof resultObj.error === "string" ? resultObj.error : "", actualSuccess ? "" : rawPayload);
+            const actualSuccess = parsed?.success ?? successByResultObj ?? true;
+            const errorText = firstNonBlank(parsed?.error, resultObj && typeof resultObj.error === "string" ? resultObj.error : "", actualSuccess ? "" : rawPayload);
             const nextCard = {
                 status: actualSuccess ? "success" : "failed",
-                baseUrl: firstNonBlank(parsed === null || parsed === void 0 ? void 0 : parsed.baseUrl, savedBaseUrl),
-                packageVersion: (parsed === null || parsed === void 0 ? void 0 : parsed.packageVersion) || "",
-                agentVersion: (parsed === null || parsed === void 0 ? void 0 : parsed.agentVersion) || "",
-                durationMs: (parsed === null || parsed === void 0 ? void 0 : parsed.durationMs) || "",
-                command: (parsed === null || parsed === void 0 ? void 0 : parsed.command) || "",
+                baseUrl: firstNonBlank(parsed?.baseUrl, savedBaseUrl),
+                packageVersion: parsed?.packageVersion || "",
+                agentVersion: parsed?.agentVersion || "",
+                durationMs: parsed?.durationMs || "",
+                command: parsed?.command || "",
                 error: errorText
             };
             setConnectionCard(nextCard);

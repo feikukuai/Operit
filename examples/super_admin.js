@@ -96,10 +96,9 @@ const superAdmin = (function () {
     const DEFAULT_WAIT_TIMEOUT_MS = 300000;
     const MIN_TIMEOUT_MS = 3000;
     async function persistTerminalOutputIfTooLong(command, result) {
-        var _a;
-        const outputStr = typeof (result === null || result === void 0 ? void 0 : result.output) === "string"
+        const outputStr = typeof result?.output === "string"
             ? result.output
-            : String((_a = result === null || result === void 0 ? void 0 : result.output) !== null && _a !== void 0 ? _a : "");
+            : String(result?.output ?? "");
         if (outputStr.length <= MAX_INLINE_TERMINAL_OUTPUT_CHARS) {
             return null;
         }
@@ -111,8 +110,8 @@ const superAdmin = (function () {
         return {
             command,
             output: "(saved_to_file)",
-            exitCode: result === null || result === void 0 ? void 0 : result.exitCode,
-            sessionId: result === null || result === void 0 ? void 0 : result.sessionId,
+            exitCode: result?.exitCode,
+            sessionId: result?.sessionId,
             context_preserved: true,
             output_saved_to: filePath,
             output_chars: outputStr.length,
@@ -128,7 +127,6 @@ const superAdmin = (function () {
      * @param timeoutMs - 可选的超时时间（毫秒，最低 3000ms）。强烈建议显式传入；前台未传时默认 15000ms，后台模式不应用该默认值。
      */
     async function terminal(params) {
-        var _a;
         try {
             if (!params.command) {
                 throw new Error("命令不能为空");
@@ -181,7 +179,7 @@ const superAdmin = (function () {
             if (timedOut) {
                 const screenResult = await Tools.System.terminal.screen(sessionId);
                 timeoutScreen = {
-                    sessionId: (_a = screenResult.sessionId) !== null && _a !== void 0 ? _a : sessionId,
+                    sessionId: screenResult.sessionId ?? sessionId,
                     rows: screenResult.rows,
                     cols: screenResult.cols,
                     content: screenResult.content
@@ -219,7 +217,6 @@ const superAdmin = (function () {
      * @param timeoutMs - 可选超时（毫秒，最低 3000ms）；未传默认 300000ms
      */
     async function terminal_wait(params = {}) {
-        var _a, _b;
         try {
             const timeoutMs = params.timeoutMs;
             let timeout = DEFAULT_WAIT_TIMEOUT_MS;
@@ -239,20 +236,20 @@ const superAdmin = (function () {
             const startedAt = Date.now();
             const result = await Tools.System.terminal.exec(sessionId, waitCommand, timeout);
             const elapsedMs = Date.now() - startedAt;
-            const timedOut = (result === null || result === void 0 ? void 0 : result.timedOut) === true;
+            const timedOut = result?.timedOut === true;
             let timeoutScreen = null;
             if (timedOut) {
                 const screenResult = await Tools.System.terminal.screen(sessionId);
                 timeoutScreen = {
-                    sessionId: (_a = screenResult.sessionId) !== null && _a !== void 0 ? _a : sessionId,
+                    sessionId: screenResult.sessionId ?? sessionId,
                     rows: screenResult.rows,
                     cols: screenResult.cols,
                     content: screenResult.content
                 };
             }
-            const outputStr = typeof (result === null || result === void 0 ? void 0 : result.output) === "string"
+            const outputStr = typeof result?.output === "string"
                 ? result.output
-                : String((_b = result === null || result === void 0 ? void 0 : result.output) !== null && _b !== void 0 ? _b : "");
+                : String(result?.output ?? "");
             const markerSeen = outputStr.includes(marker);
             return {
                 sessionId,
@@ -261,7 +258,7 @@ const superAdmin = (function () {
                 elapsedMs,
                 waitCompleted: !timedOut && markerSeen,
                 markerSeen,
-                exitCode: result === null || result === void 0 ? void 0 : result.exitCode,
+                exitCode: result?.exitCode,
                 timeoutScreen,
                 context_preserved: true
             };
@@ -302,13 +299,12 @@ const superAdmin = (function () {
      * 获取当前终端会话可见屏幕内容（仅一屏，不包含历史）
      */
     async function terminal_getscreen(_params = {}) {
-        var _a;
         try {
             const session = await Tools.System.terminal.create("super_admin_default_session");
             const sessionId = session.sessionId;
             const result = await Tools.System.terminal.screen(sessionId);
             return {
-                sessionId: (_a = result.sessionId) !== null && _a !== void 0 ? _a : sessionId,
+                sessionId: result.sessionId ?? sessionId,
                 rows: result.rows,
                 cols: result.cols,
                 content: result.content,
@@ -327,7 +323,6 @@ const superAdmin = (function () {
      * @param control - 控制键
      */
     async function terminal_input(params = {}) {
-        var _a;
         try {
             if (params.input === undefined && params.control === undefined) {
                 throw new Error("input和control至少需要提供一个");
@@ -342,7 +337,7 @@ const superAdmin = (function () {
                 sessionId: sessionId,
                 input: params.input,
                 control: params.control,
-                result: (_a = result === null || result === void 0 ? void 0 : result.value) !== null && _a !== void 0 ? _a : String(result !== null && result !== void 0 ? result : "")
+                result: result?.value ?? String(result ?? "")
             };
         }
         catch (error) {

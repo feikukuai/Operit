@@ -180,7 +180,7 @@ const baiduMap = (function () {
             // 发起请求
             const result = await httpGet(url);
             // 根据实际结构，直接使用content数组
-            const dataContent = (result === null || result === void 0 ? void 0 : result.content) || [];
+            const dataContent = result?.content || [];
             // 如果没有找到任何内容数据结构，返回空结果
             if (!dataContent || dataContent.length === 0) {
                 logger(LOG_LEVELS.INFO, `搜索结果为空或格式不符合预期`);
@@ -194,7 +194,6 @@ const baiduMap = (function () {
             }
             // 解析content数组中的每个元素
             const potentialAois = dataContent.map((item) => {
-                var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11;
                 // ==========基本信息==========
                 const uid = item.uid || "";
                 const name = item.name || (item.alias) || "";
@@ -212,12 +211,12 @@ const baiduMap = (function () {
                 let rating = undefined;
                 let comment_count = undefined;
                 // 从多个位置提取评分
-                const overallRating = item.overall_rating || ((_b = (_a = item.ext) === null || _a === void 0 ? void 0 : _a.detail_info) === null || _b === void 0 ? void 0 : _b.overall_rating);
+                const overallRating = item.overall_rating || item.ext?.detail_info?.overall_rating;
                 if (overallRating) {
                     rating = parseFloat(overallRating);
                 }
                 // 从多个位置提取评论数
-                const commentNum = (_d = (_c = item.ext) === null || _c === void 0 ? void 0 : _c.detail_info) === null || _d === void 0 ? void 0 : _d.comment_num;
+                const commentNum = item.ext?.detail_info?.comment_num;
                 if (commentNum) {
                     comment_count = parseInt(commentNum, 10);
                 }
@@ -225,11 +224,11 @@ const baiduMap = (function () {
                 let price = undefined;
                 let ticket_info = undefined;
                 // 从detail_info提取价格
-                if ((_f = (_e = item.ext) === null || _e === void 0 ? void 0 : _e.detail_info) === null || _f === void 0 ? void 0 : _f.price) {
+                if (item.ext?.detail_info?.price) {
                     price = item.ext.detail_info.price;
                 }
                 // 提取门票信息
-                if ((_h = (_g = item.ext) === null || _g === void 0 ? void 0 : _g.detail_info) === null || _h === void 0 ? void 0 : _h.dk_ticket) {
+                if (item.ext?.detail_info?.dk_ticket) {
                     const ticketData = item.ext.detail_info.dk_ticket;
                     ticket_info = {
                         title: ticketData.title,
@@ -243,20 +242,20 @@ const baiduMap = (function () {
                 // ==========开放时间==========
                 let opening_hours = undefined;
                 let opening_hours_detail = undefined;
-                if ((_k = (_j = item.business_time) === null || _j === void 0 ? void 0 : _j.data) === null || _k === void 0 ? void 0 : _k[0]) {
+                if (item.business_time?.data?.[0]) {
                     const timeData = item.business_time.data[0];
-                    opening_hours = (_l = timeData.business_time_text) === null || _l === void 0 ? void 0 : _l.common;
+                    opening_hours = timeData.business_time_text?.common;
                     // 详细开放时间信息
                     opening_hours_detail = {
-                        common_hours: (_m = timeData.business_time_text) === null || _m === void 0 ? void 0 : _m.common,
-                        festival_hours: (_o = timeData.business_time_text) === null || _o === void 0 ? void 0 : _o.festival,
+                        common_hours: timeData.business_time_text?.common,
+                        festival_hours: timeData.business_time_text?.festival,
                         detailed_schedule: timeData.common || [],
                         festival_schedule: timeData.festival || {}
                     };
                 }
                 // ==========排行榜信息==========
                 let rankings = [];
-                if ((_r = (_q = (_p = item.ext) === null || _p === void 0 ? void 0 : _p.detail_info) === null || _q === void 0 ? void 0 : _q.bangdan_head) === null || _r === void 0 ? void 0 : _r.ranking_show) {
+                if (item.ext?.detail_info?.bangdan_head?.ranking_show) {
                     rankings = item.ext.detail_info.bangdan_head.ranking_show.map((rank) => ({
                         name: rank.ranking,
                         rank: rank.rank_s,
@@ -267,7 +266,7 @@ const baiduMap = (function () {
                 }
                 // ==========活动事件==========
                 let events = [];
-                if ((_t = (_s = item.ext) === null || _s === void 0 ? void 0 : _s.detail_info) === null || _t === void 0 ? void 0 : _t.event_notice) {
+                if (item.ext?.detail_info?.event_notice) {
                     events.push({
                         title: item.ext.detail_info.event_notice.title,
                         content: item.ext.detail_info.event_notice.content,
@@ -277,8 +276,8 @@ const baiduMap = (function () {
                 }
                 // ==========照片和街景==========
                 const shop_hours_simple = item.shop_hours_simple;
-                const photo_count = ((_v = (_u = item.ext) === null || _u === void 0 ? void 0 : _u.detail_info) === null || _v === void 0 ? void 0 : _v.photo_num) ? parseInt(item.ext.detail_info.photo_num, 10) : undefined;
-                const has_indoor_map = ((_x = (_w = item.ext) === null || _w === void 0 ? void 0 : _w.detail_info) === null || _x === void 0 ? void 0 : _x.indoor_map) === '1';
+                const photo_count = item.ext?.detail_info?.photo_num ? parseInt(item.ext.detail_info.photo_num, 10) : undefined;
+                const has_indoor_map = item.ext?.detail_info?.indoor_map === '1';
                 let has_street_view = false;
                 let street_view_info = undefined;
                 if (typeof item.pano === 'string' && item.pano) {
@@ -312,35 +311,63 @@ const baiduMap = (function () {
                     item.geo_type == 2);
                 // ==========其他附加信息==========
                 const additional_info = {};
-                if ((_z = (_y = item.ext) === null || _y === void 0 ? void 0 : _y.detail_info) === null || _z === void 0 ? void 0 : _z.aoi_src_id)
+                if (item.ext?.detail_info?.aoi_src_id)
                     additional_info['aoi_src_id'] = item.ext.detail_info.aoi_src_id;
-                if ((_1 = (_0 = item.ext) === null || _0 === void 0 ? void 0 : _0.detail_info) === null || _1 === void 0 ? void 0 : _1.navi_update_time)
+                if (item.ext?.detail_info?.navi_update_time)
                     additional_info['navi_update_time'] = item.ext.detail_info.navi_update_time;
-                if ((_3 = (_2 = item.ext) === null || _2 === void 0 ? void 0 : _2.detail_info) === null || _3 === void 0 ? void 0 : _3.official_url)
+                if (item.ext?.detail_info?.official_url)
                     additional_info['official_url'] = item.ext.detail_info.official_url;
-                if ((_5 = (_4 = item.ext) === null || _4 === void 0 ? void 0 : _4.detail_info) === null || _5 === void 0 ? void 0 : _5.is_reservable)
+                if (item.ext?.detail_info?.is_reservable)
                     additional_info['is_reservable'] = item.ext.detail_info.is_reservable === '1';
-                if ((_7 = (_6 = item.ext) === null || _6 === void 0 ? void 0 : _6.detail_info) === null || _7 === void 0 ? void 0 : _7.areaid)
+                if (item.ext?.detail_info?.areaid)
                     additional_info['area_id'] = item.ext.detail_info.areaid;
-                if ((_9 = (_8 = item.ext) === null || _8 === void 0 ? void 0 : _8.detail_info) === null || _9 === void 0 ? void 0 : _9.entrance_price)
+                if (item.ext?.detail_info?.entrance_price)
                     additional_info['entrance_price'] = item.ext.detail_info.entrance_price;
-                if ((_11 = (_10 = item.ext) === null || _10 === void 0 ? void 0 : _10.detail_info) === null || _11 === void 0 ? void 0 : _11.free)
+                if (item.ext?.detail_info?.free)
                     additional_info['is_free'] = item.ext.detail_info.free;
                 // 构建详情URL
                 const detailUrl = uid ? `https://map.baidu.com/?qt=ext&uid=${uid}` : "";
-                return Object.assign({ uid: uid, name: name, address: address, area_name: area_name, phone: phone, tags: tags, detail_type: detail_type, rating: rating, comment_count: comment_count, price: price, ticket_info: ticket_info, opening_hours: opening_hours, opening_hours_detail: opening_hours_detail, shop_hours_simple: shop_hours_simple, photo_count: photo_count, has_street_view: has_street_view, street_view_info: street_view_info, has_indoor_map: has_indoor_map, rankings: rankings, events: events, type: type, has_geo_data: hasGeoData, center: {
+                return {
+                    uid: uid,
+                    name: name,
+                    address: address,
+                    area_name: area_name,
+                    phone: phone,
+                    tags: tags,
+                    detail_type: detail_type,
+                    rating: rating,
+                    comment_count: comment_count,
+                    price: price,
+                    ticket_info: ticket_info,
+                    opening_hours: opening_hours,
+                    opening_hours_detail: opening_hours_detail,
+                    shop_hours_simple: shop_hours_simple,
+                    photo_count: photo_count,
+                    has_street_view: has_street_view,
+                    street_view_info: street_view_info,
+                    has_indoor_map: has_indoor_map,
+                    rankings: rankings,
+                    events: events,
+                    type: type,
+                    has_geo_data: hasGeoData,
+                    center: {
                         lng: lng,
                         lat: lat
-                    }, detail_url: detailUrl, additional_info: additional_info }, (currentLogLevel >= LOG_LEVELS.DEBUG ? {
-                    raw_data: {
-                        uid: item.uid,
-                        name: item.name,
-                        addr: item.addr,
-                        x: item.x,
-                        y: item.y,
-                        geo_type: item.geo_type
-                    }
-                } : {}));
+                    },
+                    detail_url: detailUrl,
+                    additional_info: additional_info,
+                    // 只在DEBUG模式下包含简化的原始数据
+                    ...(currentLogLevel >= LOG_LEVELS.DEBUG ? {
+                        raw_data: {
+                            uid: item.uid,
+                            name: item.name,
+                            addr: item.addr,
+                            x: item.x,
+                            y: item.y,
+                            geo_type: item.geo_type
+                        }
+                    } : {})
+                };
             });
             logger(LOG_LEVELS.DEBUG, `找到${potentialAois.length}个AOI结果`);
             return {
@@ -441,19 +468,29 @@ const baiduMap = (function () {
                 }));
                 logger(LOG_LEVELS.DEBUG, `解析到${boundary.length}个边界点`);
             }
-            return Object.assign({ success: true, uid: uid, name: content.name || "", address: content.addr || "", center: {
+            return {
+                success: true,
+                uid: uid,
+                name: content.name || "",
+                address: content.addr || "",
+                center: {
                     lng: parseFloat(content.x || (content.point && content.point.x) || '0'),
                     lat: parseFloat(content.y || (content.point && content.point.y) || '0')
-                }, boundary: boundary, point_count: boundary.length }, (currentLogLevel >= LOG_LEVELS.DEBUG ? {
-                raw_data: {
-                    uid: content.uid,
-                    name: content.name,
-                    addr: content.addr,
-                    x: content.x,
-                    y: content.y,
-                    geo_type: content.geo_type
-                }
-            } : {}));
+                },
+                boundary: boundary,
+                point_count: boundary.length,
+                // 只在DEBUG模式下包含简化的原始数据
+                ...(currentLogLevel >= LOG_LEVELS.DEBUG ? {
+                    raw_data: {
+                        uid: content.uid,
+                        name: content.name,
+                        addr: content.addr,
+                        x: content.x,
+                        y: content.y,
+                        geo_type: content.geo_type
+                    }
+                } : {})
+            };
         }
         catch (error) {
             logger(LOG_LEVELS.ERROR, `[get_aoi_boundary] 错误:`, error);

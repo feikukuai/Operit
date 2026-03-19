@@ -21,6 +21,7 @@ import com.ai.assistance.operit.data.preferences.ApiPreferences
 import com.ai.assistance.operit.data.preferences.DisplayPreferencesManager
 import com.ai.assistance.operit.data.preferences.WaifuPreferences
 import com.ai.assistance.operit.data.preferences.CharacterCardManager
+import com.ai.assistance.operit.data.preferences.ActivePromptManager
 import com.ai.assistance.operit.data.model.PromptFunctionType
 import com.ai.assistance.operit.data.preferences.preferencesManager
 import com.ai.assistance.operit.core.avatar.impl.factory.AvatarModelFactoryImpl
@@ -62,6 +63,7 @@ class ConversationService(
     private val displayPreferencesManager = DisplayPreferencesManager.getInstance(context)
     private val waifuPreferences = WaifuPreferences.getInstance(context)
     private val characterCardManager = CharacterCardManager.getInstance(context)
+    private val activePromptManager = ActivePromptManager.getInstance(context)
     private val userPreferencesManager = preferencesManager
     private val avatarRepository by lazy {
         AvatarRepository.getInstance(context, AvatarModelFactoryImpl())
@@ -712,6 +714,7 @@ class ConversationService(
      * @return 格式化的waifu规则文本，如果没有规则则返回空字符串
      */
     private suspend fun buildWaifuRulesText(): String {
+        val activePrompt = activePromptManager.getActivePrompt()
         val waifuDisableActions = waifuPreferences.waifuDisableActionsFlow.first()
         val waifuEnableEmoticons = waifuPreferences.waifuEnableEmoticonsFlow.first()
         val waifuEnableSelfie = waifuPreferences.waifuEnableSelfieFlow.first()
@@ -725,7 +728,8 @@ class ConversationService(
         if (waifuEnableEmoticons) {
             // 动态获取当前可用的表情分组
             val availableCategories = try {
-                customEmojiRepository.getAllCategories().first()
+                customEmojiRepository.initializeBuiltinEmojis(activePrompt)
+                customEmojiRepository.getAllCategories(activePrompt).first()
             } catch (e: Exception) {
                 com.ai.assistance.operit.util.AppLogger.e("ConversationService", "获取表情分组失败", e)
                 emptyList()

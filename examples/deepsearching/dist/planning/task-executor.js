@@ -56,7 +56,7 @@ async function collectStreamToString(stream, onChunk) {
     let buffer = "";
     const collector = {
         emit: function (value) {
-            const chunk = String(value !== null && value !== void 0 ? value : "");
+            const chunk = String(value ?? "");
             buffer += chunk;
             if (onChunk) {
                 try {
@@ -73,24 +73,21 @@ async function collectStreamToString(stream, onChunk) {
 function toKotlinPairList(history) {
     const list = [];
     (history || []).forEach((item) => {
-        var _a, _b;
-        const role = item && item.length > 0 ? String((_a = item[0]) !== null && _a !== void 0 ? _a : "") : "";
-        const content = item && item.length > 1 ? String((_b = item[1]) !== null && _b !== void 0 ? _b : "") : "";
+        const role = item && item.length > 0 ? String(item[0] ?? "") : "";
+        const content = item && item.length > 1 ? String(item[1] ?? "") : "";
         list.push(new Pair(role, content));
     });
     return list;
 }
 async function sendMessage(enhancedAIService, options) {
-    var _a, _b, _c;
     const onNonFatalError = (_value) => Unit.INSTANCE;
     const onToolInvocation = options.onToolInvocation
         ? (toolName) => {
-            var _a;
-            (_a = options.onToolInvocation) === null || _a === void 0 ? void 0 : _a.call(options, toolName);
+            options.onToolInvocation?.(toolName);
             return Unit.INSTANCE;
         }
         : null;
-    const stream = await enhancedAIService.callSuspend("sendMessage", options.message, null, toKotlinPairList(options.chatHistory), (_a = options.workspacePath) !== null && _a !== void 0 ? _a : null, null, FunctionType.CHAT, PromptFunctionType.CHAT, false, false, false, options.maxTokens, options.tokenUsageThreshold, onNonFatalError, null, (_b = options.customSystemPromptTemplate) !== null && _b !== void 0 ? _b : null, options.isSubTask, null, null, null, false, null, (_c = options.proxySenderName) !== null && _c !== void 0 ? _c : null, onToolInvocation, null, null, true);
+    const stream = await enhancedAIService.callSuspend("sendMessage", options.message, null, toKotlinPairList(options.chatHistory), options.workspacePath ?? null, null, FunctionType.CHAT, PromptFunctionType.CHAT, false, false, false, options.maxTokens, options.tokenUsageThreshold, onNonFatalError, null, options.customSystemPromptTemplate ?? null, options.isSubTask, null, null, null, false, null, options.proxySenderName ?? null, onToolInvocation, null, null, true);
     return collectStreamToString(stream, options.onChunk);
 }
 class TaskExecutor {
@@ -181,7 +178,7 @@ class TaskExecutor {
             const raw = await sendMessage(this.enhancedAIService, {
                 message: fullInstruction,
                 chatHistory: [],
-                workspacePath: workspacePath !== null && workspacePath !== void 0 ? workspacePath : null,
+                workspacePath: workspacePath ?? null,
                 maxTokens,
                 tokenUsageThreshold,
                 customSystemPromptTemplate: String(SystemPromptConfig.SUBTASK_AGENT_PROMPT_TEMPLATE || ""),
@@ -233,7 +230,7 @@ class TaskExecutor {
         return sendMessage(this.enhancedAIService, {
             message: fullSummaryInstruction,
             chatHistory,
-            workspacePath: workspacePath !== null && workspacePath !== void 0 ? workspacePath : null,
+            workspacePath: workspacePath ?? null,
             maxTokens,
             tokenUsageThreshold,
             customSystemPromptTemplate: null,

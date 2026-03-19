@@ -1456,25 +1456,14 @@
     }
   ]
 }*/
-var __rest = (this && this.__rest) || function (s, e) {
-    var t = {};
-    for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p) && e.indexOf(p) < 0)
-        t[p] = s[p];
-    if (s != null && typeof Object.getOwnPropertySymbols === "function")
-        for (var i = 0, p = Object.getOwnPropertySymbols(s); i < p.length; i++) {
-            if (e.indexOf(p[i]) < 0 && Object.prototype.propertyIsEnumerable.call(s, p[i]))
-                t[p[i]] = s[p[i]];
-        }
-    return t;
-};
 async function all_about_myself(params) {
     try {
-        const { query } = params !== null && params !== void 0 ? params : {};
+        const { query } = params ?? {};
         complete({
             success: true,
             message: "配置排查手册已加载（MCP/Skill/Sandbox Package/沙盒包调试烧录/功能模型与模型配置/TTS-STT语音服务），将按配置链路执行排查。",
             data: {
-                query: query !== null && query !== void 0 ? query : ""
+                query: query ?? ""
             }
         });
     }
@@ -1486,9 +1475,8 @@ async function all_about_myself(params) {
     }
 }
 async function how_make_skill() {
-    var _a;
     try {
-        const locale = ((_a = getLang()) !== null && _a !== void 0 ? _a : "").toLowerCase();
+        const locale = (getLang() ?? "").toLowerCase();
         const lang = locale.startsWith("zh") ? "zh" : locale.startsWith("en") ? "en" : "both";
         const zh = `如何制作 skill（简版）
 1. 先创建目录：/sdcard/Download/Operit/skills/<skill_name>/
@@ -1550,10 +1538,9 @@ async function list_sandbox_packages() {
     }
 }
 async function set_sandbox_package_enabled(params) {
-    var _a, _b;
     try {
-        const packageName = (_a = params === null || params === void 0 ? void 0 : params.package_name) !== null && _a !== void 0 ? _a : "";
-        const enabled = (_b = params === null || params === void 0 ? void 0 : params.enabled) !== null && _b !== void 0 ? _b : false;
+        const packageName = params?.package_name ?? "";
+        const enabled = params?.enabled ?? false;
         const result = await Tools.SoftwareSettings.setSandboxPackageEnabled(packageName, enabled);
         const payload = extract_string_result(result);
         complete({
@@ -1584,7 +1571,7 @@ const TOOLPKG_SUBPACKAGE_ID_PATTERN = /^\s*["']?id["']?\s*:\s*["']([^"']+)["']/g
 const TOOLPKG_SKIP_DIR_NAMES = new Set([".git", "__pycache__"]);
 const TOOLPKG_SKIP_FILE_NAMES = new Set([".DS_Store", "Thumbs.db"]);
 function normalize_android_path(raw) {
-    const normalized = String(raw !== null && raw !== void 0 ? raw : "").trim().replace(/\\/g, "/");
+    const normalized = String(raw ?? "").trim().replace(/\\/g, "/");
     if (!normalized)
         return "";
     if (/^[a-zA-Z]+:\/\//.test(normalized))
@@ -1599,7 +1586,7 @@ function normalize_android_path(raw) {
     return normalized;
 }
 function normalize_package_key(raw) {
-    return String(raw !== null && raw !== void 0 ? raw : "").trim().toLowerCase();
+    return String(raw ?? "").trim().toLowerCase();
 }
 function normalize_directory_path(path) {
     const normalized = normalize_android_path(path).replace(/\/+/g, "/");
@@ -1626,7 +1613,7 @@ function path_basename(path) {
 }
 function path_join(...parts) {
     const filtered = parts
-        .map((part) => String(part !== null && part !== void 0 ? part : "").trim().replace(/\\/g, "/"))
+        .map((part) => String(part ?? "").trim().replace(/\\/g, "/"))
         .filter(Boolean);
     if (filtered.length === 0)
         return "";
@@ -1635,7 +1622,7 @@ function path_join(...parts) {
     return leadingSlash ? `/${joined}` : joined;
 }
 function safe_debug_file_stem(raw, fallback) {
-    const normalized = String(raw !== null && raw !== void 0 ? raw : "").trim().replace(/[^A-Za-z0-9._-]+/g, "_").replace(/^[_\.]+|[_\.]+$/g, "");
+    const normalized = String(raw ?? "").trim().replace(/[^A-Za-z0-9._-]+/g, "_").replace(/^[_\.]+|[_\.]+$/g, "");
     return normalized || fallback;
 }
 function parse_boolean_like(value, defaultValue) {
@@ -1662,12 +1649,11 @@ function parse_integer_like(value, defaultValue) {
 }
 async function android_path_exists(path) {
     const result = (await Tools.Files.exists(path, "android"));
-    return !!(result === null || result === void 0 ? void 0 : result.exists);
+    return !!result?.exists;
 }
 async function get_android_file_type(path) {
-    var _a;
     const result = (await Tools.Files.info(path, "android"));
-    return String((_a = result === null || result === void 0 ? void 0 : result.fileType) !== null && _a !== void 0 ? _a : "").trim().toLowerCase();
+    return String(result?.fileType ?? "").trim().toLowerCase();
 }
 async function ensure_android_directory(path) {
     await Tools.Files.mkdir(path, true, "android");
@@ -1686,14 +1672,14 @@ async function cleanup_android_paths(paths) {
         try {
             await delete_android_path_if_exists(path);
         }
-        catch (_a) {
+        catch {
             // Ignore cleanup failures.
         }
     }
 }
 async function read_android_text_file(path) {
     const result = (await Tools.Files.read({ path, environment: "android" }));
-    const content = typeof (result === null || result === void 0 ? void 0 : result.content) === "string" ? result.content : extract_string_result(result);
+    const content = typeof result?.content === "string" ? result.content : extract_string_result(result);
     if (typeof content !== "string") {
         throw new Error(`Failed to read text file: ${path}`);
     }
@@ -1708,7 +1694,7 @@ function parse_json_record(raw) {
             return null;
         return parsed;
     }
-    catch (_a) {
+    catch {
         return null;
     }
 }
@@ -1728,10 +1714,9 @@ function parse_sandbox_packages_payload(raw) {
     };
 }
 function find_sandbox_package_entry(payload, packageName) {
-    var _a, _b;
     const targetKey = normalize_package_key(packageName);
-    const packages = (_a = payload === null || payload === void 0 ? void 0 : payload.packages) !== null && _a !== void 0 ? _a : [];
-    return ((_b = packages.find((entry) => normalize_package_key(entry === null || entry === void 0 ? void 0 : entry.packageName) === targetKey)) !== null && _b !== void 0 ? _b : null);
+    const packages = payload?.packages ?? [];
+    return (packages.find((entry) => normalize_package_key(entry?.packageName) === targetKey) ?? null);
 }
 async function refresh_sandbox_packages_until(packageName, timeoutMs) {
     const deadline = Date.now() + Math.max(0, timeoutMs);
@@ -1768,9 +1753,8 @@ function extract_js_metadata_block(sourceText, sourcePath) {
     return match[1].trim();
 }
 function parse_js_package_source(sourceText, sourcePath) {
-    var _a, _b, _c;
     const metadataBlock = extract_js_metadata_block(sourceText, sourcePath);
-    const packageName = (_c = (_b = (_a = JS_PACKAGE_NAME_PATTERN.exec(metadataBlock)) === null || _a === void 0 ? void 0 : _a[1]) === null || _b === void 0 ? void 0 : _b.trim()) !== null && _c !== void 0 ? _c : "";
+    const packageName = JS_PACKAGE_NAME_PATTERN.exec(metadataBlock)?.[1]?.trim() ?? "";
     if (!packageName) {
         throw new Error(`Missing package metadata name: ${sourcePath}`);
     }
@@ -1780,12 +1764,11 @@ function parse_js_package_source(sourceText, sourcePath) {
     };
 }
 async function delete_duplicate_external_js_package_files(packageName, keepPath) {
-    var _a, _b;
     const removedPaths = [];
     const listing = (await Tools.Files.list(SANDBOX_EXTERNAL_PACKAGES_DIR, "android"));
-    for (const entry of (_a = listing === null || listing === void 0 ? void 0 : listing.entries) !== null && _a !== void 0 ? _a : []) {
-        const entryName = String((_b = entry === null || entry === void 0 ? void 0 : entry.name) !== null && _b !== void 0 ? _b : "").trim();
-        if (!entryName || (entry === null || entry === void 0 ? void 0 : entry.isDirectory) || !entryName.toLowerCase().endsWith(".js")) {
+    for (const entry of listing?.entries ?? []) {
+        const entryName = String(entry?.name ?? "").trim();
+        if (!entryName || entry?.isDirectory || !entryName.toLowerCase().endsWith(".js")) {
             continue;
         }
         const candidatePath = path_join(SANDBOX_EXTERNAL_PACKAGES_DIR, entryName);
@@ -1801,44 +1784,43 @@ async function delete_duplicate_external_js_package_files(packageName, keepPath)
             await Tools.Files.deleteFile(candidatePath, false, "android");
             removedPaths.push(candidatePath);
         }
-        catch (_c) {
+        catch {
             // Ignore files that cannot be parsed as sandbox packages.
         }
     }
     return removedPaths;
 }
 function parse_toolpkg_manifest_text(text, manifestPath) {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k;
     let packageId = "";
     let mainEntry = "";
     let subpackageIds = [];
     try {
         const parsed = JSON.parse(text);
         if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-            packageId = String((_a = parsed.toolpkg_id) !== null && _a !== void 0 ? _a : "").trim();
-            mainEntry = String((_b = parsed.main) !== null && _b !== void 0 ? _b : "").trim();
+            packageId = String(parsed.toolpkg_id ?? "").trim();
+            mainEntry = String(parsed.main ?? "").trim();
             if (Array.isArray(parsed.subpackages)) {
                 subpackageIds = parsed.subpackages
-                    .map((subpackage) => { var _a; return String((_a = subpackage === null || subpackage === void 0 ? void 0 : subpackage.id) !== null && _a !== void 0 ? _a : "").trim(); })
+                    .map((subpackage) => String(subpackage?.id ?? "").trim())
                     .filter(Boolean);
             }
         }
     }
-    catch (_l) {
+    catch {
         // HJSON-like manifests will fall back to regex parsing below.
     }
     if (!packageId) {
-        packageId = (_e = (_d = (_c = TOOLPKG_ID_PATTERN.exec(text)) === null || _c === void 0 ? void 0 : _c[1]) === null || _d === void 0 ? void 0 : _d.trim()) !== null && _e !== void 0 ? _e : "";
+        packageId = TOOLPKG_ID_PATTERN.exec(text)?.[1]?.trim() ?? "";
     }
     if (!mainEntry) {
-        mainEntry = (_h = (_g = (_f = TOOLPKG_MAIN_PATTERN.exec(text)) === null || _f === void 0 ? void 0 : _f[1]) === null || _g === void 0 ? void 0 : _g.trim()) !== null && _h !== void 0 ? _h : "";
+        mainEntry = TOOLPKG_MAIN_PATTERN.exec(text)?.[1]?.trim() ?? "";
     }
     if (subpackageIds.length === 0) {
         const matches = [];
         const pattern = new RegExp(TOOLPKG_SUBPACKAGE_ID_PATTERN.source, TOOLPKG_SUBPACKAGE_ID_PATTERN.flags);
         let match;
         while ((match = pattern.exec(text)) !== null) {
-            const subpackageId = (_k = (_j = match[1]) === null || _j === void 0 ? void 0 : _j.trim()) !== null && _k !== void 0 ? _k : "";
+            const subpackageId = match[1]?.trim() ?? "";
             if (subpackageId) {
                 matches.push(subpackageId);
             }
@@ -1920,12 +1902,11 @@ async function resolve_toolpkg_source(rawSourcePath) {
     };
 }
 function collect_toolpkg_directory_entries(rootFile, currentFile, entries = []) {
-    var _a, _b, _c, _d;
     const children = currentFile.listFiles();
-    const length = Number((_a = children === null || children === void 0 ? void 0 : children.length) !== null && _a !== void 0 ? _a : 0);
+    const length = Number(children?.length ?? 0);
     for (let index = 0; index < length; index += 1) {
         const child = children[index];
-        const childName = String((_d = (_c = (_b = child.getName) === null || _b === void 0 ? void 0 : _b.call(child)) !== null && _c !== void 0 ? _c : child.name) !== null && _d !== void 0 ? _d : "").trim();
+        const childName = String(child.getName?.() ?? child.name ?? "").trim();
         if (!childName) {
             continue;
         }
@@ -2004,14 +1985,14 @@ async function build_toolpkg_archive_from_folder(source) {
     };
 }
 function parse_requested_package_ids(raw) {
-    const input = String(raw !== null && raw !== void 0 ? raw : "").trim();
+    const input = String(raw ?? "").trim();
     if (!input)
         return [];
     return Array.from(new Set(input.split(/[\r\n,]+/).map((item) => item.trim()).filter(Boolean)));
 }
 async function debug_install_js_package(params) {
     try {
-        const sourcePath = normalize_android_path(params === null || params === void 0 ? void 0 : params.source_path);
+        const sourcePath = normalize_android_path(params?.source_path);
         if (!sourcePath) {
             complete({
                 success: false,
@@ -2036,8 +2017,8 @@ async function debug_install_js_package(params) {
         }
         const sourceText = await read_android_text_file(sourcePath);
         const packageInfo = parse_js_package_source(sourceText, sourcePath);
-        const enableAfterInstall = parse_boolean_like(params === null || params === void 0 ? void 0 : params.enable_after_install, true);
-        const activateAfterInstall = parse_boolean_like(params === null || params === void 0 ? void 0 : params.activate_after_install, true);
+        const enableAfterInstall = parse_boolean_like(params?.enable_after_install, true);
+        const activateAfterInstall = parse_boolean_like(params?.activate_after_install, true);
         const shouldEnable = enableAfterInstall || activateAfterInstall;
         await ensure_android_directory(SANDBOX_EXTERNAL_PACKAGES_DIR);
         const targetPath = path_join(SANDBOX_EXTERNAL_PACKAGES_DIR, `${safe_debug_file_stem(packageInfo.packageName, "debug_js_package")}.js`);
@@ -2114,12 +2095,11 @@ async function debug_install_js_package(params) {
     }
 }
 async function debug_install_toolpkg(params) {
-    var _a, _b;
     const cleanupPaths = [];
     try {
-        const resolvedSource = await resolve_toolpkg_source((_a = params === null || params === void 0 ? void 0 : params.source_path) !== null && _a !== void 0 ? _a : "");
+        const resolvedSource = await resolve_toolpkg_source(params?.source_path ?? "");
         cleanupPaths.push(...resolvedSource.temporaryPaths);
-        let archivePath = (_b = resolvedSource.archivePath) !== null && _b !== void 0 ? _b : "";
+        let archivePath = resolvedSource.archivePath ?? "";
         if (resolvedSource.sourceKind === "folder") {
             const builtArchive = await build_toolpkg_archive_from_folder(resolvedSource);
             archivePath = builtArchive.archivePath;
@@ -2138,8 +2118,8 @@ async function debug_install_toolpkg(params) {
             });
             return;
         }
-        const resetSubpackageStates = parse_boolean_like(params === null || params === void 0 ? void 0 : params.reset_subpackage_states, true);
-        const waitMs = parse_integer_like(params === null || params === void 0 ? void 0 : params.wait_ms, DEFAULT_TOOLPKG_INSTALL_WAIT_MS);
+        const resetSubpackageStates = parse_boolean_like(params?.reset_subpackage_states, true);
+        const waitMs = parse_integer_like(params?.wait_ms, DEFAULT_TOOLPKG_INSTALL_WAIT_MS);
         const broadcastResult = await Tools.System.sendBroadcast({
             action: TOOLPKG_DEBUG_INSTALL_ACTION,
             component: TOOLPKG_DEBUG_INSTALL_COMPONENT,
@@ -2176,7 +2156,7 @@ async function debug_install_toolpkg(params) {
             });
             return;
         }
-        const requestedSubpackages = parse_requested_package_ids(params === null || params === void 0 ? void 0 : params.activate_subpackages);
+        const requestedSubpackages = parse_requested_package_ids(params?.activate_subpackages);
         const knownSubpackageKeys = new Set(resolvedSource.subpackageIds.map(normalize_package_key));
         const unknownRequestedSubpackages = knownSubpackageKeys.size === 0
             ? []
@@ -2253,14 +2233,13 @@ function parse_environment_variable_payload(raw) {
             value: typeof record.value === "string" || record.value === null ? record.value : undefined
         };
     }
-    catch (_a) {
+    catch {
         return null;
     }
 }
 async function read_environment_variable(params) {
-    var _a, _b;
     try {
-        const key = ((_a = params === null || params === void 0 ? void 0 : params.key) !== null && _a !== void 0 ? _a : "").trim();
+        const key = (params?.key ?? "").trim();
         if (!key) {
             complete({
                 success: false,
@@ -2273,11 +2252,11 @@ async function read_environment_variable(params) {
         const parsed = parse_environment_variable_payload(raw);
         complete({
             success: true,
-            message: (parsed === null || parsed === void 0 ? void 0 : parsed.exists) ? `Environment variable read: ${key}` : `Environment variable not set: ${key}`,
+            message: parsed?.exists ? `Environment variable read: ${key}` : `Environment variable not set: ${key}`,
             data: {
                 key,
-                value: (_b = parsed === null || parsed === void 0 ? void 0 : parsed.value) !== null && _b !== void 0 ? _b : null,
-                exists: !!(parsed === null || parsed === void 0 ? void 0 : parsed.exists),
+                value: parsed?.value ?? null,
+                exists: !!parsed?.exists,
                 raw
             }
         });
@@ -2290,9 +2269,8 @@ async function read_environment_variable(params) {
     }
 }
 async function write_environment_variable(params) {
-    var _a, _b, _c;
     try {
-        const key = ((_a = params === null || params === void 0 ? void 0 : params.key) !== null && _a !== void 0 ? _a : "").trim();
+        const key = (params?.key ?? "").trim();
         if (!key) {
             complete({
                 success: false,
@@ -2300,7 +2278,7 @@ async function write_environment_variable(params) {
             });
             return;
         }
-        const value = (_b = params === null || params === void 0 ? void 0 : params.value) !== null && _b !== void 0 ? _b : "";
+        const value = params?.value ?? "";
         const result = await Tools.SoftwareSettings.writeEnvironmentVariable(key, String(value));
         const raw = extract_string_result(result);
         const parsed = parse_environment_variable_payload(raw);
@@ -2311,8 +2289,8 @@ async function write_environment_variable(params) {
             data: {
                 key,
                 requestedValue: String(value),
-                value: (_c = parsed === null || parsed === void 0 ? void 0 : parsed.value) !== null && _c !== void 0 ? _c : null,
-                exists: !!(parsed === null || parsed === void 0 ? void 0 : parsed.exists),
+                value: parsed?.value ?? null,
+                exists: !!parsed?.exists,
                 raw
             }
         });
@@ -2326,7 +2304,7 @@ async function write_environment_variable(params) {
 }
 async function restart_mcp_with_logs(params) {
     try {
-        const timeoutMs = params === null || params === void 0 ? void 0 : params.timeout_ms;
+        const timeoutMs = params?.timeout_ms;
         const result = await Tools.SoftwareSettings.restartMcpWithLogs(timeoutMs);
         const logs = extract_string_result(result);
         complete({
@@ -2365,7 +2343,7 @@ async function get_speech_services_config() {
 }
 async function set_speech_services_config(params) {
     try {
-        const updates = Object.assign({}, (params !== null && params !== void 0 ? params : {}));
+        const updates = { ...(params ?? {}) };
         const result = await Tools.SoftwareSettings.setSpeechServicesConfig(updates);
         const parsed = result;
         complete({
@@ -2402,7 +2380,7 @@ async function list_model_configs() {
 }
 async function create_model_config(params) {
     try {
-        const options = Object.assign({}, (params !== null && params !== void 0 ? params : {}));
+        const options = { ...(params ?? {}) };
         const result = await Tools.SoftwareSettings.createModelConfig(options);
         complete({
             success: true,
@@ -2418,9 +2396,8 @@ async function create_model_config(params) {
     }
 }
 async function update_model_config(params) {
-    var _a;
     try {
-        const configId = ((_a = params === null || params === void 0 ? void 0 : params.config_id) !== null && _a !== void 0 ? _a : "").trim();
+        const configId = (params?.config_id ?? "").trim();
         if (!configId) {
             complete({
                 success: false,
@@ -2428,7 +2405,7 @@ async function update_model_config(params) {
             });
             return;
         }
-        const _b = params !== null && params !== void 0 ? params : {}, { config_id: _ignoredConfigId } = _b, updates = __rest(_b, ["config_id"]);
+        const { config_id: _ignoredConfigId, ...updates } = params ?? {};
         const result = await Tools.SoftwareSettings.updateModelConfig(configId, updates);
         complete({
             success: true,
@@ -2444,9 +2421,8 @@ async function update_model_config(params) {
     }
 }
 async function delete_model_config(params) {
-    var _a;
     try {
-        const configId = ((_a = params === null || params === void 0 ? void 0 : params.config_id) !== null && _a !== void 0 ? _a : "").trim();
+        const configId = (params?.config_id ?? "").trim();
         if (!configId) {
             complete({
                 success: false,
@@ -2485,9 +2461,8 @@ async function list_function_model_configs() {
     }
 }
 async function get_function_model_config(params) {
-    var _a, _b;
     try {
-        const functionType = ((_a = params === null || params === void 0 ? void 0 : params.function_type) !== null && _a !== void 0 ? _a : "").trim();
+        const functionType = (params?.function_type ?? "").trim();
         if (!functionType) {
             complete({
                 success: false,
@@ -2496,9 +2471,12 @@ async function get_function_model_config(params) {
             return;
         }
         const result = await Tools.SoftwareSettings.getFunctionModelConfig(functionType);
-        const config = (_b = result === null || result === void 0 ? void 0 : result.config) !== null && _b !== void 0 ? _b : {};
-        const { contextLength: _contextLength, maxContextLength: _maxContextLength, enableMaxContextMode: _enableMaxContextMode, summaryTokenThreshold: _summaryTokenThreshold, enableSummary: _enableSummary, enableSummaryByMessageCount: _enableSummaryByMessageCount, summaryMessageCountThreshold: _summaryMessageCountThreshold } = config, configWithoutContextSummary = __rest(config, ["contextLength", "maxContextLength", "enableMaxContextMode", "summaryTokenThreshold", "enableSummary", "enableSummaryByMessageCount", "summaryMessageCountThreshold"]);
-        const filteredResult = Object.assign(Object.assign({}, result), { config: configWithoutContextSummary });
+        const config = result?.config ?? {};
+        const { contextLength: _contextLength, maxContextLength: _maxContextLength, enableMaxContextMode: _enableMaxContextMode, summaryTokenThreshold: _summaryTokenThreshold, enableSummary: _enableSummary, enableSummaryByMessageCount: _enableSummaryByMessageCount, summaryMessageCountThreshold: _summaryMessageCountThreshold, ...configWithoutContextSummary } = config;
+        const filteredResult = {
+            ...result,
+            config: configWithoutContextSummary
+        };
         complete({
             success: true,
             message: "Function model config fetched.",
@@ -2517,19 +2495,18 @@ function get_error_message(error) {
 }
 function pick_context_summary_fields(config) {
     return {
-        context_length: config === null || config === void 0 ? void 0 : config.contextLength,
-        max_context_length: config === null || config === void 0 ? void 0 : config.maxContextLength,
-        enable_max_context_mode: config === null || config === void 0 ? void 0 : config.enableMaxContextMode,
-        summary_token_threshold: config === null || config === void 0 ? void 0 : config.summaryTokenThreshold,
-        enable_summary: config === null || config === void 0 ? void 0 : config.enableSummary,
-        enable_summary_by_message_count: config === null || config === void 0 ? void 0 : config.enableSummaryByMessageCount,
-        summary_message_count_threshold: config === null || config === void 0 ? void 0 : config.summaryMessageCountThreshold
+        context_length: config?.contextLength,
+        max_context_length: config?.maxContextLength,
+        enable_max_context_mode: config?.enableMaxContextMode,
+        summary_token_threshold: config?.summaryTokenThreshold,
+        enable_summary: config?.enableSummary,
+        enable_summary_by_message_count: config?.enableSummaryByMessageCount,
+        summary_message_count_threshold: config?.summaryMessageCountThreshold
     };
 }
 async function get_context_summary_config(params) {
-    var _a, _b, _c, _d, _e, _f, _g, _h;
     try {
-        const functionType = ((_a = params === null || params === void 0 ? void 0 : params.function_type) !== null && _a !== void 0 ? _a : "CHAT").trim().toUpperCase();
+        const functionType = (params?.function_type ?? "CHAT").trim().toUpperCase();
         if (!functionType) {
             complete({
                 success: false,
@@ -2552,11 +2529,11 @@ async function get_context_summary_config(params) {
             message: `Context summary config fetched for ${functionType}.`,
             data: {
                 function_type: functionType,
-                config_id: (_c = (_b = result.configId) !== null && _b !== void 0 ? _b : config.id) !== null && _c !== void 0 ? _c : "",
-                config_name: (_e = (_d = result.configName) !== null && _d !== void 0 ? _d : config.name) !== null && _e !== void 0 ? _e : "",
-                model_index: (_f = result.modelIndex) !== null && _f !== void 0 ? _f : 0,
-                actual_model_index: (_g = result.actualModelIndex) !== null && _g !== void 0 ? _g : 0,
-                selected_model: (_h = result.selectedModel) !== null && _h !== void 0 ? _h : "",
+                config_id: result.configId ?? config.id ?? "",
+                config_name: result.configName ?? config.name ?? "",
+                model_index: result.modelIndex ?? 0,
+                actual_model_index: result.actualModelIndex ?? 0,
+                selected_model: result.selectedModel ?? "",
                 context_summary: pick_context_summary_fields(config),
                 raw: result
             }
@@ -2570,9 +2547,8 @@ async function get_context_summary_config(params) {
     }
 }
 async function set_context_summary_config(params) {
-    var _a, _b, _c, _d;
     try {
-        const functionType = ((_a = params === null || params === void 0 ? void 0 : params.function_type) !== null && _a !== void 0 ? _a : "CHAT").trim().toUpperCase();
+        const functionType = (params?.function_type ?? "CHAT").trim().toUpperCase();
         if (!functionType) {
             complete({
                 success: false,
@@ -2581,7 +2557,7 @@ async function set_context_summary_config(params) {
             return;
         }
         const binding = (await Tools.SoftwareSettings.getFunctionModelConfig(functionType));
-        const configId = ((_d = (_b = binding.configId) !== null && _b !== void 0 ? _b : (_c = binding.config) === null || _c === void 0 ? void 0 : _c.id) !== null && _d !== void 0 ? _d : "").trim();
+        const configId = (binding.configId ?? binding.config?.id ?? "").trim();
         if (!configId) {
             complete({
                 success: false,
@@ -2599,17 +2575,26 @@ async function set_context_summary_config(params) {
             enable_summary_by_message_count: true,
             summary_message_count_threshold: 16
         };
-        const updates = Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign({}, defaultUpdates), ((params === null || params === void 0 ? void 0 : params.context_length) === undefined ? {} : { context_length: params.context_length })), ((params === null || params === void 0 ? void 0 : params.max_context_length) === undefined
-            ? {}
-            : { max_context_length: params.max_context_length })), ((params === null || params === void 0 ? void 0 : params.enable_max_context_mode) === undefined
-            ? {}
-            : { enable_max_context_mode: params.enable_max_context_mode })), ((params === null || params === void 0 ? void 0 : params.summary_token_threshold) === undefined
-            ? {}
-            : { summary_token_threshold: params.summary_token_threshold })), ((params === null || params === void 0 ? void 0 : params.enable_summary) === undefined ? {} : { enable_summary: params.enable_summary })), ((params === null || params === void 0 ? void 0 : params.enable_summary_by_message_count) === undefined
-            ? {}
-            : { enable_summary_by_message_count: params.enable_summary_by_message_count })), ((params === null || params === void 0 ? void 0 : params.summary_message_count_threshold) === undefined
-            ? {}
-            : { summary_message_count_threshold: params.summary_message_count_threshold }));
+        const updates = {
+            ...defaultUpdates,
+            ...(params?.context_length === undefined ? {} : { context_length: params.context_length }),
+            ...(params?.max_context_length === undefined
+                ? {}
+                : { max_context_length: params.max_context_length }),
+            ...(params?.enable_max_context_mode === undefined
+                ? {}
+                : { enable_max_context_mode: params.enable_max_context_mode }),
+            ...(params?.summary_token_threshold === undefined
+                ? {}
+                : { summary_token_threshold: params.summary_token_threshold }),
+            ...(params?.enable_summary === undefined ? {} : { enable_summary: params.enable_summary }),
+            ...(params?.enable_summary_by_message_count === undefined
+                ? {}
+                : { enable_summary_by_message_count: params.enable_summary_by_message_count }),
+            ...(params?.summary_message_count_threshold === undefined
+                ? {}
+                : { summary_message_count_threshold: params.summary_message_count_threshold })
+        };
         const updateResult = (await Tools.SoftwareSettings.updateModelConfig(configId, updates));
         complete({
             success: true,
@@ -2632,10 +2617,9 @@ async function set_context_summary_config(params) {
     }
 }
 async function set_function_model_config(params) {
-    var _a, _b;
     try {
-        const functionType = ((_a = params === null || params === void 0 ? void 0 : params.function_type) !== null && _a !== void 0 ? _a : "").trim();
-        const configId = ((_b = params === null || params === void 0 ? void 0 : params.config_id) !== null && _b !== void 0 ? _b : "").trim();
+        const functionType = (params?.function_type ?? "").trim();
+        const configId = (params?.config_id ?? "").trim();
         if (!functionType) {
             complete({
                 success: false,
@@ -2650,7 +2634,7 @@ async function set_function_model_config(params) {
             });
             return;
         }
-        const result = await Tools.SoftwareSettings.setFunctionModelConfig(functionType, configId, params === null || params === void 0 ? void 0 : params.model_index);
+        const result = await Tools.SoftwareSettings.setFunctionModelConfig(functionType, configId, params?.model_index);
         complete({
             success: true,
             message: "Function model binding updated.",
@@ -2665,9 +2649,8 @@ async function set_function_model_config(params) {
     }
 }
 async function test_model_config_connection(params) {
-    var _a;
     try {
-        const configId = ((_a = params === null || params === void 0 ? void 0 : params.config_id) !== null && _a !== void 0 ? _a : "").trim();
+        const configId = (params?.config_id ?? "").trim();
         if (!configId) {
             complete({
                 success: false,
@@ -2675,8 +2658,8 @@ async function test_model_config_connection(params) {
             });
             return;
         }
-        const result = await Tools.SoftwareSettings.testModelConfigConnection(configId, params === null || params === void 0 ? void 0 : params.model_index);
-        const success = !!(result === null || result === void 0 ? void 0 : result.success);
+        const result = await Tools.SoftwareSettings.testModelConfigConnection(configId, params?.model_index);
+        const success = !!result?.success;
         complete({
             success,
             message: success ? "Model config connection tests passed." : "Model config connection tests have failures.",
@@ -2691,9 +2674,8 @@ async function test_model_config_connection(params) {
     }
 }
 async function ping_mcp(params) {
-    var _a;
     try {
-        const packageName = ((_a = params === null || params === void 0 ? void 0 : params.package_name) !== null && _a !== void 0 ? _a : "").trim();
+        const packageName = (params?.package_name ?? "").trim();
         if (!packageName) {
             complete({
                 success: false,

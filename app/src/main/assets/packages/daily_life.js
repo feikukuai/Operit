@@ -478,7 +478,6 @@ const dailyLife = (function () {
      * Create a one-time scheduled workflow to send a reminder message to a chat.
      */
     async function schedule_one_time_task(params) {
-        var _a, _b, _c;
         if (!params.trigger_time) {
             throw new Error("trigger_time is required");
         }
@@ -489,10 +488,10 @@ const dailyLife = (function () {
         const resolvedRoleCardId = getCallerCardId();
         const resolvedSenderName = getCallerName();
         const resolvedLang = getLang();
-        const workflowName = ((_a = resolvedLang === null || resolvedLang === void 0 ? void 0 : resolvedLang.toLowerCase()) === null || _a === void 0 ? void 0 : _a.startsWith("zh"))
+        const workflowName = resolvedLang?.toLowerCase()?.startsWith("zh")
             ? `一次性定时任务 ${params.trigger_time}`
             : `One-time scheduled task ${params.trigger_time}`;
-        const description = ((_b = resolvedLang === null || resolvedLang === void 0 ? void 0 : resolvedLang.toLowerCase()) === null || _b === void 0 ? void 0 : _b.startsWith("zh"))
+        const description = resolvedLang?.toLowerCase()?.startsWith("zh")
             ? `一次性定时任务，触发时间 ${params.trigger_time}`
             : `One-time scheduled task at ${params.trigger_time}`;
         const timedTriggerTag = `[定时触发:${params.trigger_time}]\n[Scheduled Trigger:${params.trigger_time}]`;
@@ -501,7 +500,7 @@ const dailyLife = (function () {
             ? `${params.message}\n${timedTriggerTag}`
             : `${defaultMessage}\n${timedTriggerTag}`;
         const created = await Tools.Workflow.create(workflowName, description, null, null, true);
-        const workflowId = created === null || created === void 0 ? void 0 : created.id;
+        const workflowId = created?.id;
         if (!workflowId) {
             throw new Error("Failed to create workflow: missing workflow id");
         }
@@ -520,7 +519,7 @@ const dailyLife = (function () {
         if (resolvedSenderName) {
             actionConfig.sender_name = resolvedSenderName;
         }
-        const nodeTexts = ((_c = resolvedLang === null || resolvedLang === void 0 ? void 0 : resolvedLang.toLowerCase()) === null || _c === void 0 ? void 0 : _c.startsWith("zh"))
+        const nodeTexts = resolvedLang?.toLowerCase()?.startsWith("zh")
             ? {
                 triggerName: "定时触发",
                 triggerDesc: "一次性定时触发",

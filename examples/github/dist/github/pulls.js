@@ -6,11 +6,10 @@ exports.getPullRequest = getPullRequest;
 exports.mergePullRequest = mergePullRequest;
 const api_1 = require("./api");
 async function listPullRequests(params) {
-    var _a, _b, _c;
-    const page = (_a = params.page) !== null && _a !== void 0 ? _a : 1;
-    const perPage = (_b = params.per_page) !== null && _b !== void 0 ? _b : 30;
+    const page = params.page ?? 1;
+    const perPage = params.per_page ?? 30;
     const url = (0, api_1.buildUrl)(`/repos/${encodeURIComponent(params.owner)}/${encodeURIComponent(params.repo)}/pulls`, {
-        state: (_c = params.state) !== null && _c !== void 0 ? _c : 'open',
+        state: params.state ?? 'open',
         head: params.head,
         base: params.base,
         page,

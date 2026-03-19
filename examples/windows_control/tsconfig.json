@@ -1,9 +1,9 @@
 {
   "compilerOptions": {
-    "target": "es2018",
+    "target": "es2020",
     "module": "commonjs",
     "outDir": "./dist",
-    "lib": ["es2018", "dom"],
+    "lib": ["es2020"],
     "declaration": false,
     "strict": false,
     "noImplicitAny": false,
@@ -21,13 +21,14 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "typeRoots": [
-      "../types/index.d.ts",
+      "../types",
       "./node_modules/@types",
       "../../node_modules/@types"
     ]
   },
   "include": [
     "./**/*.ts",
+    "./**/*.d.ts",
     "../types/**/*.d.ts"
   ],
   "exclude": [

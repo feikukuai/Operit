@@ -114,6 +114,11 @@ const CrossrefSearch = (function () {
     const BASE_URL = "https://api.crossref.org";
     const DEFAULT_ROWS = 10;
     const MAX_ROWS = 100;
+    function buildQueryString(params) {
+        return Object.entries(params)
+            .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
+            .join("&");
+    }
     /**
      * 格式化作者信息
      */
@@ -149,7 +154,6 @@ const CrossrefSearch = (function () {
      * 格式化单篇文章信息
      */
     function formatArticle(item, index) {
-        var _a, _b, _c;
         const lines = [];
         if (index !== undefined) {
             lines.push(`\n=== Article ${index + 1} ===`);
@@ -166,7 +170,7 @@ const CrossrefSearch = (function () {
         const authors = formatAuthors(item.author);
         lines.push(`Authors: ${authors}`);
         // 发表日期
-        const publishedDate = formatDate(((_a = item.published) === null || _a === void 0 ? void 0 : _a['date-parts']) || ((_b = item['published-print']) === null || _b === void 0 ? void 0 : _b['date-parts']) || ((_c = item['published-online']) === null || _c === void 0 ? void 0 : _c['date-parts']));
+        const publishedDate = formatDate(item.published?.['date-parts'] || item['published-print']?.['date-parts'] || item['published-online']?.['date-parts']);
         lines.push(`Published: ${publishedDate}`);
         // 期刊/会议
         if (item['container-title'] && item['container-title'].length > 0) {
@@ -255,13 +259,13 @@ const CrossrefSearch = (function () {
         }
         const actualRows = Math.min(Math.max(rows, 1), MAX_ROWS);
         try {
-            const urlParams = new URLSearchParams({
+            const queryString = buildQueryString({
                 query: query,
                 rows: String(actualRows),
                 sort: sort,
                 order: order
             });
-            const url = `${BASE_URL}/works?${urlParams.toString()}`;
+            const url = `${BASE_URL}/works?${queryString}`;
             const client = OkHttp.newClient();
             const response = await client.get(url, {
                 'User-Agent': 'Operit/1.0 (mailto:support@example.com)'
@@ -313,11 +317,11 @@ const CrossrefSearch = (function () {
         }
         const actualRows = Math.min(Math.max(rows, 1), MAX_ROWS);
         try {
-            const urlParams = new URLSearchParams({
+            const queryString = buildQueryString({
                 'query.author': author,
                 rows: String(actualRows)
             });
-            const url = `${BASE_URL}/works?${urlParams.toString()}`;
+            const url = `${BASE_URL}/works?${queryString}`;
             const client = OkHttp.newClient();
             const response = await client.get(url, {
                 'User-Agent': 'Operit/1.0 (mailto:support@example.com)'
@@ -369,11 +373,11 @@ const CrossrefSearch = (function () {
         }
         const actualRows = Math.min(Math.max(rows, 1), MAX_ROWS);
         try {
-            const urlParams = new URLSearchParams({
+            const queryString = buildQueryString({
                 'query.title': title,
                 rows: String(actualRows)
             });
-            const url = `${BASE_URL}/works?${urlParams.toString()}`;
+            const url = `${BASE_URL}/works?${queryString}`;
             const client = OkHttp.newClient();
             const response = await client.get(url, {
                 'User-Agent': 'Operit/1.0 (mailto:support@example.com)'

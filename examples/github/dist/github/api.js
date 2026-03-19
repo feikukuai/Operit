@@ -50,8 +50,7 @@ function createHttpClient(timeoutMs = 30000) {
     return OkHttp.newBuilder().connectTimeout(timeoutMs).readTimeout(timeoutMs).writeTimeout(timeoutMs).build();
 }
 async function requestJson(options) {
-    var _a;
-    const client = createHttpClient((_a = options.timeoutMs) !== null && _a !== void 0 ? _a : 30000);
+    const client = createHttpClient(options.timeoutMs ?? 30000);
     const req = client.newRequest().url(options.url).method(options.method);
     const headers = defaultHeaders(options.headers);
     req.headers(headers);

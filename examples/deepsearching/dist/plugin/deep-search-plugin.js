@@ -79,15 +79,14 @@ function registerToolPkg() {
     return true;
 }
 function onApplicationCreate(input) {
-    console.log("deepsearching onApplicationCreate", JSON.stringify(input !== null && input !== void 0 ? input : null));
+    console.log("deepsearching onApplicationCreate", JSON.stringify(input ?? null));
 }
 async function onMessageProcessing(input) {
-    var _a, _b, _c, _d, _f, _g;
     const totalStartTime = Date.now();
     const payload = normalizePayload(input);
-    const probeOnly = Boolean((_a = payload.probeOnly) !== null && _a !== void 0 ? _a : false);
-    const executionId = String((_b = payload.executionId) !== null && _b !== void 0 ? _b : "").trim();
-    const message = String((_c = payload.messageContent) !== null && _c !== void 0 ? _c : "").trim();
+    const probeOnly = Boolean(payload.probeOnly ?? false);
+    const executionId = String(payload.executionId ?? "").trim();
+    const message = String(payload.messageContent ?? "").trim();
     logProbe(`onMessageProcessing start probeOnly=${probeOnly} executionId=${executionId || "none"} messageLength=${message.length}`);
     if (!message) {
         logProbe(`onMessageProcessing return matched=false reason=empty_message elapsedMs=${Date.now() - totalStartTime}`);
@@ -131,14 +130,14 @@ async function onMessageProcessing(input) {
         }
         cancellationHandle = Java.proxy(MessageProcessingController, {
             cancel() {
-                manager === null || manager === void 0 ? void 0 : manager.cancel();
+                manager?.cancel();
             },
         });
         ToolPkgMessageProcessingCancellationRegistry.register(executionId, cancellationHandle);
         const history = payload.chatHistory || [];
-        const workspacePath = (_d = payload.workspacePath) !== null && _d !== void 0 ? _d : null;
-        const maxTokens = Number((_f = payload.maxTokens) !== null && _f !== void 0 ? _f : 0);
-        const tokenUsageThreshold = Number((_g = payload.tokenUsageThreshold) !== null && _g !== void 0 ? _g : 0);
+        const workspacePath = payload.workspacePath ?? null;
+        const maxTokens = Number(payload.maxTokens ?? 0);
+        const tokenUsageThreshold = Number(payload.tokenUsageThreshold ?? 0);
         if (!maxTokens || !tokenUsageThreshold) {
             console.log("deepsearching missing maxTokens/tokenUsageThreshold");
             logProbe(`onMessageProcessing return matched=false reason=missing_limits elapsedMs=${Date.now() - totalStartTime}`);
@@ -177,10 +176,9 @@ async function onMessageProcessing(input) {
     }
 }
 function onXmlRender(event) {
-    var _a, _b, _c;
     const payload = normalizePayload(event);
-    const xmlContent = String((_a = payload.xmlContent) !== null && _a !== void 0 ? _a : "");
-    const tagName = String((_b = payload.tagName) !== null && _b !== void 0 ? _b : "");
+    const xmlContent = String(payload.xmlContent ?? "");
+    const tagName = String(payload.tagName ?? "");
     console.log("deepsearching onXmlRender input", JSON.stringify({
         tagName,
         xmlLength: xmlContent.length,
@@ -193,16 +191,15 @@ function onXmlRender(event) {
     const result = (0, plan_xml_render_plugin_1.renderPlanXml)(xmlContent, tagName);
     console.log("deepsearching onXmlRender result", JSON.stringify({
         tagName,
-        handled: Boolean(result === null || result === void 0 ? void 0 : result.handled),
-        hasComposeDsl: Boolean(result === null || result === void 0 ? void 0 : result.composeDsl),
-        composeDslStateKeys: ((_c = result === null || result === void 0 ? void 0 : result.composeDsl) === null || _c === void 0 ? void 0 : _c.state) ? Object.keys(result.composeDsl.state) : []
+        handled: Boolean(result?.handled),
+        hasComposeDsl: Boolean(result?.composeDsl),
+        composeDslStateKeys: result?.composeDsl?.state ? Object.keys(result.composeDsl.state) : []
     }));
     return result;
 }
 function onInputMenuToggle(input) {
-    var _a;
     const payload = normalizePayload(input);
-    const action = String((_a = payload.action) !== null && _a !== void 0 ? _a : "").toLowerCase();
+    const action = String(payload.action ?? "").toLowerCase();
     let context = null;
     try {
         context = getAppContext();

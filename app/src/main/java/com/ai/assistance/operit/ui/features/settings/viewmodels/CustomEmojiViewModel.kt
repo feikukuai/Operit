@@ -2,44 +2,77 @@ package com.ai.assistance.operit.ui.features.settings.viewmodels
 
 import android.content.Context
 import android.net.Uri
-import com.ai.assistance.operit.util.AppLogger
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ai.assistance.operit.R
+import com.ai.assistance.operit.data.model.ActivePrompt
 import com.ai.assistance.operit.data.model.CustomEmoji
+import com.ai.assistance.operit.data.preferences.ActivePromptManager
+import com.ai.assistance.operit.data.preferences.CharacterCardManager
+import com.ai.assistance.operit.data.preferences.CharacterGroupCardManager
 import com.ai.assistance.operit.data.preferences.CustomEmojiPreferences
 import com.ai.assistance.operit.data.repository.CustomEmojiRepository
-import kotlinx.coroutines.flow.*
+import com.ai.assistance.operit.util.AppLogger
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 /**
  * 自定义表情管理 ViewModel
- * 
- * 管理自定义表情的UI状态和业务逻辑
+ *
+ * 管理当前活跃角色目标的自定义表情 UI 状态和业务逻辑。
  */
 class CustomEmojiViewModel(context: Context) : ViewModel() {
 
     private val repository = CustomEmojiRepository.getInstance(context)
-    private val TAG = "CustomEmojiViewModel"
+    private val activePromptManager = ActivePromptManager.getInstance(context)
+    private val characterCardManager = CharacterCardManager.getInstance(context)
+    private val characterGroupCardManager = CharacterGroupCardManager.getInstance(context)
     private val appContext = context.applicationContext
+    private val tag = "CustomEmojiViewModel"
 
-    // 当前选中的类别
-    private val _selectedCategory = MutableStateFlow(CustomEmojiPreferences.BUILTIN_EMOTIONS.first())
-    val selectedCategory: StateFlow<String> = _selectedCategory.asStateFlow()
-
-    // 所有类别（内置 + 自定义）
-    val categories: StateFlow<List<String>> = repository.getAllCategories()
+    val activePrompt: StateFlow<ActivePrompt> = activePromptManager.activePromptFlow
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
-            initialValue = CustomEmojiPreferences.BUILTIN_EMOTIONS
+            initialValue = ActivePrompt.CharacterCard(CharacterCardManager.DEFAULT_CHARACTER_CARD_ID)
         )
 
-    // 当前类别的表情列表
-    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
-    val emojisInCategory: StateFlow<List<CustomEmoji>> = _selectedCategory
-        .flatMapLatest { category ->
-            repository.getEmojisForCategory(category)
+    val activeTargetName: StateFlow<String> = activePrompt
+        .flatMapLatest { prompt ->
+            when (prompt) {
+                is ActivePrompt.CharacterCard -> {
+                    characterCardManager.getCharacterCardFlow(prompt.id).map { it?.name.orEmpty() }
+                }
+                is ActivePrompt.CharacterGroup -> {
+                    characterGroupCardManager.getCharacterGroupCardFlow(prompt.id).map { it?.name.orEmpty() }
+                }
+            }
+        }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = ""
+        )
+
+    private val _selectedCategory = MutableStateFlow(CustomEmojiPreferences.BUILTIN_EMOTIONS.first())
+    val selectedCategory: StateFlow<String> = _selectedCategory.asStateFlow()
+
+    val categories: StateFlow<List<String>> = activePrompt
+        .flatMapLatest { prompt ->
+            flow {
+                repository.initializeBuiltinEmojis(prompt)
+                emitAll(repository.getAllCategories(prompt))
+            }
         }
         .stateIn(
             scope = viewModelScope,
@@ -47,31 +80,41 @@ class CustomEmojiViewModel(context: Context) : ViewModel() {
             initialValue = emptyList()
         )
 
-    // 加载状态
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    val emojisInCategory: StateFlow<List<CustomEmoji>> = combine(activePrompt, _selectedCategory) { prompt, category ->
+        prompt to category
+    }.flatMapLatest { (prompt, category) ->
+        repository.getEmojisForCategory(prompt, category)
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
+    )
+
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
-    // 错误消息
     private val _errorMessage = MutableStateFlow<String?>(null)
     val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
 
-    // 成功消息
     private val _successMessage = MutableStateFlow<String?>(null)
     val successMessage: StateFlow<String?> = _successMessage.asStateFlow()
 
-    /**
-     * 选择类别
-     */
+    init {
+        viewModelScope.launch {
+            categories.collect { currentCategories ->
+                val fallbackCategory = currentCategories.firstOrNull()
+                if (!fallbackCategory.isNullOrBlank() && _selectedCategory.value !in currentCategories) {
+                    _selectedCategory.value = fallbackCategory
+                }
+            }
+        }
+    }
+
     fun selectCategory(category: String) {
         _selectedCategory.value = category
     }
 
-    /**
-     * 批量添加表情
-     * 
-     * @param category 类别名称
-     * @param uris 图片URI列表
-     */
     fun addEmojis(category: String, uris: List<Uri>) {
         viewModelScope.launch {
             _isLoading.value = true
@@ -80,16 +123,17 @@ class CustomEmojiViewModel(context: Context) : ViewModel() {
 
             var successCount = 0
             var failCount = 0
+            val target = activePrompt.value
 
             uris.forEach { uri ->
-                val result = repository.addCustomEmoji(category, uri)
+                val result = repository.addCustomEmoji(target, category, uri)
                 if (result.isSuccess) {
                     successCount++
                 } else {
                     failCount++
                     result.exceptionOrNull()?.let { ex ->
-                        AppLogger.e(TAG, "Failed to add emoji from URI: $uri", ex)
-                    } ?: AppLogger.e(TAG, "Failed to add emoji from URI: $uri")
+                        AppLogger.e(tag, "Failed to add emoji from URI: $uri", ex)
+                    } ?: AppLogger.e(tag, "Failed to add emoji from URI: $uri")
                 }
             }
 
@@ -108,114 +152,81 @@ class CustomEmojiViewModel(context: Context) : ViewModel() {
         }
     }
 
-    /**
-     * 删除表情
-     * 
-     * @param emojiId 表情ID
-     */
     fun deleteEmoji(emojiId: String) {
         viewModelScope.launch {
             _isLoading.value = true
             _errorMessage.value = null
             _successMessage.value = null
 
-            val result = repository.deleteCustomEmoji(emojiId)
+            val result = repository.deleteCustomEmoji(activePrompt.value, emojiId)
             _isLoading.value = false
 
             if (result.isSuccess) {
                 _successMessage.value = appContext.getString(R.string.emoji_deleted_success)
             } else {
                 result.exceptionOrNull()?.let { ex ->
-                    AppLogger.e(TAG, "Failed to delete emoji: $emojiId", ex)
-                } ?: AppLogger.e(TAG, "Failed to delete emoji: $emojiId")
+                    AppLogger.e(tag, "Failed to delete emoji: $emojiId", ex)
+                } ?: AppLogger.e(tag, "Failed to delete emoji: $emojiId")
                 _errorMessage.value = appContext.getString(R.string.emoji_delete_failed)
             }
         }
     }
 
-    /**
-     * 删除类别
-     * 
-     * @param category 类别名称
-     */
     fun deleteCategory(category: String) {
         viewModelScope.launch {
             _isLoading.value = true
             _errorMessage.value = null
             _successMessage.value = null
 
-            val result = repository.deleteCategory(category)
+            val result = repository.deleteCategory(activePrompt.value, category)
             _isLoading.value = false
 
             if (result.isSuccess) {
                 _successMessage.value = appContext.getString(R.string.category_deleted)
-                // 切换到第一个内置类别
-                _selectedCategory.value = CustomEmojiPreferences.BUILTIN_EMOTIONS.first()
             } else {
                 result.exceptionOrNull()?.let { ex ->
-                    AppLogger.e(TAG, "Failed to delete category: $category", ex)
-                } ?: AppLogger.e(TAG, "Failed to delete category: $category")
+                    AppLogger.e(tag, "Failed to delete category: $category", ex)
+                } ?: AppLogger.e(tag, "Failed to delete category: $category")
                 _errorMessage.value = appContext.getString(R.string.category_delete_failed)
             }
         }
     }
 
-    /**
-     * 创建新类别
-     * 
-     * @param categoryName 类别名称
-     */
     suspend fun createCategory(categoryName: String): Boolean {
+        val target = activePrompt.value
+
         if (!repository.isValidCategoryName(categoryName)) {
             _errorMessage.value = appContext.getString(R.string.invalid_category_name)
             return false
         }
 
-        if (repository.categoryExists(categoryName)) {
+        if (repository.categoryExists(target, categoryName)) {
             _errorMessage.value = appContext.getString(R.string.category_already_exists)
             return false
         }
 
-        repository.addCategory(categoryName)
-
-        // 切换到新创建的类别
+        repository.addCategory(target, categoryName)
         _selectedCategory.value = categoryName
         _successMessage.value = appContext.getString(R.string.category_created)
         return true
     }
 
-    /**
-     * 获取表情的URI（用于UI显示）
-     */
     fun getEmojiUri(emoji: CustomEmoji): Uri {
-        return repository.getEmojiUri(emoji)
+        return repository.getEmojiUri(activePrompt.value, emoji)
     }
 
-    /**
-     * 检查类别是否为自定义类别
-     * 允许删除内置类别
-     */
     fun isCustomCategory(_category: String): Boolean {
         return true
     }
 
-    /**
-     * 清除错误消息
-     */
     fun clearErrorMessage() {
         _errorMessage.value = null
     }
 
-    /**
-     * 清除成功消息
-     */
     fun clearSuccessMessage() {
         _successMessage.value = null
     }
 
-    /**
-     * 重置为默认表情
-     */
     fun resetToDefault() {
         viewModelScope.launch {
             _isLoading.value = true
@@ -223,17 +234,14 @@ class CustomEmojiViewModel(context: Context) : ViewModel() {
             _successMessage.value = null
 
             try {
-                repository.resetToDefault()
+                repository.resetToDefault(activePrompt.value)
                 _isLoading.value = false
                 _successMessage.value = appContext.getString(R.string.emoji_reset_success)
-                // 切换到第一个内置类别
-                _selectedCategory.value = CustomEmojiPreferences.BUILTIN_EMOTIONS.first()
             } catch (e: Exception) {
                 _isLoading.value = false
-                AppLogger.e(TAG, "Failed to reset emojis", e)
+                AppLogger.e(tag, "Failed to reset emojis", e)
                 _errorMessage.value = appContext.getString(R.string.emoji_reset_failed, e.message ?: "Unknown error")
             }
         }
     }
 }
-

@@ -65,13 +65,13 @@ const ExtendedHttpTools = (function () {
             toolParams.ignore_ssl = params.ignore_ssl;
         const result = await toolCall({ name: "http_request", params: toolParams });
         const success = result.statusCode >= 200 && result.statusCode < 400;
-        const contentStr = typeof (result === null || result === void 0 ? void 0 : result.content) === "string" ? result.content : "";
+        const contentStr = typeof result?.content === "string" ? result.content : "";
         if (contentStr.length > MAX_INLINE_HTTP_RESPONSE_CHARS) {
             await Tools.Files.mkdir(OPERIT_CLEAN_ON_EXIT_DIR, true);
             const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
             const rand = Math.floor(Math.random() * 1000000);
             let ext = "txt";
-            const ct = typeof (result === null || result === void 0 ? void 0 : result.contentType) === "string" ? result.contentType.toLowerCase() : "";
+            const ct = typeof result?.contentType === "string" ? result.contentType.toLowerCase() : "";
             if (ct.includes("json"))
                 ext = "json";
             else if (ct.includes("html"))
@@ -81,12 +81,12 @@ const ExtendedHttpTools = (function () {
             const filePath = `${OPERIT_CLEAN_ON_EXIT_DIR}/http_response_${timestamp}_${rand}.${ext}`;
             await Tools.Files.write(filePath, contentStr, false);
             const resultMeta = {
-                url: result === null || result === void 0 ? void 0 : result.url,
-                statusCode: result === null || result === void 0 ? void 0 : result.statusCode,
-                statusMessage: result === null || result === void 0 ? void 0 : result.statusMessage,
-                headers: result === null || result === void 0 ? void 0 : result.headers,
-                contentType: result === null || result === void 0 ? void 0 : result.contentType,
-                size: result === null || result === void 0 ? void 0 : result.size,
+                url: result?.url,
+                statusCode: result?.statusCode,
+                statusMessage: result?.statusMessage,
+                headers: result?.headers,
+                contentType: result?.contentType,
+                size: result?.size,
                 content: "(saved_to_file)",
             };
             return {

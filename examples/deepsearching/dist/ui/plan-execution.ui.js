@@ -261,7 +261,7 @@ function calculateNodePositions(sortedTasks, graph, canvasSize) {
     // Calculate levels - matches lines 447-451
     const levels = {};
     for (const task of sortedTasks) {
-        const maxDepLevel = Math.max(-1, ...task.dependencies.map(dep => { var _a; return (_a = levels[dep]) !== null && _a !== void 0 ? _a : -1; }));
+        const maxDepLevel = Math.max(-1, ...task.dependencies.map(dep => levels[dep] ?? -1));
         levels[task.id] = maxDepLevel + 1;
     }
     // Node dimensions - matches lines 453-457

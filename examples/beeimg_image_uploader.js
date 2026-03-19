@@ -77,9 +77,9 @@ const beeimgUploader = (function () {
         }
     }
     async function upload_image(params) {
-        const file_path = params === null || params === void 0 ? void 0 : params.file_path;
-        const album_id = params === null || params === void 0 ? void 0 : params.album_id;
-        const privacy = params === null || params === void 0 ? void 0 : params.privacy;
+        const file_path = params?.file_path;
+        const album_id = params?.album_id;
+        const privacy = params?.privacy;
         if (!file_path || String(file_path).trim().length === 0) {
             throw new Error("参数 file_path 不能为空。");
         }

@@ -172,17 +172,6 @@ METADATA
         }
     ]
 }*/
-var __rest = (this && this.__rest) || function (s, e) {
-    var t = {};
-    for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p) && e.indexOf(p) < 0)
-        t[p] = s[p];
-    if (s != null && typeof Object.getOwnPropertySymbols === "function")
-        for (var i = 0, p = Object.getOwnPropertySymbols(s); i < p.length; i++) {
-            if (e.indexOf(p[i]) < 0 && Object.prototype.propertyIsEnumerable.call(s, p[i]))
-                t[p[i]] = s[p[i]];
-        }
-    return t;
-};
 const XiaohongshuAssistant = (function () {
     // 添加 Array.prototype.at 支持
     Array.prototype.at = function (index) {
@@ -200,7 +189,7 @@ const XiaohongshuAssistant = (function () {
         if (typeof data === 'string') {
             return { success: true, message: message, data: data };
         }
-        return Object.assign({ success, message }, data);
+        return { success, message, ...data };
     }
     // Helper to find a UI element and click it
     async function findAndClick(finder) {
@@ -374,10 +363,7 @@ const XiaohongshuAssistant = (function () {
         return createResponse(true, `搜索到 ${results.length} 条相关内容`, {
             keyword: keyword,
             search_type: search_type,
-            results: results.map((_a) => {
-                var { element } = _a, rest = __rest(_a, ["element"]);
-                return rest;
-            }), // 移除element属性
+            results: results.map(({ element, ...rest }) => rest), // 移除element属性
             result_count: results.length
         });
     }
@@ -402,7 +388,6 @@ const XiaohongshuAssistant = (function () {
         }
     }
     function extractPostInfoFromNode(node, index) {
-        var _a, _b;
         // 改进视频帖子过滤逻辑
         const relativeLayout = node.findByClass("RelativeLayout");
         if (relativeLayout) {
@@ -421,7 +406,7 @@ const XiaohongshuAssistant = (function () {
         if (allTextViews.length < 2)
             return null; // 需要标题和其他信息
         // 1. 寻找标题：通常是当中最长的文本
-        const sortedByLength = [...allTextViews].sort((a, b) => { var _a, _b; return (((_a = b.text) === null || _a === void 0 ? void 0 : _a.length) || 0) - (((_b = a.text) === null || _b === void 0 ? void 0 : _b.length) || 0); });
+        const sortedByLength = [...allTextViews].sort((a, b) => (b.text?.length || 0) - (a.text?.length || 0));
         const titleNode = sortedByLength[0];
         if (!titleNode || !titleNode.text || titleNode.text.length < 5)
             return null;
@@ -430,13 +415,13 @@ const XiaohongshuAssistant = (function () {
         // 2. 寻找点赞数：包含数字，可能带“万”
         const likesRegex = /^\s*\d+(\.\d+)?\s*万?\s*$/;
         const likesNode = otherTextViews.find(tv => tv.text && likesRegex.test(tv.text.trim()));
-        const likes = ((_a = likesNode === null || likesNode === void 0 ? void 0 : likesNode.text) === null || _a === void 0 ? void 0 : _a.trim()) || "未知";
+        const likes = likesNode?.text?.trim() || "未知";
         // 3. 寻找作者：不是点赞数，也不是日期
         const dateRegex = /^\d{2,4}-\d{2}(-\d{2})?$/;
         const authorNode = otherTextViews.find(tv => tv.text &&
             tv !== likesNode &&
             !dateRegex.test(tv.text.trim()));
-        const author = ((_b = authorNode === null || authorNode === void 0 ? void 0 : authorNode.text) === null || _b === void 0 ? void 0 : _b.trim()) || "未知作者";
+        const author = authorNode?.text?.trim() || "未知作者";
         if (title === author) {
             return null;
         }
@@ -632,7 +617,6 @@ const XiaohongshuAssistant = (function () {
         }
     }
     async function unfollow_user(params) {
-        var _a;
         if (!await isInPostDetail()) {
             return createResponse(false, "当前不在帖子详情页");
         }
@@ -642,7 +626,7 @@ const XiaohongshuAssistant = (function () {
         if (followButton) {
             await followButton.click();
             await Tools.System.sleep(1000);
-            (_a = (await UINode.getCurrentPage()).findByText("不再关注")) === null || _a === void 0 ? void 0 : _a.click();
+            (await UINode.getCurrentPage()).findByText("不再关注")?.click();
             return createResponse(true, "取消关注成功");
         }
         else {
@@ -679,7 +663,6 @@ const XiaohongshuAssistant = (function () {
         }
     }
     async function get_post_info(params) {
-        var _a, _b, _c, _d;
         if (!await isInPostDetail()) {
             return createResponse(false, "当前不在帖子详情页");
         }
@@ -702,7 +685,7 @@ const XiaohongshuAssistant = (function () {
         const authorButton = page.find(n => n.contentDesc && n.contentDesc.startsWith("作者,"));
         let authorTextView;
         if (authorButton) {
-            authorTextView = (_a = authorButton.findByClass("TextView")) !== null && _a !== void 0 ? _a : undefined;
+            authorTextView = authorButton.findByClass("TextView") ?? undefined;
             if (authorTextView && authorTextView.text) {
                 postInfo.author = authorTextView.text;
             }
@@ -785,14 +768,14 @@ const XiaohongshuAssistant = (function () {
                     const comment = { author: "未知", content: "未知", likes: "0", date: "未知" };
                     const likesRegex = /^\d+(\.\d+)?[万wW]?$/;
                     const likesNode = item.find(n => n.className === 'TextView' && n.text && likesRegex.test(n.text));
-                    comment.likes = (_b = likesNode === null || likesNode === void 0 ? void 0 : likesNode.text) !== null && _b !== void 0 ? _b : "0";
+                    comment.likes = likesNode?.text ?? "0";
                     const contentCandidates = textViews.filter(tv => tv.text && tv !== likesNode);
                     if (contentCandidates.length === 0)
                         continue;
-                    contentCandidates.sort((a, b) => { var _a, _b, _c, _d; return ((_b = (_a = b.text) === null || _a === void 0 ? void 0 : _a.length) !== null && _b !== void 0 ? _b : 0) - ((_d = (_c = a.text) === null || _c === void 0 ? void 0 : _c.length) !== null && _d !== void 0 ? _d : 0); });
-                    let contentText = (_c = contentCandidates[0].text) !== null && _c !== void 0 ? _c : "";
+                    contentCandidates.sort((a, b) => (b.text?.length ?? 0) - (a.text?.length ?? 0));
+                    let contentText = contentCandidates[0].text ?? "";
                     const authorNode = contentCandidates.length > 1 ? contentCandidates[1] : undefined;
-                    comment.author = ((_d = authorNode === null || authorNode === void 0 ? void 0 : authorNode.text) === null || _d === void 0 ? void 0 : _d.replace("作者", "").trim()) || "未知";
+                    comment.author = authorNode?.text?.replace("作者", "").trim() || "未知";
                     const dateRegex = /(\d{2}-\d{2}( \d{2}:\d{2})?|\d+天前|昨天 \d{2}:\d{2})/;
                     let dateMatch = contentText.match(dateRegex);
                     if (dateMatch) {

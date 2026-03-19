@@ -182,11 +182,10 @@ npm install
 ```json
 {
   "compilerOptions": {
-    "target": "es2017",
+    "target": "es2020",
     "module": "commonjs",
     "lib": [
-      "es2017",
-      "dom"
+      "es2020"
     ],
     "declaration": false,
     "strict": false,
@@ -209,7 +208,8 @@ npm install
     ]
   },
   "include": [
-    "**/*.ts"
+    "**/*.ts",
+    "**/*.d.ts"
   ],
   "exclude": [
     "node_modules"
@@ -218,10 +218,11 @@ npm install
 ```
 
 **关键配置解释:**
--   `"target": "es2017"`: 将代码编译为 ES2017 版本的 JavaScript。
+-   `"target": "es2020"`: 将代码编译为 ES2020 版本的 JavaScript，以匹配 QuickJS 运行时可用的现代语法能力。
 -   `"module": "commonjs"`: 使用 CommonJS 模块系统，这是脚本执行环境所要求的。
+-   `"lib": ["es2020"]`: 以 ECMAScript 标准库为基础，不默认引入浏览器 DOM 类型。Operit 的脚本运行在 QuickJS 宿主中，不是网页环境；`console`、timer 等宿主能力由平台兼容层单独提供。
 -   `"typeRoots": ["./types"]`: 指定了类型定义文件 (`.d.ts`) 的存放目录。你需要手动在项目中创建一个 `types` 文件夹，并将平台提供的核心类型定义文件 (`index.d.ts`, `files.d.ts` 等) 放进去，这样才能获得 `Tools` 等全局对象的智能提示。
--   `"include": ["**/*.ts"]`: 告诉编译器编译当前目录下所有的 `.ts` 文件。
+-   `"include": ["**/*.ts", "**/*.d.ts"]`: 告诉编译器同时纳入脚本源码和补充的宿主类型声明文件。
 
 完成以上步骤后，你的项目就搭建好了。现在你可以继续阅读后续章节，了解项目的具体结构和脚本的编写方法。
 

@@ -88,9 +88,8 @@
 }*/
 const ExtendedFileTools = (function () {
     async function file_exists(params) {
-        var _a;
         const result = await Tools.Files.exists(params.path, params.environment);
-        return { success: !!result && ((_a = result.exists) !== null && _a !== void 0 ? _a : true), message: '检查完成', data: result };
+        return { success: !!result && (result.exists ?? true), message: '检查完成', data: result };
     }
     async function move_file(params) {
         const result = await Tools.Files.move(params.source, params.destination, params.environment);

@@ -1,6 +1,7 @@
 package com.ai.assistance.operit.util
 
 import android.content.Context
+import com.ai.assistance.operit.data.preferences.ActivePromptManager
 import com.ai.assistance.operit.data.repository.CustomEmojiRepository
 import com.ai.assistance.operit.util.markdown.MarkdownProcessorType
 import com.ai.assistance.operit.util.markdown.NestedMarkdownProcessor
@@ -16,16 +17,15 @@ import java.io.File
  */
 object WaifuMessageProcessor {
     
-    // 用于访问自定义表情的 Context 和 Repository
-    private var context: Context? = null
     private var customEmojiRepository: CustomEmojiRepository? = null
+    private var activePromptManager: ActivePromptManager? = null
     
     /**
      * 初始化处理器（需要在应用启动时调用）
      */
     fun initialize(appContext: Context) {
-        context = appContext.applicationContext
         customEmojiRepository = CustomEmojiRepository.getInstance(appContext)
+        activePromptManager = ActivePromptManager.getInstance(appContext)
     }
     
     /**
@@ -428,10 +428,12 @@ object WaifuMessageProcessor {
             val customEmoji = try {
                 customEmojiRepository?.let { repo ->
                     runBlocking {
-                        val emojis = repo.getEmojisForCategory(emotion).first()
+                        val activePrompt = activePromptManager?.getActivePrompt() ?: return@runBlocking null
+                        repo.initializeBuiltinEmojis(activePrompt)
+                        val emojis = repo.getEmojisForCategory(activePrompt, emotion).first()
                         if (emojis.isNotEmpty()) {
                             val randomEmoji = emojis.random()
-                            val file = repo.getEmojiFile(randomEmoji)
+                            val file = repo.getEmojiFile(activePrompt, randomEmoji)
                             if (file.exists()) {
                                 com.ai.assistance.operit.util.AppLogger.d("WaifuMessageProcessor", "使用自定义表情: ${file.absolutePath}")
                                 return@runBlocking file.absolutePath

@@ -115,6 +115,12 @@ const CrossrefSearch = (function () {
     const DEFAULT_ROWS = 10;
     const MAX_ROWS = 100;
 
+    function buildQueryString(params: Record<string, string>): string {
+        return Object.entries(params)
+            .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
+            .join("&");
+    }
+
     type SearchByDoiParams = {
         doi: string;
     };
@@ -298,14 +304,14 @@ const CrossrefSearch = (function () {
         const actualRows = Math.min(Math.max(rows, 1), MAX_ROWS);
 
         try {
-            const urlParams = new URLSearchParams({
+            const queryString = buildQueryString({
                 query: query,
                 rows: String(actualRows),
                 sort: sort,
                 order: order
             });
 
-            const url = `${BASE_URL}/works?${urlParams.toString()}`;
+            const url = `${BASE_URL}/works?${queryString}`;
             const client = OkHttp.newClient();
             const response = await client.get(url, {
                 'User-Agent': 'Operit/1.0 (mailto:support@example.com)'
@@ -365,12 +371,12 @@ const CrossrefSearch = (function () {
         const actualRows = Math.min(Math.max(rows, 1), MAX_ROWS);
 
         try {
-            const urlParams = new URLSearchParams({
+            const queryString = buildQueryString({
                 'query.author': author,
                 rows: String(actualRows)
             });
 
-            const url = `${BASE_URL}/works?${urlParams.toString()}`;
+            const url = `${BASE_URL}/works?${queryString}`;
             const client = OkHttp.newClient();
             const response = await client.get(url, {
                 'User-Agent': 'Operit/1.0 (mailto:support@example.com)'
@@ -430,12 +436,12 @@ const CrossrefSearch = (function () {
         const actualRows = Math.min(Math.max(rows, 1), MAX_ROWS);
 
         try {
-            const urlParams = new URLSearchParams({
+            const queryString = buildQueryString({
                 'query.title': title,
                 rows: String(actualRows)
             });
 
-            const url = `${BASE_URL}/works?${urlParams.toString()}`;
+            const url = `${BASE_URL}/works?${queryString}`;
             const client = OkHttp.newClient();
             const response = await client.get(url, {
                 'User-Agent': 'Operit/1.0 (mailto:support@example.com)'

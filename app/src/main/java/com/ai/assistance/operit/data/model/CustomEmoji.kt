@@ -12,7 +12,7 @@ import java.util.UUID
  * @property isBuiltInCategory 是否为内置类别
  * @property createdAt 创建时间戳
  * 
- * 注意：只存储fileName，完整路径在使用时动态构建为 custom_emoji/{category}/{fileName}
+ * 注意：只存储fileName，完整路径在使用时会根据当前角色目标动态构建。
  */
 @Serializable
 data class CustomEmoji(

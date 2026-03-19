@@ -17,6 +17,8 @@ import com.ai.assistance.operit.data.model.OperitTavernExtension
 import com.ai.assistance.operit.data.model.OperitAttachedTagPayload
 import com.ai.assistance.operit.data.model.OperitCharacterCardPayload
 import com.ai.assistance.operit.data.model.PromptFunctionType
+import com.ai.assistance.operit.data.model.ActivePrompt
+import com.ai.assistance.operit.data.repository.CustomEmojiRepository
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
 import com.google.gson.JsonElement
@@ -50,6 +52,7 @@ class CharacterCardManager private constructor(private val context: Context) {
     private val userPreferencesManager = UserPreferencesManager.getInstance(context)
     // 添加WaifuPreferences引用用于Waifu模式配置管理
     private val waifuPreferences = WaifuPreferences.getInstance(context)
+    private val customEmojiRepository by lazy { CustomEmojiRepository.getInstance(context) }
     
     companion object {
         private val CHARACTER_CARD_LIST = stringSetPreferencesKey("character_card_list")
@@ -147,11 +150,19 @@ class CharacterCardManager private constructor(private val context: Context) {
     /**
      * 为角色卡创建默认主题配置
      */
-    private suspend fun createDefaultThemeForCharacterCard(characterCardId: String) {
+    private suspend fun createDefaultThemeForCharacterCard(
+        characterCardId: String,
+        emojiSourcePrompt: ActivePrompt
+    ) {
         // 获取当前默认主题配置作为新角色卡的主题基础
         userPreferencesManager.copyCurrentThemeToCharacterCard(characterCardId)
         // 同时也复制当前Waifu模式配置
         waifuPreferences.copyCurrentWaifuSettingsToCharacterCard(characterCardId)
+        // 同时复制创建前活跃目标的自定义表情配置
+        customEmojiRepository.cloneEmojiSet(
+            emojiSourcePrompt,
+            ActivePrompt.CharacterCard(characterCardId)
+        )
     }
 
 
@@ -167,10 +178,17 @@ class CharacterCardManager private constructor(private val context: Context) {
         } catch (e: Exception) {
             AppLogger.e("CharacterCardManager", "克隆角色卡Waifu配置失败", e)
         }
+
+        try {
+            customEmojiRepository.cloneEmojisBetweenCharacterCards(sourceCharacterCardId, targetCharacterCardId)
+        } catch (e: Exception) {
+            AppLogger.e("CharacterCardManager", "克隆角色卡自定义表情失败", e)
+        }
     }
 
     // 创建角色卡
     suspend fun createCharacterCard(card: CharacterCard): String {
+        val emojiSourcePrompt = resolveEmojiSourcePrompt()
         val id = if (card.isDefault) DEFAULT_CHARACTER_CARD_ID else UUID.randomUUID().toString()
         val newCard = card.copy(id = id)
 
@@ -213,7 +231,7 @@ class CharacterCardManager private constructor(private val context: Context) {
 
         // 为新角色卡创建默认主题配置
         if (!newCard.isDefault) {
-            createDefaultThemeForCharacterCard(id)
+            createDefaultThemeForCharacterCard(id, emojiSourcePrompt)
         }
         
         return id
@@ -296,6 +314,8 @@ class CharacterCardManager private constructor(private val context: Context) {
         userPreferencesManager.deleteCharacterCardTheme(id)
         // 删除角色卡对应的Waifu模式配置
         waifuPreferences.deleteCharacterCardWaifuSettings(id)
+        // 删除角色卡对应的自定义表情配置
+        customEmojiRepository.deleteCharacterCardEmojis(id)
         
     }
     
@@ -615,9 +635,19 @@ class CharacterCardManager private constructor(private val context: Context) {
 
         if (card.id != DEFAULT_CHARACTER_CARD_ID) {
             if (!userPreferencesManager.hasCharacterCardTheme(card.id)) {
-                createDefaultThemeForCharacterCard(card.id)
+                createDefaultThemeForCharacterCard(card.id, resolveEmojiSourcePrompt())
             }
         }
+    }
+
+    private suspend fun resolveEmojiSourcePrompt(): ActivePrompt {
+        val activeGroupId = CharacterGroupCardManager.getInstance(context).observeActiveCharacterGroupId().first()
+        if (!activeGroupId.isNullOrBlank()) {
+            return ActivePrompt.CharacterGroup(activeGroupId)
+        }
+
+        val activeCardId = observeActiveCharacterCardId().first()
+        return ActivePrompt.CharacterCard(activeCardId ?: DEFAULT_CHARACTER_CARD_ID)
     }
     
     // 根据角色名查找角色卡

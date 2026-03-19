@@ -104,7 +104,6 @@ const zhipuDraw = (function () {
         }
     }
     async function callZhipuImageAPI(params) {
-        var _a;
         const apiKey = getApiKey();
         const modelFromParam = (params.model || "").trim();
         const modelFromEnv = (getEnv("ZHIPU_IMAGE_MODEL") || "").trim();
@@ -136,7 +135,7 @@ const zhipuDraw = (function () {
         catch (e) {
             throw new Error(`解析智谱响应失败: ${getErrorMessage(e)}`);
         }
-        const first = (_a = parsed === null || parsed === void 0 ? void 0 : parsed.data) === null || _a === void 0 ? void 0 : _a[0];
+        const first = parsed?.data?.[0];
         if (!first || !first.url) {
             throw new Error("智谱响应中未找到有效的图片数据，请检查API返回格式");
         }

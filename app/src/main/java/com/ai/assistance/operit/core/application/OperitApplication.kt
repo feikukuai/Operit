@@ -183,11 +183,11 @@ class OperitApplication : Application(), ImageLoaderFactory, WorkConfiguration.P
             AppLogger.d(TAG, "【启动计时】功能提示词管理器初始化完成（异步） - ${System.currentTimeMillis() - characterStartTime}ms")
         }
 
-        // 初始化自定义表情
+        // 初始化当前活跃角色目标的自定义表情
         applicationScope.launch {
             val emojiStartTime = System.currentTimeMillis()
             CustomEmojiRepository.getInstance(applicationContext).initializeBuiltinEmojis()
-            AppLogger.d(TAG, "【启动计时】自定义表情初始化完成（异步） - ${System.currentTimeMillis() - emojiStartTime}ms")
+            AppLogger.d(TAG, "【启动计时】当前角色自定义表情初始化完成（异步） - ${System.currentTimeMillis() - emojiStartTime}ms")
         }
 
         // 初始化AndroidShellExecutor上下文

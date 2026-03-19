@@ -564,7 +564,7 @@ const UIAutomationSubAgentTools = (function () {
     }
     async function getInstalledApps() {
         const appList = await Tools.System.listApps(false);
-        const rawItems = getStringArrayFromUnknown(appList === null || appList === void 0 ? void 0 : appList.packages);
+        const rawItems = getStringArrayFromUnknown(appList?.packages);
         const entries = rawItems.map(parseInstalledAppEntry).filter((e) => e.name);
         const nameMap = new Map();
         for (const e of entries)
@@ -646,7 +646,7 @@ const UIAutomationSubAgentTools = (function () {
             targetAppForRun = matched.run;
         }
         const result = await Tools.UI.runSubAgent(intent, max_steps, agentIdToUse, targetAppForRun);
-        const agentId = result === null || result === void 0 ? void 0 : result.agentId;
+        const agentId = result?.agentId;
         if (agentId && String(agentId).trim().length > 0 && String(agentId).trim().toLowerCase() !== 'default') {
             setCachedAgentId(agentId);
         }
@@ -674,7 +674,6 @@ const UIAutomationSubAgentTools = (function () {
         return run_subagent_internal({ intent, max_steps, target_app, agent_id: String(agentIdToUse) });
     }
     async function run_subagent_parallel_internal(params) {
-        var _a;
         const state = getPackageState();
         const isMainScreen = String(state).toLowerCase() === 'main_screen';
         if (isMainScreen) {
@@ -738,7 +737,7 @@ const UIAutomationSubAgentTools = (function () {
         }
         const used = {};
         for (const s of activeSlots) {
-            const key = ((_a = resolvedBySlot.get(s.index)) === null || _a === void 0 ? void 0 : _a.key) || String(s.targetApp).trim().toLowerCase();
+            const key = resolvedBySlot.get(s.index)?.key || String(s.targetApp).trim().toLowerCase();
             const prev = used[key];
             if (prev !== undefined) {
                 return {
@@ -750,13 +749,12 @@ const UIAutomationSubAgentTools = (function () {
         }
         const tasks = slots
             .map((i) => {
-            var _a, _b;
             const intent = params[`intent_${i}`];
             if (!intent || intent.trim().length === 0)
                 return null;
             const maxSteps = params[`max_steps_${i}`];
             const agentId = params[`agent_id_${i}`];
-            const targetApp = (_b = (_a = resolvedBySlot.get(i)) === null || _a === void 0 ? void 0 : _a.run) !== null && _b !== void 0 ? _b : params[`target_app_${i}`];
+            const targetApp = resolvedBySlot.get(i)?.run ?? params[`target_app_${i}`];
             return (async () => {
                 try {
                     const result = await Tools.UI.runSubAgent(String(intent), maxSteps === undefined ? undefined : Number(maxSteps), agentId === undefined || agentId === null || String(agentId).trim().length === 0 ? undefined : String(agentId).trim(), targetApp);
@@ -783,8 +781,8 @@ const UIAutomationSubAgentTools = (function () {
     }
     async function close_all_virtual_displays(_params) {
         const result = await toolCall('close_all_virtual_displays', {});
-        const ok = (result === null || result === void 0 ? void 0 : result.success) !== false;
-        const error = result === null || result === void 0 ? void 0 : result.error;
+        const ok = result?.success !== false;
+        const error = result?.error;
         return {
             success: ok,
             message: ok

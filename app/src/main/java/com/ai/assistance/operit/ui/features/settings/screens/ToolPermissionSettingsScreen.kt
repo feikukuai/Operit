@@ -40,7 +40,7 @@ fun ToolPermissionSettingsScreen(navigateBack: () -> Unit) {
     val toolPermissionSystem = remember { ToolPermissionSystem.getInstance(context) }
     val scope = rememberCoroutineScope()
 
-    val allTools = remember { toolHandler.getAllToolNames() }
+    val allTools = remember { toolHandler.getAllToolNames().filterNot { it == "package_proxy" } }
     val toolPermissions = remember { mutableStateMapOf<String, PermissionLevel>() }
     val masterSwitch = toolPermissionSystem.masterSwitchFlow.collectAsState(initial = PermissionLevel.ALLOW).value
     var masterSwitchInput by remember { mutableStateOf(masterSwitch) }

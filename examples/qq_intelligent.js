@@ -122,7 +122,7 @@ const QQIntelligent = (function () {
     }
     async function is_in_group() {
         let page = await UINode.getCurrentPage();
-        return page.findAllByContentDesc('语音').findIndex(e => { var _a, _b, _c; return ((_a = e.className) === null || _a === void 0 ? void 0 : _a.includes('ImageButton')) && ((_c = (_b = e.centerPoint) === null || _b === void 0 ? void 0 : _b.y) !== null && _c !== void 0 ? _c : 0) > 1000; }) === -1;
+        return page.findAllByContentDesc('语音').findIndex(e => e.className?.includes('ImageButton') && (e.centerPoint?.y ?? 0) > 1000) === -1;
     }
     Array.prototype.at = function (index) {
         if (index < 0) {
@@ -131,11 +131,10 @@ const QQIntelligent = (function () {
         return this[index];
     };
     async function get_history(params) {
-        var _a, _b, _c, _d, _e, _f, _g;
         const message_num = Number(params.message_num) || 10;
         let page = await UINode.getCurrentPage();
         //获取群名称
-        const chat_title = (_c = (_b = (_a = page.findById('com.tencent.mobileqq:id/ivTitleBtnLeft')) === null || _a === void 0 ? void 0 : _a.parent) === null || _b === void 0 ? void 0 : _b.allTexts()[0]) !== null && _c !== void 0 ? _c : "";
+        const chat_title = page.findById('com.tencent.mobileqq:id/ivTitleBtnLeft')?.parent?.allTexts()[0] ?? "";
         // const is_group = await is_in_group();
         console.log("chat_title", chat_title);
         // console.log("is_group", is_group);
@@ -167,13 +166,13 @@ const QQIntelligent = (function () {
                 //判断头像再左边还是右边
                 const avatar = message.findByClass('ImageView');
                 if (avatar) {
-                    if (((_e = (_d = avatar.centerPoint) === null || _d === void 0 ? void 0 : _d.x) !== null && _e !== void 0 ? _e : 0) < 300) {
+                    if ((avatar.centerPoint?.x ?? 0) < 300) {
                         sender = "other";
-                        console.log("other", (_f = avatar.centerPoint) === null || _f === void 0 ? void 0 : _f.x);
+                        console.log("other", avatar.centerPoint?.x);
                     }
                     else {
                         sender = "self";
-                        console.log("self", (_g = avatar.centerPoint) === null || _g === void 0 ? void 0 : _g.x);
+                        console.log("self", avatar.centerPoint?.x);
                     }
                 }
                 else {
@@ -233,10 +232,9 @@ const QQIntelligent = (function () {
         return await reply({ message: message, click_send: click_send });
     }
     async function ensureActivity(activityName = "", packageName = "com.tencent.mobileqq", enterActivity = async () => true, tryMax = 1) {
-        var _a, _b;
         let android = new Android();
         let activity = await Tools.UI.getPageInfo();
-        if ((_a = activity.activityName) === null || _a === void 0 ? void 0 : _a.includes(activityName)) {
+        if (activity.activityName?.includes(activityName)) {
             return true;
         }
         while (tryMax > 0) {
@@ -250,7 +248,7 @@ const QQIntelligent = (function () {
             await Tools.System.sleep(3000); // Give some time for app to launch
             if (await enterActivity()) {
                 activity = await Tools.UI.getPageInfo();
-                if ((_b = activity.activityName) === null || _b === void 0 ? void 0 : _b.includes(activityName)) {
+                if (activity.activityName?.includes(activityName)) {
                     return true;
                 }
             }

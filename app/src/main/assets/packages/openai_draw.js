@@ -129,7 +129,7 @@ const openaiDraw = (function () {
                 }
             }
             catch (e) {
-                console.warn(`创建目录异常: ${dir} -> ${(e === null || e === void 0 ? void 0 : e.message) || e}`);
+                console.warn(`创建目录异常: ${dir} -> ${e?.message || e}`);
             }
         }
     }
@@ -145,7 +145,6 @@ const openaiDraw = (function () {
         return raw;
     }
     async function callOpenAIImageApi(params) {
-        var _a;
         const apiKey = getApiKey();
         const apiBaseUrl = getApiBaseUrl(params.api_base_url);
         const endpoint = getImageEndpoint(apiBaseUrl);
@@ -180,9 +179,9 @@ const openaiDraw = (function () {
             parsed = JSON.parse(response.content);
         }
         catch (e) {
-            throw new Error(`解析 OpenAI 响应失败: ${(e === null || e === void 0 ? void 0 : e.message) || e}`);
+            throw new Error(`解析 OpenAI 响应失败: ${e?.message || e}`);
         }
-        const item = (_a = parsed === null || parsed === void 0 ? void 0 : parsed.data) === null || _a === void 0 ? void 0 : _a[0];
+        const item = parsed?.data?.[0];
         if (!item) {
             throw new Error("OpenAI 响应中未找到 data[0]，请检查接口返回格式。");
         }
@@ -202,14 +201,14 @@ const openaiDraw = (function () {
                 throw new Error(`下载图片失败: ${downloadResult.details}`);
             }
             const readBinary = await Tools.Files.readBinary(tmpPath);
-            const contentBase64 = readBinary === null || readBinary === void 0 ? void 0 : readBinary.contentBase64;
+            const contentBase64 = readBinary?.contentBase64;
             if (!contentBase64 || String(contentBase64).trim().length === 0) {
                 throw new Error("读取下载图片失败: contentBase64 为空");
             }
             try {
                 await Tools.Files.deleteFile(tmpPath);
             }
-            catch (_b) {
+            catch {
                 // ignore
             }
             return {
@@ -270,8 +269,8 @@ const openaiDraw = (function () {
             console.error("draw_image 执行失败:", error);
             complete({
                 success: false,
-                message: `图片生成失败: ${(error === null || error === void 0 ? void 0 : error.message) || error}`,
-                error_stack: error === null || error === void 0 ? void 0 : error.stack
+                message: `图片生成失败: ${error?.message || error}`,
+                error_stack: error?.stack
             });
         }
     }

@@ -84,6 +84,16 @@ const googleSearch = (function () {
         return `${base}?${queryString}`;
     }
 
+    function getHostname(rawUrl: string): string {
+        const match = rawUrl.trim().match(/^[a-zA-Z][a-zA-Z\d+\-.]*:\/\/([^/?#]+)/);
+        if (!match || !match[1]) {
+            return rawUrl;
+        }
+        const authority = match[1];
+        const host = authority.includes("@") ? authority.split("@").pop() || authority : authority;
+        return host.replace(/:\d+$/, "");
+    }
+
     async function fetchHtmlViaWebVisit(url: string): Promise<VisitWebResultData> {
         const result = await Tools.Net.visit(url);
         // The result can be a string if the underlying tool returns a simple string.
@@ -189,7 +199,7 @@ const googleSearch = (function () {
 
         for (const currentUrl of mirrorUrls) {
             try {
-                const searchResult = await performSearch(currentUrl, params.includeLinks, `Google Scholar 镜像 (${new URL(currentUrl).hostname})`);
+                const searchResult = await performSearch(currentUrl, params.includeLinks, `Google Scholar 镜像 (${getHostname(currentUrl)})`);
                 if (searchResult.success && searchResult.data) {
                     // Check for CAPTCHA in the content
                     if (searchResult.data.includes("recaptcha") || searchResult.data.includes("人机身份验证")) {

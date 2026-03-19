@@ -10,7 +10,6 @@ function supportsPlanTag(tagName) {
     return String(tagName || "").toLowerCase() === "plan";
 }
 function renderPlanXml(xmlContent, tagName) {
-    var _a;
     const normalizedTagName = String(tagName || "plan").toLowerCase();
     const normalizedXmlContent = String(xmlContent || "");
     const matched = supportsPlanTag(normalizedTagName);
@@ -36,7 +35,7 @@ function renderPlanXml(xmlContent, tagName) {
     console.log("deepsearching renderPlanXml result", JSON.stringify({
         tagName: normalizedTagName,
         handled: true,
-        stateKeys: Object.keys(((_a = result.composeDsl) === null || _a === void 0 ? void 0 : _a.state) || {})
+        stateKeys: Object.keys(result.composeDsl?.state || {})
     }));
     return result;
 }

@@ -71,20 +71,97 @@ function toTimeoutMs(raw: string): number {
   return Math.floor(value);
 }
 
+function ensureHttpScheme(raw: string): string {
+  return raw.startsWith("http://") || raw.startsWith("https://") ? raw : `http://${raw}`;
+}
+
+function parsePort(raw: string): number | null {
+  if (!raw.trim()) {
+    return null;
+  }
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value < 1 || value > 65535) {
+    return null;
+  }
+  return value;
+}
+
+function parseAuthority(authority: string): { host: string; port: number | null } | null {
+  const value = authority.includes("@") ? authority.slice(authority.lastIndexOf("@") + 1) : authority;
+  if (!value) {
+    return null;
+  }
+
+  if (value.startsWith("[")) {
+    const closingIndex = value.indexOf("]");
+    if (closingIndex < 0) {
+      return null;
+    }
+    const host = value.slice(0, closingIndex + 1);
+    const remainder = value.slice(closingIndex + 1);
+    if (!remainder) {
+      return { host, port: null };
+    }
+    if (!remainder.startsWith(":")) {
+      return null;
+    }
+    const port = parsePort(remainder.slice(1));
+    return port == null ? null : { host, port };
+  }
+
+  const firstColonIndex = value.indexOf(":");
+  const lastColonIndex = value.lastIndexOf(":");
+  if (firstColonIndex < 0) {
+    return { host: value, port: null };
+  }
+  if (firstColonIndex !== lastColonIndex) {
+    return null;
+  }
+
+  const host = value.slice(0, lastColonIndex);
+  if (!host) {
+    return null;
+  }
+  const port = parsePort(value.slice(lastColonIndex + 1));
+  return port == null ? null : { host, port };
+}
+
+function parseHttpLikeUrl(raw: string): {
+  scheme: "http" | "https";
+  host: string;
+  port: number | null;
+  path: string;
+  search: string;
+  hash: string;
+} | null {
+  const normalized = ensureHttpScheme(raw.trim());
+  const match = normalized.match(/^(https?):\/\/([^/?#]+)([^?#]*)(\?[^#]*)?(#.*)?$/i);
+  if (!match) {
+    return null;
+  }
+
+  const authority = parseAuthority(match[2] || "");
+  if (!authority || !authority.host.trim()) {
+    return null;
+  }
+
+  return {
+    scheme: (match[1] || "").toLowerCase() === "https" ? "https" : "http",
+    host: authority.host.trim(),
+    port: authority.port,
+    path: match[3] || "",
+    search: match[4] || "",
+    hash: match[5] || ""
+  };
+}
+
 function extractPortFromUrl(raw: string): number | null {
   const value = raw.trim();
   if (!value) {
     return null;
   }
-  try {
-    const withScheme =
-      value.startsWith("http://") || value.startsWith("https://") ? value : `http://${value}`;
-    const url = new URL(withScheme);
-    const port = Number(url.port || 0);
-    return port >= 1 && port <= 65535 ? port : null;
-  } catch {
-    return null;
-  }
+  const parsed = parseHttpLikeUrl(value);
+  return parsed?.port ?? null;
 }
 
 function normalizeBaseUrlInput(input: string, fallbackBaseUrl: string): string {
@@ -94,23 +171,15 @@ function normalizeBaseUrlInput(input: string, fallbackBaseUrl: string): string {
   }
 
   const fallbackPort = extractPortFromUrl(fallbackBaseUrl) || 58321;
-  const withScheme =
-    raw.startsWith("http://") || raw.startsWith("https://") ? raw : `http://${raw}`;
-
-  try {
-    const url = new URL(withScheme);
-    const scheme = (url.protocol || "http:").replace(":", "").toLowerCase() === "https" ? "https" : "http";
-    const host = url.hostname.trim();
-    if (!host) {
-      return withScheme;
-    }
-    const portRaw = Number(url.port || 0);
-    const port = portRaw >= 1 && portRaw <= 65535 ? portRaw : fallbackPort;
-    const path = url.pathname && url.pathname !== "/" ? url.pathname : "";
-    return `${scheme}://${host}:${port}${path}${url.search}${url.hash}`.replace(/\/+$/g, "");
-  } catch {
+  const withScheme = ensureHttpScheme(raw);
+  const parsed = parseHttpLikeUrl(raw);
+  if (!parsed) {
     return withScheme;
   }
+
+  const port = parsed.port ?? fallbackPort;
+  const path = parsed.path && parsed.path !== "/" ? parsed.path : "";
+  return `${parsed.scheme}://${parsed.host}:${port}${path}${parsed.search}${parsed.hash}`.replace(/\/+$/g, "");
 }
 
 function parseConnectionPayload(raw: string): ParsedConnectionPayload | null {

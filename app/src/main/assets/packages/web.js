@@ -126,7 +126,7 @@ const Web = (function () {
             try {
                 return JSON.parse(raw);
             }
-            catch (_a) {
+            catch {
                 return { value: raw };
             }
         }
@@ -134,8 +134,8 @@ const Web = (function () {
             try {
                 return JSON.parse(raw.value);
             }
-            catch (_b) {
-                return Object.assign(Object.assign({}, raw), { value: raw.value });
+            catch {
+                return { ...raw, value: raw.value };
             }
         }
         if (typeof raw === 'object') {
@@ -164,7 +164,7 @@ const Web = (function () {
         return sid.length > 0 ? sid : undefined;
     }
     function extractUrlFromPayload(payload) {
-        const candidates = [payload === null || payload === void 0 ? void 0 : payload.url, payload === null || payload === void 0 ? void 0 : payload.result, payload === null || payload === void 0 ? void 0 : payload.value];
+        const candidates = [payload?.url, payload?.result, payload?.value];
         for (const item of candidates) {
             if (typeof item !== 'string') {
                 continue;
@@ -191,7 +191,7 @@ const Web = (function () {
         return detectedUrl;
     }
     function extractPageContent(payload) {
-        const candidates = [payload === null || payload === void 0 ? void 0 : payload.snapshot, payload === null || payload === void 0 ? void 0 : payload.content, payload === null || payload === void 0 ? void 0 : payload.text, payload === null || payload === void 0 ? void 0 : payload.value];
+        const candidates = [payload?.snapshot, payload?.content, payload?.text, payload?.value];
         for (const item of candidates) {
             if (typeof item === 'string' && item.length > 0) {
                 return item;
@@ -216,7 +216,14 @@ const Web = (function () {
         const safeSessionId = sanitizeSessionId(sessionId);
         const filePath = `${OPERIT_CLEAN_ON_EXIT_DIR}/web_content_${safeSessionId}_${timestamp}_${rand}.txt`;
         await Tools.Files.write(filePath, content, false);
-        return Object.assign(Object.assign({}, payload), { snapshot: '(saved_to_file)', snapshot_chars: content.length, snapshot_saved_to: filePath, operit_clean_on_exit_dir: OPERIT_CLEAN_ON_EXIT_DIR, hint: 'Content is large and saved to file. Use read_file_part or grep_code to inspect it.' });
+        return {
+            ...payload,
+            snapshot: '(saved_to_file)',
+            snapshot_chars: content.length,
+            snapshot_saved_to: filePath,
+            operit_clean_on_exit_dir: OPERIT_CLEAN_ON_EXIT_DIR,
+            hint: 'Content is large and saved to file. Use read_file_part or grep_code to inspect it.',
+        };
     }
     async function start(params = {}) {
         return toPayload(await Tools.Net.startWeb({
@@ -270,7 +277,7 @@ const Web = (function () {
             modifiers = normalized;
         }
         return toPayload(await Tools.Net.webClick({
-            session_id: optionalSessionId(params === null || params === void 0 ? void 0 : params.session_id),
+            session_id: optionalSessionId(params?.session_id),
             ref,
             element: params && params.element !== undefined && params.element !== null
                 ? String(params.element)
@@ -336,7 +343,7 @@ const Web = (function () {
                 try {
                     parsed = JSON.parse(parsed);
                 }
-                catch (_a) {
+                catch {
                     throw new Error("paths 必须是合法 JSON 数组字符串");
                 }
             }
@@ -371,8 +378,8 @@ const Web = (function () {
         catch (error) {
             const result = {
                 success: false,
-                message: `${toolName} 执行失败: ${(error === null || error === void 0 ? void 0 : error.message) || String(error)}`,
-                error: String((error === null || error === void 0 ? void 0 : error.stack) || error),
+                message: `${toolName} 执行失败: ${error?.message || String(error)}`,
+                error: String(error?.stack || error),
             };
             complete(result);
         }

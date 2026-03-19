@@ -113,17 +113,6 @@ METADATA
         }
     ]
 }*/
-var __rest = (this && this.__rest) || function (s, e) {
-    var t = {};
-    for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p) && e.indexOf(p) < 0)
-        t[p] = s[p];
-    if (s != null && typeof Object.getOwnPropertySymbols === "function")
-        for (var i = 0, p = Object.getOwnPropertySymbols(s); i < p.length; i++) {
-            if (e.indexOf(p[i]) < 0 && Object.prototype.propertyIsEnumerable.call(s, p[i]))
-                t[p[i]] = s[p[i]];
-        }
-    return t;
-};
 const BaiduMapAssistant = (function () {
     // 添加 Array.prototype.at 支持
     if (!Array.prototype.at) {
@@ -147,7 +136,7 @@ const BaiduMapAssistant = (function () {
         if (typeof data === 'string') {
             return { success, message, data };
         }
-        return Object.assign({ success, message }, data);
+        return { success, message, ...data };
     }
     // Helper to find a UI element and click it
     async function findAndClick(finder) {
@@ -266,10 +255,7 @@ const BaiduMapAssistant = (function () {
             const results = await get_map_search_results();
             return createResponse(true, `搜索到 ${results.length} 个相关地点。请使用 'select_location_from_list' 选择一个。`, {
                 keyword: keyword,
-                results: results.map((_a) => {
-                    var { element } = _a, rest = __rest(_a, ["element"]);
-                    return rest;
-                }), // 移除 element 属性
+                results: results.map(({ element, ...rest }) => rest), // 移除 element 属性
                 result_count: results.length
             });
         }
@@ -353,7 +339,7 @@ const BaiduMapAssistant = (function () {
         }
         // 最终去重并重新编号索引
         const finalResults = Array.from(new Map(results.map(item => [item.title, item])).values())
-            .map((item, index) => (Object.assign(Object.assign({}, item), { index: index + 1 })));
+            .map((item, index) => ({ ...item, index: index + 1 }));
         return finalResults.slice(0, desiredCount);
     }
     // --- Placeholder functions for other tools ---
@@ -516,7 +502,9 @@ const BaiduMapAssistant = (function () {
     async function wrapToolExecution(func, params) {
         try {
             const result = await func(params);
-            complete(Object.assign({}, result));
+            complete({
+                ...result,
+            });
         }
         catch (error) {
             console.error(`Tool ${func.name} failed unexpectedly`, error);

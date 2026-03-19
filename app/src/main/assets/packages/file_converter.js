@@ -82,7 +82,7 @@ const fileConverter = (function () {
      * @returns An object with tool information and the command to execute.
      */
     function getConverterInfo(inputPath, outputPath, options) {
-        const getExt = (path) => { var _a; return ((_a = path.split('.').pop()) === null || _a === void 0 ? void 0 : _a.toLowerCase()) || ''; };
+        const getExt = (path) => path.split('.').pop()?.toLowerCase() || '';
         const inputExt = getExt(inputPath);
         const outputExt = getExt(outputPath);
         const isAudioVideo = (ext) => ['mp4', 'mkv', 'avi', 'mov', 'flv', 'webm', 'mp3', 'wav', 'ogg', 'flac', 'aac', 'm4a', 'wma', 'wmv'].includes(ext);

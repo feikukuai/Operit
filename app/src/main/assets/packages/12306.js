@@ -185,7 +185,7 @@ const ticket12306 = (function () {
         const queryString = Object.entries(params).map(([key, val]) => `${encodeURIComponent(key)}=${encodeURIComponent(val)}`).join('&');
         const fullUrl = queryString ? `${url}?${queryString}` : url;
         try {
-            const finalHeaders = Object.assign({}, headers);
+            const finalHeaders = { ...headers };
             // If the cookie string is empty, remove it to let the client use its cookie jar.
             if (finalHeaders['Cookie'] === '') {
                 delete finalHeaders['Cookie'];

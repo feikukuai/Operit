@@ -1,7 +1,6 @@
 package com.ai.assistance.operit.data.preferences
 
 import android.content.Context
-import com.ai.assistance.operit.util.AppLogger
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
@@ -9,21 +8,22 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.ai.assistance.operit.data.model.ActivePrompt
 import com.ai.assistance.operit.data.model.CustomEmoji
+import com.ai.assistance.operit.util.AppLogger
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
-// Define the DataStore at the module level
 private val Context.customEmojiDataStore: DataStore<Preferences> by
-        preferencesDataStore(name = "custom_emoji_settings")
+    preferencesDataStore(name = "custom_emoji_settings")
 
 /**
  * 自定义表情 DataStore Preferences 管理类
- * 
- * 使用 DataStore 存储自定义表情的元数据（JSON格式）
- * 文件本身存储在 filesDir/custom_emoji/ 目录下
+ *
+ * 使用 DataStore 按角色卡/角色组存储自定义表情元数据（JSON格式）。
+ * 文件本身存储在 filesDir/custom_emoji/<target>/ 目录下。
  */
 class CustomEmojiPreferences private constructor(private val context: Context) {
 
@@ -40,13 +40,10 @@ class CustomEmojiPreferences private constructor(private val context: Context) {
         }
 
         private const val TAG = "CustomEmojiPreferences"
-        
-        // Preference keys
-        private val CUSTOM_EMOJIS = stringPreferencesKey("custom_emojis")
-        private val ALL_CATEGORIES = stringSetPreferencesKey("all_categories")
-        private val BUILTIN_EMOJIS_INITIALIZED = booleanPreferencesKey("builtin_emojis_initialized")
-        
-        // 内置情绪类别
+        private val LEGACY_CUSTOM_EMOJIS = stringPreferencesKey("custom_emojis")
+        private val LEGACY_ALL_CATEGORIES = stringSetPreferencesKey("all_categories")
+        private val LEGACY_BUILTIN_EMOJIS_INITIALIZED = booleanPreferencesKey("builtin_emojis_initialized")
+
         val BUILTIN_EMOTIONS = listOf(
             "happy", "sad", "angry", "surprised", "confused",
             "crying", "like_you", "miss_you", "speechless"
@@ -58,175 +55,161 @@ class CustomEmojiPreferences private constructor(private val context: Context) {
         encodeDefaults = true
     }
 
-    /**
-     * 获取所有自定义表情的 Flow
-     */
-    fun getCustomEmojisFlow(): Flow<List<CustomEmoji>> {
+    private fun targetPrefix(target: ActivePrompt): String {
+        return when (target) {
+            is ActivePrompt.CharacterCard -> "character_card_custom_emoji_${target.id}_"
+            is ActivePrompt.CharacterGroup -> "character_group_custom_emoji_${target.id}_"
+        }
+    }
+
+    private fun customEmojisKey(target: ActivePrompt) =
+        stringPreferencesKey("${targetPrefix(target)}custom_emojis")
+
+    private fun categoriesKey(target: ActivePrompt) =
+        stringSetPreferencesKey("${targetPrefix(target)}all_categories")
+
+    private fun builtinInitializedKey(target: ActivePrompt) =
+        booleanPreferencesKey("${targetPrefix(target)}builtin_emojis_initialized")
+
+    private fun decodeCustomEmojis(jsonString: String): List<CustomEmoji> {
+        return try {
+            json.decodeFromString<List<CustomEmoji>>(jsonString)
+        } catch (e: Exception) {
+            AppLogger.e(TAG, "Error decoding custom emojis", e)
+            emptyList()
+        }
+    }
+
+    fun getCustomEmojisFlow(target: ActivePrompt): Flow<List<CustomEmoji>> {
         return context.customEmojiDataStore.data.map { preferences ->
-            val jsonString = preferences[CUSTOM_EMOJIS] ?: "[]"
-            try {
-                json.decodeFromString<List<CustomEmoji>>(jsonString)
-            } catch (e: Exception) {
-                AppLogger.e(TAG, "Error decoding custom emojis", e)
-                emptyList()
-            }
+            decodeCustomEmojis(preferences[customEmojisKey(target)] ?: "[]")
         }
     }
 
-    /**
-     * 添加自定义表情
-     */
-    suspend fun addCustomEmoji(emoji: CustomEmoji) {
+    suspend fun setCustomEmojis(target: ActivePrompt, emojis: List<CustomEmoji>) {
         context.customEmojiDataStore.edit { preferences ->
-            val currentList = try {
-                val jsonString = preferences[CUSTOM_EMOJIS] ?: "[]"
-                json.decodeFromString<List<CustomEmoji>>(jsonString)
-            } catch (e: Exception) {
-                AppLogger.e(TAG, "Error decoding existing emojis", e)
-                emptyList()
-            }
-            
-            val updatedList = currentList + emoji
-            preferences[CUSTOM_EMOJIS] = json.encodeToString(updatedList)
-            AppLogger.d(TAG, "Added emoji: ${emoji.id} to category: ${emoji.emotionCategory}")
+            preferences[customEmojisKey(target)] = json.encodeToString(emojis)
         }
     }
 
-    /**
-     * 删除指定的自定义表情
-     */
-    suspend fun deleteCustomEmoji(emojiId: String) {
+    suspend fun addCustomEmoji(target: ActivePrompt, emoji: CustomEmoji) {
         context.customEmojiDataStore.edit { preferences ->
-            val currentList = try {
-                val jsonString = preferences[CUSTOM_EMOJIS] ?: "[]"
-                json.decodeFromString<List<CustomEmoji>>(jsonString)
-            } catch (e: Exception) {
-                AppLogger.e(TAG, "Error decoding existing emojis", e)
-                emptyList()
-            }
-            
+            val currentList = decodeCustomEmojis(preferences[customEmojisKey(target)] ?: "[]")
+            preferences[customEmojisKey(target)] = json.encodeToString(currentList + emoji)
+            AppLogger.d(TAG, "Added emoji: ${emoji.id} to target: $target category: ${emoji.emotionCategory}")
+        }
+    }
+
+    suspend fun deleteCustomEmoji(target: ActivePrompt, emojiId: String) {
+        context.customEmojiDataStore.edit { preferences ->
+            val currentList = decodeCustomEmojis(preferences[customEmojisKey(target)] ?: "[]")
             val updatedList = currentList.filter { it.id != emojiId }
-            preferences[CUSTOM_EMOJIS] = json.encodeToString(updatedList)
-            AppLogger.d(TAG, "Deleted emoji: $emojiId")
+            preferences[customEmojisKey(target)] = json.encodeToString(updatedList)
+            AppLogger.d(TAG, "Deleted emoji: $emojiId from target: $target")
         }
     }
 
-    /**
-     * 获取指定类别的表情 Flow
-     */
-    fun getEmojisForCategory(category: String): Flow<List<CustomEmoji>> {
-        return getCustomEmojisFlow().map { emojis ->
+    fun getEmojisForCategory(target: ActivePrompt, category: String): Flow<List<CustomEmoji>> {
+        return getCustomEmojisFlow(target).map { emojis ->
             emojis.filter { it.emotionCategory == category }
         }
     }
 
-    /**
-     * 删除指定类别下的所有表情
-     */
-    suspend fun deleteCategory(category: String) {
+    suspend fun deleteCategory(target: ActivePrompt, category: String) {
         context.customEmojiDataStore.edit { preferences ->
-            val currentList = try {
-                val jsonString = preferences[CUSTOM_EMOJIS] ?: "[]"
-                json.decodeFromString<List<CustomEmoji>>(jsonString)
-            } catch (e: Exception) {
-                AppLogger.e(TAG, "Error decoding existing emojis", e)
-                emptyList()
-            }
-            
+            val currentList = decodeCustomEmojis(preferences[customEmojisKey(target)] ?: "[]")
             val updatedList = currentList.filter { it.emotionCategory != category }
-            preferences[CUSTOM_EMOJIS] = json.encodeToString(updatedList)
+            preferences[customEmojisKey(target)] = json.encodeToString(updatedList)
 
-            // Also remove from the categories set
-            val currentCategories = preferences[ALL_CATEGORIES] ?: emptySet()
-            if (currentCategories.contains(category)) {
-                preferences[ALL_CATEGORIES] = currentCategories - category
+            val currentCategories = preferences[categoriesKey(target)] ?: emptySet()
+            val updatedCategories = currentCategories - category
+            if (updatedCategories.isEmpty()) {
+                preferences.remove(categoriesKey(target))
+            } else {
+                preferences[categoriesKey(target)] = updatedCategories
             }
-            AppLogger.d(TAG, "Deleted category: $category")
+            AppLogger.d(TAG, "Deleted category: $category from target: $target")
         }
     }
 
-    /**
-     * 获取所有类别（内置 + 自定义）的 Flow
-     */
-    fun getAllCategories(): Flow<List<String>> {
+    fun getAllCategories(target: ActivePrompt): Flow<List<String>> {
         return context.customEmojiDataStore.data.map { preferences ->
-            val storedCategories = preferences[ALL_CATEGORIES] ?: BUILTIN_EMOTIONS.toSet()
-
-            // 内置类别优先，然后是自定义类别
+            val storedCategories = preferences[categoriesKey(target)] ?: emptySet()
             val builtin = BUILTIN_EMOTIONS.filter { it in storedCategories }
             val custom = storedCategories.filter { it !in BUILTIN_EMOTIONS }.sorted()
-
             builtin + custom
         }
     }
 
-    /**
-     * 添加一个新类别（即使是空的）
-     */
-    suspend fun addCategory(categoryName: String) {
+    suspend fun setAllCategories(target: ActivePrompt, categories: Set<String>) {
         context.customEmojiDataStore.edit { preferences ->
-            val currentCategories = preferences[ALL_CATEGORIES] ?: emptySet()
-            if (!currentCategories.contains(categoryName)) {
-                preferences[ALL_CATEGORIES] = currentCategories + categoryName
-                AppLogger.d(TAG, "Added category: $categoryName")
+            if (categories.isEmpty()) {
+                preferences.remove(categoriesKey(target))
+            } else {
+                preferences[categoriesKey(target)] = categories
             }
         }
     }
 
-    /**
-     * 批量添加类别
-     */
-    suspend fun addCategories(categoryNames: List<String>) {
+    suspend fun addCategory(target: ActivePrompt, categoryName: String) {
         context.customEmojiDataStore.edit { preferences ->
-            val currentCategories = preferences[ALL_CATEGORIES] ?: emptySet()
+            val currentCategories = preferences[categoriesKey(target)] ?: emptySet()
+            if (!currentCategories.contains(categoryName)) {
+                preferences[categoriesKey(target)] = currentCategories + categoryName
+                AppLogger.d(TAG, "Added category: $categoryName to target: $target")
+            }
+        }
+    }
+
+    suspend fun addCategories(target: ActivePrompt, categoryNames: List<String>) {
+        context.customEmojiDataStore.edit { preferences ->
+            val currentCategories = preferences[categoriesKey(target)] ?: emptySet()
             val newCategories = categoryNames.filter { it !in currentCategories }
             if (newCategories.isNotEmpty()) {
-                preferences[ALL_CATEGORIES] = currentCategories + newCategories
-                AppLogger.d(TAG, "Added categories: $newCategories")
+                preferences[categoriesKey(target)] = currentCategories + newCategories
+                AppLogger.d(TAG, "Added categories: $newCategories to target: $target")
             }
         }
     }
 
-    /**
-     * 获取所有自定义类别（不包括内置类别）
-     */
-    fun getCustomCategories(): Flow<List<String>> {
-        return getCustomEmojisFlow().map { emojis ->
-            emojis
-                .filter { !it.isBuiltInCategory }
-                .map { it.emotionCategory }
-                .distinct()
-                .sorted()
-        }
-    }
-
-    /**
-     * 清空所有自定义表情
-     */
-    suspend fun clearAllEmojis() {
+    suspend fun clearAllEmojis(target: ActivePrompt) {
         context.customEmojiDataStore.edit { preferences ->
-            preferences[CUSTOM_EMOJIS] = "[]"
-            preferences.remove(ALL_CATEGORIES)
-            AppLogger.d(TAG, "Cleared all custom emojis and categories")
+            preferences[customEmojisKey(target)] = "[]"
+            preferences.remove(categoriesKey(target))
+            preferences.remove(builtinInitializedKey(target))
+            AppLogger.d(TAG, "Cleared all emojis for target: $target")
         }
     }
 
-    /**
-     * 检查内置表情是否已初始化
-     */
-    fun isBuiltinEmojisInitialized(): Flow<Boolean> {
+    fun isBuiltinEmojisInitialized(target: ActivePrompt): Flow<Boolean> {
         return context.customEmojiDataStore.data.map { preferences ->
-            preferences[BUILTIN_EMOJIS_INITIALIZED] ?: false
+            preferences[builtinInitializedKey(target)] ?: false
         }
     }
 
-    /**
-     * 标记内置表情已初始化
-     */
-    suspend fun setBuiltinEmojisInitialized(initialized: Boolean) {
+    suspend fun setBuiltinEmojisInitialized(target: ActivePrompt, initialized: Boolean) {
         context.customEmojiDataStore.edit { preferences ->
-            preferences[BUILTIN_EMOJIS_INITIALIZED] = initialized
+            if (initialized) {
+                preferences[builtinInitializedKey(target)] = true
+            } else {
+                preferences.remove(builtinInitializedKey(target))
+            }
+        }
+    }
+
+    suspend fun deleteTarget(target: ActivePrompt) {
+        context.customEmojiDataStore.edit { preferences ->
+            preferences.remove(customEmojisKey(target))
+            preferences.remove(categoriesKey(target))
+            preferences.remove(builtinInitializedKey(target))
+        }
+    }
+
+    suspend fun clearLegacyGlobalStorage() {
+        context.customEmojiDataStore.edit { preferences ->
+            preferences.remove(LEGACY_CUSTOM_EMOJIS)
+            preferences.remove(LEGACY_ALL_CATEGORIES)
+            preferences.remove(LEGACY_BUILTIN_EMOJIS_INITIALIZED)
         }
     }
 }
-

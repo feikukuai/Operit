@@ -363,17 +363,6 @@ Notes:
     }
   ]
 }*/
-var __rest = (this && this.__rest) || function (s, e) {
-    var t = {};
-    for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p) && e.indexOf(p) < 0)
-        t[p] = s[p];
-    if (s != null && typeof Object.getOwnPropertySymbols === "function")
-        for (var i = 0, p = Object.getOwnPropertySymbols(s); i < p.length; i++) {
-            if (e.indexOf(p[i]) < 0 && Object.prototype.propertyIsEnumerable.call(s, p[i]))
-                t[p[i]] = s[p[i]];
-        }
-    return t;
-};
 /// <reference path="./types/index.d.ts" />
 const WorkflowIntegration = (function () {
     async function usage_advice(_params) {
@@ -426,7 +415,7 @@ const WorkflowIntegration = (function () {
      * @returns 更新结果
      */
     async function update_workflow(params) {
-        const { workflow_id } = params, updates = __rest(params, ["workflow_id"]);
+        const { workflow_id, ...updates } = params;
         const data = await Tools.Workflow.update(workflow_id, updates);
         return {
             success: true,
@@ -440,7 +429,7 @@ const WorkflowIntegration = (function () {
      * @returns 更新结果
      */
     async function patch_workflow(params) {
-        const { workflow_id } = params, patch = __rest(params, ["workflow_id"]);
+        const { workflow_id, ...patch } = params;
         const data = await Tools.Workflow.patch(workflow_id, patch);
         return {
             success: true,

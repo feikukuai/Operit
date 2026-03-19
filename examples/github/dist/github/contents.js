@@ -36,14 +36,13 @@ async function resolveFileSha(params) {
     }
 }
 async function createOrUpdateFile(params) {
-    var _a;
     const token = (0, api_1.getToken)();
     if (!token) {
         throw new Error('GITHUB_TOKEN is required for create_or_update_file.');
     }
     const encoding = (params.content_encoding || 'utf-8').toLowerCase();
     const base64Content = encoding === 'base64' ? params.content : (0, base64_1.safeBtoaBase64)(params.content);
-    const sha = (_a = params.sha) !== null && _a !== void 0 ? _a : (await resolveFileSha({ owner: params.owner, repo: params.repo, path: params.path, branch: params.branch }));
+    const sha = params.sha ?? (await resolveFileSha({ owner: params.owner, repo: params.repo, path: params.path, branch: params.branch }));
     const url = (0, api_1.buildUrl)(`/repos/${encodeURIComponent(params.owner)}/${encodeURIComponent(params.repo)}/contents/${params.path
         .split('/')
         .map((p) => encodeURIComponent(p))
@@ -60,12 +59,11 @@ async function createOrUpdateFile(params) {
     });
 }
 async function deleteFile(params) {
-    var _a;
     const token = (0, api_1.getToken)();
     if (!token) {
         throw new Error('GITHUB_TOKEN is required for delete_file.');
     }
-    const sha = (_a = params.sha) !== null && _a !== void 0 ? _a : (await resolveFileSha({ owner: params.owner, repo: params.repo, path: params.path, branch: params.branch }));
+    const sha = params.sha ?? (await resolveFileSha({ owner: params.owner, repo: params.repo, path: params.path, branch: params.branch }));
     if (!sha) {
         throw new Error('File sha is required (unable to resolve automatically).');
     }

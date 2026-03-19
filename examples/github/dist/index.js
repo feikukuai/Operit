@@ -274,13 +274,12 @@ exports.apply_local_delete = tools_1.toolImpl.apply_local_delete;
 exports.overwrite_local_file = tools_1.toolImpl.overwrite_local_file;
 exports.terminal_exec = tools_1.toolImpl.terminal_exec;
 async function main(params) {
-    var _a, _b, _c;
     try {
-        const owner = String((params === null || params === void 0 ? void 0 : params.owner) || 'octocat');
-        const repo = String((params === null || params === void 0 ? void 0 : params.repo) || 'Hello-World');
-        const query = String((params === null || params === void 0 ? void 0 : params.query) || 'operit');
-        const path = String((params === null || params === void 0 ? void 0 : params.path) || 'README.md');
-        const enableWrite = (params === null || params === void 0 ? void 0 : params.enable_write) === true;
+        const owner = String(params?.owner || 'octocat');
+        const repo = String(params?.repo || 'Hello-World');
+        const query = String(params?.query || 'operit');
+        const path = String(params?.path || 'README.md');
+        const enableWrite = params?.enable_write === true;
         const baseUrl = (0, api_1.getBaseUrl)();
         const token = (0, api_1.getToken)();
         const results = {};
@@ -310,17 +309,17 @@ async function main(params) {
         results.get_repository = await run('get_repository', async () => summarizeRepo(await (0, repos_1.getRepository)({ owner, repo })));
         results.search_repositories = await run('search_repositories', async () => {
             const r = await (0, repos_1.searchRepositories)({ query, per_page: 5 });
-            const items = Array.isArray(r === null || r === void 0 ? void 0 : r.items) ? r.items : [];
+            const items = Array.isArray(r?.items) ? r.items : [];
             return {
-                total_count: r === null || r === void 0 ? void 0 : r.total_count,
+                total_count: r?.total_count,
                 count: items.length,
                 first: items[0] ? { id: items[0].id, full_name: items[0].full_name, stargazers_count: items[0].stargazers_count } : null
             };
         });
         results.list_issues = await run('list_issues', async () => summarizeList(await (0, issues_1.listIssues)({ owner, repo, per_page: 5 })));
-        let issueNumber = typeof (params === null || params === void 0 ? void 0 : params.issue_number) === 'number' ? params.issue_number : undefined;
+        let issueNumber = typeof params?.issue_number === 'number' ? params.issue_number : undefined;
         if (!issueNumber && results.list_issues.ok) {
-            const first = (_a = results.list_issues.data) === null || _a === void 0 ? void 0 : _a.first;
+            const first = results.list_issues.data?.first;
             if (first && typeof first.number === 'number')
                 issueNumber = first.number;
         }
@@ -331,15 +330,14 @@ async function main(params) {
             results.list_issue_comments = { ok: false, skipped: true, reason: 'No issue_number provided and cannot infer from list_issues.' };
         }
         results.list_pull_requests = await run('list_pull_requests', async () => summarizeList(await (0, pulls_1.listPullRequests)({ owner, repo, per_page: 5 })));
-        let pullNumber = typeof (params === null || params === void 0 ? void 0 : params.pull_number) === 'number' ? params.pull_number : undefined;
+        let pullNumber = typeof params?.pull_number === 'number' ? params.pull_number : undefined;
         if (!pullNumber && results.list_pull_requests.ok) {
-            const first = (_b = results.list_pull_requests.data) === null || _b === void 0 ? void 0 : _b.first;
+            const first = results.list_pull_requests.data?.first;
             if (first && typeof first.number === 'number')
                 pullNumber = first.number;
         }
         if (pullNumber) {
             results.get_pull_request = await run('get_pull_request', async () => {
-                var _a, _b;
                 const pr = await (0, pulls_1.getPullRequest)({ owner, repo, pull_number: pullNumber });
                 return pr
                     ? {
@@ -347,8 +345,8 @@ async function main(params) {
                         title: pr.title,
                         state: pr.state,
                         merged: pr.merged,
-                        head: (_a = pr.head) === null || _a === void 0 ? void 0 : _a.ref,
-                        base: (_b = pr.base) === null || _b === void 0 ? void 0 : _b.ref
+                        head: pr.head?.ref,
+                        base: pr.base?.ref
                     }
                     : pr;
             });
@@ -357,7 +355,7 @@ async function main(params) {
             results.get_pull_request = { ok: false, skipped: true, reason: 'No pull_number provided and cannot infer from list_pull_requests.' };
         }
         const inferReadableRepoFilePath = async () => {
-            if (params === null || params === void 0 ? void 0 : params.path) {
+            if (params?.path) {
                 return path;
             }
             try {
@@ -415,7 +413,7 @@ async function main(params) {
             const ts = Date.now();
             const testBranch = `operit-test-${ts}`;
             const testPath = `operit_test_${ts}.txt`;
-            const baseBranch = (results.get_repository.ok ? (_c = results.get_repository.data) === null || _c === void 0 ? void 0 : _c.default_branch : undefined) || 'main';
+            const baseBranch = (results.get_repository.ok ? results.get_repository.data?.default_branch : undefined) || 'main';
             results.create_branch = await run('create_branch', async () => (0, branches_1.createBranch)({ owner, repo, new_branch: testBranch, from_branch: baseBranch }));
             results.create_or_update_file = await run('create_or_update_file', async () => (0, contents_1.createOrUpdateFile)({
                 owner,
@@ -456,8 +454,8 @@ async function main(params) {
             else {
                 results.comment_issue = await run('comment_issue', async () => (0, issues_1.commentIssue)({ owner, repo, issue_number: issueNumber, body: `operit self-test comment ${ts}` }));
             }
-            const prHead = (params === null || params === void 0 ? void 0 : params.pr_head) ? String(params.pr_head) : '';
-            const prBase = (params === null || params === void 0 ? void 0 : params.pr_base) ? String(params.pr_base) : '';
+            const prHead = params?.pr_head ? String(params.pr_head) : '';
+            const prBase = params?.pr_base ? String(params.pr_base) : '';
             if (!token) {
                 writeSkipped('create_pull_request', 'Skipped: GITHUB_TOKEN missing (required for write operation).');
             }

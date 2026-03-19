@@ -207,7 +207,6 @@ const nanobananaDraw = (function () {
         }
     }
     async function callNanobananaApi(params) {
-        var _a, _b;
         const apiKey = getApiKey();
         // 构建请求体 - 使用异步模式（webHook: "-1"）
         const body = {
@@ -258,8 +257,8 @@ const nanobananaDraw = (function () {
         }
         const taskId = parsed["data"]["id"];
         console.log(`任务提交成功! ID: ${taskId}`);
-        const pollIntervalMs = (_a = params.poll_interval_ms) !== null && _a !== void 0 ? _a : POLL_INTERVAL;
-        const maxWaitTimeMs = (_b = params.max_wait_time_ms) !== null && _b !== void 0 ? _b : MAX_WAIT_TIME;
+        const pollIntervalMs = params.poll_interval_ms ?? POLL_INTERVAL;
+        const maxWaitTimeMs = params.max_wait_time_ms ?? MAX_WAIT_TIME;
         console.log(`步骤2/2: 等待任务完成（轮询中，每${pollIntervalMs / 1000}秒查询一次，最长等待${Math.ceil(maxWaitTimeMs / 60000)}分钟）...`);
         return taskId;
     }
@@ -267,8 +266,8 @@ const nanobananaDraw = (function () {
         const apiKey = getApiKey();
         const startTime = Date.now();
         let attempts = 0;
-        const pollIntervalMs = normalizePositiveInt(options === null || options === void 0 ? void 0 : options.poll_interval_ms, POLL_INTERVAL);
-        const maxWaitTimeMs = normalizePositiveInt(options === null || options === void 0 ? void 0 : options.max_wait_time_ms, MAX_WAIT_TIME);
+        const pollIntervalMs = normalizePositiveInt(options?.poll_interval_ms, POLL_INTERVAL);
+        const maxWaitTimeMs = normalizePositiveInt(options?.max_wait_time_ms, MAX_WAIT_TIME);
         // 构建结果查询请求
         const requestBody = JSON.stringify({ id: taskId });
         const headers = {
@@ -337,7 +336,6 @@ const nanobananaDraw = (function () {
         return "png";
     }
     async function draw_image(params) {
-        var _a;
         if (!params || !params.prompt || params.prompt.trim().length === 0) {
             throw new Error("参数 prompt 不能为空。");
         }
@@ -438,7 +436,7 @@ const nanobananaDraw = (function () {
         // 步骤2: 轮询等待任务完成
         const imageUrl = await pollForResult(taskId, { poll_interval_ms: pollIntervalMs, max_wait_time_ms: maxWaitTimeMs });
         const ext = guessExtensionFromUrl(imageUrl);
-        const baseName = buildFileName(prompt, (_a = params.file_name) !== null && _a !== void 0 ? _a : null);
+        const baseName = buildFileName(prompt, params.file_name ?? null);
         const filePath = `${DRAWS_DIR}/${baseName}.${ext}`;
         const downloadResult = await Tools.Files.download(imageUrl, filePath);
         if (!downloadResult.successful) {

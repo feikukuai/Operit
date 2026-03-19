@@ -221,7 +221,9 @@ const networkTest = (function () {
             return {
                 success: true,
                 message: "HTTP客户端配置已更新",
-                config: Object.assign({}, clientConfig)
+                config: {
+                    ...clientConfig
+                }
             };
         }
         catch (error) {

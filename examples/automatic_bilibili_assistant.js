@@ -144,17 +144,6 @@ METADATA
         }
     ]
 }*/
-var __rest = (this && this.__rest) || function (s, e) {
-    var t = {};
-    for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p) && e.indexOf(p) < 0)
-        t[p] = s[p];
-    if (s != null && typeof Object.getOwnPropertySymbols === "function")
-        for (var i = 0, p = Object.getOwnPropertySymbols(s); i < p.length; i++) {
-            if (e.indexOf(p[i]) < 0 && Object.prototype.propertyIsEnumerable.call(s, p[i]))
-                t[p[i]] = s[p[i]];
-        }
-    return t;
-};
 const BilibiliAssistant = (function () {
     // 添加 Array.prototype.at 支持
     Array.prototype.at = function (index) {
@@ -172,7 +161,7 @@ const BilibiliAssistant = (function () {
         if (typeof data === 'string') {
             return { success: true, message: message, data: data };
         }
-        return Object.assign({ success, message }, data);
+        return { success, message, ...data };
     }
     // Helper to find a UI element and click it
     async function findAndClick(finder) {
@@ -189,10 +178,9 @@ const BilibiliAssistant = (function () {
         return findAndClick(async () => (await UINode.getCurrentPage()).findByText(text));
     }
     async function ensureMain(packageName = BILIBILI_PACKAGE) {
-        var _a, _b, _c;
         let pageInfo = await Tools.UI.getPageInfo();
         // 1. Check if we are already on the main activity.
-        if (pageInfo.packageName === packageName && ((_a = pageInfo.activityName) === null || _a === void 0 ? void 0 : _a.includes(MAIN_ACTIVITY))) {
+        if (pageInfo.packageName === packageName && pageInfo.activityName?.includes(MAIN_ACTIVITY)) {
             console.log("Already on the main activity.");
             return true;
         }
@@ -206,7 +194,7 @@ const BilibiliAssistant = (function () {
         console.log("Attempting to go back to main activity.");
         for (let i = 0; i < 4; i++) {
             pageInfo = await Tools.UI.getPageInfo();
-            if (pageInfo.packageName === packageName && ((_b = pageInfo.activityName) === null || _b === void 0 ? void 0 : _b.includes(MAIN_ACTIVITY))) {
+            if (pageInfo.packageName === packageName && pageInfo.activityName?.includes(MAIN_ACTIVITY)) {
                 console.log(`Successfully returned to main activity on attempt ${i + 1}.`);
                 return true;
             }
@@ -225,7 +213,7 @@ const BilibiliAssistant = (function () {
         await Tools.System.startApp(packageName);
         await Tools.System.sleep(4000);
         pageInfo = await Tools.UI.getPageInfo();
-        if (pageInfo.packageName === packageName && ((_c = pageInfo.activityName) === null || _c === void 0 ? void 0 : _c.includes(MAIN_ACTIVITY))) {
+        if (pageInfo.packageName === packageName && pageInfo.activityName?.includes(MAIN_ACTIVITY)) {
             console.log("Successfully reached main activity after restart.");
             return true;
         }
@@ -297,10 +285,7 @@ const BilibiliAssistant = (function () {
         return createResponse(true, `搜索到 ${results.length} 条有效视频结果`, {
             keyword: keyword,
             filter_type: filter_type,
-            results: results.map((_a) => {
-                var { element } = _a, rest = __rest(_a, ["element"]);
-                return rest;
-            }), // Exclude element from response
+            results: results.map(({ element, ...rest }) => rest), // Exclude element from response
             result_count: results.length
         });
     }
@@ -530,9 +515,8 @@ const BilibiliAssistant = (function () {
         }
     }
     async function is_in_video_activity() {
-        var _a;
         const pageInfo = await Tools.UI.getPageInfo();
-        return (_a = pageInfo.activityName) === null || _a === void 0 ? void 0 : _a.includes(VIDEO_ACTIVITY);
+        return pageInfo.activityName?.includes(VIDEO_ACTIVITY);
     }
     async function is_on_search_results_page() {
         // A reliable indicator of the search results page is the presence of filter buttons.
@@ -774,7 +758,9 @@ const BilibiliAssistant = (function () {
     async function wrapToolExecution(func, params) {
         try {
             const result = await func(params);
-            complete(Object.assign({}, result));
+            complete({
+                ...result, // contains success, message, and other data
+            });
         }
         catch (error) {
             // This catch is for unexpected errors in tool logic, not for "soft" failures.

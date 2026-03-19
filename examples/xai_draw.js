@@ -477,7 +477,12 @@ const xaiDraw = (function () {
         }
         await ensureDirectories();
         const resolvedInputs = await resolveVideoInputs(params.image_url, params.image_path, params.video_url);
-        const createdTask = await createVideoTask(Object.assign(Object.assign({}, params), { prompt, image: resolvedInputs.image, video_url: resolvedInputs.video_url }));
+        const createdTask = await createVideoTask({
+            ...params,
+            prompt,
+            image: resolvedInputs.image,
+            video_url: resolvedInputs.video_url
+        });
         const pollIntervalMs = normalizePositiveInteger(params.poll_interval_ms, DEFAULT_POLL_INTERVAL_MS);
         const maxWaitTimeMs = normalizePositiveInteger(params.max_wait_time_ms, DEFAULT_MAX_WAIT_TIME_MS);
         const deadline = Date.now() + maxWaitTimeMs;

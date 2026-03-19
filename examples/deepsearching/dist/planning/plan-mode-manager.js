@@ -24,7 +24,7 @@ async function collectStreamToString(stream) {
     let buffer = "";
     const collector = {
         emit: function (value) {
-            buffer += String(value !== null && value !== void 0 ? value : "");
+            buffer += String(value ?? "");
             return Unit.INSTANCE;
         }
     };
@@ -34,9 +34,8 @@ async function collectStreamToString(stream) {
 function toKotlinPairList(history) {
     const list = [];
     (history || []).forEach((item) => {
-        var _d, _f;
-        const role = item && item.length > 0 ? String((_d = item[0]) !== null && _d !== void 0 ? _d : "") : "";
-        const content = item && item.length > 1 ? String((_f = item[1]) !== null && _f !== void 0 ? _f : "") : "";
+        const role = item && item.length > 0 ? String(item[0] ?? "") : "";
+        const content = item && item.length > 1 ? String(item[1] ?? "") : "";
         list.push(new Pair(role, content));
     });
     return list;
@@ -51,7 +50,7 @@ function newInputProcessingState(kind, message) {
         const completedCls = Java.type(base + "Completed");
         return completedCls.INSTANCE;
     }
-    return Java.newInstance(base + kind, String(message !== null && message !== void 0 ? message : ""));
+    return Java.newInstance(base + kind, String(message ?? ""));
 }
 async function sendPlanningMessage(aiService, context, message, chatHistory) {
     const emptyModelParams = Collections.emptyList();
@@ -167,7 +166,7 @@ class PlanModeManager {
             const planningHistory = [["system", planningRequest]];
             const aiService = await EnhancedAIService.callSuspend("getAIServiceForFunction", this.context, FunctionType.CHAT);
             const planResponseRaw = await sendPlanningMessage(aiService, this.context, getI18n().planGenerateDetailedPlan, planningHistory);
-            const planResponse = removeThinkingContent(String(planResponseRaw !== null && planResponseRaw !== void 0 ? planResponseRaw : "").trim());
+            const planResponse = removeThinkingContent(String(planResponseRaw ?? "").trim());
             console.log(`${TAG} plan response`, planResponse);
             const graph = (0, plan_parser_1.parseExecutionGraph)(planResponse);
             return graph;

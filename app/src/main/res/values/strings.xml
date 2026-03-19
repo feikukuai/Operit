@@ -4218,6 +4218,7 @@
 
     <!-- Custom Emoji Management -->
     <string name="manage_custom_emoji">管理自定义表情</string>
+    <string name="custom_emoji_bound_to_target">绑定到当前角色目标</string>
     <string name="add_emoji">添加表情</string>
     <string name="delete_emoji">删除表情</string>
     <string name="create_category">新建类别</string>

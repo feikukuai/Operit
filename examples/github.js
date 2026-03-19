@@ -470,12 +470,137 @@ async function mergePullRequest(params) {
 }
 
 // src/utils/base64.ts
+var BASE64_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+function normalizeBase64Input(value) {
+  const cleaned = String(value || "").replace(/\s+/g, "").replace(/-/g, "+").replace(/_/g, "/");
+  if (!cleaned) {
+    return "";
+  }
+  const remainder = cleaned.length % 4;
+  if (remainder === 1) {
+    throw new Error("Invalid base64 string");
+  }
+  return remainder === 0 ? cleaned : cleaned + "=".repeat(4 - remainder);
+}
+function decodeBase64ToBytes(value) {
+  const normalized = normalizeBase64Input(value);
+  const bytes = [];
+  for (let i = 0; i < normalized.length; i += 4) {
+    const c1 = normalized[i];
+    const c2 = normalized[i + 1];
+    const c3 = normalized[i + 2];
+    const c4 = normalized[i + 3];
+    const v1 = BASE64_ALPHABET.indexOf(c1);
+    const v2 = BASE64_ALPHABET.indexOf(c2);
+    const v3 = c3 === "=" ? 0 : BASE64_ALPHABET.indexOf(c3);
+    const v4 = c4 === "=" ? 0 : BASE64_ALPHABET.indexOf(c4);
+    if (v1 < 0 || v2 < 0 || c3 !== "=" && v3 < 0 || c4 !== "=" && v4 < 0) {
+      throw new Error("Invalid base64 string");
+    }
+    const chunk = v1 << 18 | v2 << 12 | v3 << 6 | v4;
+    bytes.push(chunk >> 16 & 255);
+    if (c3 !== "=") {
+      bytes.push(chunk >> 8 & 255);
+    }
+    if (c4 !== "=") {
+      bytes.push(chunk & 255);
+    }
+  }
+  return bytes;
+}
+function encodeBytesToBase64(bytes) {
+  let output = "";
+  for (let i = 0; i < bytes.length; i += 3) {
+    const b1 = bytes[i];
+    const hasB2 = i + 1 < bytes.length;
+    const hasB3 = i + 2 < bytes.length;
+    const b2 = hasB2 ? bytes[i + 1] : 0;
+    const b3 = hasB3 ? bytes[i + 2] : 0;
+    const chunk = b1 << 16 | b2 << 8 | b3;
+    output += BASE64_ALPHABET[chunk >> 18 & 63];
+    output += BASE64_ALPHABET[chunk >> 12 & 63];
+    output += hasB2 ? BASE64_ALPHABET[chunk >> 6 & 63] : "=";
+    output += hasB3 ? BASE64_ALPHABET[chunk & 63] : "=";
+  }
+  return output;
+}
+function utf8Encode(text) {
+  const bytes = [];
+  const input = String(text != null ? text : "");
+  for (let i = 0; i < input.length; i++) {
+    const codePoint = input.codePointAt(i);
+    if (codePoint == null) {
+      continue;
+    }
+    if (codePoint > 65535) {
+      i += 1;
+    }
+    if (codePoint <= 127) {
+      bytes.push(codePoint);
+    } else if (codePoint <= 2047) {
+      bytes.push(
+        192 | codePoint >> 6,
+        128 | codePoint & 63
+      );
+    } else if (codePoint <= 65535) {
+      bytes.push(
+        224 | codePoint >> 12,
+        128 | codePoint >> 6 & 63,
+        128 | codePoint & 63
+      );
+    } else {
+      bytes.push(
+        240 | codePoint >> 18,
+        128 | codePoint >> 12 & 63,
+        128 | codePoint >> 6 & 63,
+        128 | codePoint & 63
+      );
+    }
+  }
+  return bytes;
+}
+function readContinuationByte(bytes, index) {
+  const value = bytes[index];
+  if (value == null || (value & 192) !== 128) {
+    throw new Error("Invalid UTF-8 sequence");
+  }
+  return value & 63;
+}
+function utf8Decode(bytes) {
+  let output = "";
+  for (let i = 0; i < bytes.length; i++) {
+    const first = bytes[i];
+    if (first == null) {
+      break;
+    }
+    if (first <= 127) {
+      output += String.fromCodePoint(first);
+      continue;
+    }
+    if ((first & 224) === 192) {
+      const codePoint = (first & 31) << 6 | readContinuationByte(bytes, ++i);
+      output += String.fromCodePoint(codePoint);
+      continue;
+    }
+    if ((first & 240) === 224) {
+      const codePoint = (first & 15) << 12 | readContinuationByte(bytes, ++i) << 6 | readContinuationByte(bytes, ++i);
+      output += String.fromCodePoint(codePoint);
+      continue;
+    }
+    if ((first & 248) === 240) {
+      const codePoint = (first & 7) << 18 | readContinuationByte(bytes, ++i) << 12 | readContinuationByte(bytes, ++i) << 6 | readContinuationByte(bytes, ++i);
+      output += String.fromCodePoint(codePoint);
+      continue;
+    }
+    throw new Error("Invalid UTF-8 sequence");
+  }
+  return output;
+}
 function safeAtobBase64(b64) {
-  const cleaned = String(b64 || "").replace(/\s+/g, "");
-  return atob(cleaned);
+  return utf8Decode(decodeBase64ToBytes(b64));
 }
 function safeBtoaBase64(text) {
-  return btoa(String(text != null ? text : ""));
+  return encodeBytesToBase64(utf8Encode(String(text != null ? text : "")));
 }
 
 // src/github/contents.ts

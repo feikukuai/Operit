@@ -83,6 +83,10 @@ class ChatRuntimeHolder private constructor(context: Context) {
     }
 
     private fun setupCrossSessionSync() {
+        registerChatSelectionSync(
+            sourceSlot = ChatRuntimeSlot.MAIN,
+            targetSlot = ChatRuntimeSlot.FLOATING
+        )
         registerTurnSync(
             sourceSlot = ChatRuntimeSlot.MAIN,
             targetSlot = ChatRuntimeSlot.FLOATING
@@ -125,6 +129,57 @@ class ChatRuntimeHolder private constructor(context: Context) {
                     )
                 }
             }
+        }
+    }
+
+    fun syncMainChatSelectionToFloating(chatId: String) {
+        if (chatId.isBlank()) return
+        syncChatSelection(
+            sourceSlot = ChatRuntimeSlot.MAIN,
+            targetSlot = ChatRuntimeSlot.FLOATING,
+            chatId = chatId
+        )
+    }
+
+    private fun registerChatSelectionSync(
+        sourceSlot: ChatRuntimeSlot,
+        targetSlot: ChatRuntimeSlot
+    ) {
+        val sourceCore = getCore(sourceSlot)
+
+        runtimeScope.launch {
+            sourceCore.currentChatId
+                .collect { chatId ->
+                    if (chatId.isNullOrBlank()) {
+                        return@collect
+                    }
+                    syncChatSelection(sourceSlot, targetSlot, chatId)
+                }
+        }
+    }
+
+    private fun syncChatSelection(
+        sourceSlot: ChatRuntimeSlot,
+        targetSlot: ChatRuntimeSlot,
+        chatId: String
+    ) {
+        val targetCore = getCore(targetSlot)
+        if (targetCore.currentChatId.value == chatId) {
+            return
+        }
+
+        try {
+            targetCore.switchChatLocal(chatId)
+            AppLogger.d(
+                TAG,
+                "跨 Session 当前聊天同步: $sourceSlot -> $targetSlot, chatId=$chatId"
+            )
+        } catch (e: Exception) {
+            AppLogger.e(
+                TAG,
+                "跨 Session 当前聊天同步失败: $sourceSlot -> $targetSlot, chatId=$chatId",
+                e
+            )
         }
     }
 

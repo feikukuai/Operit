@@ -78,7 +78,7 @@ const tavily = (function () {
         if (!apiKey) {
             throw new Error("Tavily API key is not set. Please configure it in the environment variables.");
         }
-        const requestBody = Object.assign({}, params);
+        const requestBody = { ...params };
         const headers = {
             'accept': 'application/json',
             'content-type': 'application/json',

@@ -122,7 +122,7 @@ const BilibiliVideoAnalysis = (function () {
         const mixin_key = getMixinKey(img_key + sub_key);
         const curr_time = Math.round(Date.now() / 1000);
         const chr_filter = /[!'()*]/g;
-        const new_params = Object.assign(Object.assign({}, params), { wts: curr_time });
+        const new_params = { ...params, wts: curr_time };
         const query = Object.keys(new_params).sort().map(key => {
             const value = String(new_params[key]).replace(chr_filter, "");
             return `${encodeURIComponent(key)}=${encodeURIComponent(value)}`;
@@ -131,7 +131,6 @@ const BilibiliVideoAnalysis = (function () {
         return `${query}&w_rid=${w_rid}`;
     }
     async function get_wbi_keys() {
-        var _a, _b, _c, _d;
         try {
             const response = await client.get(API_NAV, getHeaders());
             if (!response.isSuccessful()) {
@@ -140,7 +139,7 @@ const BilibiliVideoAnalysis = (function () {
             }
             const navData = response.json();
             // The API may return a non-zero code for non-logged-in users, but still provide the WBI keys.
-            if (!((_b = (_a = navData.data) === null || _a === void 0 ? void 0 : _a.wbi_img) === null || _b === void 0 ? void 0 : _b.img_url) || !((_d = (_c = navData.data) === null || _c === void 0 ? void 0 : _c.wbi_img) === null || _d === void 0 ? void 0 : _d.sub_url)) {
+            if (!navData.data?.wbi_img?.img_url || !navData.data?.wbi_img?.sub_url) {
                 console.error("Failed to get WBI keys: " + (navData.message || "No wbi_img in response"));
                 return null;
             }
@@ -197,7 +196,6 @@ const BilibiliVideoAnalysis = (function () {
         }
     }
     async function get_subtitles_from_api(aid, cid) {
-        var _a, _b;
         const subtitles = [];
         try {
             const url = `${API_GET_SUBTITLE_LIST}?aid=${aid}&cid=${cid}`;
@@ -206,7 +204,7 @@ const BilibiliVideoAnalysis = (function () {
                 return { subtitles: [], error: `Could not fetch subtitles list, status: ${response.statusCode}` };
             }
             const subtitleListData = response.json();
-            if (subtitleListData.code === 0 && ((_b = (_a = subtitleListData.data) === null || _a === void 0 ? void 0 : _a.subtitle) === null || _b === void 0 ? void 0 : _b.subtitles)) {
+            if (subtitleListData.code === 0 && subtitleListData.data?.subtitle?.subtitles) {
                 for (const sub_meta of subtitleListData.data.subtitle.subtitles) {
                     if (sub_meta.subtitle_url) {
                         try {
@@ -263,7 +261,6 @@ const BilibiliVideoAnalysis = (function () {
         }
     }
     async function get_comments_from_api(aid) {
-        var _a, _b;
         const all_comments = [];
         if (!wbiKeys) {
             return { comments: "", count: 0, error: "获取 WBI keys 失败，无法请求评论 API" };
@@ -292,10 +289,10 @@ const BilibiliVideoAnalysis = (function () {
                     page_num++;
                     continue;
                 }
-                if (page_num === 1 && ((_a = comments_data.data) === null || _a === void 0 ? void 0 : _a.page)) {
+                if (page_num === 1 && comments_data.data?.page) {
                     total_pages = Math.ceil(comments_data.data.page.count / comments_data.data.page.size);
                 }
-                if ((_b = comments_data.data) === null || _b === void 0 ? void 0 : _b.replies) {
+                if (comments_data.data?.replies) {
                     for (const comment of comments_data.data.replies) {
                         const formatted_comment = format_comment(comment);
                         if (formatted_comment) {
@@ -438,30 +435,29 @@ const BilibiliVideoAnalysis = (function () {
         }
     }
     function format_search_results_to_string(data, count) {
-        var _a;
         if (!data.result) {
             return { formatted: "没有找到相关结果。", result_count: 0, total_count: 0 };
         }
-        const videoResults = (_a = data.result
-            .find((item) => item.result_type === "video")) === null || _a === void 0 ? void 0 : _a.data;
+        const videoResults = data.result
+            .find((item) => item.result_type === "video")
+            ?.data;
         if (!videoResults || videoResults.length === 0) {
             return { formatted: "没有找到相关视频结果。", result_count: 0, total_count: data.numResults || 0 };
         }
         const slicedResults = videoResults.slice(0, count);
         const formattedResults = slicedResults
             .map((video, index) => {
-            var _a, _b, _c;
             const cleanTitle = video.title.replace(/<em class="keyword">|<\/em>/g, "");
             const cleanDescription = video.description.replace(/<em class="keyword">|<\/em>/g, "");
             return [
                 `${index + 1}. "${cleanTitle}" - ${video.author}`,
                 `   BV ID: ${video.bvid}`,
-                `   播放: ${(_a = video.play) === null || _a === void 0 ? void 0 : _a.toLocaleString()}`,
-                `   弹幕: ${(_b = video.danmaku) === null || _b === void 0 ? void 0 : _b.toLocaleString()}`,
-                `   点赞: ${(_c = video.like) === null || _c === void 0 ? void 0 : _c.toLocaleString()}`,
+                `   播放: ${video.play?.toLocaleString()}`,
+                `   弹幕: ${video.danmaku?.toLocaleString()}`,
+                `   点赞: ${video.like?.toLocaleString()}`,
                 `   时长: ${video.duration}`,
                 `   发布于: ${new Date(video.pubdate * 1000).toLocaleDateString()}`,
-                `   简介: ${cleanDescription === null || cleanDescription === void 0 ? void 0 : cleanDescription.substring(0, 100)}${(cleanDescription === null || cleanDescription === void 0 ? void 0 : cleanDescription.length) > 100 ? "..." : ""}`,
+                `   简介: ${cleanDescription?.substring(0, 100)}${cleanDescription?.length > 100 ? "..." : ""}`,
             ].join("\n");
         })
             .join("\n\n");

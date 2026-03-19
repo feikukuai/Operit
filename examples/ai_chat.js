@@ -68,7 +68,7 @@ const aiModelInteraction = (function () {
     }
     function cleanText(text) {
         if (!text || typeof text !== 'string')
-            return String(text !== null && text !== void 0 ? text : '');
+            return String(text ?? '');
         let cleaned = text;
         // 处理转义与实体
         cleaned = cleaned.replace(/\|["\\]?n/g, '\n');
@@ -111,7 +111,7 @@ const aiModelInteraction = (function () {
                 timeout: 30000
             };
         }
-        catch (_a) {
+        catch {
             return { apiBaseUrl: '', apiKey: '', modelName: '', timeout: 30000 };
         }
     }
@@ -147,7 +147,6 @@ const aiModelInteraction = (function () {
         throw lastError || new Error('所有端点尝试失败');
     }
     async function chat_completion_logic(rawInput, timeout) {
-        var _a, _b;
         if (rawInput === null || rawInput === undefined) {
             throw new Error('参数错误: 输入参数不能为空');
         }
@@ -242,7 +241,7 @@ const aiModelInteraction = (function () {
         try {
             response = await tryEndpoints(config.apiBaseUrl, payload, config, timeout);
         }
-        catch (_c) {
+        catch {
             response = await universalHttpRequest(config.apiBaseUrl, 'POST', {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${config.apiKey}`
@@ -252,15 +251,15 @@ const aiModelInteraction = (function () {
             let errorMsg = `API请求失败: ${response.status}`;
             try {
                 const errorData = typeof response.body === 'string' ? JSON.parse(response.body) : response.body;
-                errorMsg += ` - ${((_a = errorData.error) === null || _a === void 0 ? void 0 : _a.message) || JSON.stringify(errorData)}`;
+                errorMsg += ` - ${errorData.error?.message || JSON.stringify(errorData)}`;
             }
-            catch (_d) {
+            catch {
                 errorMsg += ` - ${response.statusText}`;
             }
             throw new Error(errorMsg);
         }
         const result = typeof response.body === 'string' ? JSON.parse(response.body) : response.body;
-        if (!((_b = result.choices) === null || _b === void 0 ? void 0 : _b[0])) {
+        if (!result.choices?.[0]) {
             throw new Error('API返回格式异常');
         }
         const choice = result.choices[0];
@@ -280,7 +279,6 @@ const aiModelInteraction = (function () {
         return reply;
     }
     async function chat_completion_impl(params) {
-        var _a;
         const normalizedParams = typeof params === 'object'
             ? params
             : { messages: String(params) };
@@ -289,7 +287,7 @@ const aiModelInteraction = (function () {
             chat_completion_logic(normalizedParams, timeout),
             new Promise((_, reject) => setTimeout(() => reject(new Error(`操作超时：${timeout}ms`)), timeout))
         ]);
-        const rawReply = (_a = result.message) === null || _a === void 0 ? void 0 : _a.content;
+        const rawReply = result.message?.content;
         const cleanedReply = cleanText(rawReply);
         return {
             success: true,
@@ -319,7 +317,6 @@ const aiModelInteraction = (function () {
         return await wrapToolExecution(chat_completion_impl, params);
     }
     async function main(params) {
-        var _a, _b;
         const config = getFullConfig();
         if (!config.apiBaseUrl || !config.apiKey) {
             return {
@@ -329,22 +326,19 @@ const aiModelInteraction = (function () {
             };
         }
         return await chat_completion_impl({
-            messages: (params === null || params === void 0 ? void 0 : params.message) || 'Hello! Please respond in a continuous paragraph without any list or bullet points.',
-            temperature: (_a = params === null || params === void 0 ? void 0 : params.temperature) !== null && _a !== void 0 ? _a : 0.2,
-            timeout: (_b = params === null || params === void 0 ? void 0 : params.timeout) !== null && _b !== void 0 ? _b : 15000,
+            messages: params?.message || 'Hello! Please respond in a continuous paragraph without any list or bullet points.',
+            temperature: params?.temperature ?? 0.2,
+            timeout: params?.timeout ?? 15000,
         });
     }
     return {
         chat_completion,
         single_message: chat_completion,
-        test_connection: async (params) => wrapToolExecution(async () => {
-            var _a;
-            return await chat_completion_impl({
-                messages: "Hello! Please respond in a continuous paragraph without any list or bullet points.",
-                temperature: 0.1,
-                timeout: (_a = params === null || params === void 0 ? void 0 : params.timeout) !== null && _a !== void 0 ? _a : 10000
-            });
-        }, {}),
+        test_connection: async (params) => wrapToolExecution(async () => await chat_completion_impl({
+            messages: "Hello! Please respond in a continuous paragraph without any list or bullet points.",
+            temperature: 0.1,
+            timeout: params?.timeout ?? 10000
+        }), {}),
         main: (params) => wrapToolExecution(main, params),
         getConfig: getFullConfig,
         _makeHttpRequest: universalHttpRequest,

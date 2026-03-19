@@ -6,11 +6,10 @@ exports.commentIssue = commentIssue;
 exports.listIssueComments = listIssueComments;
 const api_1 = require("./api");
 async function listIssues(params) {
-    var _a, _b, _c;
-    const page = (_a = params.page) !== null && _a !== void 0 ? _a : 1;
-    const perPage = (_b = params.per_page) !== null && _b !== void 0 ? _b : 30;
+    const page = params.page ?? 1;
+    const perPage = params.per_page ?? 30;
     const url = (0, api_1.buildUrl)(`/repos/${encodeURIComponent(params.owner)}/${encodeURIComponent(params.repo)}/issues`, {
-        state: (_c = params.state) !== null && _c !== void 0 ? _c : 'open',
+        state: params.state ?? 'open',
         labels: params.labels,
         creator: params.creator,
         page,
@@ -48,9 +47,8 @@ async function commentIssue(params) {
     return (0, api_1.requestJson)({ method: 'POST', url, body: { body: params.body } });
 }
 async function listIssueComments(params) {
-    var _a, _b;
-    const page = (_a = params.page) !== null && _a !== void 0 ? _a : 1;
-    const perPage = (_b = params.per_page) !== null && _b !== void 0 ? _b : 30;
+    const page = params.page ?? 1;
+    const perPage = params.per_page ?? 30;
     const url = (0, api_1.buildUrl)(`/repos/${encodeURIComponent(params.owner)}/${encodeURIComponent(params.repo)}/issues/${params.issue_number}/comments`, { page, per_page: perPage });
     return (0, api_1.requestJson)({ method: 'GET', url });
 }

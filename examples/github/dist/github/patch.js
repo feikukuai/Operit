@@ -3,7 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.patchFileInRepo = patchFileInRepo;
 const contents_1 = require("./contents");
 function normalizeNewlines(text) {
-    return String(text !== null && text !== void 0 ? text : '').replace(/\r\n/g, '\n');
+    return String(text ?? '').replace(/\r\n/g, '\n');
 }
 function parseBlocks(patch) {
     const src = normalizeNewlines(patch);
@@ -55,8 +55,8 @@ async function patchFileInRepo(params) {
         path: params.path,
         ref: params.branch
     });
-    const originalText = typeof (file === null || file === void 0 ? void 0 : file.decoded_text) === 'string' ? file.decoded_text : '';
-    const sha = typeof (file === null || file === void 0 ? void 0 : file.sha) === 'string' ? file.sha : undefined;
+    const originalText = typeof file?.decoded_text === 'string' ? file.decoded_text : '';
+    const sha = typeof file?.sha === 'string' ? file.sha : undefined;
     if (!sha) {
         throw new Error('Cannot patch file: sha missing (is it a file path?)');
     }

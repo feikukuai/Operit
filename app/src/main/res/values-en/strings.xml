@@ -4283,6 +4283,7 @@
 
     <!-- Custom Emoji Management -->
     <string name="manage_custom_emoji">Manage Custom Emojis</string>
+    <string name="custom_emoji_bound_to_target">Bound to current character target</string>
     <string name="add_emoji">Add Emoji</string>
     <string name="delete_emoji">Delete Emoji</string>
     <string name="create_category">Create Category</string>

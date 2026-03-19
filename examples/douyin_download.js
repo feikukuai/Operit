@@ -75,7 +75,6 @@ const douyin = (function () {
      * 解析抖音分享链接，获取视频信息
      */
     async function resolveDouyinUrl(shareUrl) {
-        var _a, _b, _c, _d, _e, _f;
         try {
             console.log(`正在解析抖音链接: ${shareUrl}`);
             const request = client.newRequest()
@@ -102,11 +101,11 @@ const douyin = (function () {
                     if (!pageDataKey) {
                         throw new Error("无法在 _ROUTER_DATA 中找到页面数据");
                     }
-                    const videoData = (_c = (_b = (_a = routerData.loaderData[pageDataKey]) === null || _a === void 0 ? void 0 : _a.videoInfoRes) === null || _b === void 0 ? void 0 : _b.item_list) === null || _c === void 0 ? void 0 : _c[0];
+                    const videoData = routerData.loaderData[pageDataKey]?.videoInfoRes?.item_list?.[0];
                     if (videoData) {
                         const videoId = videoData.aweme_id;
                         const videoTitle = videoData.desc;
-                        const watermarkedUrl = (_f = (_e = (_d = videoData.video) === null || _d === void 0 ? void 0 : _d.play_addr) === null || _e === void 0 ? void 0 : _e.url_list) === null || _f === void 0 ? void 0 : _f[0];
+                        const watermarkedUrl = videoData.video?.play_addr?.url_list?.[0];
                         if (videoId && videoTitle && watermarkedUrl) {
                             console.log(`通过 _ROUTER_DATA 找到视频信息: ID=${videoId}`);
                             const downloadUrl = watermarkedUrl.replace("playwm", "play");

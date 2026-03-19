@@ -24,25 +24,70 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.flow
+import org.json.JSONObject
 
 /** Utility class for managing tool executions */
 object ToolExecutionManager {
     private const val TAG = "ToolExecutionManager"
 
+    private data class ResolvedToolTarget(
+        val tool: AITool,
+        val displayName: String
+    )
+
     private fun ensureEndsWithNewline(content: String): String {
         return if (content.endsWith("\n")) content else "$content\n"
     }
 
-    private fun resolveDisplayToolName(tool: AITool): String {
+    private fun resolveToolTarget(tool: AITool): ResolvedToolTarget {
         if (tool.name != "package_proxy") {
-            return tool.name
+            return ResolvedToolTarget(tool = tool, displayName = tool.name)
         }
+
         val targetToolName = tool.parameters
             .firstOrNull { it.name == "tool_name" }
             ?.value
             ?.trim()
             .orEmpty()
-        return if (targetToolName.isNotBlank()) targetToolName else tool.name
+        if (targetToolName.isBlank()) {
+            return ResolvedToolTarget(tool = tool, displayName = tool.name)
+        }
+
+        val forwardedParameters = resolveProxyParameters(tool)
+        return ResolvedToolTarget(
+            tool = AITool(name = targetToolName, parameters = forwardedParameters),
+            displayName = targetToolName
+        )
+    }
+
+    private fun resolveDisplayToolName(tool: AITool): String {
+        return resolveToolTarget(tool).displayName
+    }
+
+    private fun resolveProxyParameters(tool: AITool): List<ToolParameter> {
+        val paramsRaw = tool.parameters
+            .firstOrNull { it.name == "params" }
+            ?.value
+            ?.trim()
+            .orEmpty()
+        if (paramsRaw.isBlank()) {
+            return emptyList()
+        }
+
+        val paramsObject = runCatching { JSONObject(paramsRaw) }.getOrNull() ?: return emptyList()
+        val forwardedParameters = mutableListOf<ToolParameter>()
+        val keys = paramsObject.keys()
+        while (keys.hasNext()) {
+            val key = keys.next()
+            val value = paramsObject.opt(key)
+            val valueString = when (value) {
+                null, JSONObject.NULL -> "null"
+                is String -> value
+                else -> value.toString()
+            }
+            forwardedParameters.add(ToolParameter(name = key, value = valueString))
+        }
+        return forwardedParameters
     }
 
     /**
@@ -176,37 +221,40 @@ object ToolExecutionManager {
         toolHandler: AIToolHandler,
         invocation: ToolInvocation
     ): Pair<Boolean, ToolResult?> {
+        val resolvedTarget = resolveToolTarget(invocation.tool)
+        val permissionTool = resolvedTarget.tool
+
         // 检查是否强制拒绝权限（deny_tool标记）
         val hasPromptForPermission = !invocation.rawText.contains("deny_tool")
 
         if (hasPromptForPermission) {
             // 检查权限，如果需要则弹出权限请求界面
             val toolPermissionSystem = toolHandler.getToolPermissionSystem()
-            val hasPermission = toolPermissionSystem.checkToolPermission(invocation.tool)
+            val hasPermission = toolPermissionSystem.checkToolPermission(permissionTool)
 
             // 如果权限被拒绝，创建错误结果
             if (!hasPermission) {
                 val errorResult =
                     ToolResult(
-                        toolName = invocation.tool.name,
+                        toolName = resolvedTarget.displayName,
                         success = false,
                         result = StringResultData(""),
                         error = "User cancelled the tool execution."
                     )
                 toolHandler.notifyToolPermissionChecked(
-                    invocation.tool,
+                    permissionTool,
                     granted = false,
                     reason = errorResult.error
                 )
                 return Pair(false, errorResult)
             }
 
-            toolHandler.notifyToolPermissionChecked(invocation.tool, granted = true)
+            toolHandler.notifyToolPermissionChecked(permissionTool, granted = true)
             return Pair(true, null)
         }
 
         toolHandler.notifyToolPermissionChecked(
-            invocation.tool,
+            permissionTool,
             granted = true,
             reason = "Permission check bypassed by deny_tool tag."
         )

@@ -39,7 +39,7 @@ function formatResult(result) {
     try {
         return JSON.stringify(result, null, 2);
     }
-    catch (_a) {
+    catch {
         return asText(result);
     }
 }
@@ -103,7 +103,7 @@ function parseToolRecord(result) {
                 return parsed;
             }
         }
-        catch (_a) {
+        catch {
             return {};
         }
     }
@@ -292,7 +292,6 @@ function Screen(ctx) {
     };
     const refreshTmuxTabsAction = async () => {
         await runAction(text.actionSyncTmuxSession, async () => {
-            var _a;
             await saveCurrentConfigToEnv();
             const listResult = await callLinuxTool("linux_ssh_tmux_list_windows", getConnectionParams());
             const tabs = parseTmuxTabsFromListResult(listResult);
@@ -302,7 +301,7 @@ function Screen(ctx) {
             const current = selectedTmuxTabState.value;
             const nextSelected = tabs.some((tab) => tab.windowName === current)
                 ? current
-                : (((_a = tabs[0]) === null || _a === void 0 ? void 0 : _a.windowName) || "");
+                : (tabs[0]?.windowName || "");
             selectedTmuxTabState.set(nextSelected);
             if (!nextSelected) {
                 tmuxPreviewState.set(sessionExists
@@ -338,7 +337,6 @@ function Screen(ctx) {
     };
     const deleteTmuxTabAction = async () => {
         await runAction(text.actionDeleteCurrentTab, async () => {
-            var _a;
             const windowName = selectedTmuxTabState.value.trim();
             if (!windowName) {
                 throw new Error(text.errorDeleteTabRequired);
@@ -351,7 +349,7 @@ function Screen(ctx) {
             const listAfterDeleteResult = await callLinuxTool("linux_ssh_tmux_list_windows", getConnectionParams());
             const tabs = parseTmuxTabsFromListResult(listAfterDeleteResult);
             tmuxTabsState.set(tabs);
-            const nextSelected = ((_a = tabs[0]) === null || _a === void 0 ? void 0 : _a.windowName) || "";
+            const nextSelected = tabs[0]?.windowName || "";
             selectedTmuxTabState.set(nextSelected);
             if (!nextSelected) {
                 const listRecord = parseToolRecord(listAfterDeleteResult);
@@ -400,9 +398,8 @@ function Screen(ctx) {
     };
     const runTmuxCommandAction = async () => {
         await runAction(text.actionRunTmuxCommand, async () => {
-            var _a;
             const selectedWindow = selectedTmuxTabState.value.trim();
-            const windowName = selectedWindow || ((_a = tmuxTabsState.value[0]) === null || _a === void 0 ? void 0 : _a.windowName) || getNextTaskWindowName(tmuxTabsState.value);
+            const windowName = selectedWindow || tmuxTabsState.value[0]?.windowName || getNextTaskWindowName(tmuxTabsState.value);
             const command = tmuxCommandState.value.trim();
             if (!command) {
                 throw new Error(text.errorEnterCommandFirst);
