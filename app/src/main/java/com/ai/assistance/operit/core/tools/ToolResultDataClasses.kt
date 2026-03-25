@@ -1,5 +1,6 @@
 package com.ai.assistance.operit.core.tools
 
+import com.ai.assistance.operit.api.voice.HttpTtsResponsePipelineStep
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.EncodeDefault
 import kotlinx.serialization.ExperimentalSerializationApi
@@ -1749,7 +1750,8 @@ data class SpeechTtsHttpConfigResultItem(
     val requestBody: String,
     val contentType: String,
     val voiceId: String,
-    val modelName: String
+    val modelName: String,
+    val responsePipeline: List<HttpTtsResponsePipelineStep>
 )
 
 /** 语音服务 STT HTTP 配置条目 */

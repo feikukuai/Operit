@@ -8,7 +8,7 @@ import com.ai.assistance.showerclient.ShowerServerManager as CoreShowerServerMan
  *
  * The jar is packaged in app assets (src/main/assets/shower-server.jar).
  * At runtime we copy it to the app's files directory and start it via app_process:
- *   CLASSPATH=/data/user/0/<pkg>/files/shower-server.jar app_process / com.ai.assistance.shower.Main
+ *   CLASSPATH=/data/user/<current_user_id>/<pkg>/files/shower-server.jar app_process / com.ai.assistance.shower.Main
  */
 object ShowerServerManager {
 

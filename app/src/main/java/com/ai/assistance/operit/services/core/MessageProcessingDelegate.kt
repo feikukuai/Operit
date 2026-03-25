@@ -578,9 +578,9 @@ class MessageProcessingDelegate(
                     details = "chatId=$activeChatId, size=${chatHistory.size}"
                 )
 
-                // 根据enableSummary控制Token阈值检查和Token超限回调
-                val effectiveMaxTokens = if (enableSummary) maxTokens else 0
-                val effectiveTokenUsageThreshold = if (enableSummary) tokenUsageThreshold else Double.POSITIVE_INFINITY
+                // 关闭总结时仍保留真实 limits，避免下游插件收到 0/Infinity 这类无效 JSON 值。
+                val effectiveMaxTokens = maxTokens
+                val effectiveTokenUsageThreshold = if (enableSummary) tokenUsageThreshold else Double.MAX_VALUE
                 val effectiveOnTokenLimitExceeded = if (enableSummary) {
                     suspend { onTokenLimitExceeded(activeChatId) }
                 } else {
@@ -888,7 +888,8 @@ class MessageProcessingDelegate(
                 withContext(Dispatchers.Main) { showErrorMessage(context.getString(R.string.message_send_failed, e.message)) }
             } finally {
                 val finalizeMessageStartTime = messageTimingNow()
-                finalizeMessageAndNotify(
+                val deferTurnCompleteToAsyncJob =
+                    finalizeMessageAndNotify(
                     chatId = chatId,
                     activeChatId = activeChatId,
                     aiMessageProvider = { aiMessage },
@@ -925,6 +926,14 @@ class MessageProcessingDelegate(
                     startTimeMs = cleanupRuntimeStartTime,
                     details = "chatId=$activeChatId"
                 )
+
+                if (shouldNotifyTurnComplete && !deferTurnCompleteToAsyncJob) {
+                    val service = serviceForTurnComplete
+                    if (service != null) {
+                        notifyTurnComplete(chatId, activeChatId, service)
+                    }
+                }
+
                 logMessageTiming(
                     stage = "delegate.sendUserMessage.total",
                     startTimeMs = sendUserMessageStartTime,
@@ -957,15 +966,15 @@ class MessageProcessingDelegate(
         roleCardId: String,
         chatModelConfigIdOverride: String? = null,
         chatModelIndexOverride: Int? = null
-    ) {
+    ): Boolean {
         // 修改为使用 try-catch 来检查变量是否已初始化，而不是使用 ::var.isInitialized
+        var deferTurnCompleteToAsyncJob = false
         try {
             val aiMessage = aiMessageProvider()
             // 优先使用共享流的全量重放缓存重建最终文本，避免完成信号早于收集协程处理尾部字符时丢字。
             val finalContent = resolveFinalContent(aiMessage)
             aiMessage.content = finalContent
 
-            var deferTurnCompleteToAsyncJob = false
             withContext(Dispatchers.IO) {
                 val waifuPreferences = WaifuPreferences.getInstance(context)
                 val isWaifuModeEnabled = waifuPreferences.enableWaifuModeFlow.first()
@@ -1079,13 +1088,6 @@ class MessageProcessingDelegate(
                     }
                 }
             }
-
-            if (shouldNotifyTurnComplete && !deferTurnCompleteToAsyncJob) {
-                val service = serviceForTurnComplete
-                if (service != null) {
-                    notifyTurnComplete(chatId, activeChatId, service)
-                }
-            }
         } catch (e: UninitializedPropertyAccessException) {
             AppLogger.d(TAG, "AI消息未初始化，跳过流清理步骤")
         } catch (e: kotlinx.coroutines.CancellationException) {
@@ -1102,17 +1104,11 @@ class MessageProcessingDelegate(
                         addMessageToChat(chatId, finalMessage)
                     }
                 }
-
-                if (shouldNotifyTurnComplete) {
-                    val service = serviceForTurnComplete
-                    if (service != null) {
-                        notifyTurnComplete(chatId, activeChatId, service)
-                    }
-                }
             } catch (ex: Exception) {
                 AppLogger.e(TAG, "回退到普通模式也失败", ex)
             }
         }
+        return deferTurnCompleteToAsyncJob
     }
 
     private fun cleanupRuntimeAfterSend(chatId: String, chatRuntime: ChatRuntime) {

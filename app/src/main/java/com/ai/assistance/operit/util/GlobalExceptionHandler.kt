@@ -15,6 +15,7 @@ class GlobalExceptionHandler(private val context: Context) : Thread.UncaughtExce
     override fun uncaughtException(thread: Thread, ex: Throwable) {
         val stackTrace = StringWriter()
         ex.printStackTrace(PrintWriter(stackTrace))
+        CrashRecoveryState.markPendingCrashReportLaunch(context)
 
         val intent =
                 Intent(context, CrashReportActivity::class.java).apply {

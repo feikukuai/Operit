@@ -302,7 +302,7 @@ class MCPDeployer(private val context: Context) {
             // 将pluginPath转换为终端可访问的路径
             val terminalPluginPath = if (pluginPath.startsWith("/storage/")) {
                 // 如果是Android storage路径，转换为sdcard路径
-                pluginPath.replace("/storage/emulated/0", "/sdcard")
+                pluginPath.replace(Regex("^/storage/emulated/\\d+"), "/sdcard")
             } else if (pluginPath.startsWith("/sdcard")) {
                 // 已经是sdcard路径，直接使用
                 pluginPath

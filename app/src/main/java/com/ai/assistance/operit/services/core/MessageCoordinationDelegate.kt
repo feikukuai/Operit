@@ -192,7 +192,8 @@ class MessageCoordinationDelegate(
         if (!isAutoContinuation) {
             currentPromptFunctionType = promptFunctionType
         }
-        val isBackgroundSend = !chatIdOverride.isNullOrBlank()
+        val isBackgroundSend =
+            !chatIdOverride.isNullOrBlank() && chatIdOverride != chatHistoryDelegate.currentChatId.value
         // 获取当前聊天ID和工作区路径
         val chatId = chatIdOverride ?: chatHistoryDelegate.currentChatId.value
         if (chatId == null) {
@@ -450,7 +451,7 @@ class MessageCoordinationDelegate(
         val shouldEnableMemoryQuery = apiConfigDelegate.enableMemoryQuery.value || hasMemoryFolder
         val replyToMessage = uiBridge.getReplyToMessage()
 
-        val isFirstMessage = chatHistoryDelegate.chatHistory.value.none { it.sender == "user" }
+        val isFirstMessage = chatHistoryDelegate.getChatHistory(chatId).none { it.sender == "user" }
         if (isFirstMessage) {
             val newTitle =
                 when {
@@ -546,7 +547,10 @@ class MessageCoordinationDelegate(
                 )
 
                 val beforeLastAiTimestamp =
-                    chatHistoryDelegate.chatHistory.value.lastOrNull { it.sender == "ai" }?.timestamp ?: Long.MIN_VALUE
+                    chatHistoryDelegate.getChatHistory(chatId)
+                        .lastOrNull { it.sender == "ai" }
+                        ?.timestamp
+                        ?: Long.MIN_VALUE
                 val targetTurnCounter = messageProcessingDelegate.getTurnCompleteCounter(chatId) + 1L
 
                 // 第一轮第一个成员使用原始用户消息，其他使用空消息（不添加"继续"）
@@ -568,7 +572,7 @@ class MessageCoordinationDelegate(
                     skipSummaryCheck = true,
                     isAutoContinuation = false,
                     roleCardIdOverride = member.characterCardId,
-                    chatIdOverride = null,
+                    chatIdOverride = chatId,
                     messageTextOverride = memberMessage,
                     proxySenderNameOverride = null,
                     chatModelConfigIdOverride = null,
@@ -591,7 +595,7 @@ class MessageCoordinationDelegate(
                     return@forEachIndexed
                 }
 
-                val newAiMessage = chatHistoryDelegate.chatHistory.value
+                val newAiMessage = chatHistoryDelegate.getChatHistory(chatId)
                     .asReversed()
                     .firstOrNull { it.sender == "ai" && it.timestamp > beforeLastAiTimestamp }
                 if (newAiMessage != null && newAiMessage.content.isNotBlank()) {
@@ -610,6 +614,9 @@ class MessageCoordinationDelegate(
 
         AppLogger.d(TAG, "群组编排结束: chatId=$chatId, timelineSize=${timeline.size}")
         maybeSummarizeAfterGroupRound(chatId, promptFunctionType)
+        attachmentDelegate.clearAttachments()
+        uiBridge.resetAttachmentPanelState()
+        uiBridge.clearReplyToMessage()
         return true
     }
 
@@ -845,8 +852,8 @@ class MessageCoordinationDelegate(
     ) {
         if (!apiConfigDelegate.enableSummary.value) return
 
-        val currentMessages = chatHistoryDelegate.chatHistory.value
-        val currentTokens = tokenStatsDelegate.currentWindowSizeFlow.value
+        val currentMessages = chatHistoryDelegate.getChatHistory(chatId)
+        val currentTokens = tokenStatsDelegate.getLastCurrentWindowSize(chatId)
         val maxTokens = (apiConfigDelegate.contextLength.value * 1024).toInt()
         val shouldSummarize = AIMessageManager.shouldGenerateSummary(
             messages = currentMessages,
@@ -1026,10 +1033,16 @@ class MessageCoordinationDelegate(
                     return@launch
                 }
 
-                chatHistoryDelegate.addSummaryMessage(summaryMessage, insertPosition)
+                chatHistoryDelegate.addSummaryMessage(
+                    summaryMessage = summaryMessage,
+                    insertPosition = insertPosition,
+                    chatIdOverride = originalChatId
+                )
 
                 val newHistoryForTokens =
-                    AIMessageManager.getMemoryFromMessages(chatHistoryDelegate.chatHistory.value)
+                    AIMessageManager.getMemoryFromMessages(
+                        chatHistoryDelegate.getChatHistory(originalChatId)
+                    )
                 val chatService = service.getAIServiceForFunction(
                     functionType = FunctionType.CHAT,
                     chatModelConfigIdOverride = chatModelConfigIdOverride,
@@ -1120,7 +1133,7 @@ class MessageCoordinationDelegate(
                 return false
             }
 
-            val currentMessages = chatHistoryDelegate.chatHistory.value
+            val currentMessages = currentChatId?.let { chatHistoryDelegate.getChatHistory(it) }.orEmpty()
             if (currentMessages.isEmpty()) {
                 AppLogger.d(TAG, "历史记录为空，无需总结")
                 return false
@@ -1131,11 +1144,16 @@ class MessageCoordinationDelegate(
                 AIMessageManager.summarizeMemory(service, currentMessages, autoContinue, isGroupChat)
 
             if (summaryMessage != null) {
-                chatHistoryDelegate.addSummaryMessage(summaryMessage, insertPosition)
+                chatHistoryDelegate.addSummaryMessage(
+                    summaryMessage = summaryMessage,
+                    insertPosition = insertPosition,
+                    chatIdOverride = currentChatId
+                )
 
                 // 更新窗口大小
-                val newHistoryForTokens =
-                    AIMessageManager.getMemoryFromMessages(chatHistoryDelegate.chatHistory.value)
+                val newHistoryForTokens = AIMessageManager.getMemoryFromMessages(
+                    currentChatId?.let { chatHistoryDelegate.getChatHistory(it) }.orEmpty()
+                )
                 val chatService = service.getAIServiceForFunction(
                     functionType = FunctionType.CHAT,
                     chatModelConfigIdOverride = effectiveChatModelConfigIdOverride,
@@ -1203,6 +1221,7 @@ class MessageCoordinationDelegate(
                         promptFunctionType = continuationPromptType,
                         isContinuation = true,
                         isAutoContinuation = true,
+                        chatIdOverride = currentChatId,
                         chatModelConfigIdOverride = effectiveChatModelConfigIdOverride,
                         chatModelIndexOverride = effectiveChatModelIndexOverride
                     )

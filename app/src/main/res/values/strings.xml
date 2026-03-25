@@ -1359,6 +1359,7 @@
     <string name="crash_report_details_title">错误详情</string>
     <string name="crash_report_copy_button">复制</string>
     <string name="crash_report_export_button">导出</string>
+    <string name="crash_report_export_logs_button">导出应用日志</string>
     <string name="crash_report_copy_success">已复制到剪贴板</string>
     <string name="crash_report_export_success">错误报告已导出到\n%1$s</string>
     <string name="crash_report_export_failed">导出失败: %1$s</string>
@@ -2511,6 +2512,10 @@
     <string name="speech_services_http_headers">HTTP 头部 (JSON)</string>
     <string name="speech_services_http_headers_placeholder">{\"Content-Type\": \"application/json\"}</string>
     <string name="speech_services_http_headers_error">无效的 JSON 格式</string>
+    <string name="speech_services_http_response_pipeline">响应处理管线</string>
+    <string name="speech_services_http_response_pipeline_placeholder">[\n  { &quot;type&quot;: &quot;parse_json&quot; },\n  { &quot;type&quot;: &quot;pick&quot;, &quot;path&quot;: &quot;audio_uri&quot; },\n  { &quot;type&quot;: &quot;http_get&quot; }\n]</string>
+    <string name="speech_services_http_response_pipeline_hint">留空或 [] 表示直接把响应体当音频。支持 parse_json、pick、parse_json_string、http_get、http_request_from_object、base64_decode。</string>
+    <string name="speech_services_http_response_pipeline_error">无效的响应处理管线 JSON 数组</string>
     <string name="speech_services_http_method">HTTP 方法</string>
     <string name="speech_services_http_method_select">选择HTTP方法</string>
     <string name="speech_services_http_content_type">Content-Type</string>
@@ -6984,6 +6989,19 @@
     <string name="http_tts_url_invalid_scheme">HTTP TTS 服务配置错误: URL 模板必须以 http:// 或 https:// 开头。</string>
     <string name="http_tts_init_failed">初始化HTTP TTS服务时发生意外错误</string>
     <string name="http_tts_fetch_failed">获取HTTP TTS音频失败</string>
+    <string name="http_tts_response_pipeline_invalid_step">HTTP TTS 响应处理第 %1$d 步无效: %2$s</string>
+    <string name="http_tts_response_pipeline_pick_path_required">HTTP TTS 响应处理第 %1$d 步缺少 path</string>
+    <string name="http_tts_response_pipeline_final_not_audio">HTTP TTS 响应处理完成后没有得到音频字节</string>
+    <string name="http_tts_response_pipeline_step_type_mismatch">HTTP TTS 响应处理第 %1$d 步 %2$s 需要 %3$s 类型输入</string>
+    <string name="http_tts_response_pipeline_parse_json_failed">HTTP TTS 响应处理第 %1$d 步解析 JSON 失败</string>
+    <string name="http_tts_response_pipeline_parse_json_string_failed">HTTP TTS 响应处理第 %1$d 步解析 JSON 字符串失败</string>
+    <string name="http_tts_response_pipeline_http_url_invalid">HTTP TTS 响应处理第 %1$d 步得到的 URL 无效</string>
+    <string name="http_tts_response_pipeline_http_object_url_missing">HTTP TTS 响应处理第 %1$d 步的 HTTP 对象缺少 url</string>
+    <string name="http_tts_response_pipeline_http_method_invalid">HTTP TTS 响应处理第 %1$d 步的 HTTP method 无效: %2$s</string>
+    <string name="http_tts_response_pipeline_http_body_missing">HTTP TTS 响应处理第 %1$d 步的 POST HTTP 对象缺少 body</string>
+    <string name="http_tts_response_pipeline_http_content_type_missing">HTTP TTS 响应处理第 %1$d 步的 POST HTTP 对象缺少 content_type</string>
+    <string name="http_tts_response_pipeline_base64_decode_failed">HTTP TTS 响应处理第 %1$d 步 Base64 解码失败</string>
+    <string name="http_tts_response_pipeline_pick_failed">HTTP TTS 响应处理第 %1$d 步无法读取路径: %2$s</string>
 
     <!-- ConversationMarkupManager -->
     <string name="conversation_markup_multiple_tools_warning">检测到多个工具调用。系统将只执行第一个工具 `%1$s`，忽略其它工具调用。请避免在单个消息中同时调用多个工具。</string>

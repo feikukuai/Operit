@@ -14,18 +14,23 @@ import com.ai.assistance.operit.util.AppLogger
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import com.ai.assistance.operit.ui.components.CustomScaffold
@@ -35,6 +40,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.ai.assistance.operit.R
+import com.ai.assistance.operit.ui.features.toolbox.screens.logcat.LogcatExportHelper
 import com.ai.assistance.operit.ui.main.MainActivity
 import com.ai.assistance.operit.ui.theme.OperitTheme
 import kotlinx.coroutines.launch
@@ -64,6 +70,9 @@ class CrashReportActivity : ComponentActivity() {
 fun CrashReportScreen(stackTrace: String) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
+    var isExportingLogs by remember { mutableStateOf(false) }
+    var logExportMessage by remember { mutableStateOf<String?>(null) }
+    var logExportSuccess by remember { mutableStateOf<Boolean?>(null) }
 
     CustomScaffold(
             topBar = {
@@ -132,6 +141,71 @@ fun CrashReportScreen(stackTrace: String) {
                             Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
                             Spacer(Modifier.size(ButtonDefaults.IconSpacing))
                             Text(stringResource(id = R.string.crash_report_export_button))
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    OutlinedButton(
+                        onClick = {
+                            coroutineScope.launch {
+                                isExportingLogs = true
+                                logExportMessage = null
+                                logExportSuccess = null
+                                try {
+                                    val result = LogcatExportHelper.exportLogs(context)
+                                    logExportMessage = result.message
+                                    logExportSuccess = result.success
+                                } finally {
+                                    isExportingLogs = false
+                                }
+                            }
+                        },
+                        enabled = !isExportingLogs,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        if (isExportingLogs) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(ButtonDefaults.IconSize),
+                                strokeWidth = 2.dp
+                            )
+                        } else {
+                            Icon(
+                                Icons.Default.Description,
+                                contentDescription = null,
+                                modifier = Modifier.size(ButtonDefaults.IconSize)
+                            )
+                        }
+                        Spacer(Modifier.size(ButtonDefaults.IconSpacing))
+                        Text(stringResource(id = R.string.crash_report_export_logs_button))
+                    }
+
+                    if (logExportMessage != null) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(
+                                containerColor = if (logExportSuccess == true) {
+                                    MaterialTheme.colorScheme.primaryContainer
+                                } else {
+                                    MaterialTheme.colorScheme.errorContainer
+                                }
+                            )
+                        ) {
+                            SelectionContainer {
+                                Text(
+                                    text = logExportMessage.orEmpty(),
+                                    modifier = Modifier.padding(12.dp),
+                                    style = MaterialTheme.typography.bodySmall.copy(
+                                        fontFamily = FontFamily.Monospace
+                                    ),
+                                    color = if (logExportSuccess == true) {
+                                        MaterialTheme.colorScheme.onPrimaryContainer
+                                    } else {
+                                        MaterialTheme.colorScheme.onErrorContainer
+                                    }
+                                )
+                            }
                         }
                     }
 

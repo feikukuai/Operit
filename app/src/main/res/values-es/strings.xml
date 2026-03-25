@@ -802,6 +802,7 @@
     <string name="crash_report_details_title">Detalles del Error</string>
     <string name="crash_report_copy_button">Copiar</string>
     <string name="crash_report_export_button">Exportar</string>
+    <string name="crash_report_export_logs_button">Exportar registros de la app</string>
     <string name="crash_report_copy_success">Copiado al portapapeles</string>
     <string name="crash_report_export_success">Reporte de error exportado a\n%1$s</string>
     <string name="crash_report_export_failed">Error al exportar: %1$s</string>

@@ -504,6 +504,9 @@ fun getJsToolsDefinition(): String {
                     if (params.tts_headers !== undefined && params.tts_headers !== null && typeof params.tts_headers === 'object') {
                         params.tts_headers = JSON.stringify(params.tts_headers);
                     }
+                    if (params.tts_response_pipeline !== undefined && params.tts_response_pipeline !== null && Array.isArray(params.tts_response_pipeline)) {
+                        params.tts_response_pipeline = JSON.stringify(params.tts_response_pipeline);
+                    }
                     if (params.tts_cleaner_regexs !== undefined && params.tts_cleaner_regexs !== null && Array.isArray(params.tts_cleaner_regexs)) {
                         params.tts_cleaner_regexs = JSON.stringify(params.tts_cleaner_regexs);
                     }

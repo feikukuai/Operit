@@ -49,6 +49,7 @@ import com.ai.assistance.operit.util.ImagePoolManager
 import com.ai.assistance.operit.util.LocaleUtils
 import com.ai.assistance.operit.util.MediaPoolManager
 import com.ai.assistance.operit.util.AppIconManager
+import com.ai.assistance.operit.util.CrashRecoveryState
 import com.ai.assistance.operit.util.OperitPaths
 import com.ai.assistance.operit.util.SkillRepoZipPoolManager
 import com.ai.assistance.operit.util.SerializationSetup
@@ -120,9 +121,16 @@ class OperitApplication : Application(), ImageLoaderFactory, WorkConfiguration.P
         AppIconManager.ensureComponentState(this)
 
         // 每次应用冷启动时重置上一轮日志，避免日志无限增长
-        AppLogger.resetLogFile()
+        val isCrashReportRecoveryStartup = CrashRecoveryState.consumePendingCrashReportLaunch(this)
+        if (!isCrashReportRecoveryStartup) {
+            AppLogger.resetLogFile()
+        }
 
         ensureWorkManagerInitialized()
+
+        if (isCrashReportRecoveryStartup) {
+            AppLogger.w(TAG, "检测到崩溃报告启动，保留上一轮日志供崩溃页导出")
+        }
 
         AppLogger.d(TAG, "【启动计时】应用启动开始")
         AppLogger.d(TAG, "【启动计时】实例初始化完成 - ${System.currentTimeMillis() - startTime}ms")

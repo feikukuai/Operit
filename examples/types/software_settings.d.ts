@@ -31,6 +31,11 @@ export namespace SoftwareSettings {
         tts_content_type?: string;
         tts_voice_id?: string;
         tts_model_name?: string;
+        tts_response_pipeline?: string | Array<{
+            type: string;
+            path?: string;
+            headers?: Record<string, string>;
+        }>;
         tts_cleaner_regexs?: string | string[];
         tts_speech_rate?: number;
         tts_pitch?: number;

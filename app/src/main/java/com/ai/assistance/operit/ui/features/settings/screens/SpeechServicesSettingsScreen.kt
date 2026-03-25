@@ -67,6 +67,7 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.unit.dp
 import com.ai.assistance.operit.R
 import com.ai.assistance.operit.api.speech.SpeechServiceFactory
+import com.ai.assistance.operit.api.voice.HttpTtsResponsePipelineStep
 import com.ai.assistance.operit.api.voice.VoiceServiceFactory
 import com.ai.assistance.operit.data.preferences.SpeechServicesPreferences
 import kotlinx.coroutines.launch
@@ -111,11 +112,16 @@ fun SpeechServicesSettingsScreen(
     var ttsContentTypeInput by remember(httpConfig) { mutableStateOf(httpConfig.contentType) }
     var ttsVoiceIdInput by remember(httpConfig) { mutableStateOf(httpConfig.voiceId) }
     var ttsModelNameInput by remember(httpConfig) { mutableStateOf(httpConfig.modelName) }
+    var ttsResponsePipelineInput by remember(httpConfig) {
+        mutableStateOf(HttpTtsResponsePipelineStep.encodeList(httpConfig.responsePipeline))
+    }
     var ttsSpeechRateInput by remember(ttsSpeechRate) { mutableStateOf(ttsSpeechRate) }
     var ttsPitchInput by remember(ttsPitch) { mutableStateOf(ttsPitch) }
-    var ttsJsonError by remember { mutableStateOf<String?>(null) }
+    var ttsHeadersJsonError by remember { mutableStateOf<String?>(null) }
+    var ttsResponsePipelineJsonError by remember { mutableStateOf<String?>(null) }
     var httpMethodDropdownExpanded by remember { mutableStateOf(false) }
     val ttsCleanerRegexsState = remember { mutableStateListOf<String>() }
+    val hasHttpTtsJsonError = ttsHeadersJsonError != null || ttsResponsePipelineJsonError != null
 
     // --- State for STT Settings ---
     val sttServiceType by prefs.sttServiceTypeFlow.collectAsState(initial = SpeechServiceFactory.SpeechServiceType.SHERPA_NCNN)
@@ -144,6 +150,7 @@ fun SpeechServicesSettingsScreen(
             ttsContentTypeInput != httpConfig.contentType ||
             ttsVoiceIdInput != httpConfig.voiceId ||
             ttsModelNameInput != httpConfig.modelName ||
+            ttsResponsePipelineInput != HttpTtsResponsePipelineStep.encodeList(httpConfig.responsePipeline) ||
             ttsCleanerRegexsState.toList() != ttsCleanerRegexs ||
             ttsSpeechRateInput != ttsSpeechRate ||
             ttsPitchInput != ttsPitch ||
@@ -162,6 +169,7 @@ fun SpeechServicesSettingsScreen(
         ttsContentTypeInput,
         ttsVoiceIdInput,
         ttsModelNameInput,
+        ttsResponsePipelineInput,
         ttsSpeechRateInput,
         ttsPitchInput,
         ttsCleanerRegexsState.toList(),
@@ -171,22 +179,37 @@ fun SpeechServicesSettingsScreen(
         sttModelNameInput
     ) {
         if (!hasPendingChanges) return@LaunchedEffect
-        if (ttsServiceTypeInput == VoiceServiceFactory.VoiceServiceType.HTTP_TTS && ttsJsonError != null) return@LaunchedEffect
+        if (ttsServiceTypeInput == VoiceServiceFactory.VoiceServiceType.HTTP_TTS && hasHttpTtsJsonError) return@LaunchedEffect
 
         kotlinx.coroutines.delay(500)
 
         if (!hasPendingChanges) return@LaunchedEffect
-        if (ttsServiceTypeInput == VoiceServiceFactory.VoiceServiceType.HTTP_TTS && ttsJsonError != null) return@LaunchedEffect
+        if (ttsServiceTypeInput == VoiceServiceFactory.VoiceServiceType.HTTP_TTS && hasHttpTtsJsonError) return@LaunchedEffect
 
         val headers = if (ttsServiceTypeInput == VoiceServiceFactory.VoiceServiceType.HTTP_TTS) {
-            try {
-                Json.decodeFromString<Map<String, String>>(ttsHeadersInput)
-            } catch (_: Exception) {
-                return@LaunchedEffect
+            if (ttsHeadersInput.isBlank()) {
+                emptyMap()
+            } else {
+                try {
+                    Json.decodeFromString<Map<String, String>>(ttsHeadersInput)
+                } catch (_: Exception) {
+                    return@LaunchedEffect
+                }
             }
         } else {
             emptyMap()
         }
+
+        val responsePipeline =
+            if (ttsServiceTypeInput == VoiceServiceFactory.VoiceServiceType.HTTP_TTS) {
+                try {
+                    HttpTtsResponsePipelineStep.parseList(ttsResponsePipelineInput)
+                } catch (_: Exception) {
+                    return@LaunchedEffect
+                }
+            } else {
+                httpConfig.responsePipeline
+            }
 
         val httpConfigData = SpeechServicesPreferences.TtsHttpConfig(
             urlTemplate = ttsUrlTemplateInput,
@@ -196,7 +219,8 @@ fun SpeechServicesSettingsScreen(
             requestBody = ttsRequestBodyInput,
             contentType = ttsContentTypeInput,
             voiceId = ttsVoiceIdInput,
-            modelName = ttsModelNameInput
+            modelName = ttsModelNameInput,
+            responsePipeline = responsePipeline
         )
 
         val sttHttpConfigData = SpeechServicesPreferences.SttHttpConfig(
@@ -506,12 +530,12 @@ fun SpeechServicesSettingsScreen(
                                         ttsHeadersInput = it
                                         try {
                                             Json.decodeFromString<Map<String, String>>(it)
-                                            ttsJsonError = null
+                                            ttsHeadersJsonError = null
                                         } catch (e: Exception) {
                                             if (it.isNotBlank() && it != "{}") {
-                                                ttsJsonError = context.getString(R.string.speech_services_http_headers_error)
+                                                ttsHeadersJsonError = context.getString(R.string.speech_services_http_headers_error)
                                             } else {
-                                                ttsJsonError = null
+                                                ttsHeadersJsonError = null
                                             }
                                         }
                                     },
@@ -519,12 +543,12 @@ fun SpeechServicesSettingsScreen(
                                     placeholder = { Text(stringResource(R.string.speech_services_http_headers_placeholder)) },
                                     modifier = Modifier.fillMaxWidth(),
                                     minLines = 2,
-                                    isError = ttsJsonError != null
+                                    isError = ttsHeadersJsonError != null
                                 )
 
-                                if (ttsJsonError != null) {
+                                if (ttsHeadersJsonError != null) {
                                     Text(
-                                        text = ttsJsonError!!,
+                                        text = ttsHeadersJsonError!!,
                                         color = MaterialTheme.colorScheme.error,
                                         style = MaterialTheme.typography.bodySmall,
                                         modifier = Modifier.padding(top = 4.dp)
@@ -583,6 +607,47 @@ fun SpeechServicesSettingsScreen(
                                         placeholder = { Text(stringResource(R.string.speech_services_http_request_body_placeholder)) },
                                         modifier = Modifier.fillMaxWidth(),
                                         minLines = 3
+                                    )
+                                }
+
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                                OutlinedTextField(
+                                    value = ttsResponsePipelineInput,
+                                    onValueChange = {
+                                        ttsResponsePipelineInput = it
+                                        try {
+                                            HttpTtsResponsePipelineStep.parseList(it)
+                                            ttsResponsePipelineJsonError = null
+                                        } catch (e: Exception) {
+                                            ttsResponsePipelineJsonError =
+                                                if (it.isBlank() || it.trim() == "[]") {
+                                                    null
+                                                } else {
+                                                    context.getString(R.string.speech_services_http_response_pipeline_error)
+                                                }
+                                        }
+                                    },
+                                    label = { Text(stringResource(R.string.speech_services_http_response_pipeline)) },
+                                    placeholder = { Text(stringResource(R.string.speech_services_http_response_pipeline_placeholder)) },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    minLines = 6,
+                                    isError = ttsResponsePipelineJsonError != null,
+                                    supportingText = {
+                                        Text(
+                                            text = stringResource(R.string.speech_services_http_response_pipeline_hint),
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                )
+
+                                if (ttsResponsePipelineJsonError != null) {
+                                    Text(
+                                        text = ttsResponsePipelineJsonError!!,
+                                        color = MaterialTheme.colorScheme.error,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        modifier = Modifier.padding(top = 4.dp)
                                     )
                                 }
                             }

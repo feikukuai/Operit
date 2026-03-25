@@ -1409,6 +1409,7 @@
     <string name="crash_report_details_title">Error Details</string>
     <string name="crash_report_copy_button">Copy</string>
     <string name="crash_report_export_button">Export</string>
+    <string name="crash_report_export_logs_button">Export App Logs</string>
     <string name="crash_report_copy_success">Copied to clipboard</string>
     <string name="crash_report_export_success">Error report exported to\n%1$s</string>
     <string name="crash_report_export_failed">Export failed: %1$s</string>
@@ -2500,6 +2501,10 @@
     <string name="speech_services_http_headers">HTTP Headers (JSON)</string>
     <string name="speech_services_http_headers_placeholder">{\"Content-Type\": \"application/json\"}</string>
     <string name="speech_services_http_headers_error">Invalid JSON format</string>
+    <string name="speech_services_http_response_pipeline">Response pipeline</string>
+    <string name="speech_services_http_response_pipeline_placeholder">[\n  { &quot;type&quot;: &quot;parse_json&quot; },\n  { &quot;type&quot;: &quot;pick&quot;, &quot;path&quot;: &quot;audio_uri&quot; },\n  { &quot;type&quot;: &quot;http_get&quot; }\n]</string>
+    <string name="speech_services_http_response_pipeline_hint">Leave blank or use [] to treat the response body as audio directly. Supported steps: parse_json, pick, parse_json_string, http_get, http_request_from_object, base64_decode.</string>
+    <string name="speech_services_http_response_pipeline_error">Invalid response pipeline JSON array</string>
     <string name="speech_services_http_method">HTTP Method</string>
     <string name="speech_services_http_method_select">Select HTTP method</string>
     <string name="speech_services_http_content_type">Content-Type</string>
@@ -6967,6 +6972,19 @@
     <string name="http_tts_url_invalid_scheme">HTTP TTS service configuration error: URL template must start with http:// or https://.</string>
     <string name="http_tts_init_failed">Unexpected error while initializing HTTP TTS service</string>
     <string name="http_tts_fetch_failed">Failed to fetch HTTP TTS audio</string>
+    <string name="http_tts_response_pipeline_invalid_step">HTTP TTS response pipeline step %1$d is invalid: %2$s</string>
+    <string name="http_tts_response_pipeline_pick_path_required">HTTP TTS response pipeline step %1$d requires a path</string>
+    <string name="http_tts_response_pipeline_final_not_audio">HTTP TTS response pipeline did not produce audio bytes</string>
+    <string name="http_tts_response_pipeline_step_type_mismatch">HTTP TTS response pipeline step %1$d %2$s requires %3$s input</string>
+    <string name="http_tts_response_pipeline_parse_json_failed">HTTP TTS response pipeline step %1$d failed to parse JSON</string>
+    <string name="http_tts_response_pipeline_parse_json_string_failed">HTTP TTS response pipeline step %1$d failed to parse a JSON string</string>
+    <string name="http_tts_response_pipeline_http_url_invalid">HTTP TTS response pipeline step %1$d produced an invalid URL</string>
+    <string name="http_tts_response_pipeline_http_object_url_missing">HTTP TTS response pipeline step %1$d HTTP object is missing url</string>
+    <string name="http_tts_response_pipeline_http_method_invalid">HTTP TTS response pipeline step %1$d has an invalid HTTP method: %2$s</string>
+    <string name="http_tts_response_pipeline_http_body_missing">HTTP TTS response pipeline step %1$d POST HTTP object is missing body</string>
+    <string name="http_tts_response_pipeline_http_content_type_missing">HTTP TTS response pipeline step %1$d POST HTTP object is missing content_type</string>
+    <string name="http_tts_response_pipeline_base64_decode_failed">HTTP TTS response pipeline step %1$d failed to decode Base64</string>
+    <string name="http_tts_response_pipeline_pick_failed">HTTP TTS response pipeline step %1$d could not resolve path: %2$s</string>
 
     <!-- ConversationMarkupManager -->
     <string name="conversation_markup_multiple_tools_warning">Multiple tool calls detected. The system will only execute the first tool `%1$s` and ignore other tool calls. Please avoid calling multiple tools in a single message.</string>

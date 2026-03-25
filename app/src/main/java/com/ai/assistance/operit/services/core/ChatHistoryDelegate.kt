@@ -903,10 +903,20 @@ class ChatHistoryDelegate(
      * @param summaryMessage 要添加的总结消息。
      * @param insertPosition 预先计算好的插入索引。
      */
-    suspend fun addSummaryMessage(summaryMessage: ChatMessage, insertPosition: Int) {
+    suspend fun addSummaryMessage(
+        summaryMessage: ChatMessage,
+        insertPosition: Int,
+        chatIdOverride: String? = null
+    ) {
         historyUpdateMutex.withLock {
-            val chatId = _currentChatId.value ?: return@withLock
-            val currentMessages = _chatHistory.value.toMutableList()
+            val chatId = chatIdOverride ?: _currentChatId.value ?: return@withLock
+            val isCurrentChat = chatId == _currentChatId.value
+            val currentMessages =
+                if (isCurrentChat) {
+                    _chatHistory.value.toMutableList()
+                } else {
+                    chatHistoryManager.loadChatMessages(chatId).toMutableList()
+                }
 
             // 检查插入位置是否越界
             if (insertPosition < 0 || insertPosition > currentMessages.size) {
@@ -931,7 +941,9 @@ class ChatHistoryDelegate(
             AppLogger.d(TAG, "在预计算索引 $insertPosition 处添加总结消息，更新后总消息数量: ${currentMessages.size}")
 
             // 更新消息列表
-            _chatHistory.value = currentMessages
+            if (isCurrentChat) {
+                _chatHistory.value = currentMessages
+            }
 
             // 使用带有索引的重载方法更新数据库
             chatHistoryManager.addMessage(chatId, summaryMessage, insertPosition)

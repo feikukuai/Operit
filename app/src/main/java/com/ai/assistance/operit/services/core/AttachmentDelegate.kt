@@ -652,7 +652,7 @@ $foldersText
 
                     // 对于外部存储文件
                     if ("primary".equals(type, ignoreCase = true)) {
-                        return "/storage/emulated/0/${split[1]}"
+                        return "/sdcard/${split[1]}"
                     }
 
                     // 对于SD卡

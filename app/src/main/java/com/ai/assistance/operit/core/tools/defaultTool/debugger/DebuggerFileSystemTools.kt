@@ -38,6 +38,7 @@ import java.util.zip.ZipOutputStream
 import kotlin.math.exp
 import com.ai.assistance.operit.util.FileUtils
 import com.ai.assistance.operit.core.tools.ToolProgressBus
+import com.ai.assistance.operit.util.AndroidUserPathUtils
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
@@ -60,13 +61,13 @@ open class DebuggerFileSystemTools(context: Context) : AccessibilityFileSystemTo
         internal fun isOperitInternalPath(path: String): Boolean {
             val normalizedPath = path.trim()
             return normalizedPath.startsWith("/data/data/$OPERIT_PACKAGE") ||
-                normalizedPath.startsWith("/data/user/0/$OPERIT_PACKAGE")
+                AndroidUserPathUtils.isCurrentUserPackageDataPath(normalizedPath, OPERIT_PACKAGE)
         }
     }
     
     /**
      * 判断路径是否为Operit应用的内部存储路径
-     * 仅针对 /data/data/com.ai.assistance.operit 开头的路径返回true
+     * 仅针对 Operit 应用自身数据目录路径返回true
      */
     protected fun isOperitInternalPath(path: String): Boolean {
         return Companion.isOperitInternalPath(path)

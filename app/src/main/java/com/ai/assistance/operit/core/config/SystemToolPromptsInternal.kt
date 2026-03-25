@@ -1877,6 +1877,12 @@ object SystemToolPromptsInternal {
                                         required = false
                                     ),
                                     ToolParameterSchema(
+                                        name = "tts_response_pipeline",
+                                        type = "string",
+                                        description = "optional, HTTP TTS response pipeline JSON array string",
+                                        required = false
+                                    ),
+                                    ToolParameterSchema(
                                         name = "tts_cleaner_regexs",
                                         type = "string",
                                         description = "optional, TTS cleaner regex list JSON array string",
@@ -4637,6 +4643,12 @@ object SystemToolPromptsInternal {
                                         name = "tts_model_name",
                                         type = "string",
                                         description = "可选，TTS 模型名",
+                                        required = false
+                                    ),
+                                    ToolParameterSchema(
+                                        name = "tts_response_pipeline",
+                                        type = "string",
+                                        description = "可选，HTTP TTS 响应处理管线 JSON 数组字符串",
                                         required = false
                                     ),
                                     ToolParameterSchema(

@@ -3,6 +3,7 @@ package com.ai.assistance.operit.api.voice
 import android.content.Context
 import android.media.AudioAttributes
 import android.media.MediaPlayer
+import android.util.Base64
 import com.ai.assistance.operit.R
 import com.ai.assistance.operit.data.preferences.SpeechServicesPreferences
 import com.ai.assistance.operit.util.AppLogger
@@ -11,6 +12,7 @@ import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.io.IOException
 import java.net.URLEncoder
+import java.nio.charset.Charset
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
@@ -31,6 +33,12 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 import okhttp3.Call
 import okhttp3.Callback
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -111,6 +119,28 @@ class HttpVoiceProvider(
         val audioFile: File
     )
 
+    private data class BinaryPayload(
+        val bytes: ByteArray,
+        val contentType: String?,
+        val charset: Charset
+    )
+
+    private sealed interface PipelineValue {
+        data class Binary(val payload: BinaryPayload) : PipelineValue
+        data class Text(val value: String) : PipelineValue
+        data class JsonData(val value: JsonElement) : PipelineValue
+    }
+
+    private sealed interface JsonPathToken {
+        data class Key(val name: String) : JsonPathToken
+        data class Index(val index: Int) : JsonPathToken
+    }
+
+    private val jsonParser =
+        Json {
+            ignoreUnknownKeys = true
+        }
+
     init {
         speakScope.launch {
             for (request in speakQueue) {
@@ -145,6 +175,7 @@ class HttpVoiceProvider(
      */
     fun setConfiguration(config: SpeechServicesPreferences.TtsHttpConfig) {
         this.httpConfig = config
+        this.currentVoiceId = config.voiceId.takeIf { it.isNotBlank() }
         this._isInitialized.value = false // 强制重新初始化
     }
 
@@ -177,6 +208,8 @@ class HttpVoiceProvider(
             if (!httpConfig.urlTemplate.startsWith("http://") && !httpConfig.urlTemplate.startsWith("https://")) {
                 throw TtsException(context.getString(R.string.http_tts_url_invalid_scheme))
             }
+
+            validateResponsePipeline(httpConfig.responsePipeline)
 
             _isInitialized.value = true
         } catch (e: Exception) {
@@ -516,50 +549,456 @@ class HttpVoiceProvider(
 
             AppLogger.i(TAG, "Executing TTS Request: ${request.method} ${request.url}")
             AppLogger.i(TAG, "Request Headers:\n${request.headers}")
-
-            val response = suspendCoroutine<Response> { continuation ->
-                httpClient.newCall(request).enqueue(object : Callback {
-                    override fun onFailure(call: Call, e: IOException) {
-                        continuation.resumeWithException(e)
-                    }
-
-                    override fun onResponse(call: Call, response: Response) {
-                        continuation.resume(response)
-                    }
-                })
-            }
-
-            if (response.isSuccessful) {
-                // 创建临时文件
-                val tempFile = File(cacheDir, "tts_${UUID.randomUUID()}.mp3")
-
-                // 写入音频数据
-                response.body?.let { responseBody ->
-                    FileOutputStream(tempFile).use { output ->
-                        responseBody.byteStream().use { input ->
-                            input.copyTo(output)
-                        }
-                    }
-
-                    return@withContext tempFile
+            val initialPayload = executeBinaryRequest(request, "HTTP TTS request")
+            val finalPayload =
+                if (httpConfig.responsePipeline.isEmpty()) {
+                    initialPayload
+                } else {
+                    resolvePipelineAudio(initialPayload, httpConfig.responsePipeline)
                 }
-                // Should not happen if response is successful and body is present
-                return@withContext null
-            } else {
-                val errorBody = response.body?.string()
-                AppLogger.e(TAG, "HTTP TTS request failed. Code: ${response.code}, Body: $errorBody")
-                response.close()
-                throw TtsException(
-                    message = "HTTP TTS request failed with code ${response.code}",
-                    httpStatusCode = response.code,
-                    errorBody = errorBody
-                )
+
+            val tempFile = File(cacheDir, "tts_${UUID.randomUUID()}.bin")
+            FileOutputStream(tempFile).use { output ->
+                output.write(finalPayload.bytes)
             }
+
+            return@withContext tempFile
         } catch (e: Exception) {
             AppLogger.e(TAG, "获取HTTP TTS音频失败", e)
             if (e is TtsException) throw e
             throw TtsException(context.getString(R.string.http_tts_fetch_failed), cause = e)
         }
+    }
+
+    private fun validateResponsePipeline(steps: List<HttpTtsResponsePipelineStep>) {
+        steps.forEachIndexed { index, step ->
+            val type = step.normalizedType
+            if (type !in HttpTtsResponsePipelineStep.SUPPORTED_TYPES) {
+                throw TtsException(
+                    context.getString(R.string.http_tts_response_pipeline_invalid_step, index + 1, step.type)
+                )
+            }
+            if (type == HttpTtsResponsePipelineStep.TYPE_PICK && step.path.isBlank()) {
+                throw TtsException(
+                    context.getString(R.string.http_tts_response_pipeline_pick_path_required, index + 1)
+                )
+            }
+            if (type == HttpTtsResponsePipelineStep.TYPE_PICK) {
+                runCatching { parseJsonPath(step.path) }.getOrElse {
+                    throw TtsException(
+                        context.getString(
+                            R.string.http_tts_response_pipeline_invalid_step,
+                            index + 1,
+                            "${step.type} path"
+                        ),
+                        cause = it
+                    )
+                }
+            }
+        }
+    }
+
+    private suspend fun executeRequest(request: Request): Response =
+        suspendCoroutine { continuation ->
+            httpClient.newCall(request).enqueue(object : Callback {
+                override fun onFailure(call: Call, e: IOException) {
+                    continuation.resumeWithException(e)
+                }
+
+                override fun onResponse(call: Call, response: Response) {
+                    continuation.resume(response)
+                }
+            })
+        }
+
+    private suspend fun executeBinaryRequest(
+        request: Request,
+        requestLabel: String
+    ): BinaryPayload = withContext(Dispatchers.IO) {
+        val response = executeRequest(request)
+        response.use { safeResponse ->
+            val responseBody = safeResponse.body
+                ?: throw TtsException("$requestLabel returned an empty response body")
+
+            if (!safeResponse.isSuccessful) {
+                val errorBody = responseBody.string()
+                AppLogger.e(TAG, "$requestLabel failed. Code: ${safeResponse.code}, Body: $errorBody")
+                throw TtsException(
+                    message = "$requestLabel failed with code ${safeResponse.code}",
+                    httpStatusCode = safeResponse.code,
+                    errorBody = errorBody
+                )
+            }
+
+            val mediaType = responseBody.contentType()
+            return@withContext BinaryPayload(
+                bytes = responseBody.bytes(),
+                contentType = mediaType?.toString(),
+                charset = mediaType?.charset(Charsets.UTF_8) ?: Charsets.UTF_8
+            )
+        }
+    }
+
+    private suspend fun resolvePipelineAudio(
+        initialPayload: BinaryPayload,
+        steps: List<HttpTtsResponsePipelineStep>
+    ): BinaryPayload {
+        var current: PipelineValue = PipelineValue.Binary(initialPayload)
+
+        steps.forEachIndexed { index, step ->
+            current =
+                when (step.normalizedType) {
+                    HttpTtsResponsePipelineStep.TYPE_PARSE_JSON -> {
+                        PipelineValue.JsonData(parseJsonPayload(current, index))
+                    }
+
+                    HttpTtsResponsePipelineStep.TYPE_PICK -> {
+                        PipelineValue.JsonData(pickJsonValue(current, step.path, index))
+                    }
+
+                    HttpTtsResponsePipelineStep.TYPE_PARSE_JSON_STRING -> {
+                        PipelineValue.JsonData(parseJsonStringValue(current, index))
+                    }
+
+                    HttpTtsResponsePipelineStep.TYPE_HTTP_GET -> {
+                        PipelineValue.Binary(followHttpUrl(current, step, index))
+                    }
+
+                    HttpTtsResponsePipelineStep.TYPE_HTTP_REQUEST_FROM_OBJECT -> {
+                        PipelineValue.Binary(followHttpRequestObject(current, index))
+                    }
+
+                    HttpTtsResponsePipelineStep.TYPE_BASE64_DECODE -> {
+                        PipelineValue.Binary(decodeBase64Value(current, index))
+                    }
+
+                    else -> {
+                        throw TtsException(
+                            context.getString(
+                                R.string.http_tts_response_pipeline_invalid_step,
+                                index + 1,
+                                step.type
+                            )
+                        )
+                    }
+                }
+        }
+
+        return when (current) {
+            is PipelineValue.Binary -> current.payload
+            else -> throw TtsException(context.getString(R.string.http_tts_response_pipeline_final_not_audio))
+        }
+    }
+
+    private fun parseJsonPayload(current: PipelineValue, stepIndex: Int): JsonElement {
+        val text =
+            when (current) {
+                is PipelineValue.Binary -> current.payload.bytes.toString(current.payload.charset)
+                is PipelineValue.Text -> current.value
+                is PipelineValue.JsonData -> {
+                    throw TtsException(
+                        context.getString(
+                            R.string.http_tts_response_pipeline_step_type_mismatch,
+                            stepIndex + 1,
+                            "parse_json",
+                            "binary/text"
+                        )
+                    )
+                }
+            }
+
+        return try {
+            jsonParser.parseToJsonElement(text)
+        } catch (e: Exception) {
+            throw TtsException(
+                context.getString(R.string.http_tts_response_pipeline_parse_json_failed, stepIndex + 1),
+                cause = e
+            )
+        }
+    }
+
+    private fun pickJsonValue(current: PipelineValue, path: String, stepIndex: Int): JsonElement {
+        val jsonValue =
+            when (current) {
+                is PipelineValue.JsonData -> current.value
+                else -> {
+                    throw TtsException(
+                        context.getString(
+                            R.string.http_tts_response_pipeline_step_type_mismatch,
+                            stepIndex + 1,
+                            "pick",
+                            "json"
+                        )
+                    )
+                }
+            }
+
+        return readJsonPath(jsonValue, path, stepIndex)
+    }
+
+    private fun parseJsonStringValue(current: PipelineValue, stepIndex: Int): JsonElement {
+        val raw =
+            current.asScalarString(stepIndex, "parse_json_string")
+
+        return try {
+            jsonParser.parseToJsonElement(raw)
+        } catch (e: Exception) {
+            throw TtsException(
+                context.getString(R.string.http_tts_response_pipeline_parse_json_string_failed, stepIndex + 1),
+                cause = e
+            )
+        }
+    }
+
+    private suspend fun followHttpUrl(
+        current: PipelineValue,
+        step: HttpTtsResponsePipelineStep,
+        stepIndex: Int
+    ): BinaryPayload {
+        val rawUrl = current.asScalarString(stepIndex, "http_get").trim()
+        val httpUrl = rawUrl.toHttpUrlOrNull()
+            ?: throw TtsException(context.getString(R.string.http_tts_response_pipeline_http_url_invalid, stepIndex + 1))
+
+        val request =
+            Request.Builder()
+                .url(httpUrl)
+                .get()
+                .apply {
+                    step.headers.forEach { (key, value) ->
+                        addHeader(key, value)
+                    }
+                }
+                .build()
+
+        return executeBinaryRequest(
+            request,
+            "HTTP TTS pipeline http_get step ${stepIndex + 1}"
+        )
+    }
+
+    private suspend fun followHttpRequestObject(
+        current: PipelineValue,
+        stepIndex: Int
+    ): BinaryPayload {
+        val requestObject =
+            when (current) {
+                is PipelineValue.JsonData -> current.value as? JsonObject
+                else -> null
+            } ?: throw TtsException(
+                context.getString(
+                    R.string.http_tts_response_pipeline_step_type_mismatch,
+                    stepIndex + 1,
+                    "http_request_from_object",
+                    "json object"
+                )
+            )
+
+        val url =
+            requestObject["url"]?.jsonPrimitive?.contentOrNull?.trim().orEmpty()
+                .ifBlank {
+                    throw TtsException(
+                        context.getString(R.string.http_tts_response_pipeline_http_object_url_missing, stepIndex + 1)
+                    )
+                }
+
+        val httpUrl = url.toHttpUrlOrNull()
+            ?: throw TtsException(context.getString(R.string.http_tts_response_pipeline_http_url_invalid, stepIndex + 1))
+
+        val method =
+            requestObject["method"]?.jsonPrimitive?.contentOrNull?.trim()?.uppercase()
+                ?.takeIf { it.isNotBlank() }
+                ?: "GET"
+
+        if (method != "GET" && method != "POST") {
+            throw TtsException(
+                context.getString(R.string.http_tts_response_pipeline_http_method_invalid, stepIndex + 1, method)
+            )
+        }
+
+        val requestBuilder = Request.Builder().url(httpUrl)
+        val headersObject = requestObject["headers"] as? JsonObject
+
+        headersObject?.forEach { (key, value) ->
+            requestBuilder.addHeader(key, value.jsonPrimitive.content)
+        }
+
+        if (method == "POST") {
+            val bodyElement =
+                requestObject["body"]
+                    ?: throw TtsException(
+                        context.getString(R.string.http_tts_response_pipeline_http_body_missing, stepIndex + 1)
+                    )
+            val contentType =
+                requestObject["content_type"]?.jsonPrimitive?.contentOrNull
+                    ?: requestObject["contentType"]?.jsonPrimitive?.contentOrNull
+                    ?: throw TtsException(
+                        context.getString(R.string.http_tts_response_pipeline_http_content_type_missing, stepIndex + 1)
+                    )
+
+            val bodyText =
+                if (bodyElement is JsonPrimitive && bodyElement.isString) {
+                    bodyElement.content
+                } else {
+                    jsonParser.encodeToString(JsonElement.serializer(), bodyElement)
+                }
+
+            requestBuilder
+                .post(bodyText.toRequestBody(contentType.toMediaType()))
+                .addHeader("Content-Type", contentType)
+        } else {
+            requestBuilder.get()
+        }
+
+        return executeBinaryRequest(
+            requestBuilder.build(),
+            "HTTP TTS pipeline http_request_from_object step ${stepIndex + 1}"
+        )
+    }
+
+    private fun decodeBase64Value(current: PipelineValue, stepIndex: Int): BinaryPayload {
+        val raw = current.asScalarString(stepIndex, "base64_decode")
+        val decoded =
+            try {
+                Base64.decode(raw, Base64.DEFAULT)
+            } catch (e: IllegalArgumentException) {
+                throw TtsException(
+                    context.getString(R.string.http_tts_response_pipeline_base64_decode_failed, stepIndex + 1),
+                    cause = e
+                )
+            }
+
+        return BinaryPayload(
+            bytes = decoded,
+            contentType = null,
+            charset = Charsets.UTF_8
+        )
+    }
+
+    private fun PipelineValue.asScalarString(stepIndex: Int, stepType: String): String {
+        return when (this) {
+            is PipelineValue.Text -> value
+            is PipelineValue.JsonData -> {
+                val primitive = value as? JsonPrimitive
+                    ?: throw TtsException(
+                        context.getString(
+                            R.string.http_tts_response_pipeline_step_type_mismatch,
+                            stepIndex + 1,
+                            stepType,
+                            "string"
+                        )
+                    )
+                primitive.contentOrNull
+                    ?: throw TtsException(
+                        context.getString(
+                            R.string.http_tts_response_pipeline_step_type_mismatch,
+                            stepIndex + 1,
+                            stepType,
+                            "string"
+                        )
+                    )
+            }
+
+            is PipelineValue.Binary -> {
+                throw TtsException(
+                    context.getString(
+                        R.string.http_tts_response_pipeline_step_type_mismatch,
+                        stepIndex + 1,
+                        stepType,
+                        "string"
+                    )
+                )
+            }
+        }
+    }
+
+    private fun readJsonPath(
+        root: JsonElement,
+        rawPath: String,
+        stepIndex: Int
+    ): JsonElement {
+        val tokens = parseJsonPath(rawPath)
+        var current = root
+        for (token in tokens) {
+            current =
+                when (token) {
+                    is JsonPathToken.Key -> {
+                        val obj = current as? JsonObject
+                            ?: throw TtsException(
+                                context.getString(
+                                    R.string.http_tts_response_pipeline_pick_failed,
+                                    stepIndex + 1,
+                                    rawPath
+                                )
+                            )
+                        obj[token.name]
+                            ?: throw TtsException(
+                                context.getString(
+                                    R.string.http_tts_response_pipeline_pick_failed,
+                                    stepIndex + 1,
+                                    rawPath
+                                )
+                            )
+                    }
+
+                    is JsonPathToken.Index -> {
+                        val arr = current as? kotlinx.serialization.json.JsonArray
+                            ?: throw TtsException(
+                                context.getString(
+                                    R.string.http_tts_response_pipeline_pick_failed,
+                                    stepIndex + 1,
+                                    rawPath
+                                )
+                            )
+                        arr.getOrNull(token.index)
+                            ?: throw TtsException(
+                                context.getString(
+                                    R.string.http_tts_response_pipeline_pick_failed,
+                                    stepIndex + 1,
+                                    rawPath
+                                )
+                            )
+                    }
+                }
+        }
+        return current
+    }
+
+    private fun parseJsonPath(rawPath: String): List<JsonPathToken> {
+        val trimmed = rawPath.trim()
+        if (trimmed.isBlank() || trimmed == "$") return emptyList()
+
+        val normalized =
+            trimmed.removePrefix("$").let {
+                if (it.startsWith(".")) it.removePrefix(".") else it
+            }
+
+        val tokens = mutableListOf<JsonPathToken>()
+        var cursor = 0
+        while (cursor < normalized.length) {
+            when (normalized[cursor]) {
+                '.' -> cursor++
+                '[' -> {
+                    val end = normalized.indexOf(']', cursor + 1)
+                    require(end > cursor) { "Invalid json path: $rawPath" }
+                    val indexText = normalized.substring(cursor + 1, end).trim()
+                    val index = indexText.toIntOrNull()
+                        ?: throw IllegalArgumentException("Invalid json path index: $rawPath")
+                    tokens += JsonPathToken.Index(index)
+                    cursor = end + 1
+                }
+
+                else -> {
+                    val start = cursor
+                    while (cursor < normalized.length && normalized[cursor] != '.' && normalized[cursor] != '[') {
+                        cursor++
+                    }
+                    val key = normalized.substring(start, cursor)
+                    require(key.isNotBlank()) { "Invalid json path: $rawPath" }
+                    tokens += JsonPathToken.Key(key)
+                }
+            }
+        }
+        return tokens
     }
 
     /**

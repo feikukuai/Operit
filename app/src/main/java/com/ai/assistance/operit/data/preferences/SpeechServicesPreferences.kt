@@ -9,6 +9,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.ai.assistance.operit.api.speech.SpeechServiceFactory
+import com.ai.assistance.operit.api.voice.HttpTtsResponsePipelineStep
 import com.ai.assistance.operit.api.voice.VoiceServiceFactory
 
 import kotlinx.coroutines.flow.Flow
@@ -26,6 +27,7 @@ private val Context.speechServicesDataStore: DataStore<Preferences> by
 class SpeechServicesPreferences(private val context: Context) {
 
     private val dataStore = context.speechServicesDataStore
+    private val serializerJson = Json { ignoreUnknownKeys = true }
 
     @Serializable
     data class TtsHttpConfig(
@@ -36,7 +38,8 @@ class SpeechServicesPreferences(private val context: Context) {
         val requestBody: String = "", // POST请求的body模板，支持占位符如{text}
         val contentType: String = "application/json", // POST请求的Content-Type
         val voiceId: String = "", // 特定于TTS提供商的音色ID
-        val modelName: String = "" // TTS模型名称（用于SiliconFlow等）
+        val modelName: String = "", // TTS模型名称（用于SiliconFlow等）
+        val responsePipeline: List<HttpTtsResponsePipelineStep> = emptyList()
     )
 
     @Serializable
@@ -74,7 +77,8 @@ class SpeechServicesPreferences(private val context: Context) {
             requestBody = "",
             contentType = "application/json",
             voiceId = "",
-            modelName = ""
+            modelName = "",
+            responsePipeline = emptyList()
         )
 
         val DEFAULT_STT_HTTP_PRESET = SttHttpConfig(
@@ -108,7 +112,7 @@ class SpeechServicesPreferences(private val context: Context) {
         val json = prefs[TTS_HTTP_CONFIG]
         if (json != null) {
             try {
-                Json.decodeFromString<TtsHttpConfig>(json)
+                serializerJson.decodeFromString<TtsHttpConfig>(json)
             } catch (e: Exception) {
                 DEFAULT_HTTP_TTS_PRESET // Fallback to default preset on parsing error
             }
@@ -143,7 +147,7 @@ class SpeechServicesPreferences(private val context: Context) {
         val json = prefs[STT_HTTP_CONFIG]
         if (json != null) {
             try {
-                Json.decodeFromString<SttHttpConfig>(json)
+                serializerJson.decodeFromString<SttHttpConfig>(json)
             } catch (e: Exception) {
                 DEFAULT_STT_HTTP_PRESET
             }
@@ -173,19 +177,19 @@ class SpeechServicesPreferences(private val context: Context) {
             // 根据服务类型保存相应的配置
             when (serviceType) {
                 VoiceServiceFactory.VoiceServiceType.HTTP_TTS -> {
-                    httpConfig?.let { prefs[TTS_HTTP_CONFIG] = Json.encodeToString(it) }
+                    httpConfig?.let { prefs[TTS_HTTP_CONFIG] = serializerJson.encodeToString(it) }
                 }
                 VoiceServiceFactory.VoiceServiceType.OPENAI_WS_TTS -> {
-                    httpConfig?.let { prefs[TTS_HTTP_CONFIG] = Json.encodeToString(it) }
+                    httpConfig?.let { prefs[TTS_HTTP_CONFIG] = serializerJson.encodeToString(it) }
                 }
                 VoiceServiceFactory.VoiceServiceType.SIMPLE_TTS -> {
                     // 系统 TTS 不需要额外配置
                 }
                 VoiceServiceFactory.VoiceServiceType.SILICONFLOW_TTS -> {
-                    httpConfig?.let { prefs[TTS_HTTP_CONFIG] = Json.encodeToString(it) }
+                    httpConfig?.let { prefs[TTS_HTTP_CONFIG] = serializerJson.encodeToString(it) }
                 }
                 VoiceServiceFactory.VoiceServiceType.OPENAI_TTS -> {
-                    httpConfig?.let { prefs[TTS_HTTP_CONFIG] = Json.encodeToString(it) }
+                    httpConfig?.let { prefs[TTS_HTTP_CONFIG] = serializerJson.encodeToString(it) }
                 }
             }
         }
@@ -210,10 +214,10 @@ class SpeechServicesPreferences(private val context: Context) {
                 SpeechServiceFactory.SpeechServiceType.SHERPA_NCNN -> {
                 }
                 SpeechServiceFactory.SpeechServiceType.OPENAI_STT -> {
-                    httpConfig?.let { prefs[STT_HTTP_CONFIG] = Json.encodeToString(it) }
+                    httpConfig?.let { prefs[STT_HTTP_CONFIG] = serializerJson.encodeToString(it) }
                 }
                 SpeechServiceFactory.SpeechServiceType.DEEPGRAM_STT -> {
-                    httpConfig?.let { prefs[STT_HTTP_CONFIG] = Json.encodeToString(it) }
+                    httpConfig?.let { prefs[STT_HTTP_CONFIG] = serializerJson.encodeToString(it) }
                 }
             }
         }

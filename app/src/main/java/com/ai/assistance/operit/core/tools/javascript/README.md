@@ -592,7 +592,7 @@ const activity = ActivityLifecycleManager.INSTANCE.getCurrentActivity();
 加载 `.dex`：
 
 ```js
-Java.loadDex('/data/user/0/com.ai.assistance.operit/files/plugins/demo.dex');
+Java.loadDex('/data/user/<current_user_id>/com.ai.assistance.operit/files/plugins/demo.dex');
 
 const DemoEntry = Java.type('com.example.demo.Entry');
 const message = DemoEntry.callStatic('hello');
@@ -601,7 +601,7 @@ const message = DemoEntry.callStatic('hello');
 加载 `.jar`：
 
 ```js
-Java.loadJar('/data/user/0/com.ai.assistance.operit/files/plugins/demo.jar');
+Java.loadJar('/data/user/<current_user_id>/com.ai.assistance.operit/files/plugins/demo.jar');
 
 const DemoEntry = Java.type('com.example.demo.Entry');
 const instance = new DemoEntry();
@@ -610,15 +610,15 @@ const instance = new DemoEntry();
 如果外部代码还依赖 `.so`，可以额外指定原生库目录：
 
 ```js
-Java.loadDex('/data/user/0/com.ai.assistance.operit/files/plugins/demo.dex', {
-  nativeLibraryDir: '/data/user/0/com.ai.assistance.operit/files/plugins/lib'
+Java.loadDex('/data/user/<current_user_id>/com.ai.assistance.operit/files/plugins/demo.dex', {
+  nativeLibraryDir: '/data/user/<current_user_id>/com.ai.assistance.operit/files/plugins/lib'
 });
 ```
 
 如果外部 jar 和宿主 APK 存在同包名依赖冲突，可以显式指定子优先加载的包前缀：
 
 ```js
-Java.loadJar('/data/user/0/com.ai.assistance.operit/files/plugins/demo.jar', {
+Java.loadJar('/data/user/<current_user_id>/com.ai.assistance.operit/files/plugins/demo.jar', {
   childFirstPrefixes: [
     'com.example.plugin.',
     'org.apache.commons.'

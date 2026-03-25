@@ -1009,6 +1009,11 @@ export interface SpeechTtsHttpConfigResultItem {
     contentType: string;
     voiceId: string;
     modelName: string;
+    responsePipeline: Array<{
+        type: string;
+        path: string;
+        headers: Record<string, string>;
+    }>;
 }
 
 export interface SpeechSttHttpConfigResultItem {

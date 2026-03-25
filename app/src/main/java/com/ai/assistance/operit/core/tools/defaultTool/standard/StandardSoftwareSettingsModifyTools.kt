@@ -4,6 +4,7 @@ import android.content.Context
 import com.ai.assistance.operit.api.chat.EnhancedAIService
 import com.ai.assistance.operit.api.chat.llmprovider.ModelConfigConnectionTester
 import com.ai.assistance.operit.api.speech.SpeechServiceFactory
+import com.ai.assistance.operit.api.voice.HttpTtsResponsePipelineStep
 import com.ai.assistance.operit.api.voice.TtsException
 import com.ai.assistance.operit.api.voice.VoiceServiceFactory
 import com.ai.assistance.operit.core.tools.FunctionModelBindingResultData
@@ -280,7 +281,8 @@ class StandardSoftwareSettingsModifyTools(private val context: Context) {
                                 requestBody = ttsHttpConfig.requestBody,
                                 contentType = ttsHttpConfig.contentType,
                                 voiceId = ttsHttpConfig.voiceId,
-                                modelName = ttsHttpConfig.modelName
+                                modelName = ttsHttpConfig.modelName,
+                                responsePipeline = ttsHttpConfig.responsePipeline
                             ),
                         ttsCleanerRegexs = ttsCleanerRegexs,
                         ttsSpeechRate = ttsSpeechRate,
@@ -387,6 +389,18 @@ class StandardSoftwareSettingsModifyTools(private val context: Context) {
                     currentTtsCleanerRegexs
                 }
 
+            val ttsResponsePipeline =
+                if (hasField("tts_response_pipeline")) {
+                    val raw = getParameterValue(tool, "tts_response_pipeline").orEmpty()
+                    try {
+                        HttpTtsResponsePipelineStep.parseList(raw)
+                    } catch (_: Exception) {
+                        throw IllegalArgumentException("Invalid JSON array parameter: tts_response_pipeline")
+                    }
+                } else {
+                    currentTtsHttpConfig.responsePipeline
+                }
+
             val ttsHttpMethod =
                 if (hasField("tts_http_method")) {
                     val method = getParameterValue(tool, "tts_http_method").orEmpty().trim().uppercase()
@@ -453,7 +467,8 @@ class StandardSoftwareSettingsModifyTools(private val context: Context) {
                             getParameterValue(tool, "tts_model_name").orEmpty().trim()
                         } else {
                             currentTtsHttpConfig.modelName
-                        }
+                        },
+                    responsePipeline = ttsResponsePipeline
                 )
 
             val sttHttpConfig =
@@ -489,6 +504,7 @@ class StandardSoftwareSettingsModifyTools(private val context: Context) {
                     "tts_content_type",
                     "tts_voice_id",
                     "tts_model_name",
+                    "tts_response_pipeline",
                     "tts_cleaner_regexs",
                     "tts_speech_rate",
                     "tts_pitch",
