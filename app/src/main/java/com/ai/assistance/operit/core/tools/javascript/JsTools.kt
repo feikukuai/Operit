@@ -177,21 +177,21 @@ fun getJsToolsDefinition(): String {
                     }
                     return toolCall("visit_web", params);
                 },
-                startWeb: (options) => {
+                startBrowser: (options) => {
                     const params = { ...(options || {}) };
                     if (params.headers !== undefined && typeof params.headers === 'object') {
                         params.headers = JSON.stringify(params.headers);
                     }
-                    return toolCall("start_web", params);
+                    return toolCall("start_browser", params);
                 },
-                stopWeb: (sessionIdOrOptions) => {
+                stopBrowser: (sessionIdOrOptions) => {
                     if (typeof sessionIdOrOptions === 'string') {
                         const sid = String(sessionIdOrOptions).trim();
-                        return toolCall("stop_web", sid ? { session_id: sid } : {});
+                        return toolCall("stop_browser", sid ? { session_id: sid } : {});
                     }
-                    return toolCall("stop_web", sessionIdOrOptions || {});
+                    return toolCall("stop_browser", sessionIdOrOptions || {});
                 },
-                webNavigate: (sessionId, url, headers) => {
+                browserNavigate: (sessionId, url, headers) => {
                     const params = { url };
                     if (sessionId !== undefined && sessionId !== null && String(sessionId).trim() !== "") {
                         params.session_id = String(sessionId);
@@ -199,19 +199,19 @@ fun getJsToolsDefinition(): String {
                     if (headers !== undefined && headers !== null) {
                         params.headers = typeof headers === 'object' ? JSON.stringify(headers) : headers;
                     }
-                    return toolCall("web_navigate", params);
+                    return toolCall("browser_navigate", params);
                 },
-                webEval: (sessionId, script, timeoutMs) => {
+                browserEval: (sessionId, script, timeoutMs) => {
                     const params = { script };
                     if (sessionId !== undefined && sessionId !== null && String(sessionId).trim() !== "") {
                         params.session_id = String(sessionId);
                     }
                     if (timeoutMs !== undefined) params.timeout_ms = String(timeoutMs);
-                    return toolCall("web_eval", params);
+                    return toolCall("browser_eval", params);
                 },
-                webClick: (options) => {
+                browserClick: (options) => {
                     if (!options || typeof options !== 'object' || Array.isArray(options)) {
-                        throw new Error("webClick only accepts one options object");
+                        throw new Error("browserClick only accepts one options object");
                     }
 
                     const params = { ...options };
@@ -223,7 +223,7 @@ fun getJsToolsDefinition(): String {
                     }
 
                     if (params.ref !== undefined && params.ref !== null) params.ref = String(params.ref).trim();
-                    if (!params.ref) throw new Error("web_click requires ref");
+                    if (!params.ref) throw new Error("browser_click requires ref");
 
                     if (
                         params.selector !== undefined ||
@@ -231,7 +231,7 @@ fun getJsToolsDefinition(): String {
                         params.double_click !== undefined ||
                         params.timeout_ms !== undefined
                     ) {
-                        throw new Error("webClick options do not support selector/index/double_click/timeout_ms");
+                        throw new Error("browserClick options do not support selector/index/double_click/timeout_ms");
                     }
 
                     if (params.element !== undefined && params.element !== null) params.element = String(params.element);
@@ -259,32 +259,32 @@ fun getJsToolsDefinition(): String {
 
                     if (params.doubleClick !== undefined) params.doubleClick = params.doubleClick ? "true" : "false";
 
-                    return toolCall("web_click", params);
+                    return toolCall("browser_click", params);
                 },
-                webFill: (sessionId, selector, value) => {
+                browserFill: (sessionId, selector, value) => {
                     const params = { selector, value: String(value ?? "") };
                     if (sessionId !== undefined && sessionId !== null && String(sessionId).trim() !== "") {
                         params.session_id = String(sessionId);
                     }
-                    return toolCall("web_fill", params);
+                    return toolCall("browser_fill", params);
                 },
-                webWaitFor: (sessionId, selector, timeoutMs) => {
+                browserWaitFor: (sessionId, selector, timeoutMs) => {
                     const params = {};
                     if (sessionId !== undefined && sessionId !== null && String(sessionId).trim() !== "") {
                         params.session_id = String(sessionId);
                     }
                     if (selector !== undefined && selector !== null) params.selector = String(selector);
                     if (timeoutMs !== undefined) params.timeout_ms = String(timeoutMs);
-                    return toolCall("web_wait_for", params);
+                    return toolCall("browser_wait_for", params);
                 },
-                webSnapshot: (sessionId, options) => {
+                browserSnapshot: (sessionId, options) => {
                     const params = { ...(options || {}) };
                     if (sessionId !== undefined && sessionId !== null && String(sessionId).trim() !== "") {
                         params.session_id = String(sessionId);
                     }
-                    return toolCall("web_snapshot", params);
+                    return toolCall("browser_snapshot", params);
                 },
-                webFileUpload: (sessionId, paths) => {
+                browserFileUpload: (sessionId, paths) => {
                     const params = {};
                     if (sessionId !== undefined && sessionId !== null && String(sessionId).trim() !== "") {
                         params.session_id = String(sessionId);
@@ -295,18 +295,18 @@ fun getJsToolsDefinition(): String {
                         }
                         params.paths = JSON.stringify(paths.map((p) => String(p)));
                     }
-                    return toolCall("web_file_upload", params);
+                    return toolCall("browser_file_upload", params);
                 },
-                webUserscriptList: (options) => {
+                browserUserscriptList: (options) => {
                     const params = { ...(options || {}) };
                     if (params.include_disabled !== undefined) {
                         params.include_disabled = params.include_disabled ? "true" : "false";
                     }
-                    return toolCall("web_userscript_list", params);
+                    return toolCall("browser_userscript_list", params);
                 },
-                webUserscriptInstall: (options) => {
+                browserUserscriptInstall: (options) => {
                     if (!options || typeof options !== "object" || Array.isArray(options)) {
-                        throw new Error("webUserscriptInstall only accepts one options object");
+                        throw new Error("browserUserscriptInstall only accepts one options object");
                     }
                     const params = { ...options };
                     const presentCount = [params.url, params.path, params.source].filter((item) => item !== undefined && item !== null && String(item).trim() !== "").length;
@@ -318,11 +318,11 @@ fun getJsToolsDefinition(): String {
                             params[key] = String(params[key]);
                         }
                     });
-                    return toolCall("web_userscript_install", params);
+                    return toolCall("browser_userscript_install", params);
                 },
-                webUserscriptStart: (options) => {
+                browserUserscriptStart: (options) => {
                     if (!options || typeof options !== "object" || Array.isArray(options)) {
-                        throw new Error("webUserscriptStart only accepts one options object");
+                        throw new Error("browserUserscriptStart only accepts one options object");
                     }
                     const params = { ...options };
                     ["script_id", "name", "namespace", "source_url"].forEach((key) => {
@@ -330,11 +330,11 @@ fun getJsToolsDefinition(): String {
                             params[key] = String(params[key]);
                         }
                     });
-                    return toolCall("web_userscript_start", params);
+                    return toolCall("browser_userscript_start", params);
                 },
-                webUserscriptStop: (options) => {
+                browserUserscriptStop: (options) => {
                     if (!options || typeof options !== "object" || Array.isArray(options)) {
-                        throw new Error("webUserscriptStop only accepts one options object");
+                        throw new Error("browserUserscriptStop only accepts one options object");
                     }
                     const params = { ...options };
                     ["script_id", "name", "namespace", "source_url"].forEach((key) => {
@@ -342,11 +342,11 @@ fun getJsToolsDefinition(): String {
                             params[key] = String(params[key]);
                         }
                     });
-                    return toolCall("web_userscript_stop", params);
+                    return toolCall("browser_userscript_stop", params);
                 },
-                webUserscriptUninstall: (options) => {
+                browserUserscriptUninstall: (options) => {
                     if (!options || typeof options !== "object" || Array.isArray(options)) {
-                        throw new Error("webUserscriptUninstall only accepts one options object");
+                        throw new Error("browserUserscriptUninstall only accepts one options object");
                     }
                     const params = { ...options };
                     ["script_id", "name", "namespace", "source_url"].forEach((key) => {
@@ -354,7 +354,7 @@ fun getJsToolsDefinition(): String {
                             params[key] = String(params[key]);
                         }
                     });
-                    return toolCall("web_userscript_uninstall", params);
+                    return toolCall("browser_userscript_uninstall", params);
                 },
                 // 新增增强版HTTP请求
                 http: (options) => {
@@ -636,13 +636,14 @@ fun getJsToolsDefinition(): String {
             // 记忆管理
             Memory: {
                 // 查询记忆库
-                query: (query, folderPath, threshold, limit, startTime, endTime) => {
+                query: (query, folderPath, threshold, limit, startTime, endTime, snapshotId) => {
                     const params = { query };
                     if (folderPath) params.folder_path = folderPath;
                     if (startTime !== undefined) params.start_time = startTime;
                     if (endTime !== undefined) params.end_time = endTime;
                     if (threshold !== undefined) params.threshold = threshold;
                     if (limit !== undefined) params.limit = limit;
+                    if (snapshotId !== undefined && snapshotId !== null) params.snapshot_id = String(snapshotId);
                     return toolCall("query_memory", params);
                 },
                 // 通过标题获取记忆

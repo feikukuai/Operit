@@ -1444,6 +1444,42 @@ export interface ChatMessagesResult extends BaseResult {
 // ============================================================================
 
 /**
+ * Single memory item returned by memory query
+ */
+export interface MemoryQueryResultMemoryInfo {
+    /** Memory title */
+    title: string;
+    /** Memory content or formatted document chunk summary */
+    content: string;
+    /** Memory source */
+    source: string;
+    /** Memory tags */
+    tags: string[];
+    /** Formatted creation time */
+    createdAt: string;
+    /** Optional chunk summary for document memories */
+    chunkInfo?: string | null;
+    /** Optional matched chunk indices for document memories */
+    chunkIndices?: number[] | null;
+}
+
+/**
+ * Memory query result data
+ */
+export interface MemoryQueryResultData {
+    /** Queried memories */
+    memories: MemoryQueryResultMemoryInfo[];
+    /** Snapshot id for de-duplicated follow-up queries */
+    snapshotId?: string | null;
+    /** Whether this call created a new snapshot */
+    snapshotCreated?: boolean;
+    /** Number of matched memories excluded because they were already seen in the snapshot */
+    excludedBySnapshotCount?: number;
+    /** Returns a formatted string representation */
+    toString(): string;
+}
+
+/**
  * Memory link result data
  */
 export interface MemoryLinkResultData {

@@ -641,11 +641,11 @@ AVAILABLE_TOOLS_SECTION""".trimIndent()
   }
   
   /**
-   * Generates the dynamic web workspace guidelines based on the provided path.
+   * Generates web workspace guidelines only when a workspace is actually bound.
    *
    * @param workspacePath The current path of the workspace. Null if not bound.
    * @param useEnglish Whether to use the English or Chinese version of the guidelines.
-   * @return A string containing the appropriate workspace guidelines.
+   * @return A string containing workspace guidelines, or an empty string when no workspace is bound.
    */
   private fun buildWorkspaceRuleFileSection(
       workspaceRuleFileName: String?,
@@ -687,7 +687,7 @@ AVAILABLE_TOOLS_SECTION""".trimIndent()
       val shouldShowEnv = envLabel.isNotBlank()
       val externalStoragePath = Environment.getExternalStorageDirectory().absolutePath
       val appFilesPath = context.filesDir.absolutePath
-      return if (workspacePath != null) {
+      return if (!workspacePath.isNullOrBlank()) {
           val baseGuidelines =
               if (useEnglish) {
               """
@@ -729,17 +729,7 @@ AVAILABLE_TOOLS_SECTION""".trimIndent()
               "$baseGuidelines\n\n$workspaceRuleFileSection"
           }
       } else {
-          if (useEnglish) {
-              """
-              WEB WORKSPACE GUIDELINES:
-              - A web workspace is not yet configured for this chat. To enable web development features, please prompt the user to click the 'Web' button in the top-right corner of the app to bind a workspace directory.
-              """.trimIndent()
-          } else {
-              """
-              Web工作区指南：
-              - 当前对话尚未配置Web工作区。如需启用Web开发功能，请提示用户点击应用右上角的 "Web" 按钮来绑定一个工作区目录。
-              """.trimIndent()
-          }
+          ""
       }
   }
 

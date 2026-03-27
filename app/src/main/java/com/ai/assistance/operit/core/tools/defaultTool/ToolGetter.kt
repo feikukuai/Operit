@@ -108,8 +108,8 @@ object ToolGetter {
      * @param context 应用上下文
      * @return 会话型 Web 工具实现（标准权限级别）
      */
-    fun getWebSessionTools(context: Context): StandardWebSessionTools {
-        return StandardWebSessionTools(context)
+    fun getBrowserSessionTools(context: Context): StandardBrowserSessionTools {
+        return StandardBrowserSessionTools(context)
     }
 
     /**

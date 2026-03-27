@@ -447,19 +447,20 @@ object SystemToolPrompts {
         tools = listOf(
             ToolPrompt(
                 name = "query_memory",
-                description = "Searches the memory library for relevant memories using hybrid search (keyword matching + semantic understanding). Use this when you need to recall past knowledge, look up specific information, or require context. Keywords can be separated by '|' or spaces - each keyword will be independently matched semantically and the results will be combined with weighted scoring. You can use \"*\" as the query to return all memories (optionally filtered by folder_path). You can also filter by creation time using `start_time` / `end_time` (Unix milliseconds). When the user attaches a memory folder, a `<memory_context>` will be provided in the prompt. You MUST use the `folder_path` parameter to restrict the search to that folder. **IMPORTANT**: For document nodes (uploaded files), this tool uses vector search to return ONLY the most relevant chunks matching your query, NOT the entire document. Results show \"Document: [name], Chunk X/Y: [content]\" format. To read the complete document or specific parts, use `get_memory_by_title` instead. **NOTE**: When limit > 20, results will only show titles and truncated content to save tokens.",
+                description = "Searches the memory library using hybrid retrieval (keyword matching + semantic understanding). Use this to recall past knowledge, find context, or look up previously stored information. When the prompt includes an attached memory folder in `<memory_context>`, restrict the search to that folder. For document nodes (uploaded files), this tool returns only the most relevant matching chunks instead of the full document; use `get_memory_by_title` when you need the complete document or specific sections.",
                 parametersStructured = listOf(
                     ToolParameterSchema(name = "query", type = "string", description = "string, the keyword or question to search for, or \"*\" to return all memories", required = true),
                     ToolParameterSchema(name = "folder_path", type = "string", description = "optional, string, the specific folder path to search within", required = false),
-                    ToolParameterSchema(name = "start_time", type = "integer", description = "optional, Unix timestamp in milliseconds. Filters memories by createdAt >= start_time", required = false),
-                    ToolParameterSchema(name = "end_time", type = "integer", description = "optional, Unix timestamp in milliseconds. Filters memories by createdAt <= end_time", required = false),
+                    ToolParameterSchema(name = "start_time", type = "string", description = "optional, local-time string in `YYYY-MM-DD` or `YYYY-MM-DD HH:mm` format. Filters memories by createdAt >= start_time", required = false),
+                    ToolParameterSchema(name = "end_time", type = "string", description = "optional, local-time string in `YYYY-MM-DD` or `YYYY-MM-DD HH:mm` format. Filters memories by createdAt <= end_time", required = false),
+                    ToolParameterSchema(name = "snapshot_id", type = "string", description = "optional, string. Omit or pass empty to create a new snapshot. Reuse a returned snapshot_id to exclude memories that were already returned with that snapshot", required = false),
                     ToolParameterSchema(name = "threshold", type = "number", description = "optional, float 0.0-1.0, semantic similarity threshold, lower values return more results", required = false, default = "0.25"),
                     ToolParameterSchema(name = "limit", type = "integer", description = "optional, int >= 1, maximum number of results to return. When > 20, only titles and truncated content are returned", required = false, default = "5")
                 )
             ),
             ToolPrompt(
                 name = "get_memory_by_title",
-                description = "Retrieves a memory by exact title. For regular memories, returns full content. For document nodes (uploaded files), you can: 1) Read entire document (no parameters), 2) Read specific chunk(s) via `chunk_index` (e.g., \"3\") or `chunk_range` (e.g., \"3-7\"), 3) Search within document via `query`. Use this when query_memory returns partial results and you need more complete content.",
+                description = "Retrieves a memory by exact title. Use this when you already know the target memory and need the complete content, or when `query_memory` only returned partial document chunks and you want to read the document more fully.",
                 parametersStructured = listOf(
                     ToolParameterSchema(name = "title", type = "string", description = "required, string, the exact title of the memory", required = true),
                     ToolParameterSchema(name = "chunk_index", type = "integer", description = "optional, int, read a specific chunk by its number, e.g., 3 for the 3rd chunk", required = false),
@@ -476,19 +477,20 @@ object SystemToolPrompts {
         tools = listOf(
             ToolPrompt(
                 name = "query_memory",
-                description = "使用混合搜索（关键词匹配 + 语义理解）从记忆库中搜索相关记忆。当需要回忆过去的知识、查找特定信息或需要上下文时使用。关键词可以使用\"|\"或空格分隔 - 每个关键词都会独立进行语义匹配，结果将通过加权评分合并。可以使用 \"*\" 作为查询来返回所有记忆（可通过 folder_path 过滤）。也可以使用 `start_time` / `end_time`（Unix 毫秒时间戳）按创建时间过滤。当用户附加记忆文件夹时，提示中会提供`<memory_context>`。你必须使用 `folder_path` 参数将搜索限制在该文件夹内。**重要**：对于文档节点（上传的文件），此工具使用向量搜索只返回与查询最相关的分块，而不是整个文档。结果显示\"Document: [文档名], Chunk X/Y: [内容]\"格式。如需阅读完整文档或特定部分，请改用 `get_memory_by_title` 工具。**注意**：当 limit > 20 时，结果将只显示标题和截断内容以节省令牌。",
+                description = "使用混合检索（关键词匹配 + 语义理解）从记忆库中搜索相关记忆。当需要回忆过去的知识、查找上下文或检索已存信息时使用。当提示中通过 `<memory_context>` 附带了记忆文件夹时，应将搜索限制在该文件夹内。对于文档节点（上传的文件），这个工具只返回与查询最相关的分块，而不是整个文档；如果你需要完整文档或指定部分，请改用 `get_memory_by_title`。",
                 parametersStructured = listOf(
                     ToolParameterSchema(name = "query", type = "string", description = "string, 搜索的关键词或问题, 或使用 \"*\" 返回所有记忆", required = true),
                     ToolParameterSchema(name = "folder_path", type = "string", description = "可选, string, 要搜索的特定文件夹路径", required = false),
-                    ToolParameterSchema(name = "start_time", type = "integer", description = "可选, Unix时间戳（毫秒）。按创建时间过滤 createdAt >= start_time", required = false),
-                    ToolParameterSchema(name = "end_time", type = "integer", description = "可选, Unix时间戳（毫秒）。按创建时间过滤 createdAt <= end_time", required = false),
+                    ToolParameterSchema(name = "start_time", type = "string", description = "可选, 本地时间字符串，格式支持 `YYYY-MM-DD` 或 `YYYY-MM-DD HH:mm`。按创建时间过滤 createdAt >= start_time", required = false),
+                    ToolParameterSchema(name = "end_time", type = "string", description = "可选, 本地时间字符串，格式支持 `YYYY-MM-DD` 或 `YYYY-MM-DD HH:mm`。按创建时间过滤 createdAt <= end_time", required = false),
+                    ToolParameterSchema(name = "snapshot_id", type = "string", description = "可选, 字符串。不传或传空时创建新快照；传入已有 snapshot_id 时，会排除该快照里已经返回过的记忆", required = false),
                     ToolParameterSchema(name = "threshold", type = "number", description = "可选, float 0.0-1.0, 语义相似度阈值, 较低的值返回更多结果", required = false, default = "0.25"),
                     ToolParameterSchema(name = "limit", type = "integer", description = "可选, int >= 1, 返回结果的最大数量. 当 > 20 时，只返回标题和截断内容", required = false, default = "5")
                 )
             ),
             ToolPrompt(
                 name = "get_memory_by_title",
-                description = "通过精确标题检索记忆。对于普通记忆，返回完整内容。对于文档节点（上传的文件），可以：1) 读取整个文档（不提供参数），2) 通过 `chunk_index`（如\"3\"）或 `chunk_range`（如\"3-7\"）读取特定分块，3) 通过 `query` 在文档内搜索。当 query_memory 返回部分结果而你需要更完整内容时使用。",
+                description = "通过精确标题检索记忆。当你已经知道目标记忆，想获取完整内容时使用；如果 `query_memory` 对文档只返回了部分相关分块，而你需要更完整地阅读文档，也应使用这个工具。",
                 parametersStructured = listOf(
                     ToolParameterSchema(name = "title", type = "string", description = "必需, 字符串, 记忆的精确标题", required = true),
                     ToolParameterSchema(name = "chunk_index", type = "integer", description = "可选, 整数, 读取特定编号的分块, 例如3表示第3块", required = false),

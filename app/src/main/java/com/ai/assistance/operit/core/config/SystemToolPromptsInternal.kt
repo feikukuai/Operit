@@ -143,8 +143,8 @@ object SystemToolPromptsInternal {
                                 )
                         ),
                         ToolPrompt(
-                            name = "start_web",
-                            description = "Start a persistent web session and open a floating browser window.",
+                            name = "start_browser",
+                            description = "Start a persistent browser session and open a floating browser window.",
                             parametersStructured =
                                 listOf(
                                     ToolParameterSchema(
@@ -174,14 +174,14 @@ object SystemToolPromptsInternal {
                                 )
                         ),
                         ToolPrompt(
-                            name = "stop_web",
-                            description = "Stop one web session or all web sessions.",
+                            name = "stop_browser",
+                            description = "Stop one browser session or all browser sessions.",
                             parametersStructured =
                                 listOf(
                                     ToolParameterSchema(
                                         name = "session_id",
                                         type = "string",
-                                        description = "optional when close_all=true, web session id",
+                                        description = "optional when close_all=true, browser session id",
                                         required = false
                                     ),
                                     ToolParameterSchema(
@@ -194,14 +194,14 @@ object SystemToolPromptsInternal {
                                 )
                         ),
                         ToolPrompt(
-                            name = "web_navigate",
-                            description = "Navigate a web session to a URL.",
+                            name = "browser_navigate",
+                            description = "Navigate a browser session to a URL.",
                             parametersStructured =
                                 listOf(
                                     ToolParameterSchema(
                                         name = "session_id",
                                         type = "string",
-                                        description = "web session id",
+                                        description = "browser session id",
                                         required = true
                                     ),
                                     ToolParameterSchema(
@@ -219,14 +219,14 @@ object SystemToolPromptsInternal {
                                 )
                         ),
                         ToolPrompt(
-                            name = "web_eval",
-                            description = "Run JavaScript in a web session.",
+                            name = "browser_eval",
+                            description = "Run JavaScript in a browser session.",
                             parametersStructured =
                                 listOf(
                                     ToolParameterSchema(
                                         name = "session_id",
                                         type = "string",
-                                        description = "web session id",
+                                        description = "browser session id",
                                         required = true
                                     ),
                                     ToolParameterSchema(
@@ -245,20 +245,20 @@ object SystemToolPromptsInternal {
                                 )
                         ),
                         ToolPrompt(
-                            name = "web_click",
+                            name = "browser_click",
                             description = "Click an element by snapshot ref. If the click triggers a file download, the result will include download details.",
                             parametersStructured =
                                 listOf(
                                     ToolParameterSchema(
                                         name = "session_id",
                                         type = "string",
-                                        description = "optional, web session id",
+                                        description = "optional, browser session id",
                                         required = false
                                     ),
                                     ToolParameterSchema(
                                         name = "ref",
                                         type = "string",
-                                        description = "required, exact target element ref from web_snapshot output",
+                                        description = "required, exact target element ref from browser_snapshot output",
                                         required = true
                                     ),
                                     ToolParameterSchema(
@@ -290,14 +290,14 @@ object SystemToolPromptsInternal {
                                 )
                         ),
                         ToolPrompt(
-                            name = "web_fill",
+                            name = "browser_fill",
                             description = "Fill an input element by CSS selector.",
                             parametersStructured =
                                 listOf(
                                     ToolParameterSchema(
                                         name = "session_id",
                                         type = "string",
-                                        description = "web session id",
+                                        description = "browser session id",
                                         required = true
                                     ),
                                     ToolParameterSchema(
@@ -315,14 +315,14 @@ object SystemToolPromptsInternal {
                                 )
                         ),
                         ToolPrompt(
-                            name = "web_file_upload",
-                            description = "Upload one or multiple files to an active file chooser in a web session. `paths` is optional; omit it to cancel the file chooser.",
+                            name = "browser_file_upload",
+                            description = "Upload one or multiple files to an active file chooser in a browser session. `paths` is optional; omit it to cancel the file chooser.",
                             parametersStructured =
                                 listOf(
                                     ToolParameterSchema(
                                         name = "session_id",
                                         type = "string",
-                                        description = "optional, web session id",
+                                        description = "optional, browser session id",
                                         required = false
                                     ),
                                     ToolParameterSchema(
@@ -334,14 +334,14 @@ object SystemToolPromptsInternal {
                                 )
                         ),
                         ToolPrompt(
-                            name = "web_wait_for",
-                            description = "Wait for page ready or selector appearance in a web session.",
+                            name = "browser_wait_for",
+                            description = "Wait for page ready or selector appearance in a browser session.",
                             parametersStructured =
                                 listOf(
                                     ToolParameterSchema(
                                         name = "session_id",
                                         type = "string",
-                                        description = "web session id",
+                                        description = "browser session id",
                                         required = true
                                     ),
                                     ToolParameterSchema(
@@ -360,14 +360,14 @@ object SystemToolPromptsInternal {
                                 )
                         ),
                         ToolPrompt(
-                            name = "web_snapshot",
-                            description = "Capture current page snapshot text from a web session.",
+                            name = "browser_snapshot",
+                            description = "Capture current page snapshot text from a browser session.",
                             parametersStructured =
                                 listOf(
                                     ToolParameterSchema(
                                         name = "session_id",
                                         type = "string",
-                                        description = "web session id",
+                                        description = "browser session id",
                                         required = true
                                     ),
                                     ToolParameterSchema(
@@ -387,8 +387,8 @@ object SystemToolPromptsInternal {
                                 )
                         ),
                         ToolPrompt(
-                            name = "web_userscript_list",
-                            description = "List installed WebSession userscripts.",
+                            name = "browser_userscript_list",
+                            description = "List installed browser session userscripts.",
                             parametersStructured =
                                 listOf(
                                     ToolParameterSchema(
@@ -401,8 +401,8 @@ object SystemToolPromptsInternal {
                                 )
                         ),
                         ToolPrompt(
-                            name = "web_userscript_install",
-                            description = "Install a WebSession userscript from a URL, a local file path, or inline source text.",
+                            name = "browser_userscript_install",
+                            description = "Install a browser session userscript from a URL, a local file path, or inline source text.",
                             parametersStructured =
                                 listOf(
                                     ToolParameterSchema(
@@ -438,8 +438,8 @@ object SystemToolPromptsInternal {
                                 )
                         ),
                         ToolPrompt(
-                            name = "web_userscript_start",
-                            description = "Enable an installed WebSession userscript.",
+                            name = "browser_userscript_start",
+                            description = "Enable an installed browser session userscript.",
                             parametersStructured =
                                 listOf(
                                     ToolParameterSchema(
@@ -469,8 +469,8 @@ object SystemToolPromptsInternal {
                                 )
                         ),
                         ToolPrompt(
-                            name = "web_userscript_stop",
-                            description = "Disable an installed WebSession userscript.",
+                            name = "browser_userscript_stop",
+                            description = "Disable an installed browser session userscript.",
                             parametersStructured =
                                 listOf(
                                     ToolParameterSchema(
@@ -500,8 +500,8 @@ object SystemToolPromptsInternal {
                                 )
                         ),
                         ToolPrompt(
-                            name = "web_userscript_uninstall",
-                            description = "Uninstall a WebSession userscript from the local library.",
+                            name = "browser_userscript_uninstall",
+                            description = "Uninstall a browser session userscript from the local library.",
                             parametersStructured =
                                 listOf(
                                     ToolParameterSchema(
@@ -2892,8 +2892,8 @@ object SystemToolPromptsInternal {
                                 )
                         ),
                         ToolPrompt(
-                            name = "start_web",
-                            description = "启动持久化网页会话并打开悬浮浏览窗口。",
+                            name = "start_browser",
+                            description = "启动持久化浏览器会话并打开悬浮浏览窗口。",
                             parametersStructured =
                                 listOf(
                                     ToolParameterSchema(
@@ -2923,8 +2923,8 @@ object SystemToolPromptsInternal {
                                 )
                         ),
                         ToolPrompt(
-                            name = "stop_web",
-                            description = "停止一个网页会话或全部网页会话。",
+                            name = "stop_browser",
+                            description = "停止一个浏览器会话或全部浏览器会话。",
                             parametersStructured =
                                 listOf(
                                     ToolParameterSchema(
@@ -2943,14 +2943,14 @@ object SystemToolPromptsInternal {
                                 )
                         ),
                         ToolPrompt(
-                            name = "web_navigate",
-                            description = "让网页会话跳转到指定 URL。",
+                            name = "browser_navigate",
+                            description = "让浏览器会话跳转到指定 URL。",
                             parametersStructured =
                                 listOf(
                                     ToolParameterSchema(
                                         name = "session_id",
                                         type = "string",
-                                        description = "网页会话 ID",
+                                        description = "浏览器会话 ID",
                                         required = true
                                     ),
                                     ToolParameterSchema(
@@ -2968,14 +2968,14 @@ object SystemToolPromptsInternal {
                                 )
                         ),
                         ToolPrompt(
-                            name = "web_eval",
-                            description = "在网页会话中执行 JavaScript。",
+                            name = "browser_eval",
+                            description = "在浏览器会话中执行 JavaScript。",
                             parametersStructured =
                                 listOf(
                                     ToolParameterSchema(
                                         name = "session_id",
                                         type = "string",
-                                        description = "网页会话 ID",
+                                        description = "浏览器会话 ID",
                                         required = true
                                     ),
                                     ToolParameterSchema(
@@ -2994,20 +2994,20 @@ object SystemToolPromptsInternal {
                                 )
                         ),
                         ToolPrompt(
-                            name = "web_click",
+                            name = "browser_click",
                             description = "按快照 ref 或 CSS 选择器点击元素；如果点击触发文件下载，返回结果会包含下载信息。",
                             parametersStructured =
                                 listOf(
                                     ToolParameterSchema(
                                         name = "session_id",
                                         type = "string",
-                                        description = "可选，网页会话 ID",
+                                        description = "可选，浏览器会话 ID",
                                         required = false
                                     ),
                                     ToolParameterSchema(
                                         name = "ref",
                                         type = "string",
-                                        description = "可选，来自 web_snapshot 输出的元素引用",
+                                        description = "可选，来自 browser_snapshot 输出的元素引用",
                                         required = false
                                     ),
                                     ToolParameterSchema(
@@ -3059,14 +3059,14 @@ object SystemToolPromptsInternal {
                                 )
                         ),
                         ToolPrompt(
-                            name = "web_fill",
+                            name = "browser_fill",
                             description = "按 CSS 选择器填写输入框。",
                             parametersStructured =
                                 listOf(
                                     ToolParameterSchema(
                                         name = "session_id",
                                         type = "string",
-                                        description = "网页会话 ID",
+                                        description = "浏览器会话 ID",
                                         required = true
                                     ),
                                     ToolParameterSchema(
@@ -3084,14 +3084,14 @@ object SystemToolPromptsInternal {
                                 )
                         ),
                         ToolPrompt(
-                            name = "web_file_upload",
-                            description = "向网页会话中的文件选择器上传一个或多个文件。`paths` 为可选，不传时会取消 file chooser。",
+                            name = "browser_file_upload",
+                            description = "向浏览器会话中的文件选择器上传一个或多个文件。`paths` 为可选，不传时会取消 file chooser。",
                             parametersStructured =
                                 listOf(
                                     ToolParameterSchema(
                                         name = "session_id",
                                         type = "string",
-                                        description = "可选，网页会话 ID",
+                                        description = "可选，浏览器会话 ID",
                                         required = false
                                     ),
                                     ToolParameterSchema(
@@ -3103,14 +3103,14 @@ object SystemToolPromptsInternal {
                                 )
                         ),
                         ToolPrompt(
-                            name = "web_wait_for",
+                            name = "browser_wait_for",
                             description = "等待页面就绪或等待元素出现。",
                             parametersStructured =
                                 listOf(
                                     ToolParameterSchema(
                                         name = "session_id",
                                         type = "string",
-                                        description = "网页会话 ID",
+                                        description = "浏览器会话 ID",
                                         required = true
                                     ),
                                     ToolParameterSchema(
@@ -3129,14 +3129,14 @@ object SystemToolPromptsInternal {
                                 )
                         ),
                         ToolPrompt(
-                            name = "web_snapshot",
-                            description = "抓取当前网页快照文本。",
+                            name = "browser_snapshot",
+                            description = "抓取当前浏览器页面快照文本。",
                             parametersStructured =
                                 listOf(
                                     ToolParameterSchema(
                                         name = "session_id",
                                         type = "string",
-                                        description = "网页会话 ID",
+                                        description = "浏览器会话 ID",
                                         required = true
                                     ),
                                     ToolParameterSchema(
@@ -3156,8 +3156,8 @@ object SystemToolPromptsInternal {
                                 )
                         ),
                         ToolPrompt(
-                            name = "web_userscript_list",
-                            description = "列出已安装的 WebSession 油猴脚本。",
+                            name = "browser_userscript_list",
+                            description = "列出已安装的浏览器会话油猴脚本。",
                             parametersStructured =
                                 listOf(
                                     ToolParameterSchema(
@@ -3170,8 +3170,8 @@ object SystemToolPromptsInternal {
                                 )
                         ),
                         ToolPrompt(
-                            name = "web_userscript_install",
-                            description = "从 URL、本地文件路径或内联源码安装 WebSession 油猴脚本。",
+                            name = "browser_userscript_install",
+                            description = "从 URL、本地文件路径或内联源码安装浏览器会话油猴脚本。",
                             parametersStructured =
                                 listOf(
                                     ToolParameterSchema(
@@ -3207,8 +3207,8 @@ object SystemToolPromptsInternal {
                                 )
                         ),
                         ToolPrompt(
-                            name = "web_userscript_start",
-                            description = "启用一个已安装的 WebSession 油猴脚本。",
+                            name = "browser_userscript_start",
+                            description = "启用一个已安装的浏览器会话油猴脚本。",
                             parametersStructured =
                                 listOf(
                                     ToolParameterSchema(
@@ -3238,8 +3238,8 @@ object SystemToolPromptsInternal {
                                 )
                         ),
                         ToolPrompt(
-                            name = "web_userscript_stop",
-                            description = "禁用一个已安装的 WebSession 油猴脚本。",
+                            name = "browser_userscript_stop",
+                            description = "禁用一个已安装的浏览器会话油猴脚本。",
                             parametersStructured =
                                 listOf(
                                     ToolParameterSchema(
@@ -3269,8 +3269,8 @@ object SystemToolPromptsInternal {
                                 )
                         ),
                         ToolPrompt(
-                            name = "web_userscript_uninstall",
-                            description = "从本地脚本库卸载一个 WebSession 油猴脚本。",
+                            name = "browser_userscript_uninstall",
+                            description = "从本地脚本库卸载一个浏览器会话油猴脚本。",
                             parametersStructured =
                                 listOf(
                                     ToolParameterSchema(

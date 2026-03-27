@@ -218,10 +218,27 @@
 
 常见类型：
 
+- `MemoryQueryResultData`
 - `MemoryLinkResultData`
 - `MemoryLinkQueryResultData`
 - `MemoryLinkResult`
 - `MemoryLinkQueryResult`
+
+`MemoryQueryResultData` 内部包含 `memories[]`，每一项都有：
+
+- `title`
+- `content`
+- `source`
+- `tags`
+- `createdAt`
+- `chunkInfo`
+- `chunkIndices`
+
+`MemoryQueryResultData` 自身还包含：
+
+- `snapshotId`
+- `snapshotCreated`
+- `excludedBySnapshotCount`
 
 `MemoryLinkQueryResultData` 内部包含 `links[]`，每一项都有：
 

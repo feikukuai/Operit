@@ -68,10 +68,10 @@ import androidx.core.content.ContextCompat
 import org.json.JSONArray
 import org.json.JSONObject
 
-class StandardWebSessionTools(private val context: Context) : ToolExecutor {
+class StandardBrowserSessionTools(private val context: Context) : ToolExecutor {
 
     companion object {
-        private const val TAG = "WebSessionTools"
+        private const val TAG = "BrowserSessionTools"
         private const val DEFAULT_TIMEOUT_MS = 10_000L
         private const val DEFAULT_USER_AGENT =
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
@@ -204,21 +204,21 @@ class StandardWebSessionTools(private val context: Context) : ToolExecutor {
     override fun invoke(tool: AITool): ToolResult {
         return try {
             when (tool.name) {
-                "start_web" -> startWeb(tool)
-                "stop_web" -> stopWeb(tool)
-                "web_navigate" -> webNavigate(tool)
-                "web_eval" -> webEval(tool)
-                "web_click" -> webClick(tool)
-                "web_fill" -> webFill(tool)
-                "web_file_upload" -> webFileUpload(tool)
-                "web_wait_for" -> webWaitFor(tool)
-                "web_snapshot" -> webSnapshot(tool)
-                "web_userscript_list" -> webUserscriptList(tool)
-                "web_userscript_install" -> webUserscriptInstall(tool)
-                "web_userscript_start" -> webUserscriptStart(tool)
-                "web_userscript_stop" -> webUserscriptStop(tool)
-                "web_userscript_uninstall" -> webUserscriptUninstall(tool)
-                else -> error(tool.name, "Unsupported web session tool: ${tool.name}")
+                "start_browser" -> startBrowser(tool)
+                "stop_browser" -> stopBrowser(tool)
+                "browser_navigate" -> browserNavigate(tool)
+                "browser_eval" -> browserEval(tool)
+                "browser_click" -> browserClick(tool)
+                "browser_fill" -> browserFill(tool)
+                "browser_file_upload" -> browserFileUpload(tool)
+                "browser_wait_for" -> browserWaitFor(tool)
+                "browser_snapshot" -> browserSnapshot(tool)
+                "browser_userscript_list" -> browserUserscriptList(tool)
+                "browser_userscript_install" -> browserUserscriptInstall(tool)
+                "browser_userscript_start" -> browserUserscriptStart(tool)
+                "browser_userscript_stop" -> browserUserscriptStop(tool)
+                "browser_userscript_uninstall" -> browserUserscriptUninstall(tool)
+                else -> error(tool.name, "Unsupported browser session tool: ${tool.name}")
             }
         } catch (e: Exception) {
             AppLogger.e(TAG, "Tool execution failed: ${tool.name}", e)
@@ -226,10 +226,10 @@ class StandardWebSessionTools(private val context: Context) : ToolExecutor {
         }
     }
 
-    private fun startWeb(tool: AITool): ToolResult {
+    private fun startBrowser(tool: AITool): ToolResult {
         val appContext = context.applicationContext
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(appContext)) {
-            return error(tool.name, "Overlay permission is required for start_web.")
+            return error(tool.name, "Overlay permission is required for start_browser.")
         }
 
         val initialUrl = param(tool, "url")?.takeIf { it.isNotBlank() } ?: "about:blank"
@@ -262,7 +262,7 @@ class StandardWebSessionTools(private val context: Context) : ToolExecutor {
         return ok(tool.name, payload)
     }
 
-    private fun stopWeb(tool: AITool): ToolResult {
+    private fun stopBrowser(tool: AITool): ToolResult {
         val closeAll = boolParam(tool, "close_all", false)
 
         if (closeAll) {
@@ -286,7 +286,7 @@ class StandardWebSessionTools(private val context: Context) : ToolExecutor {
         val requestedSessionId = param(tool, "session_id")
         val targetSession = getSession(requestedSessionId)
             ?: return if (requestedSessionId.isNullOrBlank()) {
-                error(tool.name, "No active web session. Start one first or pass session_id.")
+                error(tool.name, "No active browser session. Start one first or pass session_id.")
             } else {
                 error(tool.name, "Session not found: $requestedSessionId")
             }
@@ -305,7 +305,7 @@ class StandardWebSessionTools(private val context: Context) : ToolExecutor {
         return ok(tool.name, payload)
     }
 
-    private fun webNavigate(tool: AITool): ToolResult {
+    private fun browserNavigate(tool: AITool): ToolResult {
         val session = getSession(param(tool, "session_id"))
             ?: return error(tool.name, "Session not found")
 
@@ -330,7 +330,7 @@ class StandardWebSessionTools(private val context: Context) : ToolExecutor {
         return ok(tool.name, payload)
     }
 
-    private fun webEval(tool: AITool): ToolResult {
+    private fun browserEval(tool: AITool): ToolResult {
         val session = getSession(param(tool, "session_id"))
             ?: return error(tool.name, "Session not found")
 
@@ -358,7 +358,7 @@ class StandardWebSessionTools(private val context: Context) : ToolExecutor {
         return ok(tool.name, payload)
     }
 
-    private fun webClick(tool: AITool): ToolResult {
+    private fun browserClick(tool: AITool): ToolResult {
         val session = getSession(param(tool, "session_id"))
             ?: return error(tool.name, "Session not found")
 
@@ -655,7 +655,7 @@ class StandardWebSessionTools(private val context: Context) : ToolExecutor {
         return session.lastDownloadEvent?.takeIf { session.lastDownloadEventAt > downloadMarker }
     }
 
-    private fun webFill(tool: AITool): ToolResult {
+    private fun browserFill(tool: AITool): ToolResult {
         val session = getSession(param(tool, "session_id"))
             ?: return error(tool.name, "Session not found")
 
@@ -701,7 +701,7 @@ class StandardWebSessionTools(private val context: Context) : ToolExecutor {
         return ok(tool.name, payload)
     }
 
-    private fun webFileUpload(tool: AITool): ToolResult {
+    private fun browserFileUpload(tool: AITool): ToolResult {
         val session = getSession(param(tool, "session_id"))
             ?: return error(tool.name, "Session not found")
 
@@ -775,7 +775,7 @@ class StandardWebSessionTools(private val context: Context) : ToolExecutor {
         return callbackResult
     }
 
-    private fun webWaitFor(tool: AITool): ToolResult {
+    private fun browserWaitFor(tool: AITool): ToolResult {
         val session = getSession(param(tool, "session_id"))
             ?: return error(tool.name, "Session not found")
 
@@ -829,7 +829,7 @@ class StandardWebSessionTools(private val context: Context) : ToolExecutor {
         return error(tool.name, "Timeout waiting for condition")
     }
 
-    private fun webSnapshot(tool: AITool): ToolResult {
+    private fun browserSnapshot(tool: AITool): ToolResult {
         val session = getSession(param(tool, "session_id"))
             ?: return error(tool.name, "Session not found")
 
@@ -2527,7 +2527,7 @@ class StandardWebSessionTools(private val context: Context) : ToolExecutor {
         }
     }
 
-    private fun webUserscriptList(tool: AITool): ToolResult {
+    private fun browserUserscriptList(tool: AITool): ToolResult {
         requireUserscriptSupport(tool.name)?.let { return it }
 
         val includeDisabled = boolParam(tool, "include_disabled", true)
@@ -2547,7 +2547,7 @@ class StandardWebSessionTools(private val context: Context) : ToolExecutor {
         return ok(tool.name, payload)
     }
 
-    private fun webUserscriptInstall(tool: AITool): ToolResult {
+    private fun browserUserscriptInstall(tool: AITool): ToolResult {
         requireUserscriptSupport(tool.name)?.let { return it }
 
         val url = param(tool, "url")?.trim().orEmpty()
@@ -2606,7 +2606,7 @@ class StandardWebSessionTools(private val context: Context) : ToolExecutor {
         return ok(tool.name, payload)
     }
 
-    private fun webUserscriptStart(tool: AITool): ToolResult {
+    private fun browserUserscriptStart(tool: AITool): ToolResult {
         requireUserscriptSupport(tool.name)?.let { return it }
 
         val target = resolveUserscriptTarget(tool) ?: return error(tool.name, lastUserscriptResolveError(tool))
@@ -2628,7 +2628,7 @@ class StandardWebSessionTools(private val context: Context) : ToolExecutor {
         return ok(tool.name, payload)
     }
 
-    private fun webUserscriptStop(tool: AITool): ToolResult {
+    private fun browserUserscriptStop(tool: AITool): ToolResult {
         requireUserscriptSupport(tool.name)?.let { return it }
 
         val target = resolveUserscriptTarget(tool) ?: return error(tool.name, lastUserscriptResolveError(tool))
@@ -2650,7 +2650,7 @@ class StandardWebSessionTools(private val context: Context) : ToolExecutor {
         return ok(tool.name, payload)
     }
 
-    private fun webUserscriptUninstall(tool: AITool): ToolResult {
+    private fun browserUserscriptUninstall(tool: AITool): ToolResult {
         requireUserscriptSupport(tool.name)?.let { return it }
 
         val target = resolveUserscriptTarget(tool) ?: return error(tool.name, lastUserscriptResolveError(tool))

@@ -13,11 +13,20 @@ export namespace Memory {
      * @param folderPath - Optional folder path to search within
      * @param threshold - Optional semantic similarity threshold (0.0-1.0, default 0.35)
      * @param limit - Optional maximum number of results (1-20, default 5)
-     * @param startTime - Optional start time (Unix timestamp in milliseconds), filters memories by createdAt >= startTime
-     * @param endTime - Optional end time (Unix timestamp in milliseconds), filters memories by createdAt <= endTime
-     * @returns Query results as a string
+     * @param startTime - Optional local-time start time in `YYYY-MM-DD` or `YYYY-MM-DD HH:mm` format, filters memories by createdAt >= startTime
+     * @param endTime - Optional local-time end time in `YYYY-MM-DD` or `YYYY-MM-DD HH:mm` format, filters memories by createdAt <= endTime
+     * @param snapshotId - Optional snapshot id. Omit or pass empty to create a new snapshot; reuse it to exclude already returned memories
+     * @returns Structured query results
      */
-    function query(query: string, folderPath?: string, threshold?: number, limit?: number, startTime?: number, endTime?: number): Promise<string>;
+    function query(
+        query: string,
+        folderPath?: string,
+        threshold?: number,
+        limit?: number,
+        startTime?: string,
+        endTime?: string,
+        snapshotId?: string
+    ): Promise<import('./results').MemoryQueryResultData>;
 
     /**
      * Get a memory by exact title

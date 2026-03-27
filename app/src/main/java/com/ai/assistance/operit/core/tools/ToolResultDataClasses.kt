@@ -872,7 +872,10 @@ data class ComputerDesktopActionResultData(
 /** Represents the result of a memory query */
 @Serializable
 data class MemoryQueryResultData(
-    val memories: List<MemoryInfo>
+    val memories: List<MemoryInfo>,
+    val snapshotId: String? = null,
+    val snapshotCreated: Boolean = false,
+    val excludedBySnapshotCount: Int = 0
 ) : ToolResultData() {
 
     @Serializable
@@ -887,10 +890,26 @@ data class MemoryQueryResultData(
     )
 
     override fun toString(): String {
+        val snapshotSummary = buildList {
+            snapshotId?.takeIf { it.isNotBlank() }?.let {
+                add("Snapshot ID: $it")
+            }
+            if (snapshotCreated) {
+                add("Snapshot created: true")
+            }
+            if (excludedBySnapshotCount > 0) {
+                add("Excluded by snapshot: $excludedBySnapshotCount")
+            }
+        }.joinToString("\n")
+
         if (memories.isEmpty()) {
-            return "No relevant memories found."
+            return if (snapshotSummary.isBlank()) {
+                "No relevant memories found."
+            } else {
+                "$snapshotSummary\nNo relevant memories found."
+            }
         }
-        return memories.joinToString("\n---\n") { memory ->
+        val memoryText = memories.joinToString("\n---\n") { memory ->
             """
             Title: ${memory.title}
             Content: ${memory.content}
@@ -898,6 +917,11 @@ data class MemoryQueryResultData(
             Tags: ${memory.tags.joinToString(", ")}
             Created: ${memory.createdAt}
             """.trimIndent()
+        }
+        return if (snapshotSummary.isBlank()) {
+            memoryText
+        } else {
+            "$snapshotSummary\n---\n$memoryText"
         }
     }
 }

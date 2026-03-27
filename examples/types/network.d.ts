@@ -36,10 +36,10 @@ export namespace Net {
     }): Promise<VisitWebResultData>;
 
     /**
-     * Start a persistent web session (floating window WebView).
+     * Start a persistent browser session (floating window WebView).
      * Returns StringResultData whose `value` is a JSON string payload.
      */
-    function startWeb(options?: {
+    function startBrowser(options?: {
         url?: string;
         headers?: Record<string, string> | string;
         user_agent?: string;
@@ -47,27 +47,27 @@ export namespace Net {
     }): Promise<StringResultData>;
 
     /**
-     * Stop one web session or all web sessions.
+     * Stop one browser session or all browser sessions.
      * Returns StringResultData whose `value` is a JSON string payload.
      */
-    function stopWeb(sessionIdOrOptions?: string | {
+    function stopBrowser(sessionIdOrOptions?: string | {
         session_id?: string;
         close_all?: boolean;
     }): Promise<StringResultData>;
 
     /**
-     * Navigate a web session to a target URL.
+     * Navigate a browser session to a target URL.
      */
-    function webNavigate(
+    function browserNavigate(
         sessionId: string | undefined,
         url: string,
         headers?: Record<string, string> | string
     ): Promise<StringResultData>;
 
     /**
-     * Evaluate JavaScript in a web session.
+     * Evaluate JavaScript in a browser session.
      */
-    function webEval(
+    function browserEval(
         sessionId: string | undefined,
         script: string,
         timeoutMs?: number
@@ -77,7 +77,7 @@ export namespace Net {
      * Click an element by snapshot ref.
      * Only accepts one options object.
      */
-    function webClick(options: {
+    function browserClick(options: {
         session_id?: string;
         ref: string;
         element?: string;
@@ -89,7 +89,7 @@ export namespace Net {
     /**
      * Fill an input by CSS selector.
      */
-    function webFill(
+    function browserFill(
         sessionId: string | undefined,
         selector: string,
         value: string
@@ -98,7 +98,7 @@ export namespace Net {
     /**
      * Wait for page ready or selector appearance.
      */
-    function webWaitFor(
+    function browserWaitFor(
         sessionId: string | undefined,
         selector?: string,
         timeoutMs?: number
@@ -107,7 +107,7 @@ export namespace Net {
     /**
      * Capture a text snapshot of current page.
      */
-    function webSnapshot(
+    function browserSnapshot(
         sessionId: string | undefined,
         options?: {
             include_links?: boolean;
@@ -116,26 +116,26 @@ export namespace Net {
     ): Promise<StringResultData>;
 
     /**
-     * Resolve an active file chooser in a web session.
+     * Resolve an active file chooser in a browser session.
      * If `paths` is omitted, the file chooser is cancelled.
      */
-    function webFileUpload(
+    function browserFileUpload(
         sessionId: string | undefined,
         paths?: string[]
     ): Promise<StringResultData>;
 
     /**
-     * List installed WebSession userscripts.
+     * List installed browser session userscripts.
      */
-    function webUserscriptList(options?: {
+    function browserUserscriptList(options?: {
         include_disabled?: boolean;
     }): Promise<StringResultData>;
 
     /**
-     * Install a WebSession userscript from a remote URL, local file path, or inline source text.
+     * Install a browser session userscript from a remote URL, local file path, or inline source text.
      * Exactly one of `url`, `path`, or `source` is required.
      */
-    function webUserscriptInstall(options: {
+    function browserUserscriptInstall(options: {
         url?: string;
         path?: string;
         source?: string;
@@ -144,9 +144,9 @@ export namespace Net {
     }): Promise<StringResultData>;
 
     /**
-     * Enable an installed WebSession userscript.
+     * Enable an installed browser session userscript.
      */
-    function webUserscriptStart(options: {
+    function browserUserscriptStart(options: {
         script_id?: string | number;
         name?: string;
         namespace?: string;
@@ -154,9 +154,9 @@ export namespace Net {
     }): Promise<StringResultData>;
 
     /**
-     * Disable an installed WebSession userscript.
+     * Disable an installed browser session userscript.
      */
-    function webUserscriptStop(options: {
+    function browserUserscriptStop(options: {
         script_id?: string | number;
         name?: string;
         namespace?: string;
@@ -164,9 +164,9 @@ export namespace Net {
     }): Promise<StringResultData>;
 
     /**
-     * Uninstall an installed WebSession userscript.
+     * Uninstall an installed browser session userscript.
      */
-    function webUserscriptUninstall(options: {
+    function browserUserscriptUninstall(options: {
         script_id?: string | number;
         name?: string;
         namespace?: string;

@@ -50,15 +50,15 @@ interface ToolResultMap {
 
 - `http_request` → `HttpResponseData`
 - `visit_web` → `VisitWebResultData`
-- `start_web` → `StringResultData`
-- `stop_web` → `StringResultData`
-- `web_navigate` → `StringResultData`
-- `web_eval` → `StringResultData`
-- `web_click` → `StringResultData`
-- `web_fill` → `StringResultData`
-- `web_wait_for` → `StringResultData`
-- `web_snapshot` → `StringResultData`
-- `web_file_upload` → `StringResultData`
+- `start_browser` → `StringResultData`
+- `stop_browser` → `StringResultData`
+- `browser_navigate` → `StringResultData`
+- `browser_eval` → `StringResultData`
+- `browser_click` → `StringResultData`
+- `browser_fill` → `StringResultData`
+- `browser_wait_for` → `StringResultData`
+- `browser_snapshot` → `StringResultData`
+- `browser_file_upload` → `StringResultData`
 - `multipart_request` → `HttpResponseData`
 - `manage_cookies` → `HttpResponseData`
 
@@ -112,7 +112,7 @@ interface ToolResultMap {
 ### 包与记忆
 
 - `use_package` → `string`
-- `query_memory` → `string`
+- `query_memory` → `MemoryQueryResultData`
 - `link_memories` → `MemoryLinkResultData`
 - `query_memory_links` → `MemoryLinkQueryResultData`
 

@@ -14,7 +14,7 @@ import {
     CalculationResultData, FFmpegResultData, ADBResultData, IntentResultData, TerminalCommandResultData, HiddenTerminalCommandResultData, TerminalSessionScreenResultData,
     FilePartContentData, FileApplyResultData, WorkflowListResultData, WorkflowResultData, WorkflowDetailResultData,
     StringResultData, ChatServiceStartResultData, ChatCreationResultData, ChatListResultData, ChatFindResultData, AgentStatusResultData,
-    ChatSwitchResultData, ChatTitleUpdateResultData, ChatDeleteResultData, MessageSendResultData, MemoryLinkResultData, MemoryLinkQueryResultData, GrepResultData,
+    ChatSwitchResultData, ChatTitleUpdateResultData, ChatDeleteResultData, MessageSendResultData, MemoryQueryResultData, MemoryLinkResultData, MemoryLinkQueryResultData, GrepResultData,
     ChatMessagesResultData, CharacterCardListResultData,
     SpeechServicesConfigResultData, SpeechServicesUpdateResultData,
     ModelConfigsResultData, ModelConfigCreateResultData, ModelConfigUpdateResultData, ModelConfigDeleteResultData,
@@ -52,20 +52,20 @@ export interface ToolResultMap {
     // Network operations
     'http_request': HttpResponseData;
     'visit_web': VisitWebResultData;
-    'start_web': StringResultData;
-    'stop_web': StringResultData;
-    'web_navigate': StringResultData;
-    'web_eval': StringResultData;
-    'web_click': StringResultData;
-    'web_fill': StringResultData;
-    'web_wait_for': StringResultData;
-    'web_snapshot': StringResultData;
-    'web_file_upload': StringResultData;
-    'web_userscript_list': StringResultData;
-    'web_userscript_install': StringResultData;
-    'web_userscript_start': StringResultData;
-    'web_userscript_stop': StringResultData;
-    'web_userscript_uninstall': StringResultData;
+    'start_browser': StringResultData;
+    'stop_browser': StringResultData;
+    'browser_navigate': StringResultData;
+    'browser_eval': StringResultData;
+    'browser_click': StringResultData;
+    'browser_fill': StringResultData;
+    'browser_wait_for': StringResultData;
+    'browser_snapshot': StringResultData;
+    'browser_file_upload': StringResultData;
+    'browser_userscript_list': StringResultData;
+    'browser_userscript_install': StringResultData;
+    'browser_userscript_start': StringResultData;
+    'browser_userscript_stop': StringResultData;
+    'browser_userscript_uninstall': StringResultData;
     'multipart_request': HttpResponseData;
     'manage_cookies': HttpResponseData;
 
@@ -115,7 +115,7 @@ export interface ToolResultMap {
 
     // Package operations
     'use_package': string;
-    'query_memory': string;
+    'query_memory': MemoryQueryResultData;
 
     // FFmpeg operations
     'ffmpeg_execute': FFmpegResultData;

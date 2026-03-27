@@ -1,21 +1,21 @@
 /* METADATA
 {
-    "name": "web",
+    "name": "browser",
 
     "display_name": {
-        "zh": "Web 自动化操作",
-        "en": "Web Automation"
+        "zh": "Browser 自动化操作",
+        "en": "Browser Automation"
     },
     "description": {
-        "zh": "能够基于浏览器完成复杂的网页操作。",
-        "en": "Enables complex web operations based on a real browser session."
+        "zh": "能够基于真实浏览器会话完成复杂的浏览器自动化。",
+        "en": "Enables complex browser automation based on a real browser session."
     },
     "enabledByDefault": true,
     "category": "Automatic",
     "tools": [
         {
             "name": "start",
-            "description": { "zh": "启动网页会话并打开悬浮浏览窗口。", "en": "Start a web session and open a floating browser window." },
+            "description": { "zh": "启动浏览器会话并打开悬浮浏览窗口。", "en": "Start a browser session and open a floating browser window." },
             "parameters": [
                 { "name": "url", "description": { "zh": "可选，初始 URL", "en": "Optional initial URL." }, "type": "string", "required": false },
                 { "name": "headers", "description": { "zh": "可选，请求头对象", "en": "Optional request headers object." }, "type": "object", "required": false },
@@ -100,7 +100,7 @@
         },
         {
             "name": "upload",
-            "description": { "zh": "向网页文件选择器上传文件。paths 不传时取消当前 file chooser。", "en": "Upload files to an active web file chooser. If paths is omitted, cancels the current file chooser." },
+            "description": { "zh": "向浏览器文件选择器上传文件。paths 不传时取消当前 file chooser。", "en": "Upload files to an active browser file chooser. If paths is omitted, cancels the current file chooser." },
             "parameters": [
                 { "name": "session_id", "description": { "zh": "可选，不传则使用 Kotlin 侧当前活动会话", "en": "Optional. Uses active Kotlin-side session when omitted." }, "type": "string", "required": false },
                 { "name": "paths", "description": { "zh": "可选，绝对路径数组。示例：['/sdcard/Download/a.txt']", "en": "Optional absolute file path array. Example: ['/sdcard/Download/a.txt']" }, "type": "array", "required": false }
@@ -108,7 +108,7 @@
         },
         {
             "name": "close",
-            "description": { "zh": "关闭网页会话。", "en": "Close web session." },
+            "description": { "zh": "关闭浏览器会话。", "en": "Close browser session." },
             "parameters": [
                 { "name": "session_id", "description": { "zh": "可选，不传则关闭 Kotlin 侧当前活动会话", "en": "Optional. Closes active Kotlin-side session when omitted." }, "type": "string", "required": false },
                 { "name": "close_all", "description": { "zh": "可选，是否关闭全部会话", "en": "Optional, close all sessions." }, "type": "boolean", "required": false }
@@ -164,53 +164,38 @@
         }
     ]
 }*/
-
-type AnyObject = Record<string, any>;
-
-type WrappedResult = {
-    success: boolean;
-    message: string;
-    data?: any;
-    error?: string;
-};
-
-const MAX_INLINE_WEB_CONTENT_CHARS = 24_000;
-
-const Web = (function () {
-    function toPayload(raw: any): AnyObject {
+const MAX_INLINE_BROWSER_CONTENT_CHARS = 24000;
+const Browser = (function () {
+    function toPayload(raw) {
         if (raw == null) {
             return {};
         }
-
         if (typeof raw === 'string') {
             try {
                 return JSON.parse(raw);
-            } catch {
+            }
+            catch {
                 return { value: raw };
             }
         }
-
         if (typeof raw === 'object' && typeof raw.value === 'string') {
             try {
                 return JSON.parse(raw.value);
-            } catch {
+            }
+            catch {
                 return { ...raw, value: raw.value };
             }
         }
-
         if (typeof raw === 'object') {
             return raw;
         }
-
         return { value: String(raw) };
     }
-
-    function normalizeHeaders(headers: any): Record<string, string> | undefined {
+    function normalizeHeaders(headers) {
         if (!headers || typeof headers !== 'object') {
             return undefined;
         }
-
-        const result: Record<string, string> = {};
+        const result = {};
         for (const [key, value] of Object.entries(headers)) {
             if (value === undefined || value === null) {
                 continue;
@@ -219,18 +204,15 @@ const Web = (function () {
         }
         return result;
     }
-
-    function optionalSessionId(raw: any): string | undefined {
+    function optionalSessionId(raw) {
         if (raw === undefined || raw === null) {
             return undefined;
         }
         const sid = String(raw).trim();
         return sid.length > 0 ? sid : undefined;
     }
-
-    function normalizeUserscriptLocator(params: AnyObject = {}, requireTarget: boolean = true): AnyObject {
-        const result: AnyObject = {};
-
+    function normalizeUserscriptLocator(params = {}, requireTarget = true) {
+        const result = {};
         if (params.script_id !== undefined && params.script_id !== null) {
             const scriptId = String(params.script_id).trim();
             if (scriptId) {
@@ -255,20 +237,16 @@ const Web = (function () {
                 result.source_url = sourceUrl;
             }
         }
-
         if (requireTarget && !result.script_id && !result.name) {
             throw new Error('script_id 或 name 至少传一个');
         }
-
         return result;
     }
-
-    function normalizeUserscriptInstallParams(params: AnyObject): AnyObject {
+    function normalizeUserscriptInstallParams(params) {
         if (!params || typeof params !== 'object' || Array.isArray(params)) {
             throw new Error('安装参数必须是对象');
         }
-
-        const normalized: AnyObject = {};
+        const normalized = {};
         ['url', 'path', 'source', 'source_url', 'source_display'].forEach((key) => {
             if (params[key] === undefined || params[key] === null) {
                 return;
@@ -278,16 +256,13 @@ const Web = (function () {
                 normalized[key] = value;
             }
         });
-
         const sourceCount = [normalized.url, normalized.path, normalized.source].filter(Boolean).length;
         if (sourceCount !== 1) {
             throw new Error('url/path/source 必须且只能传一个');
         }
-
         return normalized;
     }
-
-    function extractUrlFromPayload(payload: AnyObject): string | undefined {
+    function extractUrlFromPayload(payload) {
         const candidates = [payload?.url, payload?.result, payload?.value];
         for (const item of candidates) {
             if (typeof item !== 'string') {
@@ -300,32 +275,21 @@ const Web = (function () {
         }
         return undefined;
     }
-
-    async function resolveUrlForSystemBrowser(sessionId?: string, explicitUrl?: any): Promise<string> {
+    async function resolveUrlForSystemBrowser(sessionId, explicitUrl) {
         const providedUrl = explicitUrl !== undefined && explicitUrl !== null
             ? String(explicitUrl).trim()
             : '';
         if (providedUrl.length > 0) {
             return providedUrl;
         }
-
-        const evalPayload = toPayload(
-            await Tools.Net.webEval(
-                sessionId,
-                '(function(){ try { return window.location.href || document.URL || ""; } catch (e) { return ""; } })();',
-                3000
-            )
-        );
-
+        const evalPayload = toPayload(await Tools.Net.browserEval(sessionId, '(function(){ try { return window.location.href || document.URL || ""; } catch (e) { return ""; } })();', 3000));
         const detectedUrl = extractUrlFromPayload(evalPayload);
         if (!detectedUrl) {
             throw new Error('url 参数缺失，且无法从当前会话获取 URL');
         }
-
         return detectedUrl;
     }
-
-    function extractPageContent(payload: AnyObject): string {
+    function extractPageContent(payload) {
         const candidates = [payload?.snapshot, payload?.content, payload?.text, payload?.value];
         for (const item of candidates) {
             if (typeof item === 'string' && item.length > 0) {
@@ -334,29 +298,23 @@ const Web = (function () {
         }
         return '';
     }
-
-    function sanitizeSessionId(sessionId: string | undefined): string {
+    function sanitizeSessionId(sessionId) {
         if (!sessionId) {
             return 'default';
         }
         return sessionId.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 40) || 'default';
     }
-
-    async function persistPageContentIfTooLong(payload: AnyObject, sessionId?: string): Promise<AnyObject> {
+    async function persistPageContentIfTooLong(payload, sessionId) {
         const content = extractPageContent(payload);
-        if (!content || content.length <= MAX_INLINE_WEB_CONTENT_CHARS) {
+        if (!content || content.length <= MAX_INLINE_BROWSER_CONTENT_CHARS) {
             return payload;
         }
-
         await Tools.Files.mkdir(OPERIT_CLEAN_ON_EXIT_DIR, true);
-
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-        const rand = Math.floor(Math.random() * 1_000_000);
+        const rand = Math.floor(Math.random() * 1000000);
         const safeSessionId = sanitizeSessionId(sessionId);
-        const filePath = `${OPERIT_CLEAN_ON_EXIT_DIR}/web_content_${safeSessionId}_${timestamp}_${rand}.txt`;
-
+        const filePath = `${OPERIT_CLEAN_ON_EXIT_DIR}/browser_content_${safeSessionId}_${timestamp}_${rand}.txt`;
         await Tools.Files.write(filePath, content, false);
-
         return {
             ...payload,
             snapshot: '(saved_to_file)',
@@ -366,171 +324,108 @@ const Web = (function () {
             hint: 'Content is large and saved to file. Use read_file_part or grep_code to inspect it.',
         };
     }
-
-    async function start(params: AnyObject = {}): Promise<AnyObject> {
-        return toPayload(
-            await Tools.Net.startWeb({
-                url: params.url,
-                headers: normalizeHeaders(params.headers),
-                user_agent: params.user_agent,
-                session_name: params.session_name,
-            })
-        );
+    async function start(params = {}) {
+        return toPayload(await Tools.Net.startBrowser({
+            url: params.url,
+            headers: normalizeHeaders(params.headers),
+            user_agent: params.user_agent,
+            session_name: params.session_name,
+        }));
     }
-
-    async function goto(params: AnyObject): Promise<AnyObject> {
+    async function goto(params) {
         if (!params || !params.url) {
             throw new Error('url 参数必填');
         }
-
-        return toPayload(
-            await Tools.Net.webNavigate(
-                optionalSessionId(params.session_id),
-                String(params.url),
-                normalizeHeaders(params.headers)
-            )
-        );
+        return toPayload(await Tools.Net.browserNavigate(optionalSessionId(params.session_id), String(params.url), normalizeHeaders(params.headers)));
     }
-
-    async function click(params: AnyObject): Promise<AnyObject> {
-        type ClickButton = 'left' | 'right' | 'middle';
-        type ClickModifier = 'Alt' | 'Control' | 'ControlOrMeta' | 'Meta' | 'Shift';
-
-        const ref =
-            params && params.ref !== undefined && params.ref !== null
-                ? String(params.ref).trim()
-                : '';
-
+    async function click(params) {
+        const ref = params && params.ref !== undefined && params.ref !== null
+            ? String(params.ref).trim()
+            : '';
         if (!ref) {
             throw new Error('ref 参数必填');
         }
-
-        const normalizedButtonRaw =
-            params && params.button !== undefined && params.button !== null
-                ? String(params.button).trim()
-                : '';
-        if (
-            normalizedButtonRaw &&
+        const normalizedButtonRaw = params && params.button !== undefined && params.button !== null
+            ? String(params.button).trim()
+            : '';
+        if (normalizedButtonRaw &&
             normalizedButtonRaw !== 'left' &&
             normalizedButtonRaw !== 'right' &&
-            normalizedButtonRaw !== 'middle'
-        ) {
+            normalizedButtonRaw !== 'middle') {
             throw new Error('button 只能是 left/right/middle');
         }
-        const button: ClickButton | undefined =
-            normalizedButtonRaw === 'left' ||
-                normalizedButtonRaw === 'right' ||
-                normalizedButtonRaw === 'middle'
-                ? (normalizedButtonRaw as ClickButton)
-                : undefined;
-
-        let modifiers: ClickModifier[] | undefined = undefined;
+        const button = normalizedButtonRaw === 'left' ||
+            normalizedButtonRaw === 'right' ||
+            normalizedButtonRaw === 'middle'
+            ? normalizedButtonRaw
+            : undefined;
+        let modifiers = undefined;
         if (params && params.modifiers !== undefined) {
             if (!Array.isArray(params.modifiers)) {
                 throw new Error('modifiers 必须是数组');
             }
-            const normalized = params.modifiers.map((item: any) => String(item).trim());
-            const invalid = normalized.filter(
-                (item) =>
-                    item !== 'Alt' &&
-                    item !== 'Control' &&
-                    item !== 'ControlOrMeta' &&
-                    item !== 'Meta' &&
-                    item !== 'Shift'
-            );
+            const normalized = params.modifiers.map((item) => String(item).trim());
+            const invalid = normalized.filter((item) => item !== 'Alt' &&
+                item !== 'Control' &&
+                item !== 'ControlOrMeta' &&
+                item !== 'Meta' &&
+                item !== 'Shift');
             if (invalid.length > 0) {
                 throw new Error(`modifiers 存在非法值: ${invalid.join(', ')}`);
             }
-            modifiers = normalized as ClickModifier[];
+            modifiers = normalized;
         }
-
-        return toPayload(
-            await Tools.Net.webClick({
-                session_id: optionalSessionId(params?.session_id),
-                ref,
-                element:
-                    params && params.element !== undefined && params.element !== null
-                        ? String(params.element)
-                        : undefined,
-                button,
-                modifiers: modifiers && modifiers.length > 0 ? modifiers : undefined,
-                doubleClick:
-                    params && params.doubleClick !== undefined
-                        ? Boolean(params.doubleClick)
-                        : undefined,
-            })
-        );
+        return toPayload(await Tools.Net.browserClick({
+            session_id: optionalSessionId(params?.session_id),
+            ref,
+            element: params && params.element !== undefined && params.element !== null
+                ? String(params.element)
+                : undefined,
+            button,
+            modifiers: modifiers && modifiers.length > 0 ? modifiers : undefined,
+            doubleClick: params && params.doubleClick !== undefined
+                ? Boolean(params.doubleClick)
+                : undefined,
+        }));
     }
-    async function fill(params: AnyObject): Promise<AnyObject> {
+    async function fill(params) {
         if (!params || !params.selector) {
             throw new Error('selector 参数必填');
         }
         if (params.value === undefined || params.value === null) {
             throw new Error('value 参数必填');
         }
-
-        return toPayload(
-            await Tools.Net.webFill(
-                optionalSessionId(params.session_id),
-                String(params.selector),
-                String(params.value)
-            )
-        );
+        return toPayload(await Tools.Net.browserFill(optionalSessionId(params.session_id), String(params.selector), String(params.value)));
     }
-
-    async function evaluate(params: AnyObject): Promise<AnyObject> {
+    async function evaluate(params) {
         if (!params || !params.script) {
             throw new Error('script 参数必填');
         }
-
-        return toPayload(
-            await Tools.Net.webEval(
-                optionalSessionId(params.session_id),
-                String(params.script),
-                params.timeout_ms !== undefined ? Number(params.timeout_ms) : undefined
-            )
-        );
+        return toPayload(await Tools.Net.browserEval(optionalSessionId(params.session_id), String(params.script), params.timeout_ms !== undefined ? Number(params.timeout_ms) : undefined));
     }
-
-    async function wait_for(params: AnyObject = {}): Promise<AnyObject> {
-        return toPayload(
-            await Tools.Net.webWaitFor(
-                optionalSessionId(params.session_id),
-                params.selector !== undefined ? String(params.selector) : undefined,
-                params.timeout_ms !== undefined ? Number(params.timeout_ms) : undefined
-            )
-        );
+    async function wait_for(params = {}) {
+        return toPayload(await Tools.Net.browserWaitFor(optionalSessionId(params.session_id), params.selector !== undefined ? String(params.selector) : undefined, params.timeout_ms !== undefined ? Number(params.timeout_ms) : undefined));
     }
-
-    async function snapshot(params: AnyObject = {}): Promise<AnyObject> {
+    async function snapshot(params = {}) {
         const sessionId = optionalSessionId(params.session_id);
-        const payload = toPayload(
-            await Tools.Net.webSnapshot(sessionId, {
-                include_links:
-                    params.include_links !== undefined ? Boolean(params.include_links) : undefined,
-                include_images:
-                    params.include_images !== undefined ? Boolean(params.include_images) : undefined,
-            })
-        );
-
+        const payload = toPayload(await Tools.Net.browserSnapshot(sessionId, {
+            include_links: params.include_links !== undefined ? Boolean(params.include_links) : undefined,
+            include_images: params.include_images !== undefined ? Boolean(params.include_images) : undefined,
+        }));
         return persistPageContentIfTooLong(payload, sessionId);
     }
-
-    async function content(params: AnyObject = {}): Promise<AnyObject> {
+    async function content(params = {}) {
         return snapshot(params);
     }
-
-    async function open_in_system_browser(params: AnyObject = {}): Promise<AnyObject> {
+    async function open_in_system_browser(params = {}) {
         const sessionId = optionalSessionId(params.session_id);
         const targetUrl = await resolveUrlForSystemBrowser(sessionId, params.url);
-
         const intentResult = await Tools.System.intent({
             action: 'android.intent.action.VIEW',
             uri: targetUrl,
             package: params.package_name ? String(params.package_name) : undefined,
             type: 'activity',
         });
-
         return {
             status: 'ok',
             url: targetUrl,
@@ -538,101 +433,66 @@ const Web = (function () {
             intent_result: intentResult,
         };
     }
-
-    async function upload(params: AnyObject = {}): Promise<AnyObject> {
+    async function upload(params = {}) {
         const sessionId = optionalSessionId(params.session_id);
-
-        let paths: string[] | undefined = undefined;
+        let paths = undefined;
         if (params.paths !== undefined) {
-            let parsed: any = params.paths;
+            let parsed = params.paths;
             if (typeof parsed === "string") {
                 try {
                     parsed = JSON.parse(parsed);
-                } catch {
+                }
+                catch {
                     throw new Error("paths 必须是合法 JSON 数组字符串");
                 }
             }
             if (!Array.isArray(parsed)) {
                 throw new Error("paths 参数必须是数组");
             }
-            paths = parsed.map((p: any) => String(p));
+            paths = parsed.map((p) => String(p));
         }
-
-        return toPayload(
-            await Tools.Net.webFileUpload(sessionId, paths)
-        );
+        return toPayload(await Tools.Net.browserFileUpload(sessionId, paths));
     }
-
-    async function close(params: AnyObject = {}): Promise<AnyObject> {
+    async function close(params = {}) {
         const closeAll = Boolean(params.close_all);
         if (closeAll) {
-            return toPayload(await Tools.Net.stopWeb({ close_all: true }));
+            return toPayload(await Tools.Net.stopBrowser({ close_all: true }));
         }
-
         const sid = optionalSessionId(params.session_id);
         if (sid) {
-            return toPayload(await Tools.Net.stopWeb({ session_id: sid, close_all: false }));
+            return toPayload(await Tools.Net.stopBrowser({ session_id: sid, close_all: false }));
         }
-
-        return toPayload(await Tools.Net.stopWeb({ close_all: false }));
+        return toPayload(await Tools.Net.stopBrowser({ close_all: false }));
     }
-
-    async function userscript_list(params: AnyObject = {}): Promise<AnyObject> {
-        return toPayload(
-            await Tools.Net.webUserscriptList({
-                include_disabled:
-                    params.include_disabled !== undefined ? Boolean(params.include_disabled) : undefined,
-            })
-        );
+    async function userscript_list(params = {}) {
+        return toPayload(await Tools.Net.browserUserscriptList({
+            include_disabled: params.include_disabled !== undefined ? Boolean(params.include_disabled) : undefined,
+        }));
     }
-
-    async function userscript_install(params: AnyObject = {}): Promise<AnyObject> {
-        return toPayload(
-            await Tools.Net.webUserscriptInstall(
-                normalizeUserscriptInstallParams(params)
-            )
-        );
+    async function userscript_install(params = {}) {
+        return toPayload(await Tools.Net.browserUserscriptInstall(normalizeUserscriptInstallParams(params)));
     }
-
-    async function userscript_start(params: AnyObject = {}): Promise<AnyObject> {
-        return toPayload(
-            await Tools.Net.webUserscriptStart(
-                normalizeUserscriptLocator(params, true)
-            )
-        );
+    async function userscript_start(params = {}) {
+        return toPayload(await Tools.Net.browserUserscriptStart(normalizeUserscriptLocator(params, true)));
     }
-
-    async function userscript_stop(params: AnyObject = {}): Promise<AnyObject> {
-        return toPayload(
-            await Tools.Net.webUserscriptStop(
-                normalizeUserscriptLocator(params, true)
-            )
-        );
+    async function userscript_stop(params = {}) {
+        return toPayload(await Tools.Net.browserUserscriptStop(normalizeUserscriptLocator(params, true)));
     }
-
-    async function userscript_uninstall(params: AnyObject = {}): Promise<AnyObject> {
-        return toPayload(
-            await Tools.Net.webUserscriptUninstall(
-                normalizeUserscriptLocator(params, true)
-            )
-        );
+    async function userscript_uninstall(params = {}) {
+        return toPayload(await Tools.Net.browserUserscriptUninstall(normalizeUserscriptLocator(params, true)));
     }
-
-    async function wrap(
-        toolName: string,
-        fn: (params?: AnyObject) => Promise<AnyObject>,
-        params?: AnyObject
-    ): Promise<void> {
+    async function wrap(toolName, fn, params) {
         try {
             const data = await fn(params || {});
-            const result: WrappedResult = {
+            const result = {
                 success: true,
                 message: `${toolName} 执行成功`,
                 data,
             };
             complete(result);
-        } catch (error: any) {
-            const result: WrappedResult = {
+        }
+        catch (error) {
+            const result = {
                 success: false,
                 message: `${toolName} 执行失败: ${error?.message || String(error)}`,
                 error: String(error?.stack || error),
@@ -640,49 +500,46 @@ const Web = (function () {
             complete(result);
         }
     }
-
     async function main() {
         complete({
             success: true,
-            message: 'Web 已就绪，可调用 start/goto/click/fill/evaluate/wait_for/snapshot/content/open_in_system_browser/upload/close/userscript_list/userscript_install/userscript_start/userscript_stop/userscript_uninstall',
+            message: 'Browser 已就绪，可调用 start/goto/click/fill/evaluate/wait_for/snapshot/content/open_in_system_browser/upload/close/userscript_list/userscript_install/userscript_start/userscript_stop/userscript_uninstall',
         });
     }
-
     return {
-        start: (params: AnyObject) => wrap('start', start, params),
-        goto: (params: AnyObject) => wrap('goto', goto, params),
-        click: (params: AnyObject) => wrap('click', click, params),
-        fill: (params: AnyObject) => wrap('fill', fill, params),
-        evaluate: (params: AnyObject) => wrap('evaluate', evaluate, params),
-        wait_for: (params: AnyObject) => wrap('wait_for', wait_for, params),
-        snapshot: (params: AnyObject) => wrap('snapshot', snapshot, params),
-        content: (params: AnyObject) => wrap('content', content, params),
-        open_in_system_browser: (params: AnyObject) => wrap('open_in_system_browser', open_in_system_browser, params),
-        upload: (params: AnyObject) => wrap('upload', upload, params),
-        close: (params: AnyObject) => wrap('close', close, params),
-        userscript_list: (params: AnyObject) => wrap('userscript_list', userscript_list, params),
-        userscript_install: (params: AnyObject) => wrap('userscript_install', userscript_install, params),
-        userscript_start: (params: AnyObject) => wrap('userscript_start', userscript_start, params),
-        userscript_stop: (params: AnyObject) => wrap('userscript_stop', userscript_stop, params),
-        userscript_uninstall: (params: AnyObject) => wrap('userscript_uninstall', userscript_uninstall, params),
+        start: (params) => wrap('start', start, params),
+        goto: (params) => wrap('goto', goto, params),
+        click: (params) => wrap('click', click, params),
+        fill: (params) => wrap('fill', fill, params),
+        evaluate: (params) => wrap('evaluate', evaluate, params),
+        wait_for: (params) => wrap('wait_for', wait_for, params),
+        snapshot: (params) => wrap('snapshot', snapshot, params),
+        content: (params) => wrap('content', content, params),
+        open_in_system_browser: (params) => wrap('open_in_system_browser', open_in_system_browser, params),
+        upload: (params) => wrap('upload', upload, params),
+        close: (params) => wrap('close', close, params),
+        userscript_list: (params) => wrap('userscript_list', userscript_list, params),
+        userscript_install: (params) => wrap('userscript_install', userscript_install, params),
+        userscript_start: (params) => wrap('userscript_start', userscript_start, params),
+        userscript_stop: (params) => wrap('userscript_stop', userscript_stop, params),
+        userscript_uninstall: (params) => wrap('userscript_uninstall', userscript_uninstall, params),
         main,
     };
 })();
-
-exports.start = Web.start;
-exports.goto = Web.goto;
-exports.click = Web.click;
-exports.fill = Web.fill;
-exports.evaluate = Web.evaluate;
-exports.wait_for = Web.wait_for;
-exports.snapshot = Web.snapshot;
-exports.content = Web.content;
-exports.open_in_system_browser = Web.open_in_system_browser;
-exports.upload = Web.upload;
-exports.close = Web.close;
-exports.userscript_list = Web.userscript_list;
-exports.userscript_install = Web.userscript_install;
-exports.userscript_start = Web.userscript_start;
-exports.userscript_stop = Web.userscript_stop;
-exports.userscript_uninstall = Web.userscript_uninstall;
-exports.main = Web.main;
+exports.start = Browser.start;
+exports.goto = Browser.goto;
+exports.click = Browser.click;
+exports.fill = Browser.fill;
+exports.evaluate = Browser.evaluate;
+exports.wait_for = Browser.wait_for;
+exports.snapshot = Browser.snapshot;
+exports.content = Browser.content;
+exports.open_in_system_browser = Browser.open_in_system_browser;
+exports.upload = Browser.upload;
+exports.close = Browser.close;
+exports.userscript_list = Browser.userscript_list;
+exports.userscript_install = Browser.userscript_install;
+exports.userscript_start = Browser.userscript_start;
+exports.userscript_stop = Browser.userscript_stop;
+exports.userscript_uninstall = Browser.userscript_uninstall;
+exports.main = Browser.main;

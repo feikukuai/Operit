@@ -792,197 +792,197 @@ fun registerAllTools(handler: AIToolHandler, context: Context) {
     )
 
     handler.registerTool(
-            name = "start_web",
+            name = "start_browser",
             descriptionGenerator = { tool ->
                 val url = tool.parameters.find { it.name == "url" }?.value
-                if (url.isNullOrBlank()) "Start a web session" else "Start a web session at $url"
+                if (url.isNullOrBlank()) "Start a browser session" else "Start a browser session at $url"
             },
             executor = { tool ->
-                val webSessionTool = ToolGetter.getWebSessionTools(context)
-                webSessionTool.invoke(tool)
+                val browserSessionTool = ToolGetter.getBrowserSessionTools(context)
+                browserSessionTool.invoke(tool)
             }
     )
 
     handler.registerTool(
-            name = "stop_web",
+            name = "stop_browser",
             descriptionGenerator = { tool ->
                 val closeAll = tool.parameters.find { it.name == "close_all" }?.value
                 val sessionId = tool.parameters.find { it.name == "session_id" }?.value
                 if (closeAll.equals("true", ignoreCase = true)) {
-                    "Stop all web sessions"
+                    "Stop all browser sessions"
                 } else {
-                    "Stop web session: ${sessionId ?: "(missing session_id)"}"
+                    "Stop browser session: ${sessionId ?: "(missing session_id)"}"
                 }
             },
             executor = { tool ->
-                val webSessionTool = ToolGetter.getWebSessionTools(context)
-                webSessionTool.invoke(tool)
+                val browserSessionTool = ToolGetter.getBrowserSessionTools(context)
+                browserSessionTool.invoke(tool)
             }
     )
 
     handler.registerTool(
-            name = "web_navigate",
+            name = "browser_navigate",
             descriptionGenerator = { tool ->
                 val sessionId = tool.parameters.find { it.name == "session_id" }?.value ?: ""
                 val url = tool.parameters.find { it.name == "url" }?.value ?: ""
-                "Navigate web session ${sessionId.take(8)} to $url"
+                "Navigate browser session ${sessionId.take(8)} to $url"
             },
             executor = { tool ->
-                val webSessionTool = ToolGetter.getWebSessionTools(context)
-                webSessionTool.invoke(tool)
+                val browserSessionTool = ToolGetter.getBrowserSessionTools(context)
+                browserSessionTool.invoke(tool)
             }
     )
 
     handler.registerTool(
-            name = "web_eval",
+            name = "browser_eval",
             descriptionGenerator = { tool ->
                 val sessionId = tool.parameters.find { it.name == "session_id" }?.value ?: ""
-                "Evaluate JavaScript in web session ${sessionId.take(8)}"
+                "Evaluate JavaScript in browser session ${sessionId.take(8)}"
             },
             executor = { tool ->
-                val webSessionTool = ToolGetter.getWebSessionTools(context)
-                webSessionTool.invoke(tool)
+                val browserSessionTool = ToolGetter.getBrowserSessionTools(context)
+                browserSessionTool.invoke(tool)
             }
     )
 
     handler.registerTool(
-            name = "web_click",
+            name = "browser_click",
             descriptionGenerator = { tool ->
                 val ref = tool.parameters.find { it.name == "ref" }?.value ?: ""
                 "Click element by ref: $ref"
             },
             executor = { tool ->
-                val webSessionTool = ToolGetter.getWebSessionTools(context)
-                webSessionTool.invoke(tool)
+                val browserSessionTool = ToolGetter.getBrowserSessionTools(context)
+                browserSessionTool.invoke(tool)
             }
     )
 
     handler.registerTool(
-            name = "web_fill",
+            name = "browser_fill",
             descriptionGenerator = { tool ->
                 val selector = tool.parameters.find { it.name == "selector" }?.value ?: ""
                 "Fill element: $selector"
             },
             executor = { tool ->
-                val webSessionTool = ToolGetter.getWebSessionTools(context)
-                webSessionTool.invoke(tool)
+                val browserSessionTool = ToolGetter.getBrowserSessionTools(context)
+                browserSessionTool.invoke(tool)
             }
     )
 
     handler.registerTool(
-            name = "web_file_upload",
+            name = "browser_file_upload",
             descriptionGenerator = { tool ->
                 val sessionId = tool.parameters.find { it.name == "session_id" }?.value
                 val rawPaths = tool.parameters.find { it.name == "paths" }?.value
                 if (rawPaths.isNullOrBlank()) {
-                    "Resolve file chooser in web session ${sessionId?.take(8) ?: "(active)"} with cancel"
+                    "Resolve file chooser in browser session ${sessionId?.take(8) ?: "(active)"} with cancel"
                 } else {
-                    "Resolve file chooser in web session ${sessionId?.take(8) ?: "(active)"} with provided paths"
+                    "Resolve file chooser in browser session ${sessionId?.take(8) ?: "(active)"} with provided paths"
                 }
             },
             executor = { tool ->
-                val webSessionTool = ToolGetter.getWebSessionTools(context)
-                webSessionTool.invoke(tool)
+                val browserSessionTool = ToolGetter.getBrowserSessionTools(context)
+                browserSessionTool.invoke(tool)
             }
     )
 
     handler.registerTool(
-            name = "web_wait_for",
+            name = "browser_wait_for",
             descriptionGenerator = { tool ->
                 val selector = tool.parameters.find { it.name == "selector" }?.value
                 if (selector.isNullOrBlank()) {
-                    "Wait for web page load"
+                    "Wait for browser page load"
                 } else {
                     "Wait for selector: $selector"
                 }
             },
             executor = { tool ->
-                val webSessionTool = ToolGetter.getWebSessionTools(context)
-                webSessionTool.invoke(tool)
+                val browserSessionTool = ToolGetter.getBrowserSessionTools(context)
+                browserSessionTool.invoke(tool)
             }
     )
 
     handler.registerTool(
-            name = "web_snapshot",
+            name = "browser_snapshot",
             descriptionGenerator = { tool ->
                 val sessionId = tool.parameters.find { it.name == "session_id" }?.value ?: ""
-                "Snapshot web session ${sessionId.take(8)}"
+                "Snapshot browser session ${sessionId.take(8)}"
             },
             executor = { tool ->
-                val webSessionTool = ToolGetter.getWebSessionTools(context)
-                webSessionTool.invoke(tool)
+                val browserSessionTool = ToolGetter.getBrowserSessionTools(context)
+                browserSessionTool.invoke(tool)
             }
     )
 
     handler.registerTool(
-            name = "web_userscript_list",
+            name = "browser_userscript_list",
             descriptionGenerator = { tool ->
                 val includeDisabled = tool.parameters.find { it.name == "include_disabled" }?.value
                 if (includeDisabled.equals("false", ignoreCase = true)) {
-                    "List enabled web userscripts"
+                    "List enabled browser userscripts"
                 } else {
-                    "List installed web userscripts"
+                    "List installed browser userscripts"
                 }
             },
             executor = { tool ->
-                val webSessionTool = ToolGetter.getWebSessionTools(context)
-                webSessionTool.invoke(tool)
+                val browserSessionTool = ToolGetter.getBrowserSessionTools(context)
+                browserSessionTool.invoke(tool)
             }
     )
 
     handler.registerTool(
-            name = "web_userscript_install",
+            name = "browser_userscript_install",
             descriptionGenerator = { tool ->
                 val url = tool.parameters.find { it.name == "url" }?.value
                 val path = tool.parameters.find { it.name == "path" }?.value
                 when {
-                    !url.isNullOrBlank() -> "Install web userscript from $url"
-                    !path.isNullOrBlank() -> "Install web userscript from local file $path"
-                    else -> "Install web userscript from provided source"
+                    !url.isNullOrBlank() -> "Install browser userscript from $url"
+                    !path.isNullOrBlank() -> "Install browser userscript from local file $path"
+                    else -> "Install browser userscript from provided source"
                 }
             },
             executor = { tool ->
-                val webSessionTool = ToolGetter.getWebSessionTools(context)
-                webSessionTool.invoke(tool)
+                val browserSessionTool = ToolGetter.getBrowserSessionTools(context)
+                browserSessionTool.invoke(tool)
             }
     )
 
     handler.registerTool(
-            name = "web_userscript_start",
+            name = "browser_userscript_start",
             descriptionGenerator = { tool ->
                 val scriptId = tool.parameters.find { it.name == "script_id" }?.value
                 val name = tool.parameters.find { it.name == "name" }?.value
-                "Enable web userscript ${scriptId ?: name ?: "(missing target)"}"
+                "Enable browser userscript ${scriptId ?: name ?: "(missing target)"}"
             },
             executor = { tool ->
-                val webSessionTool = ToolGetter.getWebSessionTools(context)
-                webSessionTool.invoke(tool)
+                val browserSessionTool = ToolGetter.getBrowserSessionTools(context)
+                browserSessionTool.invoke(tool)
             }
     )
 
     handler.registerTool(
-            name = "web_userscript_stop",
+            name = "browser_userscript_stop",
             descriptionGenerator = { tool ->
                 val scriptId = tool.parameters.find { it.name == "script_id" }?.value
                 val name = tool.parameters.find { it.name == "name" }?.value
-                "Disable web userscript ${scriptId ?: name ?: "(missing target)"}"
+                "Disable browser userscript ${scriptId ?: name ?: "(missing target)"}"
             },
             executor = { tool ->
-                val webSessionTool = ToolGetter.getWebSessionTools(context)
-                webSessionTool.invoke(tool)
+                val browserSessionTool = ToolGetter.getBrowserSessionTools(context)
+                browserSessionTool.invoke(tool)
             }
     )
 
     handler.registerTool(
-            name = "web_userscript_uninstall",
+            name = "browser_userscript_uninstall",
             descriptionGenerator = { tool ->
                 val scriptId = tool.parameters.find { it.name == "script_id" }?.value
                 val name = tool.parameters.find { it.name == "name" }?.value
-                "Uninstall web userscript ${scriptId ?: name ?: "(missing target)"}"
+                "Uninstall browser userscript ${scriptId ?: name ?: "(missing target)"}"
             },
             executor = { tool ->
-                val webSessionTool = ToolGetter.getWebSessionTools(context)
-                webSessionTool.invoke(tool)
+                val browserSessionTool = ToolGetter.getBrowserSessionTools(context)
+                browserSessionTool.invoke(tool)
             }
     )
 

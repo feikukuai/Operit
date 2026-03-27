@@ -7030,7 +7030,7 @@
     <string name="mcp_config_invalid_missing_server_entry">无效：缺少 mcpServers.%1$s</string>
     <string name="mcp_config_invalid_missing_command">无效：缺少 command</string>
 
-    <!-- StandardWebSessionTools Accessibility -->
+    <!-- StandardBrowserSessionTools Accessibility -->
     <string name="web_session_accessibility_web_content">网页内容</string>
     <string name="web_session_accessibility_minimize_panel">最小化网页会话面板</string>
     <string name="web_session_accessibility_close_current_session">关闭当前网页会话</string>

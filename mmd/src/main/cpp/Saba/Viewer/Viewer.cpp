@@ -472,6 +472,9 @@ bool Viewer::LoadModel(const std::string& modelPath, std::string* outError) {
     if (!glModel->Create(model)) {
         return fail("failed to create GL MMD model resources.");
     }
+    // This avatar preview uses a transparent background and centers the model on screen.
+    // Keeping Saba's ground shadow in that setup projects a dark silhouette into empty space.
+    glModel->EnableGroundShadow(false);
 
     auto drawer = std::make_shared<GLMMDModelDrawer>(m_mmdDrawContext.get(), glModel);
     if (!drawer->Create()) {

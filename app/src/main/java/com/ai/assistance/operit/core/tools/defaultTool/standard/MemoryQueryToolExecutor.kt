@@ -15,6 +15,7 @@ import com.ai.assistance.operit.data.preferences.MemorySearchSettingsPreferences
 import com.ai.assistance.operit.data.repository.MemoryRepository
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import java.text.ParsePosition
 import java.text.SimpleDateFormat
 import java.util.*
 import com.ai.assistance.operit.data.preferences.preferencesManager
@@ -29,6 +30,16 @@ class MemoryQueryToolExecutor(private val context: Context) : ToolExecutor {
 
     companion object {
         private const val TAG = "MemoryQueryToolExecutor"
+        private const val MAX_QUERY_SNAPSHOTS_PER_PROFILE = 32
+
+        private data class QuerySnapshotState(
+            val id: String,
+            val seenMemoryIds: MutableSet<Long> = ConcurrentHashMap.newKeySet<Long>(),
+            @Volatile var lastAccessAtMs: Long = System.currentTimeMillis()
+        )
+
+        private val querySnapshotsByProfile =
+            ConcurrentHashMap<String, ConcurrentHashMap<String, QuerySnapshotState>>()
     }
 
     private val memoryRepositories = ConcurrentHashMap<String, MemoryRepository>()
@@ -49,6 +60,72 @@ class MemoryQueryToolExecutor(private val context: Context) : ToolExecutor {
             val profileId = resolveActiveProfileId()
             return settingsRepositories.computeIfAbsent(profileId) { MemorySearchSettingsPreferences(context, it) }
         }
+
+    private fun getQuerySnapshotStore(profileId: String): ConcurrentHashMap<String, QuerySnapshotState> {
+        return querySnapshotsByProfile.computeIfAbsent(profileId) { ConcurrentHashMap() }
+    }
+
+    private fun createQuerySnapshot(profileId: String): QuerySnapshotState {
+        val store = getQuerySnapshotStore(profileId)
+        val snapshot = QuerySnapshotState(id = UUID.randomUUID().toString())
+        store[snapshot.id] = snapshot
+        trimOldSnapshots(store)
+        return snapshot
+    }
+
+    private fun getQuerySnapshot(profileId: String, snapshotId: String): QuerySnapshotState? {
+        val snapshot = getQuerySnapshotStore(profileId)[snapshotId] ?: return null
+        snapshot.lastAccessAtMs = System.currentTimeMillis()
+        return snapshot
+    }
+
+    private fun trimOldSnapshots(store: ConcurrentHashMap<String, QuerySnapshotState>) {
+        if (store.size <= MAX_QUERY_SNAPSHOTS_PER_PROFILE) {
+            return
+        }
+        val overflow = store.size - MAX_QUERY_SNAPSHOTS_PER_PROFILE
+        store.values
+            .sortedBy { it.lastAccessAtMs }
+            .take(overflow)
+            .forEach { stale ->
+                store.remove(stale.id, stale)
+            }
+    }
+
+    private fun parseTimeBoundary(value: String?, isEnd: Boolean): Long? {
+        val trimmed = value?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+        val timezone = TimeZone.getDefault()
+
+        fun parseExact(pattern: String): Date? {
+            val formatter = SimpleDateFormat(pattern, Locale.US).apply {
+                isLenient = false
+                timeZone = timezone
+            }
+            val position = ParsePosition(0)
+            val parsed = formatter.parse(trimmed, position)
+            return if (parsed != null && position.index == trimmed.length) parsed else null
+        }
+
+        parseExact("yyyy-MM-dd HH:mm")?.let { parsed ->
+            return Calendar.getInstance(timezone).apply {
+                time = parsed
+                set(Calendar.SECOND, if (isEnd) 59 else 0)
+                set(Calendar.MILLISECOND, if (isEnd) 999 else 0)
+            }.timeInMillis
+        }
+
+        parseExact("yyyy-MM-dd")?.let { parsed ->
+            return Calendar.getInstance(timezone).apply {
+                time = parsed
+                set(Calendar.HOUR_OF_DAY, if (isEnd) 23 else 0)
+                set(Calendar.MINUTE, if (isEnd) 59 else 0)
+                set(Calendar.SECOND, if (isEnd) 59 else 0)
+                set(Calendar.MILLISECOND, if (isEnd) 999 else 0)
+            }.timeInMillis
+        }
+
+        return null
+    }
 
     override fun invoke(tool: AITool): ToolResult = runBlocking {
         return@runBlocking when (tool.name) {
@@ -73,6 +150,7 @@ class MemoryQueryToolExecutor(private val context: Context) : ToolExecutor {
     }
 
     private suspend fun executeQueryMemory(tool: AITool): ToolResult {
+        val profileId = resolveActiveProfileId()
         val query = tool.parameters.find { it.name == "query" }?.value ?: ""
         val folderPath = tool.parameters.find { it.name == "folder_path" }?.value
         val settings = memorySearchSettingsPreferences.load()
@@ -81,24 +159,26 @@ class MemoryQueryToolExecutor(private val context: Context) : ToolExecutor {
         val limit = limitParam?.toIntOrNull()
         val startTimeParam = tool.parameters.find { it.name == "start_time" }?.value
         val endTimeParam = tool.parameters.find { it.name == "end_time" }?.value
+        val snapshotIdParam = tool.parameters.find { it.name == "snapshot_id" }?.value
+        val normalizedSnapshotId = snapshotIdParam?.trim()?.takeIf { it.isNotEmpty() }
 
-        val startTimeMs = startTimeParam?.takeIf { it.isNotBlank() }?.toLongOrNull()
+        val startTimeMs = parseTimeBoundary(startTimeParam, isEnd = false)
         if (!startTimeParam.isNullOrBlank() && startTimeMs == null) {
             return ToolResult(
                 toolName = tool.name,
                 success = false,
                 result = StringResultData(""),
-                error = "Invalid start_time. Expected Unix timestamp in milliseconds."
+                error = "Invalid start_time. Expected format YYYY-MM-DD or YYYY-MM-DD HH:mm."
             )
         }
 
-        val endTimeMs = endTimeParam?.takeIf { it.isNotBlank() }?.toLongOrNull()
+        val endTimeMs = parseTimeBoundary(endTimeParam, isEnd = true)
         if (!endTimeParam.isNullOrBlank() && endTimeMs == null) {
             return ToolResult(
                 toolName = tool.name,
                 success = false,
                 result = StringResultData(""),
-                error = "Invalid end_time. Expected Unix timestamp in milliseconds."
+                error = "Invalid end_time. Expected format YYYY-MM-DD or YYYY-MM-DD HH:mm."
             )
         }
 
@@ -128,10 +208,23 @@ class MemoryQueryToolExecutor(private val context: Context) : ToolExecutor {
         val validThreshold = threshold.coerceIn(0.0f, 1.0f)
         // limit 无上限，但至少为 1
         val validLimit = if (finalLimit < 1) 1 else finalLimit
+        val snapshotState =
+            if (normalizedSnapshotId == null) {
+                createQuerySnapshot(profileId)
+            } else {
+                getQuerySnapshot(profileId, normalizedSnapshotId)
+                    ?: return ToolResult(
+                        toolName = tool.name,
+                        success = false,
+                        result = StringResultData(""),
+                        error = "Unknown snapshot_id: $normalizedSnapshotId"
+                    )
+            }
+        val snapshotCreated = normalizedSnapshotId == null
 
         AppLogger.d(
             TAG,
-            "Executing memory query: '$query' in folder: '${folderPath ?: "All"}', start_time: ${startTimeMs ?: "null"}, end_time: ${endTimeMs ?: "null"}, threshold: $validThreshold, limit: $validLimit, mode=${settings.scoreMode}, keywordWeight=${settings.keywordWeight}, vectorWeight=${settings.vectorWeight}, edgeWeight=${settings.edgeWeight}"
+            "Executing memory query: '$query' in folder: '${folderPath ?: "All"}', snapshot_id=${snapshotState.id}, snapshot_created=$snapshotCreated, start_time: ${startTimeMs ?: "null"}, end_time: ${endTimeMs ?: "null"}, threshold: $validThreshold, limit: $validLimit, mode=${settings.scoreMode}, keywordWeight=${settings.keywordWeight}, vectorWeight=${settings.vectorWeight}, edgeWeight=${settings.edgeWeight}"
         )
 
         return try {
@@ -146,8 +239,23 @@ class MemoryQueryToolExecutor(private val context: Context) : ToolExecutor {
                 createdAtStartMs = startTimeMs,
                 createdAtEndMs = endTimeMs
             )
-            
-            val formattedResult = buildResultData(results.take(validLimit), query, validLimit)
+
+            val excludedBySnapshotCount = results.count { it.id in snapshotState.seenMemoryIds }
+            val unseenResults = results.filterNot { it.id in snapshotState.seenMemoryIds }
+            val returnedMemories = unseenResults.take(validLimit)
+            if (returnedMemories.isNotEmpty()) {
+                snapshotState.seenMemoryIds.addAll(returnedMemories.map { it.id })
+            }
+            snapshotState.lastAccessAtMs = System.currentTimeMillis()
+
+            val formattedResult = buildResultData(
+                memories = returnedMemories,
+                query = query,
+                limit = validLimit,
+                snapshotId = snapshotState.id,
+                snapshotCreated = snapshotCreated,
+                excludedBySnapshotCount = excludedBySnapshotCount
+            )
             AppLogger.d(TAG, "Memory query result for '$query':\n$formattedResult")
             ToolResult(toolName = tool.name, success = true, result = formattedResult)
         } catch (e: Exception) {
@@ -1047,7 +1155,14 @@ class MemoryQueryToolExecutor(private val context: Context) : ToolExecutor {
         }
     }
 
-    private suspend fun buildResultData(memories: List<Memory>, query: String, limit: Int): MemoryQueryResultData = withContext(Dispatchers.IO) {
+    private suspend fun buildResultData(
+        memories: List<Memory>,
+        query: String,
+        limit: Int,
+        snapshotId: String? = null,
+        snapshotCreated: Boolean = false,
+        excludedBySnapshotCount: Int = 0
+    ): MemoryQueryResultData = withContext(Dispatchers.IO) {
         val sdf = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
         // 当 limit > 20 时，只返回标题和截断内容
         val isTruncatedMode = limit > 20
@@ -1123,7 +1238,12 @@ class MemoryQueryToolExecutor(private val context: Context) : ToolExecutor {
                 chunkIndices = chunkIndices
             )
         }
-        MemoryQueryResultData(memories = memoryInfos)
+        MemoryQueryResultData(
+            memories = memoryInfos,
+            snapshotId = snapshotId,
+            snapshotCreated = snapshotCreated,
+            excludedBySnapshotCount = excludedBySnapshotCount
+        )
     }
 
 

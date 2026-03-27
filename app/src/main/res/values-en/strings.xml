@@ -7013,7 +7013,7 @@
     <string name="mcp_config_invalid_missing_server_entry">Invalid: missing mcpServers.%1$s</string>
     <string name="mcp_config_invalid_missing_command">Invalid: missing command</string>
 
-    <!-- StandardWebSessionTools Accessibility -->
+    <!-- StandardBrowserSessionTools Accessibility -->
     <string name="web_session_accessibility_web_content">Web content</string>
     <string name="web_session_accessibility_minimize_panel">Minimize web sessions panel</string>
     <string name="web_session_accessibility_close_current_session">Close current web session</string>

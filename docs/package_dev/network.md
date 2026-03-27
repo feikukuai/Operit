@@ -93,28 +93,28 @@ visit(
 - 既支持直接访问 URL。
 - 也支持基于已有 `visit_key` 继续访问某个链接。
 
-### 持久 Web 会话
+### 持久浏览器会话
 
-#### `startWeb(options?)`
+#### `startBrowser(options?)`
 
-启动一个持续存在的 Web 会话（浮窗 WebView），返回 `StringResultData`，其中 `value` 是 JSON 字符串。
+启动一个持续存在的浏览器会话（浮窗 WebView），返回 `StringResultData`，其中 `value` 是 JSON 字符串。
 
-#### `stopWeb(sessionIdOrOptions?)`
+#### `stopBrowser(sessionIdOrOptions?)`
 
 关闭指定会话或全部会话。
 
-#### `webNavigate(sessionId, url, headers?)`
+#### `browserNavigate(sessionId, url, headers?)`
 
 把某个会话导航到目标 URL。
 
-#### `webEval(sessionId, script, timeoutMs?)`
+#### `browserEval(sessionId, script, timeoutMs?)`
 
 在会话内执行 JavaScript。
 
-#### `webClick(options)`
+#### `browserClick(options)`
 
 ```ts
-webClick({
+browserClick({
   session_id?,
   ref,
   element?,
@@ -126,19 +126,19 @@ webClick({
 
 这里的 `ref` 通常来自快照结果中的节点引用。
 
-#### `webFill(sessionId, selector, value)`
+#### `browserFill(sessionId, selector, value)`
 
 按 CSS 选择器填充内容。
 
-#### `webWaitFor(sessionId, selector?, timeoutMs?)`
+#### `browserWaitFor(sessionId, selector?, timeoutMs?)`
 
 等待页面就绪或某个选择器出现。
 
-#### `webSnapshot(sessionId, options?)`
+#### `browserSnapshot(sessionId, options?)`
 
 获取当前页面的文本快照，可控制是否包含链接与图片。
 
-#### `webFileUpload(sessionId, paths?)`
+#### `browserFileUpload(sessionId, paths?)`
 
 处理页面文件选择器；未传 `paths` 时表示取消。
 
@@ -193,10 +193,10 @@ console.log(page.content);
 ### 持久会话中执行点击
 
 ```ts
-const started = await Tools.Net.startWeb({ url: 'https://example.com' });
+const started = await Tools.Net.startBrowser({ url: 'https://example.com' });
 const session = JSON.parse(started.value);
 
-await Tools.Net.webClick({
+await Tools.Net.browserClick({
   session_id: session.sessionId,
   ref: 'node_12',
   element: '登录按钮'
@@ -207,7 +207,7 @@ await Tools.Net.webClick({
 
 - 常规网络请求使用 `HttpResponseData`。
 - `visit()` 使用 `VisitWebResultData`。
-- Web 会话控制相关 API 多数返回 `StringResultData`，实际有效载荷通常放在 `value` 字段中，且常为 JSON 字符串。
+- 浏览器会话控制相关 API 多数返回 `StringResultData`，实际有效载荷通常放在 `value` 字段中，且常为 JSON 字符串。
 
 ## 相关文件
 

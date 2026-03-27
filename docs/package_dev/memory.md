@@ -21,7 +21,7 @@ Tools.Memory
 
 ### 记忆查询与读取
 
-#### `query(query, folderPath?, threshold?, limit?, startTime?, endTime?)`
+#### `query(query, folderPath?, threshold?, limit?, startTime?, endTime?, snapshotId?)`
 
 ```ts
 query(
@@ -29,16 +29,23 @@ query(
   folderPath?: string,
   threshold?: number,
   limit?: number,
-  startTime?: number,
-  endTime?: number
-): Promise<string>
+  startTime?: string,
+  endTime?: string,
+  snapshotId?: string
+): Promise<MemoryQueryResultData>
 ```
 
 说明：
 
 - `threshold` 为语义相似度阈值，默认注释值为 `0.35`。
 - `limit` 范围注释为 `1-20`，默认 `5`。
-- `startTime` / `endTime` 是毫秒时间戳过滤条件。
+- `startTime` / `endTime` 是本地时间字符串过滤条件，只支持 `YYYY-MM-DD` 和 `YYYY-MM-DD HH:mm` 两种格式。
+- `startTime` 使用起始边界：按天时会从 `00:00:00.000` 开始，按分钟时会从该分钟的 `00` 秒开始。
+- `endTime` 使用包含式结束边界：按天时会到 `23:59:59.999`，按分钟时会到该分钟的 `59.999` 秒。
+- `snapshotId` 不传或传空时，会创建一个新的查询快照，并在返回值里带回 `snapshotId`。
+- 后续复用这个 `snapshotId` 查询时，会自动排除该快照里已经返回过的记忆，并把本次新返回的记忆继续记入快照。
+- 返回结构体中包含 `memories[]`，每项有 `title`、`content`、`source`、`tags`、`createdAt`，文档型记忆还可能带 `chunkInfo` 与 `chunkIndices`。
+- 返回结构体还包含 `snapshotId`、`snapshotCreated`、`excludedBySnapshotCount`，用于分页式去重检索。
 
 #### `getByTitle(title, chunkIndex?, chunkRange?, query?)`
 
@@ -113,7 +120,8 @@ update(oldTitle: string, updates?: {
 
 `memory.d.ts` 有两类返回风格：
 
-- 记忆主体操作多数返回 `Promise<string>`。
+- `query()` 返回结构化结果 `MemoryQueryResultData`。
+- 记忆主体中的读取/写入操作多数返回 `Promise<string>`。
 - 链接相关操作使用结构化结果：`MemoryLinkResultData`、`MemoryLinkQueryResultData`。
 
 ## 示例
@@ -127,7 +135,38 @@ const result = await Tools.Memory.query(
   0.4,
   5
 );
-console.log(result);
+console.log(result.snapshotId);
+console.log(result.memories.map(item => item.title));
+```
+
+### 带时间范围查询
+
+```ts
+const result = await Tools.Memory.query(
+  '最近关于网络请求的笔记',
+  'dev/network',
+  0.4,
+  5,
+  '2026-03-01',
+  '2026-03-27 18:30'
+);
+console.log(result.memories.length);
+```
+
+### 使用快照排除已返回结果
+
+```ts
+const firstPage = await Tools.Memory.query('最近关于网络请求的笔记');
+const secondPage = await Tools.Memory.query(
+  '最近关于网络请求的笔记',
+  undefined,
+  undefined,
+  5,
+  undefined,
+  undefined,
+  firstPage.snapshotId || undefined
+);
+console.log(secondPage.excludedBySnapshotCount);
 ```
 
 ### 创建记忆

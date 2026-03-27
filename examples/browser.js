@@ -1,21 +1,21 @@
 /* METADATA
 {
-    "name": "web",
+    "name": "browser",
 
     "display_name": {
-        "zh": "Web 自动化操作",
-        "en": "Web Automation"
+        "zh": "Browser 自动化操作",
+        "en": "Browser Automation"
     },
     "description": {
-        "zh": "能够基于浏览器完成复杂的网页操作。",
-        "en": "Enables complex web operations based on a real browser session."
+        "zh": "能够基于真实浏览器会话完成复杂的浏览器自动化。",
+        "en": "Enables complex browser automation based on a real browser session."
     },
     "enabledByDefault": true,
     "category": "Automatic",
     "tools": [
         {
             "name": "start",
-            "description": { "zh": "启动网页会话并打开悬浮浏览窗口。", "en": "Start a web session and open a floating browser window." },
+            "description": { "zh": "启动浏览器会话并打开悬浮浏览窗口。", "en": "Start a browser session and open a floating browser window." },
             "parameters": [
                 { "name": "url", "description": { "zh": "可选，初始 URL", "en": "Optional initial URL." }, "type": "string", "required": false },
                 { "name": "headers", "description": { "zh": "可选，请求头对象", "en": "Optional request headers object." }, "type": "object", "required": false },
@@ -100,7 +100,7 @@
         },
         {
             "name": "upload",
-            "description": { "zh": "向网页文件选择器上传文件。paths 不传时取消当前 file chooser。", "en": "Upload files to an active web file chooser. If paths is omitted, cancels the current file chooser." },
+            "description": { "zh": "向浏览器文件选择器上传文件。paths 不传时取消当前 file chooser。", "en": "Upload files to an active browser file chooser. If paths is omitted, cancels the current file chooser." },
             "parameters": [
                 { "name": "session_id", "description": { "zh": "可选，不传则使用 Kotlin 侧当前活动会话", "en": "Optional. Uses active Kotlin-side session when omitted." }, "type": "string", "required": false },
                 { "name": "paths", "description": { "zh": "可选，绝对路径数组。示例：['/sdcard/Download/a.txt']", "en": "Optional absolute file path array. Example: ['/sdcard/Download/a.txt']" }, "type": "array", "required": false }
@@ -108,7 +108,7 @@
         },
         {
             "name": "close",
-            "description": { "zh": "关闭网页会话。", "en": "Close web session." },
+            "description": { "zh": "关闭浏览器会话。", "en": "Close browser session." },
             "parameters": [
                 { "name": "session_id", "description": { "zh": "可选，不传则关闭 Kotlin 侧当前活动会话", "en": "Optional. Closes active Kotlin-side session when omitted." }, "type": "string", "required": false },
                 { "name": "close_all", "description": { "zh": "可选，是否关闭全部会话", "en": "Optional, close all sessions." }, "type": "boolean", "required": false }
@@ -164,8 +164,8 @@
         }
     ]
 }*/
-const MAX_INLINE_WEB_CONTENT_CHARS = 24000;
-const Web = (function () {
+const MAX_INLINE_BROWSER_CONTENT_CHARS = 24000;
+const Browser = (function () {
     function toPayload(raw) {
         if (raw == null) {
             return {};
@@ -282,7 +282,7 @@ const Web = (function () {
         if (providedUrl.length > 0) {
             return providedUrl;
         }
-        const evalPayload = toPayload(await Tools.Net.webEval(sessionId, '(function(){ try { return window.location.href || document.URL || ""; } catch (e) { return ""; } })();', 3000));
+        const evalPayload = toPayload(await Tools.Net.browserEval(sessionId, '(function(){ try { return window.location.href || document.URL || ""; } catch (e) { return ""; } })();', 3000));
         const detectedUrl = extractUrlFromPayload(evalPayload);
         if (!detectedUrl) {
             throw new Error('url 参数缺失，且无法从当前会话获取 URL');
@@ -306,14 +306,14 @@ const Web = (function () {
     }
     async function persistPageContentIfTooLong(payload, sessionId) {
         const content = extractPageContent(payload);
-        if (!content || content.length <= MAX_INLINE_WEB_CONTENT_CHARS) {
+        if (!content || content.length <= MAX_INLINE_BROWSER_CONTENT_CHARS) {
             return payload;
         }
         await Tools.Files.mkdir(OPERIT_CLEAN_ON_EXIT_DIR, true);
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
         const rand = Math.floor(Math.random() * 1000000);
         const safeSessionId = sanitizeSessionId(sessionId);
-        const filePath = `${OPERIT_CLEAN_ON_EXIT_DIR}/web_content_${safeSessionId}_${timestamp}_${rand}.txt`;
+        const filePath = `${OPERIT_CLEAN_ON_EXIT_DIR}/browser_content_${safeSessionId}_${timestamp}_${rand}.txt`;
         await Tools.Files.write(filePath, content, false);
         return {
             ...payload,
@@ -325,7 +325,7 @@ const Web = (function () {
         };
     }
     async function start(params = {}) {
-        return toPayload(await Tools.Net.startWeb({
+        return toPayload(await Tools.Net.startBrowser({
             url: params.url,
             headers: normalizeHeaders(params.headers),
             user_agent: params.user_agent,
@@ -336,7 +336,7 @@ const Web = (function () {
         if (!params || !params.url) {
             throw new Error('url 参数必填');
         }
-        return toPayload(await Tools.Net.webNavigate(optionalSessionId(params.session_id), String(params.url), normalizeHeaders(params.headers)));
+        return toPayload(await Tools.Net.browserNavigate(optionalSessionId(params.session_id), String(params.url), normalizeHeaders(params.headers)));
     }
     async function click(params) {
         const ref = params && params.ref !== undefined && params.ref !== null
@@ -375,7 +375,7 @@ const Web = (function () {
             }
             modifiers = normalized;
         }
-        return toPayload(await Tools.Net.webClick({
+        return toPayload(await Tools.Net.browserClick({
             session_id: optionalSessionId(params?.session_id),
             ref,
             element: params && params.element !== undefined && params.element !== null
@@ -395,20 +395,20 @@ const Web = (function () {
         if (params.value === undefined || params.value === null) {
             throw new Error('value 参数必填');
         }
-        return toPayload(await Tools.Net.webFill(optionalSessionId(params.session_id), String(params.selector), String(params.value)));
+        return toPayload(await Tools.Net.browserFill(optionalSessionId(params.session_id), String(params.selector), String(params.value)));
     }
     async function evaluate(params) {
         if (!params || !params.script) {
             throw new Error('script 参数必填');
         }
-        return toPayload(await Tools.Net.webEval(optionalSessionId(params.session_id), String(params.script), params.timeout_ms !== undefined ? Number(params.timeout_ms) : undefined));
+        return toPayload(await Tools.Net.browserEval(optionalSessionId(params.session_id), String(params.script), params.timeout_ms !== undefined ? Number(params.timeout_ms) : undefined));
     }
     async function wait_for(params = {}) {
-        return toPayload(await Tools.Net.webWaitFor(optionalSessionId(params.session_id), params.selector !== undefined ? String(params.selector) : undefined, params.timeout_ms !== undefined ? Number(params.timeout_ms) : undefined));
+        return toPayload(await Tools.Net.browserWaitFor(optionalSessionId(params.session_id), params.selector !== undefined ? String(params.selector) : undefined, params.timeout_ms !== undefined ? Number(params.timeout_ms) : undefined));
     }
     async function snapshot(params = {}) {
         const sessionId = optionalSessionId(params.session_id);
-        const payload = toPayload(await Tools.Net.webSnapshot(sessionId, {
+        const payload = toPayload(await Tools.Net.browserSnapshot(sessionId, {
             include_links: params.include_links !== undefined ? Boolean(params.include_links) : undefined,
             include_images: params.include_images !== undefined ? Boolean(params.include_images) : undefined,
         }));
@@ -451,35 +451,35 @@ const Web = (function () {
             }
             paths = parsed.map((p) => String(p));
         }
-        return toPayload(await Tools.Net.webFileUpload(sessionId, paths));
+        return toPayload(await Tools.Net.browserFileUpload(sessionId, paths));
     }
     async function close(params = {}) {
         const closeAll = Boolean(params.close_all);
         if (closeAll) {
-            return toPayload(await Tools.Net.stopWeb({ close_all: true }));
+            return toPayload(await Tools.Net.stopBrowser({ close_all: true }));
         }
         const sid = optionalSessionId(params.session_id);
         if (sid) {
-            return toPayload(await Tools.Net.stopWeb({ session_id: sid, close_all: false }));
+            return toPayload(await Tools.Net.stopBrowser({ session_id: sid, close_all: false }));
         }
-        return toPayload(await Tools.Net.stopWeb({ close_all: false }));
+        return toPayload(await Tools.Net.stopBrowser({ close_all: false }));
     }
     async function userscript_list(params = {}) {
-        return toPayload(await Tools.Net.webUserscriptList({
+        return toPayload(await Tools.Net.browserUserscriptList({
             include_disabled: params.include_disabled !== undefined ? Boolean(params.include_disabled) : undefined,
         }));
     }
     async function userscript_install(params = {}) {
-        return toPayload(await Tools.Net.webUserscriptInstall(normalizeUserscriptInstallParams(params)));
+        return toPayload(await Tools.Net.browserUserscriptInstall(normalizeUserscriptInstallParams(params)));
     }
     async function userscript_start(params = {}) {
-        return toPayload(await Tools.Net.webUserscriptStart(normalizeUserscriptLocator(params, true)));
+        return toPayload(await Tools.Net.browserUserscriptStart(normalizeUserscriptLocator(params, true)));
     }
     async function userscript_stop(params = {}) {
-        return toPayload(await Tools.Net.webUserscriptStop(normalizeUserscriptLocator(params, true)));
+        return toPayload(await Tools.Net.browserUserscriptStop(normalizeUserscriptLocator(params, true)));
     }
     async function userscript_uninstall(params = {}) {
-        return toPayload(await Tools.Net.webUserscriptUninstall(normalizeUserscriptLocator(params, true)));
+        return toPayload(await Tools.Net.browserUserscriptUninstall(normalizeUserscriptLocator(params, true)));
     }
     async function wrap(toolName, fn, params) {
         try {
@@ -503,7 +503,7 @@ const Web = (function () {
     async function main() {
         complete({
             success: true,
-            message: 'Web 已就绪，可调用 start/goto/click/fill/evaluate/wait_for/snapshot/content/open_in_system_browser/upload/close/userscript_list/userscript_install/userscript_start/userscript_stop/userscript_uninstall',
+            message: 'Browser 已就绪，可调用 start/goto/click/fill/evaluate/wait_for/snapshot/content/open_in_system_browser/upload/close/userscript_list/userscript_install/userscript_start/userscript_stop/userscript_uninstall',
         });
     }
     return {
@@ -526,20 +526,20 @@ const Web = (function () {
         main,
     };
 })();
-exports.start = Web.start;
-exports.goto = Web.goto;
-exports.click = Web.click;
-exports.fill = Web.fill;
-exports.evaluate = Web.evaluate;
-exports.wait_for = Web.wait_for;
-exports.snapshot = Web.snapshot;
-exports.content = Web.content;
-exports.open_in_system_browser = Web.open_in_system_browser;
-exports.upload = Web.upload;
-exports.close = Web.close;
-exports.userscript_list = Web.userscript_list;
-exports.userscript_install = Web.userscript_install;
-exports.userscript_start = Web.userscript_start;
-exports.userscript_stop = Web.userscript_stop;
-exports.userscript_uninstall = Web.userscript_uninstall;
-exports.main = Web.main;
+exports.start = Browser.start;
+exports.goto = Browser.goto;
+exports.click = Browser.click;
+exports.fill = Browser.fill;
+exports.evaluate = Browser.evaluate;
+exports.wait_for = Browser.wait_for;
+exports.snapshot = Browser.snapshot;
+exports.content = Browser.content;
+exports.open_in_system_browser = Browser.open_in_system_browser;
+exports.upload = Browser.upload;
+exports.close = Browser.close;
+exports.userscript_list = Browser.userscript_list;
+exports.userscript_install = Browser.userscript_install;
+exports.userscript_start = Browser.userscript_start;
+exports.userscript_stop = Browser.userscript_stop;
+exports.userscript_uninstall = Browser.userscript_uninstall;
+exports.main = Browser.main;
