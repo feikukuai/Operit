@@ -4,9 +4,8 @@ import android.content.Context
 import com.ai.assistance.operit.data.preferences.ActivePromptManager
 import com.ai.assistance.operit.data.repository.CustomEmojiRepository
 import com.ai.assistance.operit.util.markdown.MarkdownProcessorType
-import com.ai.assistance.operit.util.markdown.NestedMarkdownProcessor
-import com.ai.assistance.operit.util.stream.splitBy as streamSplitBy
 import com.ai.assistance.operit.util.stream.stream
+import com.ai.assistance.operit.util.streamnative.nativeMarkdownSplitByBlock
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import java.io.File
@@ -262,9 +261,9 @@ object WaifuMessageProcessor {
 
         runBlocking {
             content.stream()
-                .streamSplitBy(NestedMarkdownProcessor.getBlockPlugins())
+                .nativeMarkdownSplitByBlock()
                 .collect { blockGroup ->
-                    val blockType = NestedMarkdownProcessor.getTypeForPlugin(blockGroup.tag)
+                    val blockType = blockGroup.tag ?: MarkdownProcessorType.PLAIN_TEXT
                     val sb = StringBuilder()
                     blockGroup.stream.collect { sb.append(it) }
                     val block = sb.toString()

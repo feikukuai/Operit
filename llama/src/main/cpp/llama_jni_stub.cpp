@@ -203,12 +203,32 @@ Java_com_ai_assistance_llama_LlamaNative_nativeGetUnavailableReason(JNIEnv * env
 }
 
 extern "C" JNIEXPORT jlong JNICALL
-Java_com_ai_assistance_llama_LlamaNative_nativeCreateSession(JNIEnv * env, jclass clazz, jstring pathModel, jint nThreads, jint nCtx) {
+Java_com_ai_assistance_llama_LlamaNative_nativeCreateSession(
+        JNIEnv * env,
+        jclass clazz,
+        jstring pathModel,
+        jint nThreads,
+        jint nCtx,
+        jint nBatch,
+        jint nUBatch,
+        jint nGpuLayers,
+        jboolean useMmap,
+        jboolean flashAttention,
+        jboolean kvUnified,
+        jboolean offloadKqv
+) {
     (void) env;
     (void) clazz;
     (void) pathModel;
     (void) nThreads;
     (void) nCtx;
+    (void) nBatch;
+    (void) nUBatch;
+    (void) nGpuLayers;
+    (void) useMmap;
+    (void) flashAttention;
+    (void) kvUnified;
+    (void) offloadKqv;
     return 0;
 }
 
@@ -375,6 +395,18 @@ static void ensureBackendInit() {
         std::srand(static_cast<unsigned int>(std::time(nullptr)));
         LOGI("llama_backend_init done");
     });
+}
+
+static uint32_t positiveOrDefaultUInt(jint value, uint32_t defaultValue) {
+    return value > 0 ? static_cast<uint32_t>(value) : defaultValue;
+}
+
+static int32_t positiveOrDefaultInt(jint value, int32_t defaultValue) {
+    return value > 0 ? static_cast<int32_t>(value) : defaultValue;
+}
+
+static bool jbooleanToBool(jboolean value) {
+    return value == JNI_TRUE;
 }
 
 static bool abortCallback(void * user_data) {
@@ -627,12 +659,35 @@ Java_com_ai_assistance_llama_LlamaNative_nativeGetUnavailableReason(JNIEnv * env
 }
 
 extern "C" JNIEXPORT jlong JNICALL
-Java_com_ai_assistance_llama_LlamaNative_nativeCreateSession(JNIEnv * env, jclass clazz, jstring pathModel, jint nThreads, jint nCtx) {
+Java_com_ai_assistance_llama_LlamaNative_nativeCreateSession(
+        JNIEnv * env,
+        jclass clazz,
+        jstring pathModel,
+        jint nThreads,
+        jint nCtx,
+        jint nBatch,
+        jint nUBatch,
+        jint nGpuLayers,
+        jboolean useMmap,
+        jboolean flashAttention,
+        jboolean kvUnified,
+        jboolean offloadKqv
+) {
     (void) clazz;
     ensureBackendInit();
 
     const std::string modelPath = jstringToString(env, pathModel);
-    LOGI("Creating llama session. model=%s threads=%d n_ctx=%d", modelPath.c_str(), (int) nThreads, (int) nCtx);
+    const int32_t effectiveThreads = positiveOrDefaultInt(nThreads, 4);
+    const bool gpuOffloadSupported = llama_supports_gpu_offload();
+    const int32_t requestedGpuLayers = std::max<int32_t>(0, static_cast<int32_t>(nGpuLayers));
+    const int32_t effectiveGpuLayers = gpuOffloadSupported ? requestedGpuLayers : 0;
+    const bool effectiveUseMmap = jbooleanToBool(useMmap);
+    const bool effectiveFlashAttention = jbooleanToBool(flashAttention);
+    const bool effectiveKvUnified = jbooleanToBool(kvUnified);
+    const bool effectiveOffloadKqv =
+        gpuOffloadSupported &&
+        effectiveGpuLayers > 0 &&
+        jbooleanToBool(offloadKqv);
 
     auto * session = new (std::nothrow) LlamaSessionNative();
     if (!session) {
@@ -641,9 +696,29 @@ Java_com_ai_assistance_llama_LlamaNative_nativeCreateSession(JNIEnv * env, jclas
     }
 
     llama_model_params mparams = llama_model_default_params();
-    mparams.n_gpu_layers = 0;
-    mparams.use_mmap = true;
+    mparams.n_gpu_layers = effectiveGpuLayers;
+    mparams.use_mmap = effectiveUseMmap;
     mparams.use_mlock = false;
+    mparams.use_extra_bufts = true;
+
+    LOGI(
+        "Creating llama session. model=%s threads=%d n_ctx=%d n_batch=%d n_ubatch=%d gpu_layers=%d use_mmap=%d flash_attn=%d kv_unified=%d offload_kqv=%d gpu_support=%d",
+        modelPath.c_str(),
+        effectiveThreads,
+        static_cast<int>(nCtx),
+        static_cast<int>(nBatch),
+        static_cast<int>(nUBatch),
+        effectiveGpuLayers,
+        effectiveUseMmap ? 1 : 0,
+        effectiveFlashAttention ? 1 : 0,
+        effectiveKvUnified ? 1 : 0,
+        effectiveOffloadKqv ? 1 : 0,
+        gpuOffloadSupported ? 1 : 0
+    );
+
+    if (requestedGpuLayers > 0 && !gpuOffloadSupported) {
+        LOGI("GPU layers requested but this build has no GPU offload backend; continuing on CPU");
+    }
 
     session->model = llama_model_load_from_file(modelPath.c_str(), mparams);
     if (!session->model) {
@@ -661,12 +736,20 @@ Java_com_ai_assistance_llama_LlamaNative_nativeCreateSession(JNIEnv * env, jclas
     }
 
     llama_context_params cparams = llama_context_default_params();
-    cparams.n_ctx = nCtx > 0 ? static_cast<uint32_t>(nCtx) : 0;
+    cparams.n_ctx = positiveOrDefaultUInt(nCtx, 0u);
     if (cparams.n_ctx == 0) {
         cparams.n_ctx = static_cast<uint32_t>(llama_model_n_ctx_train(session->model));
     }
-    cparams.n_batch = cparams.n_ctx;
-    cparams.n_ubatch = std::min<uint32_t>(cparams.n_batch, 512u);
+    const uint32_t defaultBatch = std::min<uint32_t>(cparams.n_ctx, 512u);
+    cparams.n_batch = std::min<uint32_t>(positiveOrDefaultUInt(nBatch, defaultBatch), cparams.n_ctx);
+    cparams.n_ubatch = std::min<uint32_t>(positiveOrDefaultUInt(nUBatch, cparams.n_batch), cparams.n_batch);
+    cparams.n_seq_max = 1;
+    cparams.n_threads = effectiveThreads;
+    cparams.n_threads_batch = effectiveThreads;
+    cparams.flash_attn_type =
+        effectiveFlashAttention ? LLAMA_FLASH_ATTN_TYPE_ENABLED : LLAMA_FLASH_ATTN_TYPE_DISABLED;
+    cparams.offload_kqv = effectiveOffloadKqv;
+    cparams.kv_unified = effectiveKvUnified;
     cparams.abort_callback = abortCallback;
     cparams.abort_callback_data = session;
 
@@ -678,7 +761,7 @@ Java_com_ai_assistance_llama_LlamaNative_nativeCreateSession(JNIEnv * env, jclas
         return 0;
     }
 
-    llama_set_n_threads(session->ctx, nThreads, nThreads);
+    llama_set_n_threads(session->ctx, effectiveThreads, effectiveThreads);
 
     session->samplingParams = SamplingParamsNative{};
     session->samplingParams.seed = static_cast<uint32_t>(std::rand());

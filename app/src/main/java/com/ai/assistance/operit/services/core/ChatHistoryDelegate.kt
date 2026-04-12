@@ -48,6 +48,7 @@ class ChatHistoryDelegate(
     private val historyUpdateMutex = Mutex()
     private val allowAddMessage = AtomicBoolean(true) // 控制是否允许添加消息，切换对话时设为false
     private var beforeDestructiveHistoryMutation: (suspend (String) -> Unit)? = null
+    private var afterDestructiveHistoryMutation: (suspend (String) -> Unit)? = null
 
     private var pendingPersistChatOrderJob: Job? = null
 
@@ -62,8 +63,50 @@ class ChatHistoryDelegate(
         beforeDestructiveHistoryMutation = handler
     }
 
+    fun setAfterDestructiveHistoryMutation(handler: suspend (String) -> Unit) {
+        afterDestructiveHistoryMutation = handler
+    }
+
     private suspend fun prepareChatForDestructiveMutation(chatId: String) {
         beforeDestructiveHistoryMutation?.invoke(chatId)
+    }
+
+    private suspend fun finishDestructiveHistoryMutation(chatId: String) {
+        afterDestructiveHistoryMutation?.invoke(chatId)
+    }
+
+    private suspend fun runDestructiveHistoryMutation(
+        chatId: String,
+        mutation: suspend () -> Boolean
+    ) {
+        prepareChatForDestructiveMutation(chatId)
+        val didMutate = historyUpdateMutex.withLock { mutation() }
+        if (didMutate) {
+            finishDestructiveHistoryMutation(chatId)
+        }
+    }
+
+    private suspend fun runCurrentChatDestructiveHistoryMutation(
+        mismatchMessage: String,
+        mutation: suspend (String) -> Boolean
+    ) {
+        val chatIdSnapshot = _currentChatId.value ?: return
+        prepareChatForDestructiveMutation(chatIdSnapshot)
+        val didMutate =
+            historyUpdateMutex.withLock {
+                val currentChatId = _currentChatId.value
+                if (currentChatId != chatIdSnapshot) {
+                    AppLogger.w(
+                        TAG,
+                        "$mismatchMessage: expected=$chatIdSnapshot, actual=$currentChatId"
+                    )
+                    return@withLock false
+                }
+                mutation(chatIdSnapshot)
+            }
+        if (didMutate) {
+            finishDestructiveHistoryMutation(chatIdSnapshot)
+        }
     }
 
     suspend fun getChatHistory(chatId: String): List<ChatMessage> {
@@ -535,27 +578,24 @@ class ChatHistoryDelegate(
     /** 删除单条消息 */
     fun deleteMessage(index: Int) {
         coroutineScope.launch {
-            historyUpdateMutex.withLock {
-                _currentChatId.value?.let { chatId ->
-                    val currentMessages = _chatHistory.value.toMutableList()
-                    if (index >= 0 && index < currentMessages.size) {
-                        val messageToDelete = currentMessages[index]
-
-                        // 从数据库删除
-                        chatHistoryManager.deleteMessage(chatId, messageToDelete.timestamp)
-
-                        // 从内存中删除
-                        currentMessages.removeAt(index)
-                        _chatHistory.value = currentMessages
-                    }
+            runCurrentChatDestructiveHistoryMutation("删除消息时当前会话已变化，放弃操作") { chatId ->
+                val currentMessages = _chatHistory.value.toMutableList()
+                if (index < 0 || index >= currentMessages.size) {
+                    return@runCurrentChatDestructiveHistoryMutation false
                 }
+
+                val messageToDelete = currentMessages[index]
+                chatHistoryManager.deleteMessage(chatId, messageToDelete.timestamp)
+                currentMessages.removeAt(index)
+                _chatHistory.value = currentMessages
+                true
             }
         }
     }
 
     fun deleteMessageByTimestamp(chatId: String, timestamp: Long) {
         coroutineScope.launch {
-            historyUpdateMutex.withLock {
+            runDestructiveHistoryMutation(chatId) {
                 chatHistoryManager.deleteMessage(chatId, timestamp)
 
                 if (_currentChatId.value == chatId) {
@@ -565,25 +605,25 @@ class ChatHistoryDelegate(
                         _chatHistory.value = newMessages
                     }
                 }
+                true
             }
         }
     }
 
     /** 从指定索引删除后续所有消息 */
     suspend fun deleteMessagesFrom(index: Int) {
-        historyUpdateMutex.withLock {
-            _currentChatId.value?.let { chatId ->
+        runCurrentChatDestructiveHistoryMutation("批量删除后续消息时当前会话已变化，放弃操作") { chatId ->
                 val currentMessages = _chatHistory.value
-                if (index >= 0 && index < currentMessages.size) {
-                    val messageToStartDeletingFrom = currentMessages[index]
-                    val newHistory = currentMessages.subList(0, index)
-
-                    // 直接在这里处理数据库和内存更新，避免重复加锁
-                    chatHistoryManager.deleteMessagesFrom(chatId, messageToStartDeletingFrom.timestamp)
-                    _chatHistory.value = newHistory
+                if (index < 0 || index >= currentMessages.size) {
+                    return@runCurrentChatDestructiveHistoryMutation false
                 }
+
+                val messageToStartDeletingFrom = currentMessages[index]
+                val newHistory = currentMessages.subList(0, index)
+                chatHistoryManager.deleteMessagesFrom(chatId, messageToStartDeletingFrom.timestamp)
+                _chatHistory.value = newHistory
+                true
             }
-        }
     }
 
     /** 清空当前聊天 */
@@ -819,19 +859,7 @@ class ChatHistoryDelegate(
      * @param timestampOfFirstDeletedMessage 用于删除数据库记录的起始时间戳。如果为null，则清空所有消息。
      */
     suspend fun truncateChatHistory(newHistory: List<ChatMessage>, timestampOfFirstDeletedMessage: Long?) {
-        val chatIdSnapshot = _currentChatId.value ?: return
-        prepareChatForDestructiveMutation(chatIdSnapshot)
-
-        historyUpdateMutex.withLock {
-            val currentChatId = _currentChatId.value
-            if (currentChatId != chatIdSnapshot) {
-                AppLogger.w(
-                    TAG,
-                    "截断聊天历史时当前会话已变化，放弃操作: expected=$chatIdSnapshot, actual=$currentChatId"
-                )
-                return@withLock
-            }
-
+        runCurrentChatDestructiveHistoryMutation("截断聊天历史时当前会话已变化，放弃操作") { chatIdSnapshot ->
             if (timestampOfFirstDeletedMessage != null) {
                 // 从数据库中删除指定时间戳之后的消息
                 chatHistoryManager.deleteMessagesFrom(
@@ -845,6 +873,7 @@ class ChatHistoryDelegate(
 
             // 更新内存中的聊天记录
             _chatHistory.value = newHistory
+            true
         }
     }
 
@@ -965,17 +994,19 @@ class ChatHistoryDelegate(
                 return@withLock
             }
 
-            // 在预先计算好的位置插入总结消息
-            currentMessages.add(insertPosition, summaryMessage)
+            val persistedSummaryMessage =
+                chatHistoryManager.addMessage(chatId, summaryMessage, insertPosition)
+
+            // 这里必须使用最终持久化后的消息。
+            // 位置插入会按实际顺序重排时间戳，如果内存继续保留旧时间戳，
+            // 后续编辑保存会因按时间戳找不到原记录而退化成插入新消息。
+            currentMessages.add(insertPosition, persistedSummaryMessage)
             AppLogger.d(TAG, "在预计算索引 $insertPosition 处添加总结消息，更新后总消息数量: ${currentMessages.size}")
 
             // 更新消息列表
             if (isCurrentChat) {
                 _chatHistory.value = currentMessages
             }
-
-            // 使用带有索引的重载方法更新数据库
-            chatHistoryManager.addMessage(chatId, summaryMessage, insertPosition)
         }
     }
 

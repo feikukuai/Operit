@@ -92,18 +92,18 @@ export namespace SoftwareSettings {
         enable_summary?: boolean;
         enable_summary_by_message_count?: boolean;
         summary_message_count_threshold?: number;
-        custom_parameters?: string;
-        custom_headers?: string;
+        custom_parameters?: string | Record<string, unknown>;
+        custom_headers?: string | Record<string, string>;
         enable_direct_image_processing?: boolean;
         enable_direct_audio_processing?: boolean;
         enable_direct_video_processing?: boolean;
         enable_google_search?: boolean;
         enable_tool_call?: boolean;
-        strict_tool_call?: boolean;
         mnn_forward_type?: number;
         mnn_thread_count?: number;
         llama_thread_count?: number;
         llama_context_size?: number;
+        llama_gpu_layers?: number;
         request_limit_per_minute?: number;
         max_concurrent_requests?: number;
     }

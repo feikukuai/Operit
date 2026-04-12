@@ -263,8 +263,8 @@ class ChatHistoryManager private constructor(private val context: Context) {
         }
     }
 
-    // 添加单条消息
-    suspend fun addMessage(chatId: String, message: ChatMessage, position: Int? = null) {
+    // 添加单条消息，并返回最终持久化的消息（位置插入时时间戳可能被重排）
+    suspend fun addMessage(chatId: String, message: ChatMessage, position: Int? = null): ChatMessage {
         chatMutex(chatId).withLock {
             try {
                 val messageToPersist =
@@ -317,6 +317,8 @@ class ChatHistoryManager private constructor(private val context: Context) {
                         currentWindowSize = chat.currentWindowSize
                     )
                 }
+
+                return messageToPersist
             } catch (e: Exception) {
                 AppLogger.e(TAG, "Failed to add message for chat $chatId", e)
                 throw e

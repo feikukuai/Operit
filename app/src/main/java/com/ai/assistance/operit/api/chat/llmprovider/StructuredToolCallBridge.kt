@@ -58,7 +58,13 @@ internal object StructuredToolCallBridge {
         for ((role, content) in mergedHistory) {
             when (role) {
                 "assistant" -> {
-                    val (textContent, toolCalls) = parseXmlToolCalls(content)
+                    val (textContent, parsedToolCalls) = parseXmlToolCalls(content)
+                    val toolCalls =
+                        if (parsedToolCalls != null) {
+                            wrapPackageToolCallsWithProxy(parsedToolCalls)
+                        } else {
+                            parsedToolCalls
+                        }
                     val historyMessage = JSONObject().apply {
                         put("role", role)
                     }
@@ -433,6 +439,44 @@ internal object StructuredToolCallBridge {
         }
 
         return textContent.trim() to toolCalls
+    }
+
+    private fun wrapPackageToolCallsWithProxy(toolCalls: JSONArray): JSONArray {
+        val wrappedToolCalls = JSONArray()
+
+        for (i in 0 until toolCalls.length()) {
+            val toolCall = toolCalls.optJSONObject(i) ?: continue
+            val function = toolCall.optJSONObject("function")
+            if (function == null) {
+                wrappedToolCalls.put(toolCall)
+                continue
+            }
+
+            val toolName = function.optString("name", "")
+            if (!toolName.contains(":") || toolName == "package_proxy") {
+                wrappedToolCalls.put(toolCall)
+                continue
+            }
+
+            val rawArguments = function.optString("arguments", "{}")
+            val originalArguments = JSONObject(if (rawArguments.isBlank()) "{}" else rawArguments)
+            val wrappedFunction = JSONObject(function.toString()).apply {
+                put("name", "package_proxy")
+                put(
+                    "arguments",
+                    JSONObject().apply {
+                        put("tool_name", toolName)
+                        put("params", originalArguments)
+                    }.toString()
+                )
+            }
+
+            wrappedToolCalls.put(JSONObject(toolCall.toString()).apply {
+                put("function", wrappedFunction)
+            })
+        }
+
+        return wrappedToolCalls
     }
 
     private fun parseXmlToolResults(content: String): Pair<String, List<ToolResultRecord>?> {

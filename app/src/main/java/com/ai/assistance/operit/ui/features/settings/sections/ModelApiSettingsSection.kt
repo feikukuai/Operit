@@ -109,10 +109,11 @@ fun ModelApiSettingsSection(
     var mnnForwardTypeInput by remember(config.id) { mutableStateOf(config.mnnForwardType) }
     var mnnThreadCountInput by remember(config.id) { mutableStateOf(config.mnnThreadCount.toString()) }
 
-    // llama.cpp 特定配置状态
+    // llama.cpp 常用配置状态
     var llamaThreadCountInput by remember(config.id) { mutableStateOf(config.llamaThreadCount.toString()) }
     var llamaContextSizeInput by remember(config.id) { mutableStateOf(config.llamaContextSize.toString()) }
-    
+    var llamaGpuLayersInput by remember(config.id) { mutableStateOf(config.llamaGpuLayers.toString()) }
+
     // 图片处理配置状态
     var enableDirectImageProcessingInput by remember(config.id) { mutableStateOf(config.enableDirectImageProcessing) }
 
@@ -125,13 +126,6 @@ fun ModelApiSettingsSection(
     
     // Tool Call配置状态
     var enableToolCallInput by remember(config.id) { mutableStateOf(config.enableToolCall) }
-    var strictToolCallInput by remember(config.id) { mutableStateOf(config.strictToolCall) }
-
-    LaunchedEffect(enableToolCallInput) {
-        if (!enableToolCallInput) {
-            strictToolCallInput = false
-        }
-    }
 
     data class ApiAutoSaveState(
         val apiEndpoint: String,
@@ -142,12 +136,12 @@ fun ModelApiSettingsSection(
         val mnnThreadCount: Int,
         val llamaThreadCount: Int,
         val llamaContextSize: Int,
+        val llamaGpuLayers: Int,
         val enableDirectImageProcessing: Boolean,
         val enableDirectAudioProcessing: Boolean,
         val enableDirectVideoProcessing: Boolean,
         val enableGoogleSearch: Boolean,
         val enableToolCall: Boolean,
-        val strictToolCall: Boolean,
     )
 
     // 保存设置的通用函数
@@ -164,12 +158,12 @@ fun ModelApiSettingsSection(
                     mnnThreadCount = state.mnnThreadCount,
                     llamaThreadCount = state.llamaThreadCount,
                     llamaContextSize = state.llamaContextSize,
+                    llamaGpuLayers = state.llamaGpuLayers,
                     enableDirectImageProcessing = state.enableDirectImageProcessing,
                     enableDirectAudioProcessing = state.enableDirectAudioProcessing,
                     enableDirectVideoProcessing = state.enableDirectVideoProcessing,
                     enableGoogleSearch = state.enableGoogleSearch,
                     enableToolCall = state.enableToolCall,
-                    strictToolCall = state.strictToolCall,
                 )
 
                 EnhancedAIService.refreshAllServices(
@@ -187,14 +181,14 @@ fun ModelApiSettingsSection(
             provider = selectedApiProvider,
             mnnForwardType = mnnForwardTypeInput,
             mnnThreadCount = mnnThreadCountInput.toIntOrNull() ?: 4,
-            llamaThreadCount = llamaThreadCountInput.toIntOrNull() ?: 4,
-            llamaContextSize = llamaContextSizeInput.toIntOrNull() ?: 4096,
+            llamaThreadCount = llamaThreadCountInput.toIntOrNull()?.coerceAtLeast(1) ?: 4,
+            llamaContextSize = llamaContextSizeInput.toIntOrNull()?.coerceAtLeast(1) ?: 2048,
+            llamaGpuLayers = llamaGpuLayersInput.toIntOrNull()?.coerceAtLeast(0) ?: 0,
             enableDirectImageProcessing = enableDirectImageProcessingInput,
             enableDirectAudioProcessing = enableDirectAudioProcessingInput,
             enableDirectVideoProcessing = enableDirectVideoProcessingInput,
             enableGoogleSearch = enableGoogleSearchInput,
             enableToolCall = enableToolCallInput,
-            strictToolCall = strictToolCallInput,
         )
     }
 
@@ -406,6 +400,12 @@ fun ModelApiSettingsSection(
                     onContextSizeChange = { input ->
                         if (input.isEmpty() || input.toIntOrNull() != null) {
                             llamaContextSizeInput = input
+                        }
+                    },
+                    llamaGpuLayersInput = llamaGpuLayersInput,
+                    onGpuLayersChange = { input ->
+                        if (input.isEmpty() || input.toIntOrNull() != null) {
+                            llamaGpuLayersInput = input
                         }
                     }
                 )
@@ -714,22 +714,8 @@ fun ModelApiSettingsSection(
                 title = stringResource(R.string.enable_tool_call),
                 subtitle = stringResource(R.string.enable_tool_call_desc),
                 checked = enableToolCallInput,
-                onCheckedChange = {
-                    enableToolCallInput = it
-                    if (!it) {
-                        strictToolCallInput = false
-                    }
-                }
+                onCheckedChange = { enableToolCallInput = it }
             )
-
-            if (enableToolCallInput) {
-                SettingsSwitchRow(
-                    title = stringResource(R.string.strict_tool_call),
-                    subtitle = stringResource(R.string.strict_tool_call_desc),
-                    checked = strictToolCallInput,
-                    onCheckedChange = { strictToolCallInput = it }
-                )
-            }
 
         }
     }
@@ -1432,7 +1418,9 @@ private fun LlamaSettingsBlock(
         llamaThreadCountInput: String,
         onThreadCountChange: (String) -> Unit,
         llamaContextSizeInput: String,
-        onContextSizeChange: (String) -> Unit
+        onContextSizeChange: (String) -> Unit,
+        llamaGpuLayersInput: String,
+        onGpuLayersChange: (String) -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         SettingsInfoBanner(text = stringResource(R.string.llama_local_model_tip))
@@ -1461,15 +1449,31 @@ private fun LlamaSettingsBlock(
 
         SettingsTextField(
                 title = stringResource(R.string.llama_context_size),
+                subtitle = stringResource(R.string.llama_context_size_subtitle),
                 value = llamaContextSizeInput,
                 onValueChange = onContextSizeChange,
-                placeholder = "4096",
+                placeholder = "2048",
                 keyboardOptions = KeyboardOptions(
                         keyboardType = KeyboardType.Number,
                         imeAction = ImeAction.Next
                 ),
                 valueFilter = { input -> input.filter { it.isDigit() } }
         )
+
+        SettingsTextField(
+                title = stringResource(R.string.llama_gpu_layers),
+                subtitle = stringResource(R.string.llama_gpu_layers_subtitle),
+                value = llamaGpuLayersInput,
+                onValueChange = onGpuLayersChange,
+                placeholder = "0",
+                keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Number,
+                        imeAction = ImeAction.Next
+                ),
+                valueFilter = { input -> input.filter { it.isDigit() } }
+        )
+
+        SettingsInfoBanner(text = stringResource(R.string.llama_auto_config_tip))
     }
 }
 

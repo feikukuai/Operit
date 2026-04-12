@@ -1195,12 +1195,18 @@ export interface ModelConfigResultItem {
     mnnThreadCount: number;
     llamaThreadCount: number;
     llamaContextSize: number;
+    llamaBatchSize: number;
+    llamaUBatchSize: number;
+    llamaGpuLayers: number;
+    llamaUseMmap: boolean;
+    llamaFlashAttention: boolean;
+    llamaKvUnified: boolean;
+    llamaOffloadKqv: boolean;
     enableDirectImageProcessing: boolean;
     enableDirectAudioProcessing: boolean;
     enableDirectVideoProcessing: boolean;
     enableGoogleSearch: boolean;
     enableToolCall: boolean;
-    strictToolCall: boolean;
     requestLimitPerMinute: number;
     maxConcurrentRequests: number;
     useMultipleApiKeys: boolean;
@@ -1289,7 +1295,6 @@ export interface ModelConfigConnectionTestResultData {
     requestedModelIndex: number;
     actualModelIndex: number;
     testedModelName: string;
-    strictToolCallFallbackUsed: boolean;
     success: boolean;
     totalTests: number;
     passedTests: number;

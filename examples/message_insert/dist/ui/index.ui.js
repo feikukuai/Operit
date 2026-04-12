@@ -40,12 +40,12 @@ function createDivider(ctx) {
         thickness: 1,
     });
 }
-function createToggleCard(ctx, title, subtitle, checked, onCheckedChange) {
+function createToggleCard(ctx, title, subtitle, checked, onCheckedChange, enabled = true) {
     return ctx.UI.Surface(toggleCardStyle, [
-        createToggleRow(ctx, title, subtitle, checked, onCheckedChange),
+        createToggleRow(ctx, title, subtitle, checked, onCheckedChange, enabled),
     ]);
 }
-function createToggleRow(ctx, title, subtitle, checked, onCheckedChange) {
+function createToggleRow(ctx, title, subtitle, checked, onCheckedChange, enabled = true) {
     return ctx.UI.Row({
         fillMaxWidth: true,
         padding: { horizontal: 14, vertical: 12 },
@@ -67,11 +67,12 @@ function createToggleRow(ctx, title, subtitle, checked, onCheckedChange) {
         ctx.UI.Spacer({ width: 12 }),
         ctx.UI.Switch({
             checked,
+            enabled,
             onCheckedChange,
         }),
     ]);
 }
-function createMemoryConfigSection(ctx, text, enabled, thresholdValue, limitValue, onThresholdChange, onLimitChange, onApply) {
+function createMemoryConfigSection(ctx, text, enabled, allowRepeatedMemorySearch, onAllowRepeatedMemorySearchChange, thresholdValue, limitValue, onThresholdChange, onLimitChange, onApply) {
     return ctx.UI.Column({
         fillMaxWidth: true,
         padding: { horizontal: 14, vertical: 12 },
@@ -87,6 +88,8 @@ function createMemoryConfigSection(ctx, text, enabled, thresholdValue, limitValu
             style: "bodySmall",
             color: "onSurfaceVariant",
         }),
+        createToggleRow(ctx, text.memoryRepeatToggleTitle, text.memoryRepeatToggleDescription, allowRepeatedMemorySearch, onAllowRepeatedMemorySearchChange, enabled),
+        createDivider(ctx),
         ctx.UI.TextField({
             enabled,
             label: text.memoryThresholdFieldLabel,
@@ -124,7 +127,7 @@ function createMemoryConfigSection(ctx, text, enabled, thresholdValue, limitValu
 function createInjectionItemsCard(ctx, items, memoryConfigSection) {
     const children = [];
     items.forEach((item, index) => {
-        children.push(createToggleRow(ctx, item.title, item.subtitle, item.checked, item.onCheckedChange));
+        children.push(createToggleRow(ctx, item.title, item.subtitle, item.checked, item.onCheckedChange, item.enabled ?? true));
         children.push(createDivider(ctx));
         if (index === items.length - 1) {
             children.push(memoryConfigSection);
@@ -138,12 +141,14 @@ function Screen(ctx) {
     const text = (0, shared_1.resolveExtraInfoI18n)();
     const initial = readSettings();
     const masterEnabledState = useStateValue(ctx, "masterEnabled", initial.masterEnabled);
+    const persistInjectedContentState = useStateValue(ctx, "persistInjectedContent", initial.persistInjectedContent);
     const injectTimeState = useStateValue(ctx, "injectTime", initial.injectTime);
     const injectBatteryState = useStateValue(ctx, "injectBattery", initial.injectBattery);
     const injectWeatherState = useStateValue(ctx, "injectWeather", initial.injectWeather);
     const injectLocationState = useStateValue(ctx, "injectLocation", initial.injectLocation);
     const injectNotificationsState = useStateValue(ctx, "injectNotifications", initial.injectNotifications);
     const injectMemoryState = useStateValue(ctx, "injectMemory", initial.injectMemory);
+    const allowRepeatedMemorySearchState = useStateValue(ctx, "allowRepeatedMemorySearch", initial.allowRepeatedMemorySearch);
     const memoryThresholdState = useStateValue(ctx, "memoryThreshold", initial.memoryThreshold);
     const memoryLimitState = useStateValue(ctx, "memoryLimit", initial.memoryLimit);
     const memoryThresholdInputState = useStateValue(ctx, "memoryThresholdInput", formatDecimal(initial.memoryThreshold));
@@ -153,12 +158,14 @@ function Screen(ctx) {
     const hasInitializedState = useStateValue(ctx, "hasInitialized", false);
     const syncSettings = (next) => {
         masterEnabledState.set(next.masterEnabled);
+        persistInjectedContentState.set(next.persistInjectedContent);
         injectTimeState.set(next.injectTime);
         injectBatteryState.set(next.injectBattery);
         injectWeatherState.set(next.injectWeather);
         injectLocationState.set(next.injectLocation);
         injectNotificationsState.set(next.injectNotifications);
         injectMemoryState.set(next.injectMemory);
+        allowRepeatedMemorySearchState.set(next.allowRepeatedMemorySearch);
         memoryThresholdState.set(next.memoryThreshold);
         memoryLimitState.set(next.memoryLimit);
         memoryThresholdInputState.set(formatDecimal(next.memoryThreshold));
@@ -197,6 +204,9 @@ function Screen(ctx) {
     };
     const summaryLines = [
         masterEnabledState.value ? text.summaryMasterEnabled : text.summaryMasterDisabled,
+        persistInjectedContentState.value
+            ? text.summaryPersistEnabled
+            : text.summaryPersistDisabled,
         injectTimeState.value ? text.summaryTimeEnabled : text.summaryTimeDisabled,
         injectBatteryState.value ? text.summaryBatteryEnabled : text.summaryBatteryDisabled,
         injectWeatherState.value ? text.summaryWeatherEnabled : text.summaryWeatherDisabled,
@@ -205,7 +215,9 @@ function Screen(ctx) {
             ? text.summaryNotificationsEnabled
             : text.summaryNotificationsDisabled,
         injectMemoryState.value
-            ? `${text.summaryMemoryEnabled} (${text.memoryThresholdLabel}: ${formatDecimal(memoryThresholdState.value)}; ${text.memoryLimitLabel}: ${memoryLimitState.value})`
+            ? `${text.summaryMemoryEnabled} (${text.memoryThresholdLabel}: ${formatDecimal(memoryThresholdState.value)}; ${text.memoryLimitLabel}: ${memoryLimitState.value}; ${allowRepeatedMemorySearchState.value
+                ? text.summaryMemoryRepeatEnabled
+                : text.summaryMemoryRepeatDisabled})`
             : text.summaryMemoryDisabled,
         text.summaryRulesHint,
     ];
@@ -242,6 +254,9 @@ function Screen(ctx) {
         createSectionTitle(ctx, "settings", text.masterSectionTitle),
         createToggleCard(ctx, text.masterToggleTitle, text.masterToggleDescription, masterEnabledState.value, checked => {
             persistSettings({ masterEnabled: checked });
+        }),
+        createToggleCard(ctx, text.persistToggleTitle, text.persistToggleDescription, persistInjectedContentState.value, checked => {
+            persistSettings({ persistInjectedContent: checked });
         }),
         createSectionTitle(ctx, "bolt", text.itemsSectionTitle),
         createInjectionItemsCard(ctx, [
@@ -293,7 +308,9 @@ function Screen(ctx) {
                     persistSettings({ injectMemory: checked });
                 },
             },
-        ], createMemoryConfigSection(ctx, text, injectMemoryState.value, memoryThresholdInputState.value, memoryLimitInputState.value, value => {
+        ], createMemoryConfigSection(ctx, text, injectMemoryState.value, allowRepeatedMemorySearchState.value, checked => {
+            persistSettings({ allowRepeatedMemorySearch: checked });
+        }, memoryThresholdInputState.value, memoryLimitInputState.value, value => {
             memoryThresholdInputState.set(value);
         }, value => {
             memoryLimitInputState.set(value);

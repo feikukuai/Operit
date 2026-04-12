@@ -118,7 +118,13 @@ class KimiProvider(
             }
         }
 
-        val messagesArray = buildMessagesWithReasoning(context, message, chatHistory, effectiveEnableToolCall)
+        val messagesArray =
+            buildMessagesWithReasoning(
+                context,
+                message,
+                chatHistory,
+                effectiveEnableToolCall
+            )
         jsonObject.put("messages", messagesArray)
 
         tokenCacheManager.calculateInputTokens(message, chatHistory, toolsJson)
@@ -170,7 +176,13 @@ class KimiProvider(
                     val (content, reasoningContent) = ChatUtils.extractThinkingContent(originalContent)
 
                     if (useToolCall) {
-                        val (textContent, toolCalls) = parseXmlToolCalls(content)
+                        val (textContent, parsedToolCalls) = parseXmlToolCalls(content)
+                        val toolCalls =
+                            if (parsedToolCalls != null) {
+                                wrapPackageToolCallsWithProxy(parsedToolCalls)
+                            } else {
+                                parsedToolCalls
+                            }
                         val historyMessage = JSONObject()
                         historyMessage.put("role", role)
                         historyMessage.put("reasoning_content", reasoningContent)

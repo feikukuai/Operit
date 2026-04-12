@@ -473,6 +473,60 @@ object AIMessageManager {
         }
     }
 
+    suspend fun calculateStableContextWindow(
+        enhancedAiService: EnhancedAIService,
+        chatId: String? = null,
+        messageContent: String = "",
+        chatHistory: List<ChatMessage>,
+        workspacePath: String? = null,
+        workspaceEnv: String? = null,
+        promptFunctionType: PromptFunctionType = PromptFunctionType.CHAT,
+        thinkingGuidance: Boolean = false,
+        enableMemoryQuery: Boolean = true,
+        roleCardId: String? = null,
+        currentRoleName: String? = null,
+        splitHistoryByRole: Boolean = true,
+        groupOrchestrationMode: Boolean = false,
+        groupParticipantNamesText: String? = null,
+        proxySenderName: String? = null,
+        chatModelConfigIdOverride: String? = null,
+        chatModelIndexOverride: Int? = null,
+        publishEstimate: Boolean = true
+    ): Int {
+        val memory =
+            getMemoryFromMessages(
+                messages = chatHistory,
+                splitByRole = splitHistoryByRole,
+                targetRoleName = currentRoleName,
+                groupOrchestrationMode = groupOrchestrationMode
+            )
+        val maxImageHistoryUserTurns = apiPreferences.maxImageHistoryUserTurnsFlow.first()
+        val maxMediaHistoryUserTurns = apiPreferences.maxMediaHistoryUserTurnsFlow.first()
+        val memoryAfterImageLimit = limitImageLinksInChatHistory(memory, maxImageHistoryUserTurns)
+        val memoryForRequest =
+            limitMediaLinksInChatHistory(memoryAfterImageLimit, maxMediaHistoryUserTurns)
+
+        val windowSize =
+            enhancedAiService.estimateRequestWindowFromMemory(
+                message = messageContent,
+                chatHistory = memoryForRequest,
+                chatId = chatId,
+                workspacePath = workspacePath,
+                workspaceEnv = workspaceEnv,
+                promptFunctionType = promptFunctionType,
+                thinkingGuidance = thinkingGuidance,
+                enableMemoryQuery = enableMemoryQuery,
+                roleCardId = roleCardId,
+                enableGroupOrchestrationHint = groupOrchestrationMode,
+                groupParticipantNamesText = groupParticipantNamesText,
+                proxySenderName = proxySenderName,
+                chatModelConfigIdOverride = chatModelConfigIdOverride,
+                chatModelIndexOverride = chatModelIndexOverride,
+                publishEstimate = publishEstimate
+            )
+        return windowSize
+    }
+
     private fun limitMediaLinksInChatHistory(
         history: List<Pair<String, String>>,
         keepLastUserMediaTurns: Int

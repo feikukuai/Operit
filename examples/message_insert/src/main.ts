@@ -1,7 +1,8 @@
 import toolboxUI from "./ui/index.ui.js";
 import {
-  buildExtraInfoAttachmentTags,
+  appendExtraInfoToMessage,
   getExtraInfoInjectionEnabled,
+  loadSettings,
   resolveExtraInfoI18n,
   setExtraInfoInjectionEnabled,
 } from "./shared";
@@ -23,6 +24,11 @@ export function registerToolPkg(): boolean {
     function: onPromptInput,
   });
 
+  ToolPkg.registerPromptFinalizeHook({
+    id: "message_insert_prompt_finalize",
+    function: onPromptFinalize,
+  });
+
   ToolPkg.registerInputMenuTogglePlugin({
     id: "message_insert_input_menu_toggle",
     function: onInputMenuToggle,
@@ -39,6 +45,10 @@ export async function onPromptInput(
     return null;
   }
 
+  if (!loadSettings().persistInjectedContent) {
+    return null;
+  }
+
   const processedInput = String(
     input.eventPayload.processedInput ?? input.eventPayload.rawInput ?? ""
   );
@@ -47,15 +57,36 @@ export async function onPromptInput(
   }
 
   const chatId = String(input.eventPayload.chatId ?? getChatId() ?? "").trim();
-  const tags = await buildExtraInfoAttachmentTags(
+  return appendExtraInfoToMessage(
     processedInput,
     chatId || undefined
   );
-  if (!tags.length) {
+}
+
+export async function onPromptFinalize(
+  input: ToolPkg.PromptFinalizeHookEvent
+) {
+  const stage = String(input.eventPayload.stage ?? input.eventName ?? "");
+  if (stage !== "before_send_to_model") {
     return null;
   }
 
-  return `${processedInput.replace(/\s+$/, "")} ${tags.join(" ")}`;
+  if (loadSettings().persistInjectedContent) {
+    return null;
+  }
+
+  const processedInput = String(
+    input.eventPayload.processedInput ?? input.eventPayload.rawInput ?? ""
+  );
+  if (!processedInput.trim()) {
+    return null;
+  }
+
+  const chatId = String(input.eventPayload.chatId ?? getChatId() ?? "").trim();
+  return appendExtraInfoToMessage(
+    processedInput,
+    chatId || undefined
+  );
 }
 
 export function onInputMenuToggle(

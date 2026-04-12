@@ -757,7 +757,8 @@ object SystemToolPrompts {
         chatModelHasDirectAudio: Boolean = false,
         chatModelHasDirectVideo: Boolean = false,
         safBookmarkNames: List<String> = emptyList(),
-        toolVisibility: Map<String, Boolean> = emptyMap()
+        toolVisibility: Map<String, Boolean> = emptyMap(),
+        dispatchToolPromptComposeHooks: (PromptHookContext) -> PromptHookContext = PromptHookRegistry::dispatchToolPromptComposeHooks
     ): String {
         val categories = if (includeMemoryTools) {
             getAIAllCategoriesEn(
@@ -783,7 +784,7 @@ object SystemToolPrompts {
         }
         val availableTools = buildToolHookPayload(categories)
         val beforeContext =
-            PromptHookRegistry.dispatchToolPromptComposeHooks(
+            dispatchToolPromptComposeHooks(
                 PromptHookContext(
                     stage = "before_compose_tool_prompt",
                     useEnglish = true,
@@ -805,7 +806,7 @@ object SystemToolPrompts {
         var prompt = beforeContext.toolPrompt
             ?: applyToolVisibility(categories, toolVisibility).joinToString("\n\n") { it.toString() }
         val filterContext =
-            PromptHookRegistry.dispatchToolPromptComposeHooks(
+            dispatchToolPromptComposeHooks(
                 beforeContext.copy(
                     stage = "filter_tool_prompt_items",
                     toolPrompt = prompt
@@ -813,7 +814,7 @@ object SystemToolPrompts {
             )
         prompt = filterContext.toolPrompt ?: prompt
         val afterContext =
-            PromptHookRegistry.dispatchToolPromptComposeHooks(
+            dispatchToolPromptComposeHooks(
                 filterContext.copy(
                     stage = "after_compose_tool_prompt",
                     toolPrompt = prompt
@@ -834,7 +835,8 @@ object SystemToolPrompts {
         chatModelHasDirectAudio: Boolean = false,
         chatModelHasDirectVideo: Boolean = false,
         safBookmarkNames: List<String> = emptyList(),
-        toolVisibility: Map<String, Boolean> = emptyMap()
+        toolVisibility: Map<String, Boolean> = emptyMap(),
+        dispatchToolPromptComposeHooks: (PromptHookContext) -> PromptHookContext = PromptHookRegistry::dispatchToolPromptComposeHooks
     ): String {
         val categories = if (includeMemoryTools) {
             getAIAllCategoriesCn(
@@ -860,7 +862,7 @@ object SystemToolPrompts {
         }
         val availableTools = buildToolHookPayload(categories)
         val beforeContext =
-            PromptHookRegistry.dispatchToolPromptComposeHooks(
+            dispatchToolPromptComposeHooks(
                 PromptHookContext(
                     stage = "before_compose_tool_prompt",
                     useEnglish = false,
@@ -882,7 +884,7 @@ object SystemToolPrompts {
         var prompt = beforeContext.toolPrompt
             ?: applyToolVisibility(categories, toolVisibility).joinToString("\n\n") { it.toString() }
         val filterContext =
-            PromptHookRegistry.dispatchToolPromptComposeHooks(
+            dispatchToolPromptComposeHooks(
                 beforeContext.copy(
                     stage = "filter_tool_prompt_items",
                     toolPrompt = prompt
@@ -890,7 +892,7 @@ object SystemToolPrompts {
             )
         prompt = filterContext.toolPrompt ?: prompt
         val afterContext =
-            PromptHookRegistry.dispatchToolPromptComposeHooks(
+            dispatchToolPromptComposeHooks(
                 filterContext.copy(
                     stage = "after_compose_tool_prompt",
                     toolPrompt = prompt

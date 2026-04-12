@@ -20,8 +20,7 @@ import java.io.File
 class LlamaProvider(
     private val context: Context,
     private val modelName: String,
-    private val threadCount: Int,
-    private val contextSize: Int,
+    private val sessionConfig: LlamaSession.Config,
     private val providerType: ApiProviderType = ApiProviderType.LLAMA_CPP,
     private val enableToolCall: Boolean = false
 ) : AIService {
@@ -115,8 +114,7 @@ class LlamaProvider(
 
         val testSession = LlamaSession.create(
             pathModel = modelFile.absolutePath,
-            nThreads = threadCount,
-            nCtx = contextSize
+            config = sessionConfig
         ) ?: return@withContext Result.failure(Exception(context.getString(R.string.llama_error_create_session_failed)))
 
         testSession.release()
@@ -277,7 +275,10 @@ class LlamaProvider(
             ?.let { (it.currentValue as? Number)?.toInt() }
             ?: -1
 
-        AppLogger.d(TAG, "开始llama.cpp推理，history=${chatHistory.size}, threads=$threadCount, n_ctx=$contextSize")
+        AppLogger.d(
+            TAG,
+            "开始llama.cpp推理，history=${chatHistory.size}, threads=${sessionConfig.nThreads}, n_ctx=${sessionConfig.nCtx}, n_batch=${sessionConfig.nBatch}, n_ubatch=${sessionConfig.nUBatch}, gpu_layers=${sessionConfig.nGpuLayers}, mmap=${sessionConfig.useMmap}"
+        )
 
         var outputTokenCount = 0
         val toolCallOutputBuffer = StringBuilder()
@@ -363,8 +364,7 @@ class LlamaProvider(
             val modelFile = getModelFile(context, modelName)
             val created = LlamaSession.create(
                 pathModel = modelFile.absolutePath,
-                nThreads = threadCount,
-                nCtx = contextSize
+                config = sessionConfig
             )
             session = created
             return created

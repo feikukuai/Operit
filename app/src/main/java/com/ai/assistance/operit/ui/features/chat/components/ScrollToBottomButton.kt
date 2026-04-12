@@ -90,10 +90,7 @@ fun ScrollToBottomButton(
         IconButton(
             onClick = {
                 coroutineScope.launch {
-                    val lastIndex = scrollState.layoutInfo.totalItemsCount - 1
-                    if (lastIndex >= 0) {
-                        scrollState.animateScrollToItem(lastIndex)
-                    }
+                    scrollState.animateScrollToEnd()
                 }
                 onAutoScrollToBottomChange(true)
                 showScrollButton = false

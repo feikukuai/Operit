@@ -1150,6 +1150,11 @@ class JsEngine(private val context: Context) {
         }
 
         @JavascriptInterface
+        fun registerToolPkgPromptEstimateHistoryHook(specJson: String) {
+            toolPkgRegistrationSession.appendPromptEstimateHistoryHook(specJson)
+        }
+
+        @JavascriptInterface
         fun registerToolPkgSystemPromptComposeHook(specJson: String) {
             toolPkgRegistrationSession.appendSystemPromptComposeHook(specJson)
         }
@@ -1162,6 +1167,11 @@ class JsEngine(private val context: Context) {
         @JavascriptInterface
         fun registerToolPkgPromptFinalizeHook(specJson: String) {
             toolPkgRegistrationSession.appendPromptFinalizeHook(specJson)
+        }
+
+        @JavascriptInterface
+        fun registerToolPkgPromptEstimateFinalizeHook(specJson: String) {
+            toolPkgRegistrationSession.appendPromptEstimateFinalizeHook(specJson)
         }
 
         private fun bridgeClassLoader(): ClassLoader = getJavaBridgeClassLoader()

@@ -126,7 +126,13 @@ class DeepseekProvider(
         }
 
         // 使用特殊的消息构建方法（支持reasoning_content）
-        val messagesArray = buildMessagesWithReasoning(context, message, chatHistory, effectiveEnableToolCall)
+        val messagesArray =
+            buildMessagesWithReasoning(
+                context,
+                message,
+                chatHistory,
+                effectiveEnableToolCall
+            )
         jsonObject.put("messages", messagesArray)
 
         // ⚠️ 重要：调用 TokenCacheManager 计算输入 token 数量
@@ -196,7 +202,13 @@ class DeepseekProvider(
 
                     if (useToolCall) {
                         // 启用Tool Call时，解析XML tool calls
-                        val (textContent, toolCalls) = parseXmlToolCalls(content)
+                        val (textContent, parsedToolCalls) = parseXmlToolCalls(content)
+                        val toolCalls =
+                            if (parsedToolCalls != null) {
+                                wrapPackageToolCallsWithProxy(parsedToolCalls)
+                            } else {
+                                parsedToolCalls
+                            }
                         val historyMessage = JSONObject()
                         historyMessage.put("role", role)
 

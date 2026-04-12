@@ -2220,12 +2220,6 @@ object SystemToolPromptsInternal {
                                         required = false
                                     ),
                                     ToolParameterSchema(
-                                        name = "strict_tool_call",
-                                        type = "boolean",
-                                        description = "optional, strict tool call mode",
-                                        required = false
-                                    ),
-                                    ToolParameterSchema(
                                         name = "mnn_forward_type",
                                         type = "integer",
                                         description = "optional, MNN forward type",
@@ -2247,6 +2241,12 @@ object SystemToolPromptsInternal {
                                         name = "llama_context_size",
                                         type = "integer",
                                         description = "optional, llama.cpp context size",
+                                        required = false
+                                    ),
+                                    ToolParameterSchema(
+                                        name = "llama_gpu_layers",
+                                        type = "integer",
+                                        description = "optional, llama.cpp GPU layer count",
                                         required = false
                                     ),
                                     ToolParameterSchema(
@@ -4841,12 +4841,6 @@ object SystemToolPromptsInternal {
                                         required = false
                                     ),
                                     ToolParameterSchema(
-                                        name = "strict_tool_call",
-                                        type = "boolean",
-                                        description = "可选，严格 Tool Call 模式",
-                                        required = false
-                                    ),
-                                    ToolParameterSchema(
                                         name = "mnn_forward_type",
                                         type = "integer",
                                         description = "可选，MNN 前向类型",
@@ -4868,6 +4862,12 @@ object SystemToolPromptsInternal {
                                         name = "llama_context_size",
                                         type = "integer",
                                         description = "可选，llama.cpp 上下文大小",
+                                        required = false
+                                    ),
+                                    ToolParameterSchema(
+                                        name = "llama_gpu_layers",
+                                        type = "integer",
+                                        description = "可选，llama.cpp GPU 层数",
                                         required = false
                                     ),
                                     ToolParameterSchema(

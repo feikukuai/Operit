@@ -20,9 +20,11 @@ internal const val TOOLPKG_EVENT_INPUT_MENU_TOGGLE = "toolpkg_input_menu_toggle"
 internal const val TOOLPKG_EVENT_TOOL_LIFECYCLE = "toolpkg_tool_lifecycle"
 internal const val TOOLPKG_EVENT_PROMPT_INPUT = "toolpkg_prompt_input"
 internal const val TOOLPKG_EVENT_PROMPT_HISTORY = "toolpkg_prompt_history"
+internal const val TOOLPKG_EVENT_PROMPT_ESTIMATE_HISTORY = "toolpkg_prompt_estimate_history"
 internal const val TOOLPKG_EVENT_SYSTEM_PROMPT_COMPOSE = "toolpkg_system_prompt_compose"
 internal const val TOOLPKG_EVENT_TOOL_PROMPT_COMPOSE = "toolpkg_tool_prompt_compose"
 internal const val TOOLPKG_EVENT_PROMPT_FINALIZE = "toolpkg_prompt_finalize"
+internal const val TOOLPKG_EVENT_PROMPT_ESTIMATE_FINALIZE = "toolpkg_prompt_estimate_finalize"
 
 internal const val TOOLPKG_REGISTRATION_TOOLBOX_UI_MODULE = "registerToolPkgToolboxUiModule"
 internal const val TOOLPKG_REGISTRATION_APP_LIFECYCLE_HOOK = "registerToolPkgAppLifecycleHook"
@@ -38,9 +40,13 @@ internal const val TOOLPKG_REGISTRATION_PROMPT_INPUT_HOOK =
     "registerToolPkgPromptInputHook"
 internal const val TOOLPKG_REGISTRATION_PROMPT_HISTORY_HOOK =
     "registerToolPkgPromptHistoryHook"
+internal const val TOOLPKG_REGISTRATION_PROMPT_ESTIMATE_HISTORY_HOOK =
+    "registerToolPkgPromptEstimateHistoryHook"
 internal const val TOOLPKG_REGISTRATION_SYSTEM_PROMPT_COMPOSE_HOOK =
     "registerToolPkgSystemPromptComposeHook"
 internal const val TOOLPKG_REGISTRATION_TOOL_PROMPT_COMPOSE_HOOK =
     "registerToolPkgToolPromptComposeHook"
 internal const val TOOLPKG_REGISTRATION_PROMPT_FINALIZE_HOOK =
     "registerToolPkgPromptFinalizeHook"
+internal const val TOOLPKG_REGISTRATION_PROMPT_ESTIMATE_FINALIZE_HOOK =
+    "registerToolPkgPromptEstimateFinalizeHook"

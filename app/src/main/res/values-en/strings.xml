@@ -3722,9 +3722,6 @@
     <string name="enable_google_search_desc">When enabled, Gemini will use Google Search to enhance responses (may incur additional charges)</string>
     <string name="enable_tool_call">Model supports ToolCall</string>
     <string name="enable_tool_call_desc">When disabled, uses the built-in tool invocation mechanism which also supports tool calls. When enabled, uses the API\'s dedicated native interface (requires model support)</string>
-    <string name="strict_tool_call">Strict ToolCall</string>
-    <string name="strict_tool_call_desc">Enable this only when ToolCall is supported but still failing. This option may alter ToolCall runtime stability. Keep it off unless necessary.</string>
-    <string name="strict_tool_call_required">Strict ToolCall needs to be enabled</string>
     <string name="enable_deepseek_reasoning">Enable DeepSeek Reasoning Mode</string>
     <string name="enable_deepseek_reasoning_desc">When enabled, content within &lt;think&gt; tags will be sent as reasoning_content to DeepSeek models, supporting tool invocation for reasoning models like DeepSeek-R1</string>
     <string name="search_sources">Search Sources</string>
@@ -3779,9 +3776,25 @@
     <string name="llama_local_model_tip">Local models are usually weaker. Consider disabling memory links and disabling tools for chat.</string>
     <string name="llama_local_model_download_tip">llama.cpp models must be downloaded manually (.gguf). Put the model file in the folder below, then enter the file name in “Model name”:</string>
     <string name="llama_local_model_dir">Default model folder: %1$s</string>
+    <string name="llama_auto_config_tip">Batch size, mmap, Flash Attention, KV, and other Android compatibility settings are built in. In normal use, you only need thread count, context size, and GPU layers.</string>
     <string name="llama_select_downloaded_model">Select downloaded model</string>
     <string name="llama_thread_count">Thread count</string>
     <string name="llama_context_size">Context size</string>
+    <string name="llama_context_size_subtitle">On Android, start with 2048 first. Larger values are more likely to fail during initialization.</string>
+    <string name="llama_batch_size">Batch size</string>
+    <string name="llama_batch_size_subtitle">Keep this at or below 512, and never above the context size.</string>
+    <string name="llama_ubatch_size">Micro batch size</string>
+    <string name="llama_ubatch_size_subtitle">Keep this at or below the batch size. On Android, 512 is usually the safer choice.</string>
+    <string name="llama_gpu_layers">GPU layers</string>
+    <string name="llama_gpu_layers_subtitle">Only works when the current build has a GPU backend. Use 0 for CPU-only.</string>
+    <string name="llama_use_mmap">Use mmap</string>
+    <string name="llama_use_mmap_subtitle">Off is the safer default on Android. Disabling mmap helps many devices load GGUF successfully.</string>
+    <string name="llama_flash_attention">Enable Flash Attention</string>
+    <string name="llama_flash_attention_subtitle">Off is the safer default on mobile to avoid unstable Android backends.</string>
+    <string name="llama_kv_unified">Unified KV cache</string>
+    <string name="llama_kv_unified_subtitle">Recommended for single-session chat to reduce context management overhead on Android.</string>
+    <string name="llama_offload_kqv">Offload KQV to GPU</string>
+    <string name="llama_offload_kqv_subtitle">Only matters when GPU layers are above 0. It is ignored when no GPU backend is available.</string>
 
     <!-- ModelParametersSection strings -->
     <string name="max_tokens_name">Max Tokens</string>
@@ -4705,6 +4718,17 @@
     <string name="save_and_resend">Save and Resend</string>
     <string name="update_memory">Update Memory</string>
     <string name="chat_message">Chat Message</string>
+    <string name="chat_scroll_position_label">Message %1$d / %2$d</string>
+    <string name="chat_scroll_position_compact">%1$d/%2$d</string>
+    <string name="chat_message_locator_title">Jump to Message</string>
+    <string name="chat_message_locator_current">Current position: %1$d / %2$d</string>
+    <string name="chat_message_locator_hint">Tap any message to jump there quickly</string>
+    <string name="chat_sender_user">User</string>
+    <string name="chat_sender_ai">AI</string>
+    <string name="chat_sender_summary">Summary</string>
+    <string name="chat_sender_system">System</string>
+    <string name="chat_sender_think">Thinking</string>
+    <string name="chat_sender_other">Other</string>
     <string name="share_failed_log">Share Failed</string>
     <string name="generate_image_failed">Failed to generate image: %1$s</string>
     <string name="start_export">Starting export...</string>

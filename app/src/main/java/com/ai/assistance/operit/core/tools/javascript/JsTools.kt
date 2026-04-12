@@ -687,10 +687,22 @@ fun getJsToolsDefinition(): String {
                 },
                 createModelConfig: (options = {}) => {
                     const params = { ...(options || {}) };
+                    if (params.custom_parameters !== undefined && params.custom_parameters !== null && typeof params.custom_parameters === 'object') {
+                        params.custom_parameters = JSON.stringify(params.custom_parameters);
+                    }
+                    if (params.custom_headers !== undefined && params.custom_headers !== null && typeof params.custom_headers === 'object') {
+                        params.custom_headers = JSON.stringify(params.custom_headers);
+                    }
                     return toolCall("create_model_config", params);
                 },
                 updateModelConfig: (configId, updates = {}) => {
                     const params = { ...(updates || {}), config_id: String(configId ?? "") };
+                    if (params.custom_parameters !== undefined && params.custom_parameters !== null && typeof params.custom_parameters === 'object') {
+                        params.custom_parameters = JSON.stringify(params.custom_parameters);
+                    }
+                    if (params.custom_headers !== undefined && params.custom_headers !== null && typeof params.custom_headers === 'object') {
+                        params.custom_headers = JSON.stringify(params.custom_headers);
+                    }
                     return toolCall("update_model_config", params);
                 },
                 deleteModelConfig: (configId) => {

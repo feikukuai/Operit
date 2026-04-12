@@ -24,12 +24,14 @@ const MEMORY_QUERY_CLAUSE_SPLIT_REGEX = /[。！？!?；;，,、]+/;
 
 export type ExtraInfoInjectionSettings = {
   masterEnabled: boolean;
+  persistInjectedContent: boolean;
   injectTime: boolean;
   injectBattery: boolean;
   injectWeather: boolean;
   injectLocation: boolean;
   injectNotifications: boolean;
   injectMemory: boolean;
+  allowRepeatedMemorySearch: boolean;
   memoryThreshold: number;
   memoryLimit: number;
 };
@@ -43,6 +45,8 @@ export type ExtraInfoI18n = {
   masterSectionTitle: string;
   masterToggleTitle: string;
   masterToggleDescription: string;
+  persistToggleTitle: string;
+  persistToggleDescription: string;
   itemsSectionTitle: string;
   timeToggleTitle: string;
   timeToggleDescription: string;
@@ -58,6 +62,8 @@ export type ExtraInfoI18n = {
   memoryToggleDescription: string;
   memoryConfigTitle: string;
   memoryConfigDescription: string;
+  memoryRepeatToggleTitle: string;
+  memoryRepeatToggleDescription: string;
   memoryThresholdFieldLabel: string;
   memoryThresholdFieldDescription: string;
   memoryThresholdFieldPlaceholder: string;
@@ -70,6 +76,8 @@ export type ExtraInfoI18n = {
   summarySectionTitle: string;
   summaryMasterEnabled: string;
   summaryMasterDisabled: string;
+  summaryPersistEnabled: string;
+  summaryPersistDisabled: string;
   summaryTimeEnabled: string;
   summaryTimeDisabled: string;
   summaryBatteryEnabled: string;
@@ -82,6 +90,8 @@ export type ExtraInfoI18n = {
   summaryNotificationsDisabled: string;
   summaryMemoryEnabled: string;
   summaryMemoryDisabled: string;
+  summaryMemoryRepeatEnabled: string;
+  summaryMemoryRepeatDisabled: string;
   summaryRulesHint: string;
   saveErrorPrefix: string;
   attachmentTimeTitle: string;
@@ -134,11 +144,13 @@ const ZH_CN_I18N: ExtraInfoI18n = {
   menuTitle: "额外信息注入",
   menuDescription: "发送消息时自动附加时间、电量、天气、位置、通知、记忆等额外信息，并与设置页开关同步",
   toolboxTitle: "额外信息注入",
-  toolboxSubtitle: "把时间、电量、天气、位置、通知、记忆作为显性附件挂到用户消息上方，并随消息一起保存。",
-  toolboxBanner: "这里的开关和输入菜单里的“额外信息注入”是同一个状态；启用的项目都会在每次发送时一起注入，记忆检索会复用当前会话的快照。",
+  toolboxSubtitle: "把时间、电量、天气、位置、通知、记忆作为显性附件注入到用户消息里，并可单独控制是否随聊天记录一起保存。",
+  toolboxBanner: "这里的开关和输入菜单里的“额外信息注入”是同一个状态；你可以分别控制注入项目、是否落盘保存，以及记忆检索是否允许重复命中。",
   masterSectionTitle: "注入开关",
   masterToggleTitle: "额外信息注入",
   masterToggleDescription: "和输入菜单里的“额外信息注入”开关完全同步，切一个地方，另一个地方会一起变化。",
+  persistToggleTitle: "注入内容随消息保存",
+  persistToggleDescription: "关闭后，额外信息只在发送给模型时注入，不写入聊天记录。",
   itemsSectionTitle: "注入项目",
   timeToggleTitle: "注入时间",
   timeToggleDescription: "每次发送消息时都插入当前时间附件。",
@@ -153,7 +165,9 @@ const ZH_CN_I18N: ExtraInfoI18n = {
   memoryToggleTitle: "注入记忆",
   memoryToggleDescription: "每次发送消息时根据当前输入自动分词检索记忆，并把命中的记忆摘要附加进去。",
   memoryConfigTitle: "记忆检索设置",
-  memoryConfigDescription: "使用当前会话 id 的前六位作为快照 id，关键词会自动用 | 拼接后查询记忆。",
+  memoryConfigDescription: "默认会复用当前会话 id 的前六位作为快照 id；开启“允许重复命中”后，将不再复用快照，同一条记忆后续还可以再次被检索到。",
+  memoryRepeatToggleTitle: "允许重复命中同一记忆",
+  memoryRepeatToggleDescription: "开启后，每次都会使用新的记忆查询快照，不再排除本会话里之前命中过的记忆。",
   memoryThresholdFieldLabel: "记忆阈值",
   memoryThresholdFieldDescription: "默认 0。数值越高，返回结果越严格。",
   memoryThresholdFieldPlaceholder: "例如 0",
@@ -166,6 +180,8 @@ const ZH_CN_I18N: ExtraInfoI18n = {
   summarySectionTitle: "当前规则",
   summaryMasterEnabled: "额外信息注入：已开启",
   summaryMasterDisabled: "额外信息注入：已关闭",
+  summaryPersistEnabled: "保存策略：注入内容会随消息一起落盘",
+  summaryPersistDisabled: "保存策略：注入内容只发送给模型，不写入聊天记录",
   summaryTimeEnabled: "时间：每次发送都注入",
   summaryTimeDisabled: "时间：已关闭",
   summaryBatteryEnabled: "电量：每次发送都注入",
@@ -178,6 +194,8 @@ const ZH_CN_I18N: ExtraInfoI18n = {
   summaryNotificationsDisabled: "通知：已关闭",
   summaryMemoryEnabled: "记忆：已开启，按当前输入自动分词检索",
   summaryMemoryDisabled: "记忆：已关闭",
+  summaryMemoryRepeatEnabled: "记忆去重：允许重复命中",
+  summaryMemoryRepeatDisabled: "记忆去重：默认排除本会话已命中的记忆",
   summaryRulesHint: "这些设置会直接影响用户消息中显性附件的生成规则。",
   saveErrorPrefix: "保存失败：",
   attachmentTimeTitle: "【当前时间】",
@@ -230,11 +248,13 @@ const EN_US_I18N: ExtraInfoI18n = {
   menuTitle: "Extra Info Injection",
   menuDescription: "Automatically attach time, battery, weather, location, notifications, memories, and other extra info when sending messages, synced with the settings switch",
   toolboxTitle: "Extra Info Injection",
-  toolboxSubtitle: "Attach time, battery, weather, location, notifications, and memories as visible attachments above the user message and save them with the message.",
-  toolboxBanner: "This switch is the same state as the input-menu toggle. Every enabled item is injected on each send, and memory lookup reuses the current chat snapshot.",
+  toolboxSubtitle: "Attach time, battery, weather, location, notifications, and memories as visible attachments to the user message, with a separate option for whether they are persisted in chat history.",
+  toolboxBanner: "This switch is the same state as the input-menu toggle. You can separately control the injected items, whether they are persisted, and whether memory hits may repeat in the same chat.",
   masterSectionTitle: "Injection Switch",
   masterToggleTitle: "Extra Info Injection",
   masterToggleDescription: "This is the exact same switch as the input-menu toggle. Changing either one keeps the other in sync.",
+  persistToggleTitle: "Persist injected content",
+  persistToggleDescription: "When disabled, extra info is injected only for the model request and is not written into chat history.",
   itemsSectionTitle: "Injection Items",
   timeToggleTitle: "Inject Time",
   timeToggleDescription: "Insert the current time attachment on every send.",
@@ -249,7 +269,9 @@ const EN_US_I18N: ExtraInfoI18n = {
   memoryToggleTitle: "Inject Memory",
   memoryToggleDescription: "Tokenize the current input, query related memories, and attach the matched memory summaries on every send.",
   memoryConfigTitle: "Memory Search Settings",
-  memoryConfigDescription: "The first 6 characters of the current chat id are used as the snapshot id, and tokenized keywords are joined with | for querying.",
+  memoryConfigDescription: "By default, the first 6 characters of the current chat id are reused as the snapshot id. When repeated hits are allowed, a fresh snapshot is used for each query so previously matched memories can appear again.",
+  memoryRepeatToggleTitle: "Allow repeated memory hits",
+  memoryRepeatToggleDescription: "When enabled, each query uses a fresh snapshot instead of excluding memories that were already matched earlier in this chat.",
   memoryThresholdFieldLabel: "Memory threshold",
   memoryThresholdFieldDescription: "Default is 0. Higher values make the results stricter.",
   memoryThresholdFieldPlaceholder: "For example 0",
@@ -262,6 +284,8 @@ const EN_US_I18N: ExtraInfoI18n = {
   summarySectionTitle: "Current Rules",
   summaryMasterEnabled: "Extra info injection: enabled",
   summaryMasterDisabled: "Extra info injection: disabled",
+  summaryPersistEnabled: "Persistence: injected content is saved with the message",
+  summaryPersistDisabled: "Persistence: injected content is sent only to the model and not saved in chat history",
   summaryTimeEnabled: "Time: inject on every send",
   summaryTimeDisabled: "Time: disabled",
   summaryBatteryEnabled: "Battery: inject on every send",
@@ -274,6 +298,8 @@ const EN_US_I18N: ExtraInfoI18n = {
   summaryNotificationsDisabled: "Notifications: disabled",
   summaryMemoryEnabled: "Memory: enabled with automatic tokenized lookup",
   summaryMemoryDisabled: "Memory: disabled",
+  summaryMemoryRepeatEnabled: "Memory dedupe: repeated hits are allowed",
+  summaryMemoryRepeatDisabled: "Memory dedupe: previously hit memories are excluded in this chat",
   summaryRulesHint: "These settings directly control how visible attachments are generated for user messages.",
   saveErrorPrefix: "Save failed: ",
   attachmentTimeTitle: "[Current Time]",
@@ -324,12 +350,14 @@ const EN_US_I18N: ExtraInfoI18n = {
 
 const DEFAULT_SETTINGS: ExtraInfoInjectionSettings = {
   masterEnabled: false,
+  persistInjectedContent: true,
   injectTime: true,
   injectBattery: false,
   injectWeather: false,
   injectLocation: false,
   injectNotifications: false,
   injectMemory: false,
+  allowRepeatedMemorySearch: false,
   memoryThreshold: 0,
   memoryLimit: 3,
 };
@@ -373,12 +401,18 @@ function sanitizeSettings(input: Partial<ExtraInfoInjectionSettings> | null | un
   const memoryLimit = Number(input?.memoryLimit);
   return {
     masterEnabled: Boolean(input?.masterEnabled ?? DEFAULT_SETTINGS.masterEnabled),
+    persistInjectedContent: Boolean(
+      input?.persistInjectedContent ?? DEFAULT_SETTINGS.persistInjectedContent
+    ),
     injectTime: Boolean(input?.injectTime ?? DEFAULT_SETTINGS.injectTime),
     injectBattery: Boolean(input?.injectBattery ?? DEFAULT_SETTINGS.injectBattery),
     injectWeather: Boolean(input?.injectWeather ?? DEFAULT_SETTINGS.injectWeather),
     injectLocation: Boolean(input?.injectLocation ?? DEFAULT_SETTINGS.injectLocation),
     injectNotifications: Boolean(input?.injectNotifications ?? DEFAULT_SETTINGS.injectNotifications),
     injectMemory: Boolean(input?.injectMemory ?? DEFAULT_SETTINGS.injectMemory),
+    allowRepeatedMemorySearch: Boolean(
+      input?.allowRepeatedMemorySearch ?? DEFAULT_SETTINGS.allowRepeatedMemorySearch
+    ),
     memoryThreshold: Number.isFinite(memoryThreshold) && memoryThreshold >= 0
       ? memoryThreshold
       : DEFAULT_SETTINGS.memoryThreshold,
@@ -834,14 +868,21 @@ function buildBalancedMemorySearchTokens(
   return results;
 }
 
-function buildMemorySearchQuery(messageText: string): string {
-  const normalized = String(messageText || "")
+function stripMessageForMemorySearch(messageText: string): string {
+  return String(messageText || "")
     .replace(/<attachment\b[\s\S]*?<\/attachment>/gi, " ")
+    .replace(/<workspace_attachment\b[\s\S]*?<\/workspace_attachment>/gi, " ")
+    .replace(/<reply_to\b[\s\S]*?<\/reply_to>/gi, " ")
+    .replace(/<proxy_sender\b[^>]*\/?>/gi, " ")
+    .replace(/\[\s*From [^\]]+\]\s*/gi, " ")
     .replace(/<[^>]+>/g, " ")
     .replace(/[\r\n\t]+/g, " ")
     .replace(/[|]+/g, " ")
     .trim();
+}
 
+function buildMemorySearchQuery(messageText: string): string {
+  const normalized = stripMessageForMemorySearch(messageText);
   if (!normalized) {
     return "";
   }
@@ -867,8 +908,9 @@ async function buildMemoryContent(
 ): Promise<string> {
   const text = resolveExtraInfoI18n();
   const settings = loadSettings();
-  const snapshotId = buildMemorySnapshotId(chatId);
-  if (!snapshotId) {
+  const reuseSnapshot = !settings.allowRepeatedMemorySearch;
+  const snapshotId = reuseSnapshot ? buildMemorySnapshotId(chatId) : "";
+  if (reuseSnapshot && !snapshotId) {
     throw new Error(text.memorySnapshotUnavailable);
   }
 
@@ -876,7 +918,7 @@ async function buildMemoryContent(
   const lines = [
     text.attachmentMemoryTitle,
     `${text.memoryQueryLabel}: ${searchQuery || "-"}`,
-    `${text.memorySnapshotLabel}: ${snapshotId}`,
+    `${text.memorySnapshotLabel}: ${snapshotId || "-"}`,
     `${text.memoryThresholdLabel}: ${formatDecimal(settings.memoryThreshold)}`,
     `${text.memoryLimitLabel}: ${settings.memoryLimit}`,
   ];
@@ -892,8 +934,8 @@ async function buildMemoryContent(
   const result = await toolCall("query_memory", {
     query: searchQuery,
     limit: settings.memoryLimit,
-    snapshot_id: snapshotId,
     threshold: settings.memoryThreshold,
+    ...(reuseSnapshot ? { snapshot_id: snapshotId } : {}),
   });
 
   const memories = Array.isArray(result?.memories) ? result.memories : [];
@@ -929,6 +971,22 @@ async function buildMemoryContent(
   });
 
   return lines.join("\n");
+}
+
+export async function appendExtraInfoToMessage(
+  messageText: string,
+  chatId?: string
+): Promise<string | null> {
+  if (!stripMessageForMemorySearch(messageText)) {
+    return null;
+  }
+
+  const tags = await buildExtraInfoAttachmentTags(messageText, chatId);
+  if (!tags.length) {
+    return null;
+  }
+
+  return `${String(messageText || "").replace(/\s+$/, "")} ${tags.join(" ")}`.trim();
 }
 
 export async function buildExtraInfoAttachmentTags(

@@ -4,6 +4,18 @@ class LlamaSession private constructor(
     private var sessionPtr: Long
 ) {
 
+    data class Config(
+        val nThreads: Int = 4,
+        val nCtx: Int = 2048,
+        val nBatch: Int = 512,
+        val nUBatch: Int = 512,
+        val nGpuLayers: Int = 0,
+        val useMmap: Boolean = false,
+        val flashAttention: Boolean = false,
+        val kvUnified: Boolean = true,
+        val offloadKqv: Boolean = false
+    )
+
     companion object {
         fun isAvailable(): Boolean = runCatching { LlamaNative.nativeIsAvailable() }.getOrDefault(false)
 
@@ -12,11 +24,21 @@ class LlamaSession private constructor(
 
         fun create(
             pathModel: String,
-            nThreads: Int,
-            nCtx: Int
+            config: Config
         ): LlamaSession? {
             if (!isAvailable()) return null
-            val ptr = LlamaNative.nativeCreateSession(pathModel, nThreads, nCtx)
+            val ptr = LlamaNative.nativeCreateSession(
+                pathModel = pathModel,
+                nThreads = config.nThreads,
+                nCtx = config.nCtx,
+                nBatch = config.nBatch,
+                nUBatch = config.nUBatch,
+                nGpuLayers = config.nGpuLayers,
+                useMmap = config.useMmap,
+                flashAttention = config.flashAttention,
+                kvUnified = config.kvUnified,
+                offloadKqv = config.offloadKqv
+            )
             if (ptr == 0L) return null
             return LlamaSession(ptr)
         }

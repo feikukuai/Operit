@@ -480,7 +480,10 @@ class MNNProvider(
         val systemPrefixCount = if (history.first().first == "system") 1 else 0
 
         fun countCandidate(candidate: List<Pair<String, String>>): Int {
-            val messagesJson = StructuredToolCallBridge.buildMessagesJson(candidate, preserveThinkInHistory)
+            val messagesJson = StructuredToolCallBridge.buildMessagesJson(
+                candidate,
+                preserveThinkInHistory
+            )
             return session.countTokensStructured(messagesJson, toolsJson)
         }
 
@@ -665,7 +668,10 @@ class MNNProvider(
             }
 
             val messagesJson = if (useInternalToolCall) {
-                StructuredToolCallBridge.buildMessagesJson(safeHistory, preserveThinkInHistory)
+                StructuredToolCallBridge.buildMessagesJson(
+                    safeHistory,
+                    preserveThinkInHistory
+                )
             } else {
                 null
             }

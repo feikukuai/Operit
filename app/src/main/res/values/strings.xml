@@ -3623,9 +3623,6 @@
     <string name="enable_google_search_desc">启用后，Gemini 将使用 Google 搜索来增强回答（可能产生额外费用）</string>
     <string name="enable_tool_call">模型支持ToolCall</string>
     <string name="enable_tool_call_desc">关闭时，会使用软件内工具调用机制，也可以完成工具调用。开启后，将会使用API的专用接口进行原生工具调用（需要模型支持）</string>
-    <string name="strict_tool_call">严格toolcall</string>
-    <string name="strict_tool_call_desc">严格toolcall请在toolcall支持但报错的情况下开启，该选项一定程度上会改变toolcall运行稳定性。非必要不开启。</string>
-    <string name="strict_tool_call_required">需要开启严格toolcall</string>
     <string name="enable_deepseek_reasoning">启用 DeepSeek 推理模式</string>
     <string name="enable_deepseek_reasoning_desc">启用后，&lt;think&gt;标签内的内容将作为reasoning_content发送给DeepSeek模型，用于支持DeepSeek-R1等推理模型的工具调用</string>
     <string name="search_sources">搜索来源</string>
@@ -4462,9 +4459,25 @@
     <string name="llama_local_model_tip">本地运行模型理解能力较差，建议关闭记忆链接、开启禁用工具进行对话</string>
     <string name="llama_local_model_download_tip">llama.cpp 模型需要自行下载（.gguf）。请将模型文件放入以下文件夹，然后在“模型名称”中填写文件名：</string>
     <string name="llama_local_model_dir">默认模型目录：%1$s</string>
+    <string name="llama_auto_config_tip">批大小、mmap、Flash Attention、KV 等 Android 兼容参数已内置，普通使用只需要调整线程数、上下文大小和 GPU 层数。</string>
     <string name="llama_select_downloaded_model">选择已下载的模型</string>
     <string name="llama_thread_count">线程数</string>
     <string name="llama_context_size">上下文长度</string>
+    <string name="llama_context_size_subtitle">Android 上建议先从 2048 开始，太大更容易因内存压力初始化失败</string>
+    <string name="llama_batch_size">批大小</string>
+    <string name="llama_batch_size_subtitle">建议不超过 512，并且不要大于上下文长度</string>
+    <string name="llama_ubatch_size">微批大小</string>
+    <string name="llama_ubatch_size_subtitle">建议不超过批大小，Android 上通常 512 更稳</string>
+    <string name="llama_gpu_layers">GPU 层数</string>
+    <string name="llama_gpu_layers_subtitle">当前构建存在 GPU backend 时才会生效，0 表示纯 CPU</string>
+    <string name="llama_use_mmap">使用 mmap</string>
+    <string name="llama_use_mmap_subtitle">Android 上默认建议关闭，很多机型关闭后更容易成功加载 GGUF</string>
+    <string name="llama_flash_attention">启用 Flash Attention</string>
+    <string name="llama_flash_attention_subtitle">移动端默认建议关闭，避免部分 Android backend 不稳定</string>
+    <string name="llama_kv_unified">统一 KV 缓存</string>
+    <string name="llama_kv_unified_subtitle">单会话聊天默认建议开启，可降低 Android 上的上下文管理开销</string>
+    <string name="llama_offload_kqv">卸载 KQV 到 GPU</string>
+    <string name="llama_offload_kqv_subtitle">仅在 GPU 层数大于 0 时有意义，没有 GPU backend 时会自动忽略</string>
     
     <!-- 工作流执行状态 -->
     <string name="workflow_execution_running">执行中…</string>
@@ -4696,6 +4709,17 @@
     <string name="save_and_resend">保存并重发</string>
     <string name="update_memory">更新记忆</string>
     <string name="chat_message">聊天消息</string>
+    <string name="chat_scroll_position_label">第 %1$d / %2$d 条消息</string>
+    <string name="chat_scroll_position_compact">%1$d/%2$d</string>
+    <string name="chat_message_locator_title">跳转到消息</string>
+    <string name="chat_message_locator_current">当前定位：第 %1$d / %2$d 条</string>
+    <string name="chat_message_locator_hint">点击任意一条消息即可快速跳转</string>
+    <string name="chat_sender_user">用户</string>
+    <string name="chat_sender_ai">AI</string>
+    <string name="chat_sender_summary">总结</string>
+    <string name="chat_sender_system">系统</string>
+    <string name="chat_sender_think">思考</string>
+    <string name="chat_sender_other">其他</string>
     <string name="share_failed_log">分享失败</string>
     <string name="generate_image_failed">生成图片失败: %1$s</string>
     <string name="start_export">开始导出...</string>

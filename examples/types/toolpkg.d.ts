@@ -237,6 +237,9 @@ export namespace ToolPkg {
     export type PromptHistoryHookHandler =
         (event: PromptHistoryHookEvent) => PromptHistoryHookReturn;
 
+    export type PromptEstimateHistoryHookHandler =
+        (event: PromptEstimateHistoryHookEvent) => PromptHistoryHookReturn;
+
     export type SystemPromptComposeHookHandler =
         (event: SystemPromptComposeHookEvent) => SystemPromptComposeHookReturn;
 
@@ -245,6 +248,9 @@ export namespace ToolPkg {
 
     export type PromptFinalizeHookHandler =
         (event: PromptFinalizeHookEvent) => PromptFinalizeHookReturn;
+
+    export type PromptEstimateFinalizeHookHandler =
+        (event: PromptEstimateFinalizeHookEvent) => PromptFinalizeHookReturn;
 
     export interface HookEventBase<
         TEventName extends string,
@@ -306,6 +312,9 @@ export namespace ToolPkg {
     export interface PromptHistoryHookEvent
         extends HookEventBase<PromptHistoryEventName, PromptHookEventPayload> {}
 
+    export interface PromptEstimateHistoryHookEvent
+        extends HookEventBase<PromptHistoryEventName, PromptHookEventPayload> {}
+
     export interface SystemPromptComposeHookEvent
         extends HookEventBase<SystemPromptComposeEventName, PromptHookEventPayload> {}
 
@@ -313,6 +322,9 @@ export namespace ToolPkg {
         extends HookEventBase<ToolPromptComposeEventName, PromptHookEventPayload> {}
 
     export interface PromptFinalizeHookEvent
+        extends HookEventBase<PromptFinalizeEventName, PromptHookEventPayload> {}
+
+    export interface PromptEstimateFinalizeHookEvent
         extends HookEventBase<PromptFinalizeEventName, PromptHookEventPayload> {}
 
     export interface ToolboxUiModuleRegistration {
@@ -360,6 +372,11 @@ export namespace ToolPkg {
         function: PromptHistoryHookHandler;
     }
 
+    export interface PromptEstimateHistoryHookRegistration {
+        id: string;
+        function: PromptEstimateHistoryHookHandler;
+    }
+
     export interface SystemPromptComposeHookRegistration {
         id: string;
         function: SystemPromptComposeHookHandler;
@@ -375,6 +392,11 @@ export namespace ToolPkg {
         function: PromptFinalizeHookHandler;
     }
 
+    export interface PromptEstimateFinalizeHookRegistration {
+        id: string;
+        function: PromptEstimateFinalizeHookHandler;
+    }
+
     export interface Registry {
         registerToolboxUiModule(definition: ToolboxUiModuleRegistration): void;
         registerAppLifecycleHook(definition: AppLifecycleHookRegistration): void;
@@ -384,9 +406,11 @@ export namespace ToolPkg {
         registerToolLifecycleHook(definition: ToolLifecycleHookRegistration): void;
         registerPromptInputHook(definition: PromptInputHookRegistration): void;
         registerPromptHistoryHook(definition: PromptHistoryHookRegistration): void;
+        registerPromptEstimateHistoryHook(definition: PromptEstimateHistoryHookRegistration): void;
         registerSystemPromptComposeHook(definition: SystemPromptComposeHookRegistration): void;
         registerToolPromptComposeHook(definition: ToolPromptComposeHookRegistration): void;
         registerPromptFinalizeHook(definition: PromptFinalizeHookRegistration): void;
+        registerPromptEstimateFinalizeHook(definition: PromptEstimateFinalizeHookRegistration): void;
         readResource(key: string, outputFileName?: string, internal?: boolean): Promise<string>;
     }
 }
@@ -408,11 +432,15 @@ declare global {
 
     function registerToolPkgPromptHistoryHook(definition: ToolPkg.PromptHistoryHookRegistration): void;
 
+    function registerToolPkgPromptEstimateHistoryHook(definition: ToolPkg.PromptEstimateHistoryHookRegistration): void;
+
     function registerToolPkgSystemPromptComposeHook(definition: ToolPkg.SystemPromptComposeHookRegistration): void;
 
     function registerToolPkgToolPromptComposeHook(definition: ToolPkg.ToolPromptComposeHookRegistration): void;
 
     function registerToolPkgPromptFinalizeHook(definition: ToolPkg.PromptFinalizeHookRegistration): void;
+
+    function registerToolPkgPromptEstimateFinalizeHook(definition: ToolPkg.PromptEstimateFinalizeHookRegistration): void;
 
     const ToolPkg: ToolPkg.Registry;
 }

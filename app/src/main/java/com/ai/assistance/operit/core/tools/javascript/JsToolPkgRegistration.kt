@@ -12,9 +12,11 @@ data class ToolPkgMainRegistrationCapture(
     val toolLifecycleHooks: List<String>,
     val promptInputHooks: List<String>,
     val promptHistoryHooks: List<String>,
+    val promptEstimateHistoryHooks: List<String>,
     val systemPromptComposeHooks: List<String>,
     val toolPromptComposeHooks: List<String>,
-    val promptFinalizeHooks: List<String>
+    val promptFinalizeHooks: List<String>,
+    val promptEstimateFinalizeHooks: List<String>
 )
 
 private enum class RegistrationBucket {
@@ -26,9 +28,11 @@ private enum class RegistrationBucket {
     TOOL_LIFECYCLE,
     PROMPT_INPUT,
     PROMPT_HISTORY,
+    PROMPT_ESTIMATE_HISTORY,
     SYSTEM_PROMPT_COMPOSE,
     TOOL_PROMPT_COMPOSE,
-    PROMPT_FINALIZE
+    PROMPT_FINALIZE,
+    PROMPT_ESTIMATE_FINALIZE
 }
 
 internal class JsToolPkgRegistrationSession {
@@ -56,6 +60,8 @@ internal class JsToolPkgRegistrationSession {
     fun appendPromptInputHook(specJson: String) = append(RegistrationBucket.PROMPT_INPUT, specJson)
     fun appendPromptHistoryHook(specJson: String) =
         append(RegistrationBucket.PROMPT_HISTORY, specJson)
+    fun appendPromptEstimateHistoryHook(specJson: String) =
+        append(RegistrationBucket.PROMPT_ESTIMATE_HISTORY, specJson)
 
     fun appendSystemPromptComposeHook(specJson: String) =
         append(RegistrationBucket.SYSTEM_PROMPT_COMPOSE, specJson)
@@ -65,6 +71,8 @@ internal class JsToolPkgRegistrationSession {
 
     fun appendPromptFinalizeHook(specJson: String) =
         append(RegistrationBucket.PROMPT_FINALIZE, specJson)
+    fun appendPromptEstimateFinalizeHook(specJson: String) =
+        append(RegistrationBucket.PROMPT_ESTIMATE_FINALIZE, specJson)
 
     fun finish(executionResult: Any?): ToolPkgMainRegistrationCapture {
         if (executionResult is String && executionResult.trim().startsWith("Error:", ignoreCase = true)) {
@@ -83,9 +91,11 @@ internal class JsToolPkgRegistrationSession {
                 toolLifecycleHooks = read(RegistrationBucket.TOOL_LIFECYCLE),
                 promptInputHooks = read(RegistrationBucket.PROMPT_INPUT),
                 promptHistoryHooks = read(RegistrationBucket.PROMPT_HISTORY),
+                promptEstimateHistoryHooks = read(RegistrationBucket.PROMPT_ESTIMATE_HISTORY),
                 systemPromptComposeHooks = read(RegistrationBucket.SYSTEM_PROMPT_COMPOSE),
                 toolPromptComposeHooks = read(RegistrationBucket.TOOL_PROMPT_COMPOSE),
-                promptFinalizeHooks = read(RegistrationBucket.PROMPT_FINALIZE)
+                promptFinalizeHooks = read(RegistrationBucket.PROMPT_FINALIZE),
+                promptEstimateFinalizeHooks = read(RegistrationBucket.PROMPT_ESTIMATE_FINALIZE)
             )
         }
     }
@@ -300,9 +310,11 @@ internal fun buildToolPkgRegistrationBridgeScript(): String {
                 ['registerToolLifecycleHook', 'registerToolPkgToolLifecycleHook'],
                 ['registerPromptInputHook', 'registerToolPkgPromptInputHook'],
                 ['registerPromptHistoryHook', 'registerToolPkgPromptHistoryHook'],
+                ['registerPromptEstimateHistoryHook', 'registerToolPkgPromptEstimateHistoryHook'],
                 ['registerSystemPromptComposeHook', 'registerToolPkgSystemPromptComposeHook'],
                 ['registerToolPromptComposeHook', 'registerToolPkgToolPromptComposeHook'],
-                ['registerPromptFinalizeHook', 'registerToolPkgPromptFinalizeHook']
+                ['registerPromptFinalizeHook', 'registerToolPkgPromptFinalizeHook'],
+                ['registerPromptEstimateFinalizeHook', 'registerToolPkgPromptEstimateFinalizeHook']
             ].forEach(function(entry) {
                 var apiName = entry[0];
                 var nativeMethod = entry[1];

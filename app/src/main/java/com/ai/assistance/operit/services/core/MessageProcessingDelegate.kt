@@ -61,7 +61,7 @@ class MessageProcessingDelegate(
         private val saveCurrentChat: () -> Unit,
         private val showErrorMessage: (String) -> Unit,
         private val updateChatTitle: (chatId: String, title: String) -> Unit,
-        private val onTurnComplete: (chatId: String?, service: EnhancedAIService) -> Unit,
+        private val onTurnComplete: (chatId: String?, service: EnhancedAIService, nextWindowSize: Int?) -> Unit,
         private val onTokenLimitExceeded: suspend (chatId: String?) -> Unit, // 新增：Token超限回调
         // 添加自动朗读相关的回调
         private val getIsAutoReadEnabled: () -> Boolean,
@@ -567,6 +567,7 @@ class MessageProcessingDelegate(
             var turnInputTokens = 0
             var turnOutputTokens = 0
             var turnCachedInputTokens = 0
+            var calculateNextWindowSize: (suspend () -> Int?)? = null
             try {
                 // if (!NetworkUtils.isNetworkAvailable(context)) {
                 //     withContext(Dispatchers.Main) { showErrorMessage("网络连接不可用") }
@@ -641,6 +642,31 @@ class MessageProcessingDelegate(
                     startTimeMs = loadRoleInfoStartTime,
                     details = "chatId=$activeChatId, roleCardId=$effectiveRoleCardId, roleName=$currentRoleName"
                 )
+                calculateNextWindowSize = {
+                    runCatching {
+                        AIMessageManager.calculateStableContextWindow(
+                            enhancedAiService = service,
+                            chatId = activeChatId,
+                            messageContent = "",
+                            chatHistory = getChatHistory(activeChatId),
+                            workspacePath = workspacePath,
+                            workspaceEnv = workspaceEnv,
+                            promptFunctionType = promptFunctionType,
+                            thinkingGuidance = thinkingGuidance,
+                            enableMemoryQuery = enableMemoryQuery,
+                            roleCardId = effectiveRoleCardId,
+                            currentRoleName = currentRoleName,
+                            splitHistoryByRole = true,
+                            groupOrchestrationMode = isGroupOrchestrationTurn,
+                            groupParticipantNamesText = groupParticipantNamesText,
+                            chatModelConfigIdOverride = chatModelConfigIdOverride,
+                            chatModelIndexOverride = chatModelIndexOverride,
+                            publishEstimate = false
+                        )
+                    }.onFailure {
+                        AppLogger.w(TAG, "回合结束后重算上下文窗口失败", it)
+                    }.getOrNull()
+                }
 
                 val loadChatHistoryStartTime = messageTimingNow()
                 val chatHistory = getChatHistory(activeChatId)
@@ -1034,6 +1060,7 @@ class MessageProcessingDelegate(
                     serviceForTurnComplete = serviceForTurnComplete,
                     skipFinalAutoRead = didStreamAutoRead && !isWaifuModeEnabled,
                     roleCardId = effectiveRoleCardId,
+                    calculateNextWindowSize = calculateNextWindowSize,
                     chatModelConfigIdOverride = chatModelConfigIdOverride,
                     chatModelIndexOverride = chatModelIndexOverride
                 )
@@ -1073,7 +1100,12 @@ class MessageProcessingDelegate(
                 if (shouldNotifyTurnComplete && !deferTurnCompleteToAsyncJob) {
                     val service = serviceForTurnComplete
                     if (service != null) {
-                        notifyTurnComplete(chatId, activeChatId, service)
+                        notifyTurnComplete(
+                            chatId,
+                            activeChatId,
+                            service,
+                            calculateNextWindowSize
+                        )
                     }
                 }
 
@@ -1091,17 +1123,19 @@ class MessageProcessingDelegate(
         chatRuntime.sendJob = sendJob
     }
 
-    private fun notifyTurnComplete(
+    private suspend fun notifyTurnComplete(
         chatId: String?,
         activeChatId: String?,
-        service: EnhancedAIService
+        service: EnhancedAIService,
+        calculateNextWindowSize: (suspend () -> Int?)? = null
     ) {
         if (!chatId.isNullOrBlank()) {
             val updated = _turnCompleteCounterByChatId.value.toMutableMap()
             updated[chatId] = (updated[chatId] ?: 0L) + 1L
             _turnCompleteCounterByChatId.value = updated
         }
-        onTurnComplete(activeChatId, service)
+        val nextWindowSize = calculateNextWindowSize?.invoke()
+        onTurnComplete(activeChatId, service, nextWindowSize)
     }
 
     private suspend fun finalizeMessageAndNotify(
@@ -1112,6 +1146,7 @@ class MessageProcessingDelegate(
         serviceForTurnComplete: EnhancedAIService?,
         skipFinalAutoRead: Boolean,
         roleCardId: String,
+        calculateNextWindowSize: (suspend () -> Int?)? = null,
         chatModelConfigIdOverride: String? = null,
         chatModelIndexOverride: Int? = null
     ): Boolean {
@@ -1238,7 +1273,12 @@ class MessageProcessingDelegate(
                         if (shouldNotifyTurnComplete) {
                             val service = serviceForTurnComplete
                             if (service != null) {
-                                notifyTurnComplete(chatId, activeChatId, service)
+                                notifyTurnComplete(
+                                    chatId,
+                                    activeChatId,
+                                    service,
+                                    calculateNextWindowSize
+                                )
                             }
                         }
                     }

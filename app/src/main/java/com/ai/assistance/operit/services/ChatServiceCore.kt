@@ -154,10 +154,11 @@ class ChatServiceCore(
             updateChatTitle = { chatId, title ->
                 chatHistoryDelegate.updateChatTitle(chatId, title)
             },
-            onTurnComplete = { chatId, service ->
+            onTurnComplete = { chatId, service, nextWindowSize ->
                 tokenStatisticsDelegate.updateCumulativeStatistics(chatId, service)
                 val (inputTokens, outputTokens) = tokenStatisticsDelegate.getCumulativeTokenCounts(chatId)
-                val windowSize = tokenStatisticsDelegate.getLastCurrentWindowSize(chatId)
+                val windowSize = nextWindowSize ?: tokenStatisticsDelegate.getLastCurrentWindowSize(chatId)
+                tokenStatisticsDelegate.setTokenCounts(chatId, inputTokens, outputTokens, windowSize)
                 chatHistoryDelegate.saveCurrentChat(inputTokens, outputTokens, windowSize, chatIdOverride = chatId)
                 additionalOnTurnComplete?.invoke(chatId, inputTokens, outputTokens, windowSize)
             },
@@ -189,6 +190,9 @@ class ChatServiceCore(
         chatHistoryDelegate.setBeforeDestructiveHistoryMutation { chatId ->
             messageCoordinationDelegate.cancelSummaryForDestructiveMutation(chatId)
             messageProcessingDelegate.cancelMessageForDestructiveMutation(chatId)
+        }
+        chatHistoryDelegate.setAfterDestructiveHistoryMutation { chatId ->
+            messageCoordinationDelegate.refreshStableContextWindow(chatId = chatId)
         }
 
         initialized = true

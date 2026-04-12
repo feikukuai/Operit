@@ -19,11 +19,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.translate
@@ -126,7 +128,24 @@ internal fun CanvasExpandableHeaderRow(
 
                 val titleX = iconSizePx + gapPx
                 val titleY = contentTop + (contentHeightPx - titleLayout.size.height) / 2f
-                drawText(titleLayout, topLeft = Offset(titleX, titleY))
+                val titleTopLeft = Offset(titleX, titleY)
+                val titleSize = Size(titleLayout.size.width.toFloat(), titleLayout.size.height.toFloat())
+                val hasShimmer = shimmerShiftPx != null
+
+                if (hasShimmer) {
+                    drawContext.canvas.saveLayer(
+                        bounds =
+                            Rect(
+                                left = titleTopLeft.x,
+                                top = titleTopLeft.y,
+                                right = titleTopLeft.x + titleSize.width,
+                                bottom = titleTopLeft.y + titleSize.height,
+                            ),
+                        paint = Paint(),
+                    )
+                }
+
+                drawText(titleLayout, topLeft = titleTopLeft)
 
                 if (shimmerShiftPx != null) {
                     drawRect(
@@ -141,10 +160,11 @@ internal fun CanvasExpandableHeaderRow(
                                 start = Offset(titleX + shimmerShiftPx - 140f, titleY),
                                 end = Offset(titleX + shimmerShiftPx + 140f, titleY + titleLayout.size.height),
                             ),
-                        topLeft = Offset(titleX, titleY),
-                        size = Size(titleLayout.size.width.toFloat(), titleLayout.size.height.toFloat()),
+                        topLeft = titleTopLeft,
+                        size = titleSize,
                         blendMode = BlendMode.SrcAtop,
                     )
+                    drawContext.canvas.restore()
                 }
             }
         }

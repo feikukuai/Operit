@@ -643,6 +643,30 @@ data class ParameterConfig(
     val value: String // 静态值或节点ID
 )
 
+private fun buildExecuteActionConfig(
+    actionConfigPairs: List<ParameterConfig>,
+    toolParameterSchemasByName: Map<String, ToolParameterSchema>
+): Map<String, ParameterValue> {
+    return actionConfigPairs
+        .asSequence()
+        .filter { it.key.isNotBlank() }
+        .filterNot { param ->
+            val schema = toolParameterSchemasByName[param.key.trim()]
+            schema != null &&
+                !schema.required &&
+                !param.isReference &&
+                param.value.isBlank()
+        }
+        .associate { param ->
+            val normalizedKey = param.key.trim()
+            normalizedKey to if (param.isReference) {
+                ParameterValue.NodeReference(param.value)
+            } else {
+                ParameterValue.StaticValue(param.value)
+            }
+        }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NodeDialog(
@@ -1967,15 +1991,10 @@ fun NodeDialog(
                                 name = nodeName,
                                 description = description,
                                 actionType = actionType,
-                                actionConfig = actionConfigPairs
-                                    .filter { it.key.isNotBlank() } // 过滤掉空的参数名
-                                    .associate { param ->
-                                        param.key to if (param.isReference) {
-                                            ParameterValue.NodeReference(param.value)
-                                        } else {
-                                            ParameterValue.StaticValue(param.value)
-                                        }
-                                    }
+                                actionConfig = buildExecuteActionConfig(
+                                    actionConfigPairs = actionConfigPairs,
+                                    toolParameterSchemasByName = toolParameterSchemasByName
+                                )
                             )
                             is ConditionNode -> node.copy(
                                 name = nodeName,
@@ -2050,15 +2069,10 @@ fun NodeDialog(
                                 name = nodeName,
                                 description = description,
                                 actionType = actionType,
-                                actionConfig = actionConfigPairs
-                                    .filter { it.key.isNotBlank() } // 过滤掉空的参数名
-                                    .associate { param ->
-                                        param.key to if (param.isReference) {
-                                            ParameterValue.NodeReference(param.value)
-                                        } else {
-                                            ParameterValue.StaticValue(param.value)
-                                        }
-                                    }
+                                actionConfig = buildExecuteActionConfig(
+                                    actionConfigPairs = actionConfigPairs,
+                                    toolParameterSchemasByName = toolParameterSchemasByName
+                                )
                             )
                             "condition" -> ConditionNode(
                                 name = nodeName,
@@ -2226,4 +2240,3 @@ fun EditWorkflowDialog(
         }
     )
 }
-

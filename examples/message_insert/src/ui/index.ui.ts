@@ -58,10 +58,11 @@ function createToggleCard(
   title: string,
   subtitle: string,
   checked: boolean,
-  onCheckedChange: (checked: boolean) => void
+  onCheckedChange: (checked: boolean) => void,
+  enabled = true
 ): ComposeNode {
   return ctx.UI.Surface(toggleCardStyle, [
-    createToggleRow(ctx, title, subtitle, checked, onCheckedChange),
+    createToggleRow(ctx, title, subtitle, checked, onCheckedChange, enabled),
   ]);
 }
 
@@ -70,7 +71,8 @@ function createToggleRow(
   title: string,
   subtitle: string,
   checked: boolean,
-  onCheckedChange: (checked: boolean) => void
+  onCheckedChange: (checked: boolean) => void,
+  enabled = true
 ): ComposeNode {
   return ctx.UI.Row(
     {
@@ -95,6 +97,7 @@ function createToggleRow(
       ctx.UI.Spacer({ width: 12 }),
       ctx.UI.Switch({
         checked,
+        enabled,
         onCheckedChange,
       }),
     ]
@@ -106,12 +109,15 @@ type ToggleCardItem = {
   subtitle: string;
   checked: boolean;
   onCheckedChange: (checked: boolean) => void;
+  enabled?: boolean;
 };
 
 function createMemoryConfigSection(
   ctx: ComposeDslContext,
   text: ReturnType<typeof resolveExtraInfoI18n>,
   enabled: boolean,
+  allowRepeatedMemorySearch: boolean,
+  onAllowRepeatedMemorySearchChange: (checked: boolean) => void,
   thresholdValue: string,
   limitValue: string,
   onThresholdChange: (value: string) => void,
@@ -135,6 +141,15 @@ function createMemoryConfigSection(
         style: "bodySmall",
         color: "onSurfaceVariant",
       }),
+      createToggleRow(
+        ctx,
+        text.memoryRepeatToggleTitle,
+        text.memoryRepeatToggleDescription,
+        allowRepeatedMemorySearch,
+        onAllowRepeatedMemorySearchChange,
+        enabled
+      ),
+      createDivider(ctx),
       ctx.UI.TextField({
         enabled,
         label: text.memoryThresholdFieldLabel,
@@ -185,7 +200,8 @@ function createInjectionItemsCard(
         item.title,
         item.subtitle,
         item.checked,
-        item.onCheckedChange
+        item.onCheckedChange,
+        item.enabled ?? true
       )
     );
     children.push(createDivider(ctx));
@@ -205,6 +221,11 @@ export default function Screen(ctx: ComposeDslContext): ComposeNode {
   const initial = readSettings();
 
   const masterEnabledState = useStateValue(ctx, "masterEnabled", initial.masterEnabled);
+  const persistInjectedContentState = useStateValue(
+    ctx,
+    "persistInjectedContent",
+    initial.persistInjectedContent
+  );
   const injectTimeState = useStateValue(ctx, "injectTime", initial.injectTime);
   const injectBatteryState = useStateValue(ctx, "injectBattery", initial.injectBattery);
   const injectWeatherState = useStateValue(ctx, "injectWeather", initial.injectWeather);
@@ -215,6 +236,11 @@ export default function Screen(ctx: ComposeDslContext): ComposeNode {
     initial.injectNotifications
   );
   const injectMemoryState = useStateValue(ctx, "injectMemory", initial.injectMemory);
+  const allowRepeatedMemorySearchState = useStateValue(
+    ctx,
+    "allowRepeatedMemorySearch",
+    initial.allowRepeatedMemorySearch
+  );
   const memoryThresholdState = useStateValue(ctx, "memoryThreshold", initial.memoryThreshold);
   const memoryLimitState = useStateValue(ctx, "memoryLimit", initial.memoryLimit);
   const memoryThresholdInputState = useStateValue(
@@ -233,12 +259,14 @@ export default function Screen(ctx: ComposeDslContext): ComposeNode {
 
   const syncSettings = (next: ExtraInfoInjectionSettings): void => {
     masterEnabledState.set(next.masterEnabled);
+    persistInjectedContentState.set(next.persistInjectedContent);
     injectTimeState.set(next.injectTime);
     injectBatteryState.set(next.injectBattery);
     injectWeatherState.set(next.injectWeather);
     injectLocationState.set(next.injectLocation);
     injectNotificationsState.set(next.injectNotifications);
     injectMemoryState.set(next.injectMemory);
+    allowRepeatedMemorySearchState.set(next.allowRepeatedMemorySearch);
     memoryThresholdState.set(next.memoryThreshold);
     memoryLimitState.set(next.memoryLimit);
     memoryThresholdInputState.set(formatDecimal(next.memoryThreshold));
@@ -285,6 +313,9 @@ export default function Screen(ctx: ComposeDslContext): ComposeNode {
 
   const summaryLines = [
     masterEnabledState.value ? text.summaryMasterEnabled : text.summaryMasterDisabled,
+    persistInjectedContentState.value
+      ? text.summaryPersistEnabled
+      : text.summaryPersistDisabled,
     injectTimeState.value ? text.summaryTimeEnabled : text.summaryTimeDisabled,
     injectBatteryState.value ? text.summaryBatteryEnabled : text.summaryBatteryDisabled,
     injectWeatherState.value ? text.summaryWeatherEnabled : text.summaryWeatherDisabled,
@@ -295,7 +326,11 @@ export default function Screen(ctx: ComposeDslContext): ComposeNode {
     injectMemoryState.value
       ? `${text.summaryMemoryEnabled} (${text.memoryThresholdLabel}: ${formatDecimal(
           memoryThresholdState.value
-        )}; ${text.memoryLimitLabel}: ${memoryLimitState.value})`
+        )}; ${text.memoryLimitLabel}: ${memoryLimitState.value}; ${
+          allowRepeatedMemorySearchState.value
+            ? text.summaryMemoryRepeatEnabled
+            : text.summaryMemoryRepeatDisabled
+        })`
       : text.summaryMemoryDisabled,
     text.summaryRulesHint,
   ];
@@ -345,6 +380,15 @@ export default function Screen(ctx: ComposeDslContext): ComposeNode {
       masterEnabledState.value,
       checked => {
         persistSettings({ masterEnabled: checked });
+      }
+    ),
+    createToggleCard(
+      ctx,
+      text.persistToggleTitle,
+      text.persistToggleDescription,
+      persistInjectedContentState.value,
+      checked => {
+        persistSettings({ persistInjectedContent: checked });
       }
     ),
 
@@ -405,6 +449,10 @@ export default function Screen(ctx: ComposeDslContext): ComposeNode {
         ctx,
         text,
         injectMemoryState.value,
+        allowRepeatedMemorySearchState.value,
+        checked => {
+          persistSettings({ allowRepeatedMemorySearch: checked });
+        },
         memoryThresholdInputState.value,
         memoryLimitInputState.value,
         value => {

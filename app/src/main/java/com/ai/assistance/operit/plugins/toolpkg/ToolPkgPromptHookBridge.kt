@@ -1,6 +1,8 @@
 package com.ai.assistance.operit.plugins.toolpkg
 
 import com.ai.assistance.operit.core.chat.hooks.PromptFinalizeHook
+import com.ai.assistance.operit.core.chat.hooks.PromptEstimateFinalizeHook
+import com.ai.assistance.operit.core.chat.hooks.PromptEstimateHistoryHook
 import com.ai.assistance.operit.core.chat.hooks.PromptHistoryHook
 import com.ai.assistance.operit.core.chat.hooks.PromptHookContext
 import com.ai.assistance.operit.core.chat.hooks.PromptHookMutation
@@ -12,6 +14,8 @@ import com.ai.assistance.operit.core.chat.hooks.ToolPromptComposeHook
 import com.ai.assistance.operit.core.tools.packTool.PackageManager
 import com.ai.assistance.operit.core.tools.packTool.ToolPkgContainerRuntime
 import com.ai.assistance.operit.core.tools.packTool.TOOLPKG_EVENT_PROMPT_FINALIZE
+import com.ai.assistance.operit.core.tools.packTool.TOOLPKG_EVENT_PROMPT_ESTIMATE_FINALIZE
+import com.ai.assistance.operit.core.tools.packTool.TOOLPKG_EVENT_PROMPT_ESTIMATE_HISTORY
 import com.ai.assistance.operit.core.tools.packTool.TOOLPKG_EVENT_PROMPT_HISTORY
 import com.ai.assistance.operit.core.tools.packTool.TOOLPKG_EVENT_PROMPT_INPUT
 import com.ai.assistance.operit.core.tools.packTool.TOOLPKG_EVENT_SYSTEM_PROMPT_COMPOSE
@@ -30,11 +34,15 @@ internal object ToolPkgPromptHookBridge {
     @Volatile
     private var promptHistoryHooks: List<ToolPkgPromptHookRegistration> = emptyList()
     @Volatile
+    private var promptEstimateHistoryHooks: List<ToolPkgPromptHookRegistration> = emptyList()
+    @Volatile
     private var systemPromptComposeHooks: List<ToolPkgPromptHookRegistration> = emptyList()
     @Volatile
     private var toolPromptComposeHooks: List<ToolPkgPromptHookRegistration> = emptyList()
     @Volatile
     private var promptFinalizeHooks: List<ToolPkgPromptHookRegistration> = emptyList()
+    @Volatile
+    private var promptEstimateFinalizeHooks: List<ToolPkgPromptHookRegistration> = emptyList()
     private val runtimeChangeListener =
         PackageManager.ToolPkgRuntimeChangeListener {
             syncToolPkgRegistrations(toolPkgPackageManager().getImportedToolPkgContainerRuntimes())
@@ -60,6 +68,19 @@ internal object ToolPkgPromptHookBridge {
             return dispatchPromptHooks(
                 hooks = promptHistoryHooks,
                 familyEvent = TOOLPKG_EVENT_PROMPT_HISTORY,
+                context = context,
+                parseMutation = ::parsePromptHistoryMutation
+            )
+        }
+    }
+
+    private object PromptEstimateHistoryBridge : PromptEstimateHistoryHook {
+        override val id: String = "builtin.toolpkg.prompt-estimate-history-hook-bridge"
+
+        override fun onEvent(context: PromptHookContext): PromptHookMutation? {
+            return dispatchPromptHooks(
+                hooks = promptEstimateHistoryHooks,
+                familyEvent = TOOLPKG_EVENT_PROMPT_ESTIMATE_HISTORY,
                 context = context,
                 parseMutation = ::parsePromptHistoryMutation
             )
@@ -105,15 +126,30 @@ internal object ToolPkgPromptHookBridge {
         }
     }
 
+    private object PromptEstimateFinalizeBridge : PromptEstimateFinalizeHook {
+        override val id: String = "builtin.toolpkg.prompt-estimate-finalize-hook-bridge"
+
+        override fun onEvent(context: PromptHookContext): PromptHookMutation? {
+            return dispatchPromptHooks(
+                hooks = promptEstimateFinalizeHooks,
+                familyEvent = TOOLPKG_EVENT_PROMPT_ESTIMATE_FINALIZE,
+                context = context,
+                parseMutation = ::parsePromptFinalizeMutation
+            )
+        }
+    }
+
     fun register() {
         if (!installed.compareAndSet(false, true)) {
             return
         }
         PromptHookRegistry.registerPromptInputHook(PromptInputBridge)
         PromptHookRegistry.registerPromptHistoryHook(PromptHistoryBridge)
+        PromptHookRegistry.registerPromptEstimateHistoryHook(PromptEstimateHistoryBridge)
         PromptHookRegistry.registerSystemPromptComposeHook(SystemPromptComposeBridge)
         PromptHookRegistry.registerToolPromptComposeHook(ToolPromptComposeBridge)
         PromptHookRegistry.registerPromptFinalizeHook(PromptFinalizeBridge)
+        PromptHookRegistry.registerPromptEstimateFinalizeHook(PromptEstimateFinalizeBridge)
 
         val manager = toolPkgPackageManager()
         manager.addToolPkgRuntimeChangeListener(runtimeChangeListener)
@@ -214,6 +250,23 @@ internal object ToolPkgPromptHookBridge {
                 )
             )
 
+        promptEstimateHistoryHooks =
+            activeContainers.flatMap { runtime ->
+                runtime.promptEstimateHistoryHooks.map { hook ->
+                    ToolPkgPromptHookRegistration(
+                        containerPackageName = runtime.packageName,
+                        hookId = hook.id,
+                        functionName = hook.function,
+                        functionSource = hook.functionSource
+                    )
+                }
+            }.sortedWith(
+                compareBy(
+                    ToolPkgPromptHookRegistration::containerPackageName,
+                    ToolPkgPromptHookRegistration::hookId
+                )
+            )
+
         systemPromptComposeHooks =
             activeContainers.flatMap { runtime ->
                 runtime.systemPromptComposeHooks.map { hook ->
@@ -251,6 +304,23 @@ internal object ToolPkgPromptHookBridge {
         promptFinalizeHooks =
             activeContainers.flatMap { runtime ->
                 runtime.promptFinalizeHooks.map { hook ->
+                    ToolPkgPromptHookRegistration(
+                        containerPackageName = runtime.packageName,
+                        hookId = hook.id,
+                        functionName = hook.function,
+                        functionSource = hook.functionSource
+                    )
+                }
+            }.sortedWith(
+                compareBy(
+                    ToolPkgPromptHookRegistration::containerPackageName,
+                    ToolPkgPromptHookRegistration::hookId
+                )
+            )
+
+        promptEstimateFinalizeHooks =
+            activeContainers.flatMap { runtime ->
+                runtime.promptEstimateFinalizeHooks.map { hook ->
                     ToolPkgPromptHookRegistration(
                         containerPackageName = runtime.packageName,
                         hookId = hook.id,

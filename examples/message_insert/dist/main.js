@@ -5,6 +5,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerToolPkg = registerToolPkg;
 exports.onPromptInput = onPromptInput;
+exports.onPromptFinalize = onPromptFinalize;
 exports.onInputMenuToggle = onInputMenuToggle;
 const index_ui_js_1 = __importDefault(require("./ui/index.ui.js"));
 const shared_1 = require("./shared");
@@ -23,6 +24,10 @@ function registerToolPkg() {
         id: "message_insert_prompt_input",
         function: onPromptInput,
     });
+    ToolPkg.registerPromptFinalizeHook({
+        id: "message_insert_prompt_finalize",
+        function: onPromptFinalize,
+    });
     ToolPkg.registerInputMenuTogglePlugin({
         id: "message_insert_input_menu_toggle",
         function: onInputMenuToggle,
@@ -34,16 +39,30 @@ async function onPromptInput(input) {
     if (stage !== "before_process") {
         return null;
     }
+    if (!(0, shared_1.loadSettings)().persistInjectedContent) {
+        return null;
+    }
     const processedInput = String(input.eventPayload.processedInput ?? input.eventPayload.rawInput ?? "");
     if (!processedInput.trim()) {
         return null;
     }
     const chatId = String(input.eventPayload.chatId ?? getChatId() ?? "").trim();
-    const tags = await (0, shared_1.buildExtraInfoAttachmentTags)(processedInput, chatId || undefined);
-    if (!tags.length) {
+    return (0, shared_1.appendExtraInfoToMessage)(processedInput, chatId || undefined);
+}
+async function onPromptFinalize(input) {
+    const stage = String(input.eventPayload.stage ?? input.eventName ?? "");
+    if (stage !== "before_send_to_model") {
         return null;
     }
-    return `${processedInput.replace(/\s+$/, "")} ${tags.join(" ")}`;
+    if ((0, shared_1.loadSettings)().persistInjectedContent) {
+        return null;
+    }
+    const processedInput = String(input.eventPayload.processedInput ?? input.eventPayload.rawInput ?? "");
+    if (!processedInput.trim()) {
+        return null;
+    }
+    const chatId = String(input.eventPayload.chatId ?? getChatId() ?? "").trim();
+    return (0, shared_1.appendExtraInfoToMessage)(processedInput, chatId || undefined);
 }
 function onInputMenuToggle(input) {
     const action = String(input.eventPayload.action ?? "").toLowerCase();

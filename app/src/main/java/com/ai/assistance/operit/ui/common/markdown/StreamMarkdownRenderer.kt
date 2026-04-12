@@ -383,6 +383,7 @@ fun StreamMarkdownRenderer(
                 val isInlineContainer =
                     tempBlockType != MarkdownProcessorType.CODE_BLOCK &&
                         tempBlockType != MarkdownProcessorType.BLOCK_LATEX &&
+                        tempBlockType != MarkdownProcessorType.TABLE &&
                         tempBlockType != MarkdownProcessorType.XML_BLOCK
 
                 val newNode = MarkdownNode(type = tempBlockType)
@@ -644,6 +645,7 @@ fun StreamMarkdownRenderer(
                     val isInlineContainer =
                         tempBlockType != MarkdownProcessorType.CODE_BLOCK &&
                             tempBlockType != MarkdownProcessorType.BLOCK_LATEX &&
+                            tempBlockType != MarkdownProcessorType.TABLE &&
                             tempBlockType != MarkdownProcessorType.XML_BLOCK
 
                     val newNode = MarkdownNode(type = tempBlockType)

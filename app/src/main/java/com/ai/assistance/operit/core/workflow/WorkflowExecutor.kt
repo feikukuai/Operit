@@ -2,6 +2,7 @@ package com.ai.assistance.operit.core.workflow
 
 import android.content.Context
 import com.ai.assistance.operit.R
+import com.ai.assistance.operit.core.config.SystemToolPrompts
 import com.ai.assistance.operit.util.AppLogger
 import com.ai.assistance.operit.core.tools.AIToolHandler
 import com.ai.assistance.operit.data.model.AITool
@@ -14,6 +15,7 @@ import com.ai.assistance.operit.data.model.LogicNode
 import com.ai.assistance.operit.data.model.LogicOperator
 import com.ai.assistance.operit.data.model.ParameterValue
 import com.ai.assistance.operit.data.model.ToolParameter
+import com.ai.assistance.operit.data.model.ToolParameterSchema
 import com.ai.assistance.operit.data.model.TriggerNode
 import com.ai.assistance.operit.data.model.Workflow
 import com.ai.assistance.operit.data.model.WorkflowExecutionLogEntry
@@ -966,10 +968,75 @@ class WorkflowExecutor(private val context: Context) {
         nodeResults: Map<String, NodeExecutionState>,
         triggerExtras: Map<String, String>
     ): List<ToolParameter> {
-        return node.actionConfig.map { (key, paramValue) ->
+        val schemasByName = getToolParameterSchemas(node.actionType)
+        return node.actionConfig.mapNotNull { (key, paramValue) ->
+            val normalizedKey = key.trim()
+            if (normalizedKey.isBlank()) {
+                return@mapNotNull null
+            }
+            val schema = schemasByName[normalizedKey]
+            if (
+                schema != null &&
+                !schema.required &&
+                paramValue is ParameterValue.StaticValue &&
+                paramValue.value.isBlank()
+            ) {
+                return@mapNotNull null
+            }
             val resolvedValue = resolveParameterValue(paramValue, nodeResults, triggerExtras)
-            ToolParameter(name = key, value = resolvedValue)
+            ToolParameter(name = normalizedKey, value = resolvedValue)
         }
+    }
+
+    private fun getToolParameterSchemas(toolName: String): Map<String, ToolParameterSchema> {
+        val normalizedToolName = toolName.trim()
+        if (normalizedToolName.isBlank()) {
+            return emptyMap()
+        }
+
+        if (normalizedToolName.contains(":")) {
+            val parts = normalizedToolName.split(":", limit = 2)
+            if (parts.size != 2) {
+                return emptyMap()
+            }
+
+            val packageName = parts[0].trim()
+            val packageToolName = parts[1].trim()
+            if (packageName.isBlank() || packageToolName.isBlank()) {
+                return emptyMap()
+            }
+
+            val packageManager = toolHandler.getOrCreatePackageManager()
+            runCatching {
+                if (!packageManager.isPackageImported(packageName)) {
+                    packageManager.importPackage(packageName)
+                }
+                packageManager.usePackage(packageName)
+            }
+
+            return packageManager
+                .getEffectivePackageTools(packageName)
+                ?.tools
+                ?.find { it.name == packageToolName }
+                ?.parameters
+                ?.map { parameter ->
+                    ToolParameterSchema(
+                        name = parameter.name,
+                        type = parameter.type,
+                        description = "",
+                        required = parameter.required
+                    )
+                }
+                ?.associateBy { it.name }
+                .orEmpty()
+        }
+
+        return SystemToolPrompts.getAllCategoriesEn()
+            .flatMap { it.tools }
+            .find { it.name == normalizedToolName }
+            ?.parametersStructured
+            ?.associateBy { it.name }
+            .orEmpty()
     }
     
     /**

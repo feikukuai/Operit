@@ -801,14 +801,7 @@ class ChatViewModel(private val context: Context) : ViewModel() {
                     // 插入总结消息
                     chatHistoryDelegate.addSummaryMessage(summaryMessage, insertPosition)
 
-                    // 插入总结后，重新计算窗口大小并保存
-                    val newHistoryForTokens =
-                        AIMessageManager.getMemoryFromMessages(chatHistoryDelegate.chatHistory.value)
-                    val chatService = enhancedAiService!!.getAIServiceForFunction(FunctionType.CHAT)
-                    val newWindowSize = chatService.calculateInputTokens("", newHistoryForTokens)
-                    val (inputTokens, outputTokens) = tokenStatsDelegate.getCumulativeTokenCounts()
-                    chatHistoryDelegate.saveCurrentChat(inputTokens, outputTokens, newWindowSize)
-                    tokenStatsDelegate.setTokenCounts(inputTokens, outputTokens, newWindowSize)
+                    messageCoordinationDelegate.refreshStableContextWindow(chatId = currentChatId)
 
                     uiStateDelegate.showToast(context.getString(R.string.chat_summary_inserted))
                 } else {
@@ -971,15 +964,7 @@ class ChatViewModel(private val context: Context) : ViewModel() {
                 // 直接在数据库中更新该条消息
                 chatHistoryDelegate.addMessageToChat(editedMessage)
 
-                // 更新统计信息并保存
-                tokenStatsDelegate.updateCumulativeStatistics()
-                val (inputTokens, outputTokens) = tokenStatsDelegate.getCumulativeTokenCounts()
-                val currentWindowSize = tokenStatsDelegate.getLastCurrentWindowSize()
-                chatHistoryDelegate.saveCurrentChat(
-                    inputTokens,
-                    outputTokens,
-                    currentWindowSize
-                )
+                messageCoordinationDelegate.refreshStableContextWindow(chatId = currentChatId.value)
 
                 // 显示成功提示
                 uiStateDelegate.showToast(context.getString(R.string.chat_message_updated))

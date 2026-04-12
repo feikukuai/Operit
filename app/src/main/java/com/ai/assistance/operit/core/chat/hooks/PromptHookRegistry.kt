@@ -49,6 +49,12 @@ interface PromptHistoryHook {
     fun onEvent(context: PromptHookContext): PromptHookMutation? = null
 }
 
+interface PromptEstimateHistoryHook {
+    val id: String
+
+    fun onEvent(context: PromptHookContext): PromptHookMutation? = null
+}
+
 interface SystemPromptComposeHook {
     val id: String
 
@@ -62,6 +68,12 @@ interface ToolPromptComposeHook {
 }
 
 interface PromptFinalizeHook {
+    val id: String
+
+    fun onEvent(context: PromptHookContext): PromptHookMutation? = null
+}
+
+interface PromptEstimateFinalizeHook {
     val id: String
 
     fun onEvent(context: PromptHookContext): PromptHookMutation? = null
@@ -82,9 +94,11 @@ fun List<PromptMessage>.toRoleContentPairs(): List<Pair<String, String>> {
 object PromptHookRegistry {
     private val promptInputHooks = CopyOnWriteArrayList<PromptInputHook>()
     private val promptHistoryHooks = CopyOnWriteArrayList<PromptHistoryHook>()
+    private val promptEstimateHistoryHooks = CopyOnWriteArrayList<PromptEstimateHistoryHook>()
     private val systemPromptComposeHooks = CopyOnWriteArrayList<SystemPromptComposeHook>()
     private val toolPromptComposeHooks = CopyOnWriteArrayList<ToolPromptComposeHook>()
     private val promptFinalizeHooks = CopyOnWriteArrayList<PromptFinalizeHook>()
+    private val promptEstimateFinalizeHooks = CopyOnWriteArrayList<PromptEstimateFinalizeHook>()
 
     @Synchronized
     fun registerPromptInputHook(hook: PromptInputHook) {
@@ -106,6 +120,17 @@ object PromptHookRegistry {
     @Synchronized
     fun unregisterPromptHistoryHook(hookId: String) {
         promptHistoryHooks.removeAll { it.id == hookId }
+    }
+
+    @Synchronized
+    fun registerPromptEstimateHistoryHook(hook: PromptEstimateHistoryHook) {
+        unregisterPromptEstimateHistoryHook(hook.id)
+        promptEstimateHistoryHooks.add(hook)
+    }
+
+    @Synchronized
+    fun unregisterPromptEstimateHistoryHook(hookId: String) {
+        promptEstimateHistoryHooks.removeAll { it.id == hookId }
     }
 
     @Synchronized
@@ -141,6 +166,17 @@ object PromptHookRegistry {
         promptFinalizeHooks.removeAll { it.id == hookId }
     }
 
+    @Synchronized
+    fun registerPromptEstimateFinalizeHook(hook: PromptEstimateFinalizeHook) {
+        unregisterPromptEstimateFinalizeHook(hook.id)
+        promptEstimateFinalizeHooks.add(hook)
+    }
+
+    @Synchronized
+    fun unregisterPromptEstimateFinalizeHook(hookId: String) {
+        promptEstimateFinalizeHooks.removeAll { it.id == hookId }
+    }
+
     fun dispatchPromptInputHooks(initialContext: PromptHookContext): PromptHookContext {
         return dispatch(
             initialContext = initialContext,
@@ -156,6 +192,16 @@ object PromptHookRegistry {
             initialContext = initialContext,
             hooks = promptHistoryHooks,
             hookLabel = "PromptHistoryHook"
+        ) { hook, context ->
+            hook.onEvent(context)
+        }
+    }
+
+    fun dispatchPromptEstimateHistoryHooks(initialContext: PromptHookContext): PromptHookContext {
+        return dispatch(
+            initialContext = initialContext,
+            hooks = promptEstimateHistoryHooks,
+            hookLabel = "PromptEstimateHistoryHook"
         ) { hook, context ->
             hook.onEvent(context)
         }
@@ -186,6 +232,16 @@ object PromptHookRegistry {
             initialContext = initialContext,
             hooks = promptFinalizeHooks,
             hookLabel = "PromptFinalizeHook"
+        ) { hook, context ->
+            hook.onEvent(context)
+        }
+    }
+
+    fun dispatchPromptEstimateFinalizeHooks(initialContext: PromptHookContext): PromptHookContext {
+        return dispatch(
+            initialContext = initialContext,
+            hooks = promptEstimateFinalizeHooks,
+            hookLabel = "PromptEstimateFinalizeHook"
         ) { hook, context ->
             hook.onEvent(context)
         }

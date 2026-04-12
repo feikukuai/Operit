@@ -1,6 +1,7 @@
 package com.ai.assistance.operit.api.chat.llmprovider
 
 import android.content.Context
+import com.ai.assistance.llama.LlamaSession
 import com.ai.assistance.operit.util.AppLogger
 import com.ai.assistance.operit.data.model.ApiProviderType
 import com.ai.assistance.operit.data.model.ModelConfigData
@@ -55,6 +56,23 @@ object AIServiceFactory {
             AppLogger.e("AIServiceFactory", "解析自定义请求头失败", e)
             emptyMap()
         }
+    }
+
+    private fun buildAndroidLlamaSessionConfig(config: ModelConfigData): LlamaSession.Config {
+        val safeThreadCount =
+            config.llamaThreadCount.coerceAtLeast(1)
+                .coerceAtMost(Runtime.getRuntime().availableProcessors().coerceAtLeast(1))
+        return LlamaSession.Config(
+            nThreads = safeThreadCount,
+            nCtx = config.llamaContextSize.coerceAtLeast(1),
+            nBatch = 512,
+            nUBatch = 512,
+            nGpuLayers = config.llamaGpuLayers.coerceAtLeast(0),
+            useMmap = false,
+            flashAttention = false,
+            kvUnified = true,
+            offloadKqv = false
+        )
     }
 
     /**
@@ -175,8 +193,7 @@ object AIServiceFactory {
             ApiProviderType.LLAMA_CPP -> LlamaProvider(
                 context = context,
                 modelName = config.modelName,
-                threadCount = config.llamaThreadCount,
-                contextSize = config.llamaContextSize,
+                sessionConfig = buildAndroidLlamaSessionConfig(config),
                 providerType = config.apiProviderType,
                 enableToolCall = enableToolCall
             )

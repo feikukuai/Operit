@@ -60,6 +60,11 @@ internal object ToolPkgMainRegistrationScriptParser {
                     registrations = captured.promptHistoryHooks,
                     registryName = TOOLPKG_REGISTRATION_PROMPT_HISTORY_HOOK
                 )
+            val promptEstimateHistoryHooks =
+                parseRegisteredFunctionHooks(
+                    registrations = captured.promptEstimateHistoryHooks,
+                    registryName = TOOLPKG_REGISTRATION_PROMPT_ESTIMATE_HISTORY_HOOK
+                )
             val systemPromptComposeHooks =
                 parseRegisteredFunctionHooks(
                     registrations = captured.systemPromptComposeHooks,
@@ -75,6 +80,11 @@ internal object ToolPkgMainRegistrationScriptParser {
                     registrations = captured.promptFinalizeHooks,
                     registryName = TOOLPKG_REGISTRATION_PROMPT_FINALIZE_HOOK
                 )
+            val promptEstimateFinalizeHooks =
+                parseRegisteredFunctionHooks(
+                    registrations = captured.promptEstimateFinalizeHooks,
+                    registryName = TOOLPKG_REGISTRATION_PROMPT_ESTIMATE_FINALIZE_HOOK
+                )
             ToolPkgMainRegistration(
                 toolboxUiModules = uiModules,
                 appLifecycleHooks = appLifecycleHooks,
@@ -84,9 +94,11 @@ internal object ToolPkgMainRegistrationScriptParser {
                 toolLifecycleHooks = toolLifecycleHooks,
                 promptInputHooks = promptInputHooks,
                 promptHistoryHooks = promptHistoryHooks,
+                promptEstimateHistoryHooks = promptEstimateHistoryHooks,
                 systemPromptComposeHooks = systemPromptComposeHooks,
                 toolPromptComposeHooks = toolPromptComposeHooks,
-                promptFinalizeHooks = promptFinalizeHooks
+                promptFinalizeHooks = promptFinalizeHooks,
+                promptEstimateFinalizeHooks = promptEstimateFinalizeHooks
             )
         } catch (e: Exception) {
             AppLogger.e(TAG, "Failed to parse toolpkg main registration: $toolPkgId", e)

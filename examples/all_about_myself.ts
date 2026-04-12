@@ -1159,6 +1159,177 @@
           }
           type: string
           required: false
+        },
+        {
+          name: "context_length"
+          description: {
+            zh: "可选，上下文长度倍率"
+            en: "Optional context length multiplier"
+          }
+          type: number
+          required: false
+        },
+        {
+          name: "max_context_length"
+          description: {
+            zh: "可选，最大上下文长度倍率"
+            en: "Optional max context length multiplier"
+          }
+          type: number
+          required: false
+        },
+        {
+          name: "enable_max_context_mode"
+          description: {
+            zh: "可选，是否启用最大上下文模式"
+            en: "Optional max-context mode switch"
+          }
+          type: boolean
+          required: false
+        },
+        {
+          name: "summary_token_threshold"
+          description: {
+            zh: "可选，总结触发阈值"
+            en: "Optional summary trigger threshold"
+          }
+          type: number
+          required: false
+        },
+        {
+          name: "enable_summary"
+          description: {
+            zh: "可选，是否启用总结"
+            en: "Optional summary switch"
+          }
+          type: boolean
+          required: false
+        },
+        {
+          name: "enable_summary_by_message_count"
+          description: {
+            zh: "可选，是否按消息数触发总结"
+            en: "Optional summary-by-message-count switch"
+          }
+          type: boolean
+          required: false
+        },
+        {
+          name: "summary_message_count_threshold"
+          description: {
+            zh: "可选，按消息数总结的阈值"
+            en: "Optional message-count threshold for summary"
+          }
+          type: integer
+          required: false
+        },
+        {
+          name: "enable_direct_image_processing"
+          description: {
+            zh: "可选，是否启用直接图片处理"
+            en: "Optional direct image processing switch"
+          }
+          type: boolean
+          required: false
+        },
+        {
+          name: "enable_direct_audio_processing"
+          description: {
+            zh: "可选，是否启用直接音频处理"
+            en: "Optional direct audio processing switch"
+          }
+          type: boolean
+          required: false
+        },
+        {
+          name: "enable_direct_video_processing"
+          description: {
+            zh: "可选，是否启用直接视频处理"
+            en: "Optional direct video processing switch"
+          }
+          type: boolean
+          required: false
+        },
+        {
+          name: "enable_google_search"
+          description: {
+            zh: "可选，是否启用 Google Search"
+            en: "Optional Google Search switch"
+          }
+          type: boolean
+          required: false
+        },
+        {
+          name: "enable_tool_call"
+          description: {
+            zh: "可选，是否开启Tool Call"
+            en: "Optional tool-call switch"
+          }
+          type: boolean
+          required: false
+        },
+        {
+          name: "mnn_forward_type"
+          description: {
+            zh: "可选，MNN 前向类型"
+            en: "Optional MNN forward type"
+          }
+          type: integer
+          required: false
+        },
+        {
+          name: "mnn_thread_count"
+          description: {
+            zh: "可选，MNN 线程数"
+            en: "Optional MNN thread count"
+          }
+          type: integer
+          required: false
+        },
+        {
+          name: "llama_thread_count"
+          description: {
+            zh: "可选，llama.cpp 线程数"
+            en: "Optional llama.cpp thread count"
+          }
+          type: integer
+          required: false
+        },
+        {
+          name: "llama_context_size"
+          description: {
+            zh: "可选，llama.cpp 上下文长度"
+            en: "Optional llama.cpp context size"
+          }
+          type: integer
+          required: false
+        },
+        {
+          name: "llama_gpu_layers"
+          description: {
+            zh: "可选，llama.cpp GPU 层数"
+            en: "Optional llama.cpp GPU layer count"
+          }
+          type: integer
+          required: false
+        },
+        {
+          name: "request_limit_per_minute"
+          description: {
+            zh: "可选，每分钟请求限制"
+            en: "Optional request-per-minute limit"
+          }
+          type: integer
+          required: false
+        },
+        {
+          name: "max_concurrent_requests"
+          description: {
+            zh: "可选，最大并发请求数"
+            en: "Optional max concurrent requests"
+          }
+          type: integer
+          required: false
         }
       ]
     },
@@ -1368,6 +1539,105 @@
           required: false
         },
         {
+          name: "context_length"
+          description: {
+            zh: "可选，上下文长度倍率"
+            en: "Optional context length multiplier"
+          }
+          type: number
+          required: false
+        },
+        {
+          name: "max_context_length"
+          description: {
+            zh: "可选，最大上下文长度倍率"
+            en: "Optional max context length multiplier"
+          }
+          type: number
+          required: false
+        },
+        {
+          name: "enable_max_context_mode"
+          description: {
+            zh: "可选，是否启用最大上下文模式"
+            en: "Optional max-context mode switch"
+          }
+          type: boolean
+          required: false
+        },
+        {
+          name: "summary_token_threshold"
+          description: {
+            zh: "可选，总结触发阈值"
+            en: "Optional summary trigger threshold"
+          }
+          type: number
+          required: false
+        },
+        {
+          name: "enable_summary"
+          description: {
+            zh: "可选，是否启用总结"
+            en: "Optional summary switch"
+          }
+          type: boolean
+          required: false
+        },
+        {
+          name: "enable_summary_by_message_count"
+          description: {
+            zh: "可选，是否按消息数触发总结"
+            en: "Optional summary-by-message-count switch"
+          }
+          type: boolean
+          required: false
+        },
+        {
+          name: "summary_message_count_threshold"
+          description: {
+            zh: "可选，按消息数总结的阈值"
+            en: "Optional message-count threshold for summary"
+          }
+          type: integer
+          required: false
+        },
+        {
+          name: "enable_direct_image_processing"
+          description: {
+            zh: "可选，是否启用直接图片处理"
+            en: "Optional direct image processing switch"
+          }
+          type: boolean
+          required: false
+        },
+        {
+          name: "enable_direct_audio_processing"
+          description: {
+            zh: "可选，是否启用直接音频处理"
+            en: "Optional direct audio processing switch"
+          }
+          type: boolean
+          required: false
+        },
+        {
+          name: "enable_direct_video_processing"
+          description: {
+            zh: "可选，是否启用直接视频处理"
+            en: "Optional direct video processing switch"
+          }
+          type: boolean
+          required: false
+        },
+        {
+          name: "enable_google_search"
+          description: {
+            zh: "可选，是否启用 Google Search"
+            en: "Optional Google Search switch"
+          }
+          type: boolean
+          required: false
+        },
+        {
           name: "enable_tool_call"
           description: {
             zh: "可选，是否开启Tool Call"
@@ -1377,12 +1647,66 @@
           required: false
         },
         {
-          name: "strict_tool_call"
+          name: "mnn_forward_type"
           description: {
-            zh: "可选，严格Tool Call模式"
-            en: "Optional strict tool-call mode"
+            zh: "可选，MNN 前向类型"
+            en: "Optional MNN forward type"
           }
-          type: boolean
+          type: integer
+          required: false
+        },
+        {
+          name: "mnn_thread_count"
+          description: {
+            zh: "可选，MNN 线程数"
+            en: "Optional MNN thread count"
+          }
+          type: integer
+          required: false
+        },
+        {
+          name: "llama_thread_count"
+          description: {
+            zh: "可选，llama.cpp 线程数"
+            en: "Optional llama.cpp thread count"
+          }
+          type: integer
+          required: false
+        },
+        {
+          name: "llama_context_size"
+          description: {
+            zh: "可选，llama.cpp 上下文长度"
+            en: "Optional llama.cpp context size"
+          }
+          type: integer
+          required: false
+        },
+        {
+          name: "llama_gpu_layers"
+          description: {
+            zh: "可选，llama.cpp GPU 层数"
+            en: "Optional llama.cpp GPU layer count"
+          }
+          type: integer
+          required: false
+        },
+        {
+          name: "request_limit_per_minute"
+          description: {
+            zh: "可选，每分钟请求限制"
+            en: "Optional request-per-minute limit"
+          }
+          type: integer
+          required: false
+        },
+        {
+          name: "max_concurrent_requests"
+          description: {
+            zh: "可选，最大并发请求数"
+            en: "Optional max concurrent requests"
+          }
+          type: integer
           required: false
         }
       ]
@@ -2950,8 +3274,27 @@ async function create_model_config(params?: {
   frequency_penalty?: number;
   repetition_penalty_enabled?: boolean;
   repetition_penalty?: number;
-  custom_parameters?: string;
-  custom_headers?: string;
+  custom_parameters?: string | Record<string, unknown>;
+  custom_headers?: string | Record<string, string>;
+  context_length?: number;
+  max_context_length?: number;
+  enable_max_context_mode?: boolean;
+  summary_token_threshold?: number;
+  enable_summary?: boolean;
+  enable_summary_by_message_count?: boolean;
+  summary_message_count_threshold?: number;
+  enable_direct_image_processing?: boolean;
+  enable_direct_audio_processing?: boolean;
+  enable_direct_video_processing?: boolean;
+  enable_google_search?: boolean;
+  enable_tool_call?: boolean;
+  mnn_forward_type?: number;
+  mnn_thread_count?: number;
+  llama_thread_count?: number;
+  llama_context_size?: number;
+  llama_gpu_layers?: number;
+  request_limit_per_minute?: number;
+  max_concurrent_requests?: number;
 }) {
   try {
     const options = { ...(params ?? {}) };
@@ -2990,18 +3333,25 @@ async function update_model_config(params?: {
   frequency_penalty?: number;
   repetition_penalty_enabled?: boolean;
   repetition_penalty?: number;
-  custom_parameters?: string;
-  custom_headers?: string;
+  custom_parameters?: string | Record<string, unknown>;
+  custom_headers?: string | Record<string, string>;
+  context_length?: number;
+  max_context_length?: number;
+  enable_max_context_mode?: boolean;
+  summary_token_threshold?: number;
+  enable_summary?: boolean;
+  enable_summary_by_message_count?: boolean;
+  summary_message_count_threshold?: number;
   enable_direct_image_processing?: boolean;
   enable_direct_audio_processing?: boolean;
   enable_direct_video_processing?: boolean;
   enable_google_search?: boolean;
   enable_tool_call?: boolean;
-  strict_tool_call?: boolean;
   mnn_forward_type?: number;
   mnn_thread_count?: number;
   llama_thread_count?: number;
   llama_context_size?: number;
+  llama_gpu_layers?: number;
   request_limit_per_minute?: number;
   max_concurrent_requests?: number;
 }) {

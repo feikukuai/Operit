@@ -341,21 +341,14 @@ class ModelConfigManager(private val context: Context) {
             mnnThreadCount: Int,
             llamaThreadCount: Int,
             llamaContextSize: Int,
+            llamaGpuLayers: Int,
             enableDirectImageProcessing: Boolean,
             enableDirectAudioProcessing: Boolean,
             enableDirectVideoProcessing: Boolean,
             enableGoogleSearch: Boolean,
-            enableToolCall: Boolean,
-            strictToolCall: Boolean
+            enableToolCall: Boolean
     ): ModelConfigData {
         return updateConfigInternal(configId) {
-            val resolvedEnableToolCall = enableToolCall
-            val resolvedStrictToolCall =
-                if (resolvedEnableToolCall) {
-                    strictToolCall
-                } else {
-                    false
-                }
             it.copy(
                     apiKey = apiKey,
                     apiEndpoint = apiEndpoint,
@@ -363,14 +356,14 @@ class ModelConfigManager(private val context: Context) {
                     apiProviderType = apiProviderType,
                     mnnForwardType = mnnForwardType,
                     mnnThreadCount = mnnThreadCount,
-                    llamaThreadCount = llamaThreadCount,
-                    llamaContextSize = llamaContextSize,
+                    llamaThreadCount = llamaThreadCount.coerceAtLeast(1),
+                    llamaContextSize = llamaContextSize.coerceAtLeast(1),
+                    llamaGpuLayers = llamaGpuLayers.coerceAtLeast(0),
                     enableDirectImageProcessing = enableDirectImageProcessing,
                     enableDirectAudioProcessing = enableDirectAudioProcessing,
                     enableDirectVideoProcessing = enableDirectVideoProcessing,
                     enableGoogleSearch = enableGoogleSearch,
-                    enableToolCall = resolvedEnableToolCall,
-                    strictToolCall = resolvedStrictToolCall
+                    enableToolCall = enableToolCall
             )
         }
     }
@@ -505,11 +498,7 @@ class ModelConfigManager(private val context: Context) {
     // 更新 Tool Call 配置
     suspend fun updateToolCall(configId: String, enableToolCall: Boolean): ModelConfigData {
         return updateConfigInternal(configId) {
-            val resolvedEnableToolCall = enableToolCall
-            it.copy(
-                    enableToolCall = resolvedEnableToolCall,
-                    strictToolCall = if (resolvedEnableToolCall) it.strictToolCall else false
-            )
+            it.copy(enableToolCall = enableToolCall)
         }
     }
 

@@ -56,7 +56,6 @@ import androidx.compose.ui.viewinterop.AndroidView
 import com.ai.assistance.operit.R
 import com.ai.assistance.operit.ui.common.displays.LatexCache
 import com.ai.assistance.operit.ui.theme.LocalAiMarkdownTextLayoutSettings
-import com.ai.assistance.operit.util.markdown.MarkdownNode
 import com.ai.assistance.operit.util.markdown.MarkdownNodeStable
 import com.ai.assistance.operit.util.markdown.MarkdownProcessorType
 import com.ai.assistance.operit.util.stream.Stream
@@ -1344,9 +1343,6 @@ private fun calculateLayout(
     return LayoutResult(currentY, maxWidth, instructions)
 }
 
-/**
- * 从 MarkdownNode 的子节点构建 SpannableStringBuilder
- */
 private fun buildSpannableFromChildren(
     children: List<MarkdownNodeStable>,
     textColor: Color,
@@ -1354,97 +1350,13 @@ private fun buildSpannableFromChildren(
     density: Density? = null,
     fontSize: TextUnit? = null
 ): SpannableStringBuilder {
-    val builder = SpannableStringBuilder()
-    
-    children.forEach { child ->
-        val content = child.content
-        
-        when (child.type) {
-            MarkdownProcessorType.LINK -> {
-                val linkText = extractLinkText(content)
-                val linkUrl = extractLinkUrl(content)
-                val start = builder.length
-                builder.append(linkText)
-                val end = builder.length
-                builder.setSpan(URLSpan(linkUrl), start, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-                builder.setSpan(UnderlineSpan(), start, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-                builder.setSpan(ForegroundColorSpan(primaryColor.toArgb()), start, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-            }
-            MarkdownProcessorType.BOLD -> {
-                val start = builder.length
-                builder.append(content)
-                val end = builder.length
-                builder.setSpan(StyleSpan(Typeface.BOLD), start, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-            }
-            MarkdownProcessorType.ITALIC -> {
-                val start = builder.length
-                builder.append(content)
-                val end = builder.length
-                builder.setSpan(StyleSpan(Typeface.ITALIC), start, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-            }
-            MarkdownProcessorType.INLINE_LATEX -> {
-                // 行内 LaTeX 渲染：使用 ImageSpan 嵌入渲染好的 LaTeX drawable
-                val latexContent = extractLatexContent(content.trimAll())
-                
-                if (density != null && fontSize != null) {
-                    try {
-                        // 使用 JLatexMath 渲染 LaTeX 公式
-                        val textSizePx = with(density) { fontSize.toPx() }
-                        val drawable = LatexCache.getDrawable(
-                            latexContent,
-                            JLatexMathDrawable.builder(latexContent)
-                                .textSize(textSizePx)
-                                .padding(2)
-                                .color(textColor.toArgb())
-                                .background(0x00000000)
-                                .align(JLatexMathDrawable.ALIGN_LEFT)
-                        )
-                        
-                        // 设置 drawable 边界
-                        drawable.setBounds(0, 0, drawable.intrinsicWidth, drawable.intrinsicHeight)
-                        
-                        // 使用占位符空格，并应用 ImageSpan
-                        val start = builder.length
-                        builder.append(" ")  // 占位符
-                        val end = builder.length
-                        builder.setSpan(
-                            ImageSpan(drawable, ImageSpan.ALIGN_BASELINE),
-                            start,
-                            end,
-                            Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
-                        )
-                    } catch (e: Exception) {
-                        // 渲染失败时回退到文本显示
-                        AppLogger.e("CanvasMarkdown", "行内LaTeX渲染失败: $latexContent", e)
-                        val start = builder.length
-                        builder.append("[$latexContent]")
-                        val end = builder.length
-                        builder.setSpan(StyleSpan(Typeface.ITALIC), start, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-                        builder.setSpan(ForegroundColorSpan(primaryColor.toArgb()), start, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-                    }
-                } else {
-                    // 如果没有提供 density 和 fontSize，回退到文本显示
-                    val start = builder.length
-                    builder.append("[$latexContent]")
-                    val end = builder.length
-                    builder.setSpan(StyleSpan(Typeface.ITALIC), start, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-                    builder.setSpan(ForegroundColorSpan(primaryColor.toArgb()), start, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-                }
-            }
-            MarkdownProcessorType.INLINE_CODE -> {
-                val start = builder.length
-                builder.append(content)
-                val end = builder.length
-                builder.setSpan(StyleSpan(Typeface.MONOSPACE.style), start, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-                // 添加背景色 span（需要自定义 span）
-                builder.setSpan(ForegroundColorSpan(textColor.toArgb()), start, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-            }
-            else -> { // PLAIN_TEXT etc.
-                builder.append(content)
-            }
-        }
-    }
-    return builder
+    return buildMarkdownInlineSpannableFromChildren(
+        children = children,
+        textColor = textColor,
+        primaryColor = primaryColor,
+        density = density,
+        fontSize = fontSize
+    )
 }
 
 /**

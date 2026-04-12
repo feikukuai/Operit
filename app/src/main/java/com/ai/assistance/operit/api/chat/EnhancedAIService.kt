@@ -340,6 +340,10 @@ class EnhancedAIService private constructor(private val context: Context) {
     private val _perRequestTokenCounts = MutableStateFlow<Pair<Int, Int>?>(null)
     val perRequestTokenCounts: StateFlow<Pair<Int, Int>?> = _perRequestTokenCounts.asStateFlow()
 
+    // Stable request window estimate for the next model hop.
+    private val _requestWindowEstimate = MutableStateFlow<Int?>(null)
+    val requestWindowEstimateFlow: StateFlow<Int?> = _requestWindowEstimate.asStateFlow()
+
     // Conversation management
     // private val streamBuffer = StringBuilder() // Moved to MessageExecutionContext
     // private val roundManager = ConversationRoundManager() // Moved to MessageExecutionContext
@@ -540,6 +544,156 @@ class EnhancedAIService private constructor(private val context: Context) {
         }
     }
 
+    private fun publishRequestWindowEstimate(windowSize: Int) {
+        _requestWindowEstimate.value = windowSize
+    }
+
+    private suspend fun estimatePreparedRequestWindow(
+        serviceForFunction: AIService,
+        message: String,
+        preparedHistory: List<Pair<String, String>>,
+        availableTools: List<ToolPrompt>?,
+        publishEstimate: Boolean
+    ): Int {
+        val windowSize =
+            serviceForFunction.calculateInputTokens(
+                message = message,
+                chatHistory = preparedHistory,
+                availableTools = availableTools
+            )
+        if (publishEstimate) {
+            publishRequestWindowEstimate(windowSize)
+        }
+        return windowSize
+    }
+
+    private fun applyPromptFinalizeHooks(
+        initialContext: PromptHookContext,
+        dispatchHooks: (PromptHookContext) -> PromptHookContext = PromptHookRegistry::dispatchPromptFinalizeHooks
+    ): PromptHookContext {
+        return dispatchHooks(initialContext)
+    }
+
+    private fun bypassPromptHooks(context: PromptHookContext): PromptHookContext = context
+
+    suspend fun estimateRequestWindowFromMemory(
+        message: String,
+        chatHistory: List<Pair<String, String>>,
+        chatId: String? = null,
+        workspacePath: String? = null,
+        workspaceEnv: String? = null,
+        functionType: FunctionType = FunctionType.CHAT,
+        promptFunctionType: PromptFunctionType = PromptFunctionType.CHAT,
+        enableThinking: Boolean = false,
+        thinkingGuidance: Boolean = false,
+        enableMemoryQuery: Boolean = true,
+        customSystemPromptTemplate: String? = null,
+        roleCardId: String? = null,
+        enableGroupOrchestrationHint: Boolean = false,
+        groupParticipantNamesText: String? = null,
+        proxySenderName: String? = null,
+        isSubTask: Boolean = false,
+        chatModelConfigIdOverride: String? = null,
+        chatModelIndexOverride: Int? = null,
+        stream: Boolean = true,
+        publishEstimate: Boolean = true
+    ): Int {
+        val preparedHistory =
+            prepareConversationHistory(
+                chatHistory = chatHistory,
+                processedInput = message,
+                chatId = chatId,
+                workspacePath = workspacePath,
+                workspaceEnv = workspaceEnv,
+                promptFunctionType = promptFunctionType,
+                thinkingGuidance = thinkingGuidance,
+                customSystemPromptTemplate = customSystemPromptTemplate,
+                enableMemoryQuery = enableMemoryQuery,
+                roleCardId = roleCardId,
+                enableGroupOrchestrationHint = enableGroupOrchestrationHint,
+                groupParticipantNamesText = groupParticipantNamesText,
+                proxySenderName = proxySenderName,
+                isSubTask = isSubTask,
+                functionType = functionType,
+                chatModelConfigIdOverride = chatModelConfigIdOverride,
+                chatModelIndexOverride = chatModelIndexOverride,
+                dispatchHistoryHooks = PromptHookRegistry::dispatchPromptEstimateHistoryHooks,
+                dispatchSystemPromptComposeHooks = ::bypassPromptHooks,
+                dispatchToolPromptComposeHooks = ::bypassPromptHooks
+            )
+
+        val modelParameters =
+            getModelParametersForFunction(
+                functionType = functionType,
+                chatModelConfigIdOverride = chatModelConfigIdOverride,
+                chatModelIndexOverride = chatModelIndexOverride
+            )
+        val serviceForFunction =
+            getAIServiceForFunction(
+                functionType = functionType,
+                chatModelConfigIdOverride = chatModelConfigIdOverride,
+                chatModelIndexOverride = chatModelIndexOverride
+            )
+        val availableTools =
+            getAvailableToolsForFunction(
+                functionType = functionType,
+                roleCardId = roleCardId,
+                chatModelConfigIdOverride = chatModelConfigIdOverride,
+                chatModelIndexOverride = chatModelIndexOverride
+            )
+
+        var finalProcessedInput = message
+        var finalPreparedHistory = preparedHistory
+        val beforeFinalizeContext =
+            applyPromptFinalizeHooks(
+                PromptHookContext(
+                    stage = "before_finalize_prompt",
+                    chatId = chatId,
+                    functionType = functionType.name,
+                    promptFunctionType = promptFunctionType.name,
+                    rawInput = message,
+                    processedInput = finalProcessedInput,
+                    preparedHistory = finalPreparedHistory.toPromptMessages(),
+                    modelParameters = serializePromptHookModelParameters(modelParameters),
+                    availableTools = serializePromptHookToolPrompts(availableTools),
+                    metadata =
+                        mapOf(
+                            "workspacePath" to workspacePath,
+                            "workspaceEnv" to workspaceEnv,
+                            "enableThinking" to enableThinking,
+                            "stream" to stream,
+                            "isSubTask" to isSubTask
+                        )
+                ),
+                dispatchHooks = PromptHookRegistry::dispatchPromptEstimateFinalizeHooks
+            )
+        finalProcessedInput = beforeFinalizeContext.processedInput ?: finalProcessedInput
+        finalPreparedHistory = beforeFinalizeContext.preparedHistory.toRoleContentPairs()
+        val beforeSendContext =
+            applyPromptFinalizeHooks(
+                beforeFinalizeContext.copy(
+                    stage = "before_send_to_model",
+                    processedInput = finalProcessedInput,
+                    preparedHistory = finalPreparedHistory.toPromptMessages()
+                ),
+                dispatchHooks = PromptHookRegistry::dispatchPromptEstimateFinalizeHooks
+            )
+        finalProcessedInput = beforeSendContext.processedInput ?: finalProcessedInput
+        finalPreparedHistory = beforeSendContext.preparedHistory.toRoleContentPairs()
+        if (!ChatUtils.isGeminiProviderModel(serviceForFunction.providerModel)) {
+            finalProcessedInput = ChatUtils.stripGeminiThoughtSignatureMeta(finalProcessedInput)
+            finalPreparedHistory = ChatUtils.stripGeminiThoughtSignatureMeta(finalPreparedHistory)
+        }
+
+        return estimatePreparedRequestWindow(
+            serviceForFunction = serviceForFunction,
+            message = finalProcessedInput,
+            preparedHistory = finalPreparedHistory,
+            availableTools = availableTools,
+            publishEstimate = publishEstimate
+        )
+    }
+
     /** Send a message to the AI service */
     suspend fun sendMessage(
         message: String,
@@ -673,7 +827,7 @@ class EnhancedAIService private constructor(private val context: Context) {
                     var finalProcessedInput = message
                     var finalPreparedHistory = preparedHistory
                     val beforeFinalizeContext =
-                        PromptHookRegistry.dispatchPromptFinalizeHooks(
+                        applyPromptFinalizeHooks(
                             PromptHookContext(
                                 stage = "before_finalize_prompt",
                                 chatId = chatId,
@@ -697,7 +851,7 @@ class EnhancedAIService private constructor(private val context: Context) {
                     finalProcessedInput = beforeFinalizeContext.processedInput ?: finalProcessedInput
                     finalPreparedHistory = beforeFinalizeContext.preparedHistory.toRoleContentPairs()
                     val beforeSendContext =
-                        PromptHookRegistry.dispatchPromptFinalizeHooks(
+                        applyPromptFinalizeHooks(
                             beforeFinalizeContext.copy(
                                 stage = "before_send_to_model",
                                 processedInput = finalProcessedInput,
@@ -712,6 +866,13 @@ class EnhancedAIService private constructor(private val context: Context) {
                     }
                     execContext.conversationHistory.clear()
                     execContext.conversationHistory.addAll(finalPreparedHistory)
+                    estimatePreparedRequestWindow(
+                        serviceForFunction = serviceForFunction,
+                        message = finalProcessedInput,
+                        preparedHistory = finalPreparedHistory,
+                        availableTools = availableTools,
+                        publishEstimate = true
+                    )
                     
                     // 使用新的Stream API
                     AppLogger.d(TAG, "sendMessage请求前准备耗时: ${tAfterGetTools - startTime}ms, 流式输出: $stream")
@@ -1870,9 +2031,16 @@ class EnhancedAIService private constructor(private val context: Context) {
             chatModelIndexOverride = chatModelIndexOverride
         )
  
+        val currentTokens = estimatePreparedRequestWindow(
+            serviceForFunction = serviceForFunction,
+            message = modelToolResultMessage,
+            preparedHistory = currentChatHistory,
+            availableTools = availableTools,
+            publishEstimate = true
+        )
+
         // After a tool call, check if token usage exceeds the threshold
         if (maxTokens > 0) {
-            val currentTokens = serviceForFunction.calculateInputTokens("", currentChatHistory, availableTools)
             val usageRatio = currentTokens.toDouble() / maxTokens.toDouble()
 
             if (usageRatio >= tokenUsageThreshold) {
@@ -2179,7 +2347,6 @@ class EnhancedAIService private constructor(private val context: Context) {
             chatModelIndexOverride = chatModelIndexOverride
         )
         val useToolCallApi = config.enableToolCall
-        val strictToolCall = config.strictToolCall
         val chatModelHasDirectImage = config.enableDirectImageProcessing
         val chatModelHasDirectAudio = config.enableDirectAudioProcessing
         val chatModelHasDirectVideo = config.enableDirectVideoProcessing
@@ -2205,7 +2372,6 @@ class EnhancedAIService private constructor(private val context: Context) {
                 chatModelHasDirectAudio,
                 chatModelHasDirectVideo,
                 useToolCallApi,
-                strictToolCall,
                 chatModelHasDirectImage
         )
     }
@@ -2412,11 +2578,7 @@ class EnhancedAIService private constructor(private val context: Context) {
                 roleCardToolAccess.isBuiltinToolAllowed(tool.name)
             }
 
-            val shouldInjectPackageProxy = config.strictToolCall && (
-                !roleCardToolAccess.customEnabled || roleCardToolAccess.hasAnyAllowedExternalSource
-            )
-
-            if (shouldInjectPackageProxy) {
+            if (config.enableToolCall) {
                 selectedTools.add(
                     ToolPrompt(
                         name = "package_proxy",

@@ -470,6 +470,55 @@ class ClaudeProvider(
         return contentArray
     }
 
+    private fun appendContentBlocks(target: JSONArray, blocks: JSONArray) {
+        for (index in 0 until blocks.length()) {
+            target.put(blocks.get(index))
+        }
+    }
+
+    private fun sanitizeImageDataForLogging(json: JSONObject): JSONObject {
+        fun sanitizeObject(obj: JSONObject) {
+            fun sanitizeArray(arr: JSONArray) {
+                for (index in 0 until arr.length()) {
+                    when (val value = arr.get(index)) {
+                        is JSONObject -> sanitizeObject(value)
+                        is JSONArray -> sanitizeArray(value)
+                        is String -> {
+                            if (value.startsWith("data:") && value.contains(";base64,")) {
+                                arr.put(index, "[image base64 omitted, length=${value.length}]")
+                            }
+                        }
+                    }
+                }
+            }
+
+            val mediaType = obj.optString("media_type", obj.optString("mime_type", ""))
+            if (mediaType.startsWith("image/", ignoreCase = true) && obj.has("data")) {
+                val dataValue = obj.opt("data")
+                if (dataValue is String) {
+                    obj.put("data", "[image base64 omitted, length=${dataValue.length}]")
+                }
+            }
+
+            val keys = obj.keys()
+            while (keys.hasNext()) {
+                val key = keys.next()
+                when (val value = obj.get(key)) {
+                    is JSONObject -> sanitizeObject(value)
+                    is JSONArray -> sanitizeArray(value)
+                    is String -> {
+                        if (value.startsWith("data:") && value.contains(";base64,")) {
+                            obj.put(key, "[image base64 omitted, length=${value.length}]")
+                        }
+                    }
+                }
+            }
+        }
+
+        sanitizeObject(json)
+        return json
+    }
+
     /**
      * 构建Claude的消息体和计算Token的核心逻辑
      */
@@ -534,10 +583,7 @@ class ClaudeProvider(
                     val contentArray = JSONArray()
                     // 先添加文本内容
                     if (textContent.isNotEmpty()) {
-                        contentArray.put(JSONObject().apply {
-                            put("type", "text")
-                            put("text", textContent)
-                        })
+                        appendContentBlocks(contentArray, buildContentArray(textContent))
                     }
                     // 再添加tool_use
                     if (toolUses != null && toolUses.length() > 0) {
@@ -584,16 +630,10 @@ class ClaudeProvider(
                     }
                     // 再添加文本内容
                     if (textContent.isNotEmpty()) {
-                        contentArray.put(JSONObject().apply {
-                            put("type", "text")
-                            put("text", textContent)
-                        })
+                        appendContentBlocks(contentArray, buildContentArray(textContent))
                     } else if (contentArray.length() == 0) {
                         // 如果没有任何内容，保留原始content
-                        contentArray.put(JSONObject().apply {
-                            put("type", "text")
-                            put("text", content)
-                        })
+                        appendContentBlocks(contentArray, buildContentArray(content))
                     }
                     
                     val messageObject = JSONObject()
@@ -653,13 +693,15 @@ class ClaudeProvider(
         // 添加已启用的模型参数
         addParameters(jsonObject, modelParameters)
 
-         val maxTokensFromParams = modelParameters
-             .firstOrNull { it.apiName == "max_tokens" }
-             ?.currentValue
-         val maxTokensValue = (maxTokensFromParams as? Number)?.toInt()?.takeIf { it > 0 }
-             ?: jsonObject.optInt("max_tokens", 0).takeIf { it > 0 }
-             ?: DEFAULT_MAX_TOKENS
-         jsonObject.put("max_tokens", maxTokensValue)
+        val maxTokensFromParams = modelParameters
+            .firstOrNull { it.apiName == "max_tokens" }
+            ?.currentValue
+        val maxTokensValue = (maxTokensFromParams as? Number)?.toInt()?.takeIf { it > 0 }
+            ?: jsonObject.optInt("max_tokens", 0).takeIf { it > 0 }
+            ?: resolveOfficialAnthropicMaxTokens()
+        if (maxTokensValue != null) {
+            jsonObject.put("max_tokens", maxTokensValue)
+        }
 
         // 添加 Tool Call 工具定义（如果启用且有可用工具）
         var toolsJson: String? = null
@@ -690,12 +732,12 @@ class ClaudeProvider(
             val thinkingObject = JSONObject()
             thinkingObject.put("type", "enabled")
 
-             val budgetTokensFromParams = modelParameters
-                 .firstOrNull { it.apiName == "budget_tokens" }
-                 ?.currentValue
-             val budgetTokensValue = (budgetTokensFromParams as? Number)?.toInt()?.takeIf { it > 0 }
-                 ?: minOf(1024, maxTokensValue)
-             thinkingObject.put("budget_tokens", budgetTokensValue)
+            val budgetTokensFromParams = modelParameters
+                .firstOrNull { it.apiName == "budget_tokens" }
+                ?.currentValue
+            val budgetTokensValue = (budgetTokensFromParams as? Number)?.toInt()?.takeIf { it > 0 }
+                ?: minOf(1024, maxTokensValue ?: DEFAULT_MAX_TOKENS)
+            thinkingObject.put("budget_tokens", budgetTokensValue)
 
             jsonObject.put("thinking", thinkingObject)
             AppLogger.d("AIService", "启用Claude的extended thinking功能")
@@ -707,8 +749,27 @@ class ClaudeProvider(
             val toolsArray = logJson.getJSONArray("tools")
             logJson.put("tools", "[${toolsArray.length()} tools omitted for brevity]")
         }
+        sanitizeImageDataForLogging(logJson)
         AppLogger.d("AIService", "Claude请求体: ${logJson.toString(4)}")
         return jsonObject.toString().toByteArray(Charsets.UTF_8).toRequestBody(JSON)
+    }
+
+    private fun resolveOfficialAnthropicMaxTokens(): Int? {
+        if (providerType != ApiProviderType.ANTHROPIC) {
+            return null
+        }
+
+        val normalizedModelName = modelName.trim().lowercase()
+        return when {
+            normalizedModelName.startsWith("claude-opus-4-1") -> 32_000
+            normalizedModelName.startsWith("claude-opus-4") -> 32_000
+            normalizedModelName.startsWith("claude-sonnet-4") -> 64_000
+            normalizedModelName.startsWith("claude-3-7-sonnet") -> 64_000
+            normalizedModelName.startsWith("claude-3-5-sonnet") -> 8_192
+            normalizedModelName.startsWith("claude-3-5-haiku") -> 8_192
+            normalizedModelName.startsWith("claude-3-haiku") -> 4_096
+            else -> DEFAULT_MAX_TOKENS
+        }
     }
 
     // 添加模型参数

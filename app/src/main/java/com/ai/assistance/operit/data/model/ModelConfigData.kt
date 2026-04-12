@@ -110,7 +110,14 @@ data class ModelConfigData(
 
         // llama.cpp 特定配置
         val llamaThreadCount: Int = 4, // 推理线程数
-        val llamaContextSize: Int = 4096, // n_ctx
+        val llamaContextSize: Int = 2048, // n_ctx
+        val llamaBatchSize: Int = 512, // n_batch
+        val llamaUBatchSize: Int = 512, // n_ubatch
+        val llamaGpuLayers: Int = 0, // n_gpu_layers
+        val llamaUseMmap: Boolean = false, // Android上默认关闭，减少mmap导致的兼容性问题
+        val llamaFlashAttention: Boolean = false, // Android上默认关闭，更接近PocketPal安全值
+        val llamaKvUnified: Boolean = true, // 单并发聊天默认开启统一KV缓存
+        val llamaOffloadKqv: Boolean = false, // 仅在启用GPU层时有意义
 
         // 图片处理配置
         val enableDirectImageProcessing: Boolean = false, // 是否启用直接图片处理
@@ -124,7 +131,6 @@ data class ModelConfigData(
 
         // Tool Call配置
         val enableToolCall: Boolean = false, // 是否启用Tool Call接口调用工具（使用模型原生工具调用而非XML格式）
-        val strictToolCall: Boolean = false, // 严格Tool Call模式（用于Tool Call支持不稳定时的兼容代理）
 
         // 请求频率限制配置
         val requestLimitPerMinute: Int = 0, // 每分钟最大请求次数，0表示不限流

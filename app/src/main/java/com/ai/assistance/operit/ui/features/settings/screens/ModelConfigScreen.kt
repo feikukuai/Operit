@@ -413,14 +413,6 @@ fun ModelConfigScreen(
                                                             }
                                                         )
 
-                                                    if (report.strictToolCallFallbackUsed) {
-                                                        showNotification(
-                                                            context.getString(
-                                                                R.string.strict_tool_call_required
-                                                            )
-                                                        )
-                                                    }
-
                                                     report.items.forEach { item ->
                                                         val result =
                                                             if (item.success) {

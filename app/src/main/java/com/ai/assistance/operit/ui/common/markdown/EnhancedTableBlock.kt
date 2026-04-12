@@ -20,7 +20,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -31,7 +30,6 @@ import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFontFamilyResolver
 import androidx.compose.ui.res.stringResource
@@ -41,7 +39,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.ai.assistance.operit.R
 import com.ai.assistance.operit.ui.theme.LocalAiMarkdownTextLayoutSettings
-import com.ai.assistance.operit.util.AppLogger
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -49,7 +46,6 @@ import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.math.exp
 
-private const val TAG = "TableBlock"
 private val TABLE_MIN_COLUMN_WIDTH = 80.dp
 private val TABLE_MAX_COLUMN_WIDTH = 320.dp
 private val TABLE_CELL_HORIZONTAL_PADDING = 8.dp
@@ -93,8 +89,6 @@ fun EnhancedTableBlock(
     modifier: Modifier = Modifier,
     textColor: Color = MaterialTheme.colorScheme.onSurface
 ) {
-    val componentId = remember { "table-${System.identityHashCode(tableContent)}" }
-    val initStartMs = remember(componentId) { SystemClock.uptimeMillis() }
     val density = LocalDensity.current
     val typography = MaterialTheme.typography
     val textLayoutSettings = LocalAiMarkdownTextLayoutSettings.current
@@ -110,30 +104,18 @@ fun EnhancedTableBlock(
             ?: Typeface.DEFAULT_BOLD
     }
 
-    val tableData = remember(tableContent) {
-        val parseStartMs = SystemClock.uptimeMillis()
-        parseTable(tableContent).also { parsed ->
-            AppLogger.d(
-                TAG,
-                "[table-canvas] id=$componentId phase=parse duration=${SystemClock.uptimeMillis() - parseStartMs}ms " +
-                    "rows=${parsed.rows.size} columns=${parsed.rows.maxOfOrNull { it.size } ?: 0} " +
-                    "cells=${parsed.rows.sumOf { it.size }} contentLength=${tableContent.length}"
-            )
-        }
-    }
+    val tableData = remember(tableContent) { parseTable(tableContent) }
 
     if (tableData.rows.isEmpty()) return
 
-    var firstComposeLogged by remember(componentId) { mutableStateOf(false) }
-    var firstLayoutLogged by remember(componentId) { mutableStateOf(false) }
-    var firstDrawLogged by remember(componentId) { mutableStateOf(false) }
-    var scrollOffsetPx by remember(componentId) { mutableStateOf(0f) }
-    var dragVelocityPxPerSec by remember(componentId) { mutableStateOf(0f) }
-    var lastDragEventTimeMs by remember(componentId) { mutableStateOf(0L) }
-    var flingJob by remember(componentId) { mutableStateOf<Job?>(null) }
+    var scrollOffsetPx by remember(tableContent) { mutableStateOf(0f) }
+    var dragVelocityPxPerSec by remember(tableContent) { mutableStateOf(0f) }
+    var lastDragEventTimeMs by remember(tableContent) { mutableStateOf(0L) }
+    var flingJob by remember(tableContent) { mutableStateOf<Job?>(null) }
     val tableBlockDesc = stringResource(R.string.table_block)
     val borderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
     val headerBackground = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+    val primaryColor = MaterialTheme.colorScheme.primary
 
     BoxWithConstraints(
         modifier =
@@ -148,6 +130,7 @@ fun EnhancedTableBlock(
             tableContent,
             availableWidthPx,
             textColor,
+            primaryColor,
             typography.bodyMedium,
             density,
             textLayoutSettings.lineHeightMultiplier,
@@ -155,7 +138,6 @@ fun EnhancedTableBlock(
             normalTypeface,
             boldTypeface,
         ) {
-            val measureStartMs = SystemClock.uptimeMillis()
             measureTableLayout(
                 tableData = tableData,
                 textColor = textColor,
@@ -163,28 +145,10 @@ fun EnhancedTableBlock(
                 bodyTextStyle = typography.bodyMedium,
                 normalTypeface = normalTypeface,
                 boldTypeface = boldTypeface,
+                primaryColor = primaryColor,
                 globalLineHeightMultiplier = textLayoutSettings.lineHeightMultiplier,
                 globalLetterSpacingSp = textLayoutSettings.letterSpacingSp,
-            ).also { layout ->
-                AppLogger.d(
-                    TAG,
-                    "[table-canvas] id=$componentId phase=measure duration=${SystemClock.uptimeMillis() - measureStartMs}ms " +
-                        "rows=${layout.rowCount} columns=${layout.columnCount} cells=${layout.cellCount} " +
-                        "measuredLines=${layout.measuredLineCount} overlongCells=${layout.overlongCellCount} " +
-                        "size=${layout.totalWidthPx}x${layout.totalHeightPx} viewportWidth=$availableWidthPx"
-                )
-            }
-        }
-
-        SideEffect {
-            if (!firstComposeLogged) {
-                firstComposeLogged = true
-                AppLogger.d(
-                    TAG,
-                    "[table-canvas] id=$componentId phase=first_compose sinceInit=${SystemClock.uptimeMillis() - initStartMs}ms " +
-                        "rows=${renderLayout.rowCount} columns=${renderLayout.columnCount} cells=${renderLayout.cellCount}"
-                )
-            }
+            )
         }
 
         val totalHeightDp = with(density) { renderLayout.totalHeightPx.toDp() }
@@ -282,30 +246,6 @@ fun EnhancedTableBlock(
                             scrollOffsetPx = (scrollOffsetPx - dragAmount).coerceIn(0f, maxScrollPx)
                         }
                     }
-                    .onGloballyPositioned { coordinates ->
-                        if (!firstLayoutLogged) {
-                            firstLayoutLogged = true
-                            AppLogger.d(
-                                TAG,
-                                "[table-canvas] id=$componentId phase=first_layout sinceInit=${SystemClock.uptimeMillis() - initStartMs}ms " +
-                                    "size=${coordinates.size.width}x${coordinates.size.height} " +
-                                    "rows=${renderLayout.rowCount} columns=${renderLayout.columnCount} cells=${renderLayout.cellCount} " +
-                                    "maxScroll=${maxScrollPx.toInt()}"
-                            )
-                        }
-                    }
-                    .drawWithContent {
-                        drawContent()
-                        if (!firstDrawLogged) {
-                            firstDrawLogged = true
-                            AppLogger.d(
-                                TAG,
-                                "[table-canvas] id=$componentId phase=first_draw sinceInit=${SystemClock.uptimeMillis() - initStartMs}ms " +
-                                    "rows=${renderLayout.rowCount} columns=${renderLayout.columnCount} cells=${renderLayout.cellCount} " +
-                                    "maxScroll=${maxScrollPx.toInt()}"
-                            )
-                        }
-                    }
         ) {
             translate(left = -scrollOffsetPx, top = 0f) {
                 drawRoundRect(
@@ -375,6 +315,7 @@ private fun measureTableLayout(
     bodyTextStyle: androidx.compose.ui.text.TextStyle,
     normalTypeface: Typeface,
     boldTypeface: Typeface,
+    primaryColor: Color,
     globalLineHeightMultiplier: Float,
     globalLetterSpacingSp: Float,
 ): TableRenderLayout {
@@ -418,6 +359,19 @@ private fun measureTableLayout(
             }
         }
 
+    val preparedRows =
+        normalizedRows.map { row ->
+            row.map { cell ->
+                buildMarkdownInlineSpannableFromText(
+                    text = cell,
+                    textColor = textColor,
+                    primaryColor = primaryColor,
+                    density = density,
+                    fontSize = bodyTextStyle.fontSize
+                ) as CharSequence
+            }
+        }
+
     var measuredLineCount = 0
     var overlongCellCount = 0
     val columnWidthsPx = MutableList(columnCount) { minColumnWidthPx }
@@ -426,19 +380,24 @@ private fun measureTableLayout(
         val isHeaderRow = rowIndex == 0 && tableData.hasHeader
         val paint = if (isHeaderRow) headerPaint else bodyPaint
         row.forEachIndexed { colIndex, cell ->
+            val preparedCell = preparedRows[rowIndex][colIndex]
             val rawLineWidthPx =
                 if (cell.isEmpty()) {
                     0f
                 } else {
-                    cell.lineSequence().maxOfOrNull { line ->
+                    cell.lineSequence().forEach { line ->
                         if (line.length > TABLE_MAX_MEASURE_LINE_CHARS) {
                             overlongCellCount += 1
-                            innerMaxWidthPx.toFloat()
-                        } else {
-                            measuredLineCount += 1
-                            paint.measureText(line)
                         }
-                    } ?: 0f
+                    }
+                    measureCellDesiredWidth(
+                        text = preparedCell,
+                        paint = paint,
+                        widthPx = innerMaxWidthPx,
+                        lineSpacingMultiplier = lineSpacingMultiplier
+                    ).also {
+                        measuredLineCount += preparedCell.lineCountHint()
+                    }
                 }
             val cellWidthPx =
                 ceil(rawLineWidthPx).toInt()
@@ -453,7 +412,7 @@ private fun measureTableLayout(
     val cells = mutableListOf<List<TableCellRenderData>>()
     val rowHeightsPx = MutableList(rowCount) { 0 }
 
-    normalizedRows.forEachIndexed { rowIndex, row ->
+    preparedRows.forEachIndexed { rowIndex, row ->
         val isHeaderRow = rowIndex == 0 && tableData.hasHeader
         val paint = if (isHeaderRow) headerPaint else bodyPaint
         val cellLayouts = mutableListOf<TableCellRenderData>()
@@ -491,7 +450,7 @@ private fun measureTableLayout(
 }
 
 private fun createCellStaticLayout(
-    text: String,
+    text: CharSequence,
     paint: TextPaint,
     widthPx: Int,
     lineSpacingMultiplier: Float,
@@ -515,6 +474,30 @@ private fun createCellStaticLayout(
             false
         )
     }
+}
+
+private fun measureCellDesiredWidth(
+    text: CharSequence,
+    paint: TextPaint,
+    widthPx: Int,
+    lineSpacingMultiplier: Float,
+): Float {
+    if (text.isEmpty()) return 0f
+
+    val layout = createCellStaticLayout(text, paint, widthPx, lineSpacingMultiplier)
+    var maxWidth = 0f
+    for (lineIndex in 0 until layout.lineCount) {
+        maxWidth = maxOf(maxWidth, layout.getLineWidth(lineIndex))
+        if (maxWidth >= widthPx) {
+            return widthPx.toFloat()
+        }
+    }
+    return maxWidth
+}
+
+private fun CharSequence.lineCountHint(): Int {
+    if (isEmpty()) return 0
+    return count { it == '\n' } + 1
 }
 
 private fun layoutLineHeightFallback(paint: TextPaint): Int {

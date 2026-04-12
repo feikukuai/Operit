@@ -645,7 +645,7 @@ val actualViewModel: ChatViewModel = viewModel ?: viewModel { ChatViewModel(cont
             if (autoScrollToBottom) {
                 try {
                     if (chatHistory.isNotEmpty()) {
-                        scrollState.animateScrollToItem(chatHistory.lastIndex)
+                        scrollState.animateScrollToEnd()
                     }
                 } catch (e: Exception) {
                     // AppLogger.e("AIChatScreen", "自动滚动失败", e)
@@ -659,7 +659,7 @@ val actualViewModel: ChatViewModel = viewModel ?: viewModel { ChatViewModel(cont
         if (autoScrollToBottom) {
             try {
                 if (chatHistory.isNotEmpty()) {
-                    scrollState.animateScrollToItem(chatHistory.lastIndex)
+                    scrollState.animateScrollToEnd()
                 }
             } catch (e: Exception) {
                 // AppLogger.e("AIChatScreen", "自动滚动失败", e)

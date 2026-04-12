@@ -57,6 +57,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import com.ai.assistance.operit.ui.features.chat.components.AttachmentChip
 import com.ai.assistance.operit.ui.features.chat.components.ChatMessageHeightMemory
 import com.ai.assistance.operit.ui.features.chat.components.ScrollToBottomButton
+import com.ai.assistance.operit.ui.features.chat.components.animateScrollToEnd
 import com.ai.assistance.operit.ui.features.chat.components.rememberChatMessageHeightMemory
 import com.ai.assistance.operit.ui.features.chat.components.lazy.LazyLayoutCacheWindow
 import com.ai.assistance.operit.ui.features.chat.components.lazy.RecyclerLazyColumn
@@ -676,7 +677,7 @@ private fun ChatMessagesView(
 
     LaunchedEffect(floatContext.messages.size, viewModel.streamUpdateTrigger) {
         if (floatContext.messages.isNotEmpty() && autoScrollToBottom) {
-            scrollState.animateScrollToItem(floatContext.messages.lastIndex)
+            scrollState.animateScrollToEnd()
         }
     }
 

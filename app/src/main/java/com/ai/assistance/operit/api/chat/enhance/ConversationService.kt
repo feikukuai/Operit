@@ -266,11 +266,13 @@ class ConversationService(
             chatModelHasDirectAudio: Boolean = false,
             chatModelHasDirectVideo: Boolean = false,
             useToolCallApi: Boolean = false,
-            strictToolCall: Boolean = false,
-            chatModelHasDirectImage: Boolean = false
+            chatModelHasDirectImage: Boolean = false,
+            dispatchHistoryHooks: (PromptHookContext) -> PromptHookContext = PromptHookRegistry::dispatchPromptHistoryHooks,
+            dispatchSystemPromptComposeHooks: (PromptHookContext) -> PromptHookContext = PromptHookRegistry::dispatchSystemPromptComposeHooks,
+            dispatchToolPromptComposeHooks: (PromptHookContext) -> PromptHookContext = PromptHookRegistry::dispatchToolPromptComposeHooks
     ): List<Pair<String, String>> {
         val beforeContext =
-            PromptHookRegistry.dispatchPromptHistoryHooks(
+            dispatchHistoryHooks(
                 PromptHookContext(
                     stage = "before_prepare_history",
                     chatId = chatId,
@@ -294,7 +296,6 @@ class ConversationService(
                             "chatModelHasDirectAudio" to chatModelHasDirectAudio,
                             "chatModelHasDirectVideo" to chatModelHasDirectVideo,
                             "useToolCallApi" to useToolCallApi,
-                            "strictToolCall" to strictToolCall,
                             "chatModelHasDirectImage" to chatModelHasDirectImage
                         )
                 )
@@ -379,7 +380,6 @@ class ConversationService(
                     chatModelHasDirectAudio = chatModelHasDirectAudio,
                     chatModelHasDirectVideo = chatModelHasDirectVideo,
                     useToolCallApi = useToolCallApi,
-                    strictToolCall = strictToolCall,
                     disableLatexDescription = disableLatexDescription,
                     disableStatusTags = disableStatusTags,
                     toolVisibility = roleCardToolAccess.effectiveBuiltinToolVisibility,
@@ -389,7 +389,9 @@ class ConversationService(
                     enableGroupOrchestrationHint = enableGroupOrchestrationHint,
                     groupOrchestrationRoleName = activeCard?.name?.takeIf { it.isNotBlank() }
                         ?: context.getString(R.string.app_name),
-                    groupParticipantNamesText = groupParticipantNamesText.orEmpty()
+                    groupParticipantNamesText = groupParticipantNamesText.orEmpty(),
+                    dispatchSystemPromptComposeHooks = dispatchSystemPromptComposeHooks,
+                    dispatchToolPromptComposeHooks = dispatchToolPromptComposeHooks
                 )
 
                 // 构建waifu特殊规则
@@ -447,7 +449,7 @@ class ConversationService(
             }
         }
         val afterContext =
-            PromptHookRegistry.dispatchPromptHistoryHooks(
+            dispatchHistoryHooks(
                 beforeContext.copy(
                     stage = "after_prepare_history",
                     useEnglish = resolvedUseEnglish,

@@ -35,7 +35,6 @@ data class ModelConnectionTestReport(
     val requestedModelIndex: Int,
     val actualModelIndex: Int,
     val testedModelName: String,
-    val strictToolCallFallbackUsed: Boolean,
     val items: List<ModelConnectionTestItem>
 ) {
     val success: Boolean
@@ -54,7 +53,6 @@ object ModelConfigConnectionTester {
         val testedModelName = getModelByIndex(config.modelName, actualModelIndex)
         val configForTest = config.copy(modelName = testedModelName)
         val items = mutableListOf<ModelConnectionTestItem>()
-        var strictToolCallFallbackUsed = false
 
         val service =
             AIServiceFactory.createService(
@@ -139,23 +137,7 @@ object ModelConfigConnectionTester {
                         ).collect { }
                     }
 
-                    if (configForTest.strictToolCall) {
-                        runToolCallTest("echo")
-                    } else {
-                        val strictProbeFailed =
-                            try {
-                                runToolCallTest("strict_probe_unlisted_tool")
-                                false
-                            } catch (e: CancellationException) {
-                                throw e
-                            } catch (_: Exception) {
-                                true
-                            }
-                        if (strictProbeFailed) {
-                            strictToolCallFallbackUsed = true
-                            runToolCallTest("echo")
-                        }
-                    }
+                    runToolCallTest("echo")
                 }
             }
 
@@ -270,7 +252,6 @@ object ModelConfigConnectionTester {
             requestedModelIndex = requestedModelIndex,
             actualModelIndex = actualModelIndex,
             testedModelName = testedModelName,
-            strictToolCallFallbackUsed = strictToolCallFallbackUsed,
             items = items
         )
     }

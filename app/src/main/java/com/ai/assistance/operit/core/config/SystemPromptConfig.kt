@@ -124,47 +124,12 @@ Before calling a tool, briefly describe what you are about to do."""
 PACKAGE SYSTEM
 - Some additional functionality is available through packages
 - To use a package, call the use_package function with the package_name parameter
-- This will show you all the tools in the package and how to use them
-- If use_package for a package has appeared earlier in this chat, treat that package as activated
-- After a package is activated, call its tools directly using function names like packageName:toolName
-- Package tools may not appear in the current system/tool list, but they are still callable after activation"""
-    private const val PACKAGE_SYSTEM_GUIDELINES_TOOL_CALL_STRICT_EN = """
-PACKAGE SYSTEM
-- Some additional functionality is available through packages
-- To use a package, call the use_package function with the package_name parameter
 - If use_package for a package has appeared earlier in this chat, treat that package as activated
 - For package tools, call package_proxy:
   - Set tool_name to the actual package tool name (e.g. packageName:toolName)
   - Put target tool arguments in params as a JSON object"""
-
-    private const val PACKAGE_SYSTEM_GUIDELINES_TOOL_CALL_STRICT_CN = """
-包系统：
-- 一些额外功能通过包提供
-- 要使用包，调用 use_package 函数并传入 package_name 参数
-- 只要本次聊天中该包曾出现过 use_package，就视为该包已激活
-- 调用包工具请使用 package_proxy：
-  - tool_name 填写真实工具名（例如 packageName:toolName）
-  - 将目标工具参数放入 params（JSON对象）"""
 
     private const val PACKAGE_SYSTEM_GUIDELINES_TOOL_CALL_CN = """
-包系统：
-- 一些额外功能通过包提供
-- 要使用包，调用 use_package 函数并传入 package_name 参数
-- 这将显示包中的所有工具及其使用方法
-- 只要本次聊天中该包曾出现过 use_package，就视为该包已激活
-- 包激活后，请直接使用 packageName:toolName 形式的函数名调用包内工具
-- 包内工具可能不会出现在当前系统/工具列表中，但激活后依然可以直接调用"""
-
-    private const val PACKAGE_SYSTEM_GUIDELINES_TOOL_CALL_PROXY_EN = """
-PACKAGE SYSTEM
-- Some additional functionality is available through packages
-- To use a package, call the use_package function with the package_name parameter
-- If use_package for a package has appeared earlier in this chat, treat that package as activated
-- For package tools, call package_proxy:
-  - Set tool_name to the actual package tool name (e.g. packageName:toolName)
-  - Put target tool arguments in params as a JSON object"""
-
-    private const val PACKAGE_SYSTEM_GUIDELINES_TOOL_CALL_PROXY_CN = """
 包系统：
 - 一些额外功能通过包提供
 - 要使用包，调用 use_package 函数并传入 package_name 参数
@@ -181,7 +146,8 @@ PACKAGE SYSTEM
         chatModelHasDirectAudio: Boolean,
         chatModelHasDirectVideo: Boolean,
         safBookmarkNames: List<String>,
-        toolVisibility: Map<String, Boolean>
+        toolVisibility: Map<String, Boolean>,
+        dispatchToolPromptComposeHooks: (PromptHookContext) -> PromptHookContext = PromptHookRegistry::dispatchToolPromptComposeHooks
     ): String {
         return SystemToolPrompts.generateToolsPromptEn(
             hasBackendImageRecognition = hasImageRecognition,
@@ -192,7 +158,8 @@ PACKAGE SYSTEM
             chatModelHasDirectAudio = chatModelHasDirectAudio,
             chatModelHasDirectVideo = chatModelHasDirectVideo,
             safBookmarkNames = safBookmarkNames,
-            toolVisibility = toolVisibility
+            toolVisibility = toolVisibility,
+            dispatchToolPromptComposeHooks = dispatchToolPromptComposeHooks
         )
     }
 
@@ -208,7 +175,8 @@ PACKAGE SYSTEM
         chatModelHasDirectAudio: Boolean,
         chatModelHasDirectVideo: Boolean,
         safBookmarkNames: List<String>,
-        toolVisibility: Map<String, Boolean>
+        toolVisibility: Map<String, Boolean>,
+        dispatchToolPromptComposeHooks: (PromptHookContext) -> PromptHookContext = PromptHookRegistry::dispatchToolPromptComposeHooks
     ): String {
         return SystemToolPrompts.generateToolsPromptCn(
             hasBackendImageRecognition = hasImageRecognition,
@@ -219,7 +187,8 @@ PACKAGE SYSTEM
             chatModelHasDirectAudio = chatModelHasDirectAudio,
             chatModelHasDirectVideo = chatModelHasDirectVideo,
             safBookmarkNames = safBookmarkNames,
-            toolVisibility = toolVisibility
+            toolVisibility = toolVisibility,
+            dispatchToolPromptComposeHooks = dispatchToolPromptComposeHooks
         )
     }
 
@@ -391,13 +360,13 @@ AVAILABLE_TOOLS_SECTION""".trimIndent()
           chatModelHasDirectAudio: Boolean = false,
           chatModelHasDirectVideo: Boolean = false,
           useToolCallApi: Boolean = false,
-          strictToolCall: Boolean = false,
           disableLatexDescription: Boolean = false,
           disableStatusTags: Boolean = false,
           toolVisibility: Map<String, Boolean> = emptyMap(),
           allowedPackageNames: Set<String>? = null,
           allowedSkillNames: Set<String>? = null,
-          allowedMcpServerNames: Set<String>? = null
+          allowedMcpServerNames: Set<String>? = null,
+          dispatchToolPromptComposeHooks: (PromptHookContext) -> PromptHookContext = PromptHookRegistry::dispatchToolPromptComposeHooks
   ): String {
     val importedPackages = packageManager.getImportedPackages()
     val packageSystemVisible = enableTools && (toolVisibility["use_package"] ?: true)
@@ -525,7 +494,8 @@ AVAILABLE_TOOLS_SECTION""".trimIndent()
                     chatModelHasDirectAudio = chatModelHasDirectAudio,
                     chatModelHasDirectVideo = chatModelHasDirectVideo,
                     safBookmarkNames = safBookmarkNames,
-                    toolVisibility = toolVisibility
+                    toolVisibility = toolVisibility,
+                    dispatchToolPromptComposeHooks = dispatchToolPromptComposeHooks
                 )
         } else {
             getAvailableToolsEn(
@@ -536,7 +506,8 @@ AVAILABLE_TOOLS_SECTION""".trimIndent()
                 chatModelHasDirectAudio = chatModelHasDirectAudio,
                 chatModelHasDirectVideo = chatModelHasDirectVideo,
                 safBookmarkNames = safBookmarkNames,
-                toolVisibility = toolVisibility
+                toolVisibility = toolVisibility,
+                dispatchToolPromptComposeHooks = dispatchToolPromptComposeHooks
             )
         }
     )
@@ -551,7 +522,8 @@ AVAILABLE_TOOLS_SECTION""".trimIndent()
                     chatModelHasDirectAudio = chatModelHasDirectAudio,
                     chatModelHasDirectVideo = chatModelHasDirectVideo,
                     safBookmarkNames = safBookmarkNames,
-                    toolVisibility = toolVisibility
+                    toolVisibility = toolVisibility,
+                    dispatchToolPromptComposeHooks = dispatchToolPromptComposeHooks
                 )
         } else {
             getAvailableToolsCn(
@@ -562,7 +534,8 @@ AVAILABLE_TOOLS_SECTION""".trimIndent()
                 chatModelHasDirectAudio = chatModelHasDirectAudio,
                 chatModelHasDirectVideo = chatModelHasDirectVideo,
                 safBookmarkNames = safBookmarkNames,
-                toolVisibility = toolVisibility
+                toolVisibility = toolVisibility,
+                dispatchToolPromptComposeHooks = dispatchToolPromptComposeHooks
             )
         }
     )
@@ -573,17 +546,9 @@ AVAILABLE_TOOLS_SECTION""".trimIndent()
         if (useToolCallApi) {
             val packageGuidelines =
                 if (useEnglish) {
-                    if (strictToolCall) {
-                        PACKAGE_SYSTEM_GUIDELINES_TOOL_CALL_PROXY_EN
-                    } else {
-                        PACKAGE_SYSTEM_GUIDELINES_TOOL_CALL_EN
-                    }
+                    PACKAGE_SYSTEM_GUIDELINES_TOOL_CALL_EN
                 } else {
-                    if (strictToolCall) {
-                        PACKAGE_SYSTEM_GUIDELINES_TOOL_CALL_PROXY_CN
-                    } else {
-                        PACKAGE_SYSTEM_GUIDELINES_TOOL_CALL_CN
-                    }
+                    PACKAGE_SYSTEM_GUIDELINES_TOOL_CALL_CN
                 }
             prompt = prompt
                 .replace("TOOL_USAGE_GUIDELINES_SECTION", if (useEnglish) TOOL_USAGE_BRIEF_EN else TOOL_USAGE_BRIEF_CN)
@@ -762,7 +727,6 @@ AVAILABLE_TOOLS_SECTION""".trimIndent()
           chatModelHasDirectAudio: Boolean = false,
           chatModelHasDirectVideo: Boolean = false,
           useToolCallApi: Boolean = false,
-          strictToolCall: Boolean = false,
           disableLatexDescription: Boolean = false,
           disableStatusTags: Boolean = false,
           toolVisibility: Map<String, Boolean> = emptyMap(),
@@ -771,10 +735,12 @@ AVAILABLE_TOOLS_SECTION""".trimIndent()
           allowedMcpServerNames: Set<String>? = null,
           enableGroupOrchestrationHint: Boolean = false,
           groupOrchestrationRoleName: String = "",
-          groupParticipantNamesText: String = ""
+          groupParticipantNamesText: String = "",
+          dispatchSystemPromptComposeHooks: (PromptHookContext) -> PromptHookContext = PromptHookRegistry::dispatchSystemPromptComposeHooks,
+          dispatchToolPromptComposeHooks: (PromptHookContext) -> PromptHookContext = PromptHookRegistry::dispatchToolPromptComposeHooks
   ): String {
     val beforeContext =
-        PromptHookRegistry.dispatchSystemPromptComposeHooks(
+        dispatchSystemPromptComposeHooks(
             PromptHookContext(
                 stage = "before_compose_system_prompt",
                 useEnglish = useEnglish,
@@ -795,7 +761,6 @@ AVAILABLE_TOOLS_SECTION""".trimIndent()
                         "chatModelHasDirectAudio" to chatModelHasDirectAudio,
                         "chatModelHasDirectVideo" to chatModelHasDirectVideo,
                         "useToolCallApi" to useToolCallApi,
-                        "strictToolCall" to strictToolCall,
                         "disableLatexDescription" to disableLatexDescription,
                         "disableStatusTags" to disableStatusTags,
                         "toolVisibility" to toolVisibility,
@@ -828,13 +793,13 @@ AVAILABLE_TOOLS_SECTION""".trimIndent()
             chatModelHasDirectAudio = chatModelHasDirectAudio,
             chatModelHasDirectVideo = chatModelHasDirectVideo,
             useToolCallApi = useToolCallApi,
-            strictToolCall = strictToolCall,
             disableLatexDescription = disableLatexDescription,
             disableStatusTags = disableStatusTags,
             toolVisibility = toolVisibility,
             allowedPackageNames = allowedPackageNames,
             allowedSkillNames = allowedSkillNames,
-            allowedMcpServerNames = allowedMcpServerNames
+            allowedMcpServerNames = allowedMcpServerNames,
+            dispatchToolPromptComposeHooks = dispatchToolPromptComposeHooks
         )
 
     var composedPrompt = applyCustomPrompts(basePrompt, customIntroPrompt)
@@ -848,7 +813,7 @@ AVAILABLE_TOOLS_SECTION""".trimIndent()
     }
 
     val composeContext =
-        PromptHookRegistry.dispatchSystemPromptComposeHooks(
+        dispatchSystemPromptComposeHooks(
             beforeContext.copy(
                 stage = "compose_system_prompt_sections",
                 systemPrompt = composedPrompt
@@ -856,7 +821,7 @@ AVAILABLE_TOOLS_SECTION""".trimIndent()
         )
     val afterComposePrompt = composeContext.systemPrompt ?: composedPrompt
     val afterContext =
-        PromptHookRegistry.dispatchSystemPromptComposeHooks(
+        dispatchSystemPromptComposeHooks(
             composeContext.copy(
                 stage = "after_compose_system_prompt",
                 systemPrompt = afterComposePrompt
@@ -885,7 +850,6 @@ AVAILABLE_TOOLS_SECTION""".trimIndent()
         chatModelHasDirectAudio = false,
         chatModelHasDirectVideo = false,
         useToolCallApi = false,
-        strictToolCall = false,
         disableLatexDescription = false,
         disableStatusTags = false
     )

@@ -135,8 +135,8 @@ open class OpenAIProvider(
         onTokensUpdated: suspend (input: Int, cachedInput: Int, output: Int) -> Unit
     ) {
         val parsed = OpenAIResponsesPayloadAdapter.parseUsageCounts(usage) ?: return
-        tokenCacheManager.updateActualTokens(parsed.inputTokens, parsed.cachedInputTokens)
-        onTokensUpdated(parsed.inputTokens, parsed.cachedInputTokens, parsed.outputTokens)
+        tokenCacheManager.updateActualTokens(parsed.actualInputTokens, parsed.cachedInputTokens)
+        onTokensUpdated(parsed.totalInputTokens, parsed.cachedInputTokens, parsed.outputTokens)
     }
 
     private fun buildOpenAiErrorDetail(error: JSONObject, fallback: String): String {
@@ -588,8 +588,6 @@ open class OpenAIProvider(
         // 当工具为空时，将enableToolCall视为false
         val effectiveEnableToolCall =
             enableToolCall && availableTools != null && availableTools.isNotEmpty()
-        val strictToolCallProxyMode =
-            effectiveEnableToolCall && availableTools!!.any { it.name == "package_proxy" }
 
         // 如果启用Tool Call且传入了工具列表，添加tools定义
         var toolsJson: String? = null
@@ -610,8 +608,7 @@ open class OpenAIProvider(
             chatHistory,
             effectiveEnableToolCall,
             toolsJson,
-            preserveThinkInHistory,
-            strictToolCallProxyMode
+            preserveThinkInHistory
         )
         jsonObject.put("messages", messagesArray)
 
@@ -759,8 +756,7 @@ open class OpenAIProvider(
         chatHistory: List<Pair<String, String>>,
         useToolCall: Boolean = false,
         toolsJson: String? = null,
-        preserveThinkInHistory: Boolean = false,
-        strictToolCallProxyMode: Boolean = false
+        preserveThinkInHistory: Boolean = false
     ): Pair<JSONArray, Int> {
         val messagesArray = JSONArray()
 
@@ -806,8 +802,8 @@ open class OpenAIProvider(
                         // 解析assistant消息中的XML tool calls
                         val (textContent, parsedToolCalls) = parseXmlToolCalls(content)
                         val toolCalls =
-                            if (strictToolCallProxyMode && parsedToolCalls != null) {
-                                wrapColonToolCallsWithProxy(parsedToolCalls)
+                            if (parsedToolCalls != null) {
+                                wrapPackageToolCallsWithProxy(parsedToolCalls)
                             } else {
                                 parsedToolCalls
                             }
@@ -1288,7 +1284,7 @@ open class OpenAIProvider(
         return newRetryCount
     }
 
-    private fun wrapColonToolCallsWithProxy(toolCalls: JSONArray): JSONArray {
+    protected fun wrapPackageToolCallsWithProxy(toolCalls: JSONArray): JSONArray {
         val wrappedToolCalls = JSONArray()
         var wrappedCount = 0
 
@@ -1326,7 +1322,7 @@ open class OpenAIProvider(
         }
 
         if (wrappedCount > 0) {
-            AppLogger.d("AIService", "严格Tool Call模式下已代理封装 $wrappedCount 个带冒号工具调用")
+            AppLogger.d("AIService", "已代理封装 $wrappedCount 个带冒号工具调用到 package_proxy")
         }
         return wrappedToolCalls
     }

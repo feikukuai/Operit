@@ -1366,7 +1366,6 @@ class StandardSoftwareSettingsModifyTools(private val context: Context) {
                         requestedModelIndex = report.requestedModelIndex,
                         actualModelIndex = report.actualModelIndex,
                         testedModelName = report.testedModelName,
-                        strictToolCallFallbackUsed = report.strictToolCallFallbackUsed,
                         success = report.success,
                         totalTests = report.items.size,
                         passedTests = report.items.count { it.success },
@@ -1631,6 +1630,17 @@ class StandardSoftwareSettingsModifyTools(private val context: Context) {
         applyInt("mnn_thread_count") { config, value -> config.copy(mnnThreadCount = value.coerceAtLeast(1)) }
         applyInt("llama_thread_count") { config, value -> config.copy(llamaThreadCount = value.coerceAtLeast(1)) }
         applyInt("llama_context_size") { config, value -> config.copy(llamaContextSize = value.coerceAtLeast(1)) }
+        applyInt("llama_batch_size") { config, value -> config.copy(llamaBatchSize = value.coerceAtLeast(1)) }
+        applyInt("llama_ubatch_size") { config, value -> config.copy(llamaUBatchSize = value.coerceAtLeast(1)) }
+        applyInt("llama_gpu_layers") { config, value -> config.copy(llamaGpuLayers = value.coerceAtLeast(0)) }
+        applyBoolean("llama_use_mmap") { config, value -> config.copy(llamaUseMmap = value) }
+        applyBoolean("llama_flash_attention") { config, value ->
+            config.copy(llamaFlashAttention = value)
+        }
+        applyBoolean("llama_kv_unified") { config, value -> config.copy(llamaKvUnified = value) }
+        applyBoolean("llama_offload_kqv") { config, value ->
+            config.copy(llamaOffloadKqv = value)
+        }
         applyInt("request_limit_per_minute") { config, value ->
             config.copy(requestLimitPerMinute = value.coerceAtLeast(0))
         }
@@ -1649,10 +1659,9 @@ class StandardSoftwareSettingsModifyTools(private val context: Context) {
         }
         applyBoolean("enable_google_search") { config, value -> config.copy(enableGoogleSearch = value) }
         applyBoolean("enable_tool_call") { config, value -> config.copy(enableToolCall = value) }
-        applyBoolean("strict_tool_call") { config, value -> config.copy(strictToolCall = value) }
 
-        if (!updated.enableToolCall && updated.strictToolCall) {
-            updated = updated.copy(strictToolCall = false)
+        if (updated.llamaGpuLayers <= 0 && updated.llamaOffloadKqv) {
+            updated = updated.copy(llamaOffloadKqv = false)
         }
 
         return updated to changedFields.distinct()
@@ -1697,12 +1706,18 @@ class StandardSoftwareSettingsModifyTools(private val context: Context) {
             mnnThreadCount = config.mnnThreadCount,
             llamaThreadCount = config.llamaThreadCount,
             llamaContextSize = config.llamaContextSize,
+            llamaBatchSize = config.llamaBatchSize,
+            llamaUBatchSize = config.llamaUBatchSize,
+            llamaGpuLayers = config.llamaGpuLayers,
+            llamaUseMmap = config.llamaUseMmap,
+            llamaFlashAttention = config.llamaFlashAttention,
+            llamaKvUnified = config.llamaKvUnified,
+            llamaOffloadKqv = config.llamaOffloadKqv,
             enableDirectImageProcessing = config.enableDirectImageProcessing,
             enableDirectAudioProcessing = config.enableDirectAudioProcessing,
             enableDirectVideoProcessing = config.enableDirectVideoProcessing,
             enableGoogleSearch = config.enableGoogleSearch,
             enableToolCall = config.enableToolCall,
-            strictToolCall = config.strictToolCall,
             requestLimitPerMinute = config.requestLimitPerMinute,
             maxConcurrentRequests = config.maxConcurrentRequests,
             useMultipleApiKeys = config.useMultipleApiKeys,

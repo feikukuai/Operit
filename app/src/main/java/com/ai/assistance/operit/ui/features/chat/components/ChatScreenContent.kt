@@ -224,6 +224,7 @@ fun ChatScreenContent(
                         onCreateBranch = { timestamp -> actualViewModel.createBranch(timestamp) }, // 添加创建分支回调
                         onInsertSummary = { index, message -> actualViewModel.insertSummary(index, message) }, // 添加插入总结回调
                         onMentionRoleFromAvatar = { roleName -> actualViewModel.insertRoleMention(roleName) },
+                        onAutoScrollToBottomChange = onAutoScrollToBottomChange,
                         topPadding = headerHeight,
                         bottomPadding = bottomInset,
                         chatStyle = chatStyle, // Pass chat style
@@ -307,6 +308,7 @@ fun ChatScreenContent(
                         onInsertSummary = { index, message -> actualViewModel.insertSummary(index, message) }, // 添加插入总结回调
                         onAutoReadMessage = { content -> actualViewModel.enableAutoReadAndSpeak(content) }, // 添加自动朗读回调
                         onMentionRoleFromAvatar = { roleName -> actualViewModel.insertRoleMention(roleName) },
+                        onAutoScrollToBottomChange = onAutoScrollToBottomChange,
                         bottomPadding = bottomInset,
                         chatStyle = chatStyle, // Pass chat style
                         cursorUserBubbleLiquidGlass = cursorUserBubbleLiquidGlass,

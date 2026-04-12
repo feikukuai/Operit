@@ -117,6 +117,118 @@ class MessageCoordinationDelegate(
         }
     }
 
+    private suspend fun recalculateStableWindowSize(
+        service: EnhancedAIService,
+        chatId: String?,
+        roleCardId: String?,
+        promptFunctionType: PromptFunctionType = PromptFunctionType.CHAT,
+        groupOrchestrationMode: Boolean = false,
+        groupParticipantNamesText: String? = null,
+        chatModelConfigIdOverride: String? = null,
+        chatModelIndexOverride: Int? = null
+    ): Int {
+        val currentChat = chatHistoryDelegate.chatHistories.value.firstOrNull { it.id == chatId }
+        val currentRoleName =
+            roleCardId?.let {
+                runCatching { characterCardManager.getCharacterCardFlow(it).first().name }
+                    .getOrNull()
+            }
+        return AIMessageManager.calculateStableContextWindow(
+            enhancedAiService = service,
+            chatId = chatId,
+            chatHistory = chatId?.let { chatHistoryDelegate.getChatHistory(it) }.orEmpty(),
+            workspacePath = currentChat?.workspace,
+            workspaceEnv = currentChat?.workspaceEnv,
+            promptFunctionType = promptFunctionType,
+            thinkingGuidance = apiConfigDelegate.enableThinkingGuidance.value,
+            enableMemoryQuery = apiConfigDelegate.enableMemoryQuery.value,
+            roleCardId = roleCardId,
+            currentRoleName = currentRoleName,
+            splitHistoryByRole = true,
+            groupOrchestrationMode = groupOrchestrationMode,
+            groupParticipantNamesText = groupParticipantNamesText,
+            chatModelConfigIdOverride = chatModelConfigIdOverride,
+            chatModelIndexOverride = chatModelIndexOverride,
+            publishEstimate = false
+        )
+    }
+
+    private suspend fun resolveBoundRoleCardId(chatId: String?): String? {
+        if (chatId.isNullOrBlank()) {
+            return null
+        }
+        val chatMeta = chatHistoryDelegate.chatHistories.value.firstOrNull { it.id == chatId } ?: return null
+        if (!chatMeta.characterGroupId.isNullOrBlank()) {
+            return null
+        }
+        val characterCardName = chatMeta.characterCardName?.takeIf { it.isNotBlank() } ?: return null
+        return runCatching { characterCardManager.findCharacterCardByName(characterCardName)?.id }.getOrNull()
+    }
+
+    private suspend fun resolveWindowEstimateRoleCardId(
+        chatId: String?,
+        roleCardId: String?
+    ): String? {
+        return roleCardId
+            ?: resolveBoundRoleCardId(chatId)
+            ?: runCatching { activePromptManager.resolveActiveCardIdForSend() }.getOrNull()
+    }
+
+    private fun resolveWindowEstimateService(chatId: String?): EnhancedAIService? {
+        return if (chatId.isNullOrBlank()) {
+            getEnhancedAiService()
+        } else {
+            EnhancedAIService.getChatInstance(context, chatId)
+        }
+    }
+
+    suspend fun refreshStableContextWindow(
+        chatId: String? = null,
+        roleCardId: String? = null,
+        promptFunctionType: PromptFunctionType? = null,
+        groupOrchestrationMode: Boolean = false,
+        groupParticipantNamesText: String? = null,
+        chatModelConfigIdOverride: String? = null,
+        chatModelIndexOverride: Int? = null
+    ): Int? {
+        val targetChatId = chatId ?: chatHistoryDelegate.currentChatId.value ?: return null
+        val service = resolveWindowEstimateService(targetChatId) ?: return null
+        val effectiveRoleCardId = resolveWindowEstimateRoleCardId(targetChatId, roleCardId)
+        val effectivePromptFunctionType = promptFunctionType ?: currentPromptFunctionType
+        val effectiveChatModelConfigIdOverride =
+            chatModelConfigIdOverride ?: currentChatModelConfigIdOverride
+        val effectiveChatModelIndexOverride =
+            chatModelIndexOverride ?: currentChatModelIndexOverride
+
+        val newWindowSize =
+            recalculateStableWindowSize(
+                service = service,
+                chatId = targetChatId,
+                roleCardId = effectiveRoleCardId,
+                promptFunctionType = effectivePromptFunctionType,
+                groupOrchestrationMode = groupOrchestrationMode,
+                groupParticipantNamesText = groupParticipantNamesText,
+                chatModelConfigIdOverride = effectiveChatModelConfigIdOverride,
+                chatModelIndexOverride = effectiveChatModelIndexOverride
+            )
+        val (inputTokens, outputTokens) = tokenStatsDelegate.getCumulativeTokenCounts(targetChatId)
+        chatHistoryDelegate.saveCurrentChat(
+            inputTokens = inputTokens,
+            outputTokens = outputTokens,
+            actualContextWindowSize = newWindowSize,
+            chatIdOverride = targetChatId
+        )
+        withContext(Dispatchers.Main) {
+            tokenStatsDelegate.setTokenCounts(
+                targetChatId,
+                inputTokens,
+                outputTokens,
+                newWindowSize
+            )
+        }
+        return newWindowSize
+    }
+
     /**
      * 发送用户消息
      * 检查是否有当前对话，如果没有则自动创建新对话
@@ -328,6 +440,7 @@ class MessageCoordinationDelegate(
                     snapshotMessages = snapshotMessages,
                     insertPosition = insertPosition,
                     originalChatId = chatId,
+                    roleCardId = roleCardId,
                     chatModelConfigIdOverride = resolvedChatModelConfigIdOverride,
                     chatModelIndexOverride = resolvedChatModelIndexOverride
                 )
@@ -1195,6 +1308,7 @@ class MessageCoordinationDelegate(
         snapshotMessages: List<ChatMessage>,
         insertPosition: Int,
         originalChatId: String?,
+        roleCardId: String?,
         chatModelConfigIdOverride: String? = null,
         chatModelIndexOverride: Int? = null
     ) {
@@ -1252,34 +1366,12 @@ class MessageCoordinationDelegate(
                     chatIdOverride = originalChatId
                 )
 
-                val newHistoryForTokens =
-                    AIMessageManager.getMemoryFromMessages(
-                        chatHistoryDelegate.getChatHistory(originalChatId)
-                    )
-                val chatService = service.getAIServiceForFunction(
-                    functionType = FunctionType.CHAT,
+                refreshStableContextWindow(
+                    chatId = originalChatId,
+                    roleCardId = roleCardId,
                     chatModelConfigIdOverride = chatModelConfigIdOverride,
                     chatModelIndexOverride = chatModelIndexOverride
                 )
-                val newWindowSize = chatService.calculateInputTokens("", newHistoryForTokens)
-                val (inputTokens, outputTokens) = tokenStatsDelegate.getCumulativeTokenCounts(
-                    originalChatId
-                )
-                chatHistoryDelegate.saveCurrentChat(
-                    inputTokens = inputTokens,
-                    outputTokens = outputTokens,
-                    actualContextWindowSize = newWindowSize,
-                    chatIdOverride = originalChatId
-                )
-                withContext(Dispatchers.Main) {
-                    tokenStatsDelegate.setTokenCounts(
-                        originalChatId,
-                        inputTokens,
-                        outputTokens,
-                        newWindowSize
-                    )
-                }
-                AppLogger.d(TAG, "Async summary completed, updated window size: $newWindowSize")
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -1368,35 +1460,11 @@ class MessageCoordinationDelegate(
                     chatIdOverride = currentChatId
                 )
 
-                // 更新窗口大小
-                val newHistoryForTokens = AIMessageManager.getMemoryFromMessages(
-                    currentChatId?.let { chatHistoryDelegate.getChatHistory(it) }.orEmpty()
-                )
-                val chatService = service.getAIServiceForFunction(
-                    functionType = FunctionType.CHAT,
+                refreshStableContextWindow(
+                    chatId = currentChatId,
                     chatModelConfigIdOverride = effectiveChatModelConfigIdOverride,
                     chatModelIndexOverride = effectiveChatModelIndexOverride
                 )
-                val newWindowSize = chatService.calculateInputTokens("", newHistoryForTokens)
-                val currentChatIdForStats = currentChatId
-                val (inputTokens, outputTokens) = tokenStatsDelegate.getCumulativeTokenCounts(
-                    currentChatIdForStats
-                )
-                chatHistoryDelegate.saveCurrentChat(
-                    inputTokens = inputTokens,
-                    outputTokens = outputTokens,
-                    actualContextWindowSize = newWindowSize,
-                    chatIdOverride = currentChatIdForStats
-                )
-                withContext(Dispatchers.Main) {
-                    tokenStatsDelegate.setTokenCounts(
-                        currentChatIdForStats,
-                        inputTokens,
-                        outputTokens,
-                        newWindowSize
-                    )
-                }
-                AppLogger.d(TAG, "总结完成，更新窗口大小为: $newWindowSize")
                 summarySuccess = true
             } else {
                 AppLogger.w(TAG, "总结失败或无需总结")

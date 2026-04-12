@@ -200,6 +200,29 @@ private fun calculatePaginationWindow(
     )
 }
 
+private fun findDepthForMessage(
+    chatHistory: List<ChatMessage>,
+    messagesPerPage: Int,
+    targetIndex: Int,
+): Int {
+    if (chatHistory.isEmpty()) {
+        return 1
+    }
+
+    val safeTargetIndex = targetIndex.coerceIn(chatHistory.indices)
+    var depth = 1
+
+    while (depth < chatHistory.size) {
+        val paginationWindow = calculatePaginationWindow(chatHistory, messagesPerPage, depth)
+        if (safeTargetIndex >= paginationWindow.minVisibleIndex) {
+            return depth
+        }
+        depth += 1
+    }
+
+    return depth
+}
+
 enum class ChatStyle {
     CURSOR,
     BUBBLE
@@ -233,6 +256,7 @@ fun ChatArea(
     onCreateBranch: ((Long) -> Unit)? = null, // 添加创建分支回调参数
     onInsertSummary: ((Int, ChatMessage) -> Unit)? = null, // 添加插入总结回调参数
     onMentionRoleFromAvatar: ((String) -> Unit)? = null, // 长按角色头像提及
+    onAutoScrollToBottomChange: ((Boolean) -> Unit)? = null,
     messagesPerPage: Int = 10, // 每页显示的消息数量
     topPadding: Dp = 0.dp,
     bottomPadding: Dp = 0.dp,
@@ -307,6 +331,7 @@ fun ChatArea(
     val minVisibleIndex = paginationWindow.minVisibleIndex
     val hasMoreMessages = paginationWindow.hasMoreMessages
     val visibleMessages = chatHistory.subList(minVisibleIndex, messagesCount)
+    var pendingJumpToMessageIndex by remember(chatHistory) { mutableStateOf<Int?>(null) }
     var wasAtTop by remember(messagesCount, minVisibleIndex, hasMoreMessages) { mutableStateOf(false) }
 
     LaunchedEffect(scrollState, messagesCount, minVisibleIndex, hasMoreMessages) {
@@ -318,6 +343,28 @@ fun ChatArea(
             }
             wasAtTop = isAtTop
         }
+    }
+
+    LaunchedEffect(pendingJumpToMessageIndex, minVisibleIndex, visibleMessages.size, messagesCount) {
+        val targetIndex = pendingJumpToMessageIndex ?: return@LaunchedEffect
+        if (targetIndex !in chatHistory.indices) {
+            pendingJumpToMessageIndex = null
+            return@LaunchedEffect
+        }
+        if (targetIndex < minVisibleIndex || targetIndex >= minVisibleIndex + visibleMessages.size) {
+            val requiredDepth = findDepthForMessage(chatHistory, messagesPerPage, targetIndex)
+            if (requiredDepth != currentDepth.value) {
+                currentDepth.value = requiredDepth
+            }
+            return@LaunchedEffect
+        }
+
+        if (targetIndex == messagesCount - 1) {
+            scrollState.animateScrollToEnd()
+        } else {
+            scrollState.scrollToItem(targetIndex - minVisibleIndex)
+        }
+        pendingJumpToMessageIndex = null
     }
 
     Box(
@@ -432,14 +479,22 @@ fun ChatArea(
             }
         }
 
-        ChatQuickScroller(
-            listState = scrollState,
-            itemCount = visibleMessages.size,
+        ChatScrollNavigator(
+            chatHistory = chatHistory,
+            scrollState = scrollState,
+            minVisibleIndex = minVisibleIndex,
+            visibleMessageCount = visibleMessages.size,
+            onJumpToMessage = { targetIndex ->
+                onAutoScrollToBottomChange?.invoke(targetIndex == messagesCount - 1)
+                pendingJumpToMessageIndex = targetIndex
+            },
             modifier =
                 Modifier
                     .align(Alignment.CenterEnd)
-                    .padding(top = topPadding + 6.dp, bottom = bottomPadding + 6.dp, end = 2.dp),
+                    .offset(y = (-56).dp)
+                    .padding(end = 10.dp),
         )
+
     }
 }
 

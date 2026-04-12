@@ -10,7 +10,19 @@ object LlamaNative {
 
     @JvmStatic external fun nativeGetUnavailableReason(): String
 
-    @JvmStatic external fun nativeCreateSession(pathModel: String, nThreads: Int, nCtx: Int): Long
+    @JvmStatic
+    external fun nativeCreateSession(
+        pathModel: String,
+        nThreads: Int,
+        nCtx: Int,
+        nBatch: Int,
+        nUBatch: Int,
+        nGpuLayers: Int,
+        useMmap: Boolean,
+        flashAttention: Boolean,
+        kvUnified: Boolean,
+        offloadKqv: Boolean
+    ): Long
 
     @JvmStatic external fun nativeReleaseSession(sessionPtr: Long)
 

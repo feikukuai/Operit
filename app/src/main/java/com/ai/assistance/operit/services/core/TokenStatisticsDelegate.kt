@@ -7,6 +7,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Job
 import java.util.concurrent.ConcurrentHashMap
@@ -66,25 +67,55 @@ class TokenStatisticsDelegate(
         lastCurrentWindowSize = window
     }
 
+    private fun handlePerRequestCounts(
+        key: String,
+        counts: Pair<Int, Int>?
+    ) {
+        if (counts == null) {
+            perRequestTokenCountByChatKey.remove(key)
+        } else {
+            perRequestTokenCountByChatKey[key] = counts
+        }
+
+        if (isActiveKey(key)) {
+            _perRequestTokenCount.value = counts
+        }
+    }
+
+    private fun handleRequestWindowEstimate(
+        key: String,
+        windowSize: Int?
+    ) {
+        if (windowSize == null) {
+            return
+        }
+
+        lastWindowSizeByChatKey[key] = windowSize
+
+        if (isActiveKey(key)) {
+            _currentWindowSize.value = windowSize
+            lastCurrentWindowSize = windowSize
+        }
+    }
+
     fun setupCollectors() {
         tokenCollectorJob?.cancel() // Cancel previous collector if any
         val service = getEnhancedAiService() ?: return // Service not ready
         tokenCollectorJob = coroutineScope.launch(Dispatchers.IO) {
-            service.perRequestTokenCounts.collect { counts ->
-                val key = chatKey(null)
-                if (counts == null) {
-                    perRequestTokenCountByChatKey.remove(key)
-                } else {
-                    perRequestTokenCountByChatKey[key] = counts
-                    lastWindowSizeByChatKey[key] = counts.first
+            launch {
+                service.perRequestTokenCounts.collect { counts ->
+                    handlePerRequestCounts(
+                        key = chatKey(null),
+                        counts = counts
+                    )
                 }
-
-                if (isActiveKey(key)) {
-                    _perRequestTokenCount.value = counts
-                    counts?.let {
-                        _currentWindowSize.value = it.first
-                        lastCurrentWindowSize = it.first
-                    }
+            }
+            launch {
+                service.requestWindowEstimateFlow.collect { windowSize ->
+                    handleRequestWindowEstimate(
+                        key = chatKey(null),
+                        windowSize = windowSize
+                    )
                 }
             }
         }
@@ -102,20 +133,20 @@ class TokenStatisticsDelegate(
         tokenCollectorJobsByChatKey[key]?.cancel()
         tokenCollectorJobsByChatKey[key] =
             coroutineScope.launch(Dispatchers.IO) {
-                service.perRequestTokenCounts.collect { counts ->
-                    if (counts == null) {
-                        perRequestTokenCountByChatKey.remove(key)
-                    } else {
-                        perRequestTokenCountByChatKey[key] = counts
-                        lastWindowSizeByChatKey[key] = counts.first
+                launch {
+                    service.perRequestTokenCounts.collect { counts ->
+                        handlePerRequestCounts(
+                            key = key,
+                            counts = counts
+                        )
                     }
-
-                    if (isActiveKey(key)) {
-                        _perRequestTokenCount.value = counts
-                        counts?.let {
-                            _currentWindowSize.value = it.first
-                            lastCurrentWindowSize = it.first
-                        }
+                }
+                launch {
+                    service.requestWindowEstimateFlow.collect { windowSize ->
+                        handleRequestWindowEstimate(
+                            key = key,
+                            windowSize = windowSize
+                        )
                     }
                 }
             }
