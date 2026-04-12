@@ -12,16 +12,16 @@ description: 用于 Operit Sandbox Package 开发。
 安装与更新都走同一个脚本：
 
 - 先把安装脚本下载到本地
-- 再通过 `all_about_myself` 这个 package 里的 `debug_run_sandbox_script` 工具运行它
+- 再通过 `operit_editor` 这个 package 里的 `debug_run_sandbox_script` 工具运行它
 - 脚本会自动创建目录，并更新 `SKILL.md`、`references/SCRIPT_DEV_GUIDE.md`、`types/*.d.ts`
 
 这里说的“执行”，指的是：
 
 - 不是用 shell 执行
 - 不是直接打开这个 `.js` 文件
-- 而是调用 `all_about_myself:debug_run_sandbox_script`
+- 而是调用 `operit_editor:debug_run_sandbox_script`
 
-也就是先确保 `all_about_myself` 这个 package 可用，再让它执行 `/sdcard/Download/Operit/skills/SandboxPackage_DEV/scripts/install_or_update.js`
+也就是先确保 `operit_editor` 这个 package 可用，再让它执行 `/sdcard/Download/Operit/skills/SandboxPackage_DEV/scripts/install_or_update.js`
 
 最终目录应当长这样：
 
@@ -43,11 +43,11 @@ description: 用于 Operit Sandbox Package 开发。
 1. 先创建 `/sdcard/Download/Operit/skills/SandboxPackage_DEV/scripts/`
 2. 用 `download_file` 下载 `https://cdn.jsdelivr.net/gh/AAswordman/Operit@main/tools/sandboxpackage_dev_install_or_update.js`
 3. 保存为 `/sdcard/Download/Operit/skills/SandboxPackage_DEV/scripts/install_or_update.js`
-4. 调用 `all_about_myself` 的 `debug_run_sandbox_script`
+4. 调用 `operit_editor` 的 `debug_run_sandbox_script`
 5. 把 `source_path` 设为 `/sdcard/Download/Operit/skills/SandboxPackage_DEV/scripts/install_or_update.js`
 6. 等脚本执行完成
 
-如果当前环境里没有直接暴露这个工具名，就先使用 `use_package` 调用 `all_about_myself`，再执行 `debug_run_sandbox_script`。
+如果当前环境里没有直接暴露这个工具名，就先使用 `use_package` 调用 `operit_editor`，再执行 `debug_run_sandbox_script`。
 
 这个安装脚本会自动处理下面这些内容：
 

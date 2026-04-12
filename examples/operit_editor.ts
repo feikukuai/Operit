@@ -1,13 +1,13 @@
 /* METADATA
 {
-  name: "all_about_myself"
+  name: "operit_editor"
   display_name: {
-    zh: "Operit配置编辑器"
-    en: "Operit Config Editor"
+    zh: "Operit平台编辑器"
+    en: "Operit Platform Editor"
   }
   description: {
-    zh: '''软件设置直改工具包：提供一组可直接读取与修改 Operit 设置的工具，覆盖 MCP、Skill、Sandbox Package、功能模型绑定、模型参数、上下文总结与 TTS/STT 语音服务配置。'''
-    en: '''Direct software-settings toolkit: a collection of tools for reading and directly modifying Operit settings, covering MCP, Skill, Sandbox Package, function-model bindings, model parameters, context-summary settings, and TTS/STT speech-service configuration.'''
+    zh: '''Operit 平台配置直改工具包：提供一组可直接读取与修改 Operit 平台设置的工具，覆盖 MCP、Skill、Sandbox Package、功能模型绑定、模型参数、上下文总结与 TTS/STT 语音服务配置。'''
+    en: '''Direct Operit platform configuration toolkit: a collection of tools for reading and directly modifying Operit platform settings, covering MCP, Skill, Sandbox Package, function-model bindings, model parameters, context-summary settings, and TTS/STT speech-service configuration.'''
   }
 
   enabledByDefault: true
@@ -15,7 +15,7 @@
   "category": "Chat",
   tools: [
     {
-      name: "all_about_myself"
+      name: "operit_editor"
       description: {
         zh: '''配置排查手册。
 
@@ -1938,7 +1938,9 @@
   ]
 }*/
 
-async function all_about_myself(params: { query?: string }) {
+const operitEditorPackage = (function () {
+
+async function operit_editor(params: { query?: string }) {
   try {
     const { query } = params ?? {};
     complete({
@@ -2431,7 +2433,7 @@ async function resolve_toolpkg_source(rawSourcePath: string): Promise<ToolPkgRes
     archivePath = sourcePath;
     const tempExtractDir = path_join(
       OPERIT_CLEAN_ON_EXIT_DIR,
-      `all_about_myself_toolpkg_extract_${safe_debug_file_stem(lowerBaseName.replace(/\.toolpkg$/i, ""), "toolpkg")}_${Date.now()}`
+      `operit_editor_toolpkg_extract_${safe_debug_file_stem(lowerBaseName.replace(/\.toolpkg$/i, ""), "toolpkg")}_${Date.now()}`
     );
     await ensure_android_directory(tempExtractDir);
     await Tools.Files.unzip(sourcePath, tempExtractDir, "android");
@@ -2550,7 +2552,7 @@ function create_toolpkg_archive_from_folder_contents(sourceFolderPath: string, d
 async function build_toolpkg_archive_from_folder(source: ToolPkgResolvedSource) {
   const tempBuildDir = path_join(
     OPERIT_CLEAN_ON_EXIT_DIR,
-    `all_about_myself_toolpkg_build_${safe_debug_file_stem(source.packageId, "toolpkg")}_${Date.now()}`
+    `operit_editor_toolpkg_build_${safe_debug_file_stem(source.packageId, "toolpkg")}_${Date.now()}`
   );
   await ensure_android_directory(tempBuildDir);
   const archivePath = path_join(tempBuildDir, `${safe_debug_file_stem(source.packageId, "toolpkg")}.toolpkg`);
@@ -3730,30 +3732,58 @@ async function ping_mcp(params?: { package_name?: string }) {
   }
 }
 
-exports.all_about_myself = all_about_myself;
-exports.how_make_skill = how_make_skill;
-exports.list_sandbox_packages = list_sandbox_packages;
-exports.set_sandbox_package_enabled = set_sandbox_package_enabled;
-exports.debug_install_js_package = debug_install_js_package;
-exports.debug_install_toolpkg = debug_install_toolpkg;
-exports.debug_run_sandbox_script = debug_run_sandbox_script;
-exports.read_environment_variable = read_environment_variable;
-exports.write_environment_variable = write_environment_variable;
-exports.restart_mcp_with_logs = restart_mcp_with_logs;
-exports.get_speech_services_config = get_speech_services_config;
-exports.set_speech_services_config = set_speech_services_config;
-exports.test_tts_playback = test_tts_playback;
-exports.list_model_configs = list_model_configs;
-exports.create_model_config = create_model_config;
-exports.update_model_config = update_model_config;
-exports.delete_model_config = delete_model_config;
-exports.list_function_model_configs = list_function_model_configs;
-exports.get_function_model_config = get_function_model_config;
-exports.get_context_summary_config = get_context_summary_config;
-exports.set_context_summary_config = set_context_summary_config;
-exports.set_function_model_config = set_function_model_config;
-exports.test_model_config_connection = test_model_config_connection;
-exports.ping_mcp = ping_mcp;
+  return {
+    operit_editor,
+    how_make_skill,
+    list_sandbox_packages,
+    set_sandbox_package_enabled,
+    debug_install_js_package,
+    debug_install_toolpkg,
+    debug_run_sandbox_script,
+    read_environment_variable,
+    write_environment_variable,
+    restart_mcp_with_logs,
+    get_speech_services_config,
+    set_speech_services_config,
+    test_tts_playback,
+    list_model_configs,
+    create_model_config,
+    update_model_config,
+    delete_model_config,
+    list_function_model_configs,
+    get_function_model_config,
+    get_context_summary_config,
+    set_context_summary_config,
+    set_function_model_config,
+    test_model_config_connection,
+    ping_mcp
+  };
+})();
+
+exports.operit_editor = operitEditorPackage.operit_editor;
+exports.how_make_skill = operitEditorPackage.how_make_skill;
+exports.list_sandbox_packages = operitEditorPackage.list_sandbox_packages;
+exports.set_sandbox_package_enabled = operitEditorPackage.set_sandbox_package_enabled;
+exports.debug_install_js_package = operitEditorPackage.debug_install_js_package;
+exports.debug_install_toolpkg = operitEditorPackage.debug_install_toolpkg;
+exports.debug_run_sandbox_script = operitEditorPackage.debug_run_sandbox_script;
+exports.read_environment_variable = operitEditorPackage.read_environment_variable;
+exports.write_environment_variable = operitEditorPackage.write_environment_variable;
+exports.restart_mcp_with_logs = operitEditorPackage.restart_mcp_with_logs;
+exports.get_speech_services_config = operitEditorPackage.get_speech_services_config;
+exports.set_speech_services_config = operitEditorPackage.set_speech_services_config;
+exports.test_tts_playback = operitEditorPackage.test_tts_playback;
+exports.list_model_configs = operitEditorPackage.list_model_configs;
+exports.create_model_config = operitEditorPackage.create_model_config;
+exports.update_model_config = operitEditorPackage.update_model_config;
+exports.delete_model_config = operitEditorPackage.delete_model_config;
+exports.list_function_model_configs = operitEditorPackage.list_function_model_configs;
+exports.get_function_model_config = operitEditorPackage.get_function_model_config;
+exports.get_context_summary_config = operitEditorPackage.get_context_summary_config;
+exports.set_context_summary_config = operitEditorPackage.set_context_summary_config;
+exports.set_function_model_config = operitEditorPackage.set_function_model_config;
+exports.test_model_config_connection = operitEditorPackage.test_model_config_connection;
+exports.ping_mcp = operitEditorPackage.ping_mcp;
 
 
 

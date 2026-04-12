@@ -57,7 +57,7 @@ import com.ai.assistance.operit.data.model.ToolParameter
 import com.ai.assistance.operit.data.preferences.preferencesManager
 import com.ai.assistance.operit.ui.features.memory.screens.dialogs.BatchDeleteConfirmDialog
 import com.ai.assistance.operit.ui.features.memory.screens.dialogs.DocumentViewDialog
-import com.ai.assistance.operit.ui.features.memory.screens.dialogs.EditMemorySheet
+import com.ai.assistance.operit.ui.features.memory.screens.dialogs.EditMemoryDialog
 import com.ai.assistance.operit.ui.features.memory.screens.dialogs.LinkMemoryDialog
 import com.ai.assistance.operit.ui.features.memory.screens.dialogs.MemoryInfoDialog
 import com.ai.assistance.operit.ui.features.memory.screens.dialogs.EdgeInfoDialog
@@ -532,7 +532,7 @@ fun MemoryScreen() {
             }
 
             if (uiState.isEditing) {
-                EditMemorySheet(
+                EditMemoryDialog(
                     memory = uiState.editingMemory,
                     allFolderPaths = uiState.folderPaths,
                     onDismiss = { viewModel.cancelEditing() },

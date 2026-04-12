@@ -2332,7 +2332,13 @@ class EnhancedAIService private constructor(private val context: Context) {
             isSubTask: Boolean = false,
             functionType: FunctionType = FunctionType.CHAT,
             chatModelConfigIdOverride: String? = null,
-            chatModelIndexOverride: Int? = null
+            chatModelIndexOverride: Int? = null,
+            dispatchHistoryHooks: (PromptHookContext) -> PromptHookContext =
+                PromptHookRegistry::dispatchPromptHistoryHooks,
+            dispatchSystemPromptComposeHooks: (PromptHookContext) -> PromptHookContext =
+                PromptHookRegistry::dispatchSystemPromptComposeHooks,
+            dispatchToolPromptComposeHooks: (PromptHookContext) -> PromptHookContext =
+                PromptHookRegistry::dispatchToolPromptComposeHooks
     ): List<Pair<String, String>> {
         // Check if backend image recognition service is configured (for intent-based vision)
         // For subtasks, always disable backend image recognition (only support OCR)
@@ -2372,7 +2378,10 @@ class EnhancedAIService private constructor(private val context: Context) {
                 chatModelHasDirectAudio,
                 chatModelHasDirectVideo,
                 useToolCallApi,
-                chatModelHasDirectImage
+                chatModelHasDirectImage,
+                dispatchHistoryHooks,
+                dispatchSystemPromptComposeHooks,
+                dispatchToolPromptComposeHooks
         )
     }
 

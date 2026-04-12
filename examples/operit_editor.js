@@ -1,13 +1,13 @@
 /* METADATA
 {
-  name: "all_about_myself"
+  name: "operit_editor"
   display_name: {
-    zh: "Operit配置编辑器"
-    en: "Operit Config Editor"
+    zh: "Operit平台编辑器"
+    en: "Operit Platform Editor"
   }
   description: {
-    zh: '''软件设置直改工具包：提供一组可直接读取与修改 Operit 设置的工具，覆盖 MCP、Skill、Sandbox Package、功能模型绑定、模型参数、上下文总结与 TTS/STT 语音服务配置。'''
-    en: '''Direct software-settings toolkit: a collection of tools for reading and directly modifying Operit settings, covering MCP, Skill, Sandbox Package, function-model bindings, model parameters, context-summary settings, and TTS/STT speech-service configuration.'''
+    zh: '''Operit 平台配置直改工具包：提供一组可直接读取与修改 Operit 平台设置的工具，覆盖 MCP、Skill、Sandbox Package、功能模型绑定、模型参数、上下文总结与 TTS/STT 语音服务配置。'''
+    en: '''Direct Operit platform configuration toolkit: a collection of tools for reading and directly modifying Operit platform settings, covering MCP, Skill, Sandbox Package, function-model bindings, model parameters, context-summary settings, and TTS/STT speech-service configuration.'''
   }
 
   enabledByDefault: true
@@ -15,7 +15,7 @@
   "category": "Chat",
   tools: [
     {
-      name: "all_about_myself"
+      name: "operit_editor"
       description: {
         zh: '''配置排查手册。
 
@@ -1937,29 +1937,30 @@
     }
   ]
 }*/
-async function all_about_myself(params) {
-    try {
-        const { query } = params ?? {};
-        complete({
-            success: true,
-            message: "配置排查手册已加载（MCP/Skill/Sandbox Package/沙盒包调试烧录/功能模型与模型配置/TTS-STT语音服务），将按配置链路执行排查。",
-            data: {
-                query: query ?? ""
-            }
-        });
+const operitEditorPackage = (function () {
+    async function operit_editor(params) {
+        try {
+            const { query } = params ?? {};
+            complete({
+                success: true,
+                message: "配置排查手册已加载（MCP/Skill/Sandbox Package/沙盒包调试烧录/功能模型与模型配置/TTS-STT语音服务），将按配置链路执行排查。",
+                data: {
+                    query: query ?? ""
+                }
+            });
+        }
+        catch (error) {
+            complete({
+                success: false,
+                message: get_error_message(error)
+            });
+        }
     }
-    catch (error) {
-        complete({
-            success: false,
-            message: get_error_message(error)
-        });
-    }
-}
-async function how_make_skill() {
-    try {
-        const locale = (getLang() ?? "").toLowerCase();
-        const lang = locale.startsWith("zh") ? "zh" : locale.startsWith("en") ? "en" : "both";
-        const zh = `如何制作 skill（简版）
+    async function how_make_skill() {
+        try {
+            const locale = (getLang() ?? "").toLowerCase();
+            const lang = locale.startsWith("zh") ? "zh" : locale.startsWith("en") ? "en" : "both";
+            const zh = `如何制作 skill（简版）
 1. 先创建目录：/sdcard/Download/Operit/skills/<skill_name>/
 2. 必备文件：SKILL.md
 3. 在 SKILL.md 顶部用 Markdown 元数据（frontmatter）写 name、description，例如：
@@ -1970,7 +1971,7 @@ description: 用一句话说明这个 skill 做什么
 4. 元数据后再写正文：适用场景、执行步骤、约束边界、期望输出
 5. 可选内容：scripts/、templates/、examples/、assets/；在 SKILL.md 里用相对路径引用
 6. 实践建议：优先下载现成 skill，直接解压过来，并确保目录下有 SKILL.md。`;
-        const en = `How to make a skill (quick guide)
+            const en = `How to make a skill (quick guide)
 1. Create a directory: /sdcard/Download/Operit/skills/<skill_name>/
 2. Required file: SKILL.md
 3. At the top of SKILL.md, use Markdown metadata (frontmatter) for name and description, for example:
@@ -1981,1403 +1982,1430 @@ description: one-line summary of what this skill does
 4. After metadata, write the main sections: use cases, workflow steps, constraints, expected outputs
 5. Optional content: scripts/, templates/, examples/, assets/; reference them from SKILL.md using relative paths
 6. Practical tip: download an existing skill, extract it directly, and ensure the directory contains SKILL.md`;
-        const message = lang === "zh" ? zh : lang === "en" ? en : `${zh}\n\n---\n\n${en}`;
-        complete({
-            success: true,
-            message,
-            data: {
-                lang,
-                zh,
-                en
-            }
-        });
-    }
-    catch (error) {
-        complete({
-            success: false,
-            message: get_error_message(error)
-        });
-    }
-}
-async function list_sandbox_packages() {
-    try {
-        const result = await Tools.SoftwareSettings.listSandboxPackages();
-        complete({
-            success: true,
-            message: `Sandbox package list fetched: ${String(result.totalCount)} package(s).`,
-            data: result
-        });
-    }
-    catch (error) {
-        complete({
-            success: false,
-            message: get_error_message(error)
-        });
-    }
-}
-async function set_sandbox_package_enabled(params) {
-    try {
-        const packageName = params?.package_name ?? "";
-        const enabled = params?.enabled ?? false;
-        const result = await Tools.SoftwareSettings.setSandboxPackageEnabled(packageName, enabled);
-        complete({
-            success: true,
-            message: result.message || "Sandbox package switch updated.",
-            data: result
-        });
-    }
-    catch (error) {
-        complete({
-            success: false,
-            message: get_error_message(error)
-        });
-    }
-}
-const SANDBOX_EXTERNAL_PACKAGES_DIR = "/sdcard/Android/data/com.ai.assistance.operit/files/packages";
-const TOOLPKG_DEBUG_INSTALL_ACTION = "com.ai.assistance.operit.DEBUG_INSTALL_TOOLPKG";
-const TOOLPKG_DEBUG_INSTALL_COMPONENT = "com.ai.assistance.operit/.core.tools.packTool.ToolPkgDebugInstallReceiver";
-const SANDBOX_SCRIPT_EXECUTION_ACTION = "com.ai.assistance.operit.EXECUTE_JS";
-const SANDBOX_SCRIPT_EXECUTION_COMPONENT = "com.ai.assistance.operit/com.ai.assistance.operit.core.tools.javascript.ScriptExecutionReceiver";
-const SANDBOX_SCRIPT_EXECUTION_MODE_SCRIPT = "script";
-const SANDBOX_SCRIPT_EXECUTION_MODE_CODE = "code";
-const SANDBOX_JS_TEMP_DIR = "/sdcard/Android/data/com.ai.assistance.operit/js_temp";
-const DEFAULT_SANDBOX_REFRESH_TIMEOUT_MS = 1500;
-const DEFAULT_TOOLPKG_INSTALL_WAIT_MS = 1500;
-const DEFAULT_SANDBOX_SCRIPT_WAIT_MS = 15000;
-const JS_METADATA_BLOCK_PATTERN = /\/\*\s*METADATA([\s\S]*?)\*\//m;
-const JS_PACKAGE_NAME_PATTERN = /^\s*["']?name["']?\s*:\s*["']([^"']+)["']/m;
-const TOOLPKG_ID_PATTERN = /^\s*["']?toolpkg_id["']?\s*:\s*["']([^"']+)["']/m;
-const TOOLPKG_MAIN_PATTERN = /^\s*["']?main["']?\s*:\s*["']([^"']+)["']/m;
-const TOOLPKG_SUBPACKAGE_ID_PATTERN = /^\s*["']?id["']?\s*:\s*["']([^"']+)["']/gm;
-const TOOLPKG_SKIP_DIR_NAMES = new Set([".git", "__pycache__"]);
-const TOOLPKG_SKIP_FILE_NAMES = new Set([".DS_Store", "Thumbs.db"]);
-function normalize_android_path(raw) {
-    const normalized = String(raw ?? "").trim().replace(/\\/g, "/");
-    if (!normalized)
-        return "";
-    if (/^[a-zA-Z]+:\/\//.test(normalized))
-        return normalized;
-    if (normalized.startsWith("/"))
-        return normalized;
-    if (normalized.startsWith("sdcard/"))
-        return `/${normalized}`;
-    if (normalized.startsWith("Android/") || normalized.startsWith("Download/")) {
-        return `/sdcard/${normalized}`;
-    }
-    return normalized;
-}
-function normalize_package_key(raw) {
-    return String(raw ?? "").trim().toLowerCase();
-}
-function normalize_directory_path(path) {
-    const normalized = normalize_android_path(path).replace(/\/+/g, "/");
-    if (normalized === "/")
-        return normalized;
-    return normalized.replace(/\/+$/, "");
-}
-function same_android_path(left, right) {
-    return normalize_directory_path(left) === normalize_directory_path(right);
-}
-function path_dirname(path) {
-    const normalized = normalize_directory_path(path);
-    const index = normalized.lastIndexOf("/");
-    if (index < 0)
-        return "";
-    if (index === 0)
-        return "/";
-    return normalized.slice(0, index);
-}
-function path_basename(path) {
-    const normalized = normalize_directory_path(path);
-    const index = normalized.lastIndexOf("/");
-    return index >= 0 ? normalized.slice(index + 1) : normalized;
-}
-function path_join(...parts) {
-    const filtered = parts
-        .map((part) => String(part ?? "").trim().replace(/\\/g, "/"))
-        .filter(Boolean);
-    if (filtered.length === 0)
-        return "";
-    const leadingSlash = filtered[0].startsWith("/");
-    const joined = filtered.map((part) => part.replace(/^\/+|\/+$/g, "")).filter(Boolean).join("/");
-    return leadingSlash ? `/${joined}` : joined;
-}
-function safe_debug_file_stem(raw, fallback) {
-    const normalized = String(raw ?? "").trim().replace(/[^A-Za-z0-9._-]+/g, "_").replace(/^[_\.]+|[_\.]+$/g, "");
-    return normalized || fallback;
-}
-function parse_boolean_like(value, defaultValue) {
-    if (value === undefined || value === null || value === "")
-        return defaultValue;
-    if (typeof value === "boolean")
-        return value;
-    if (typeof value === "number")
-        return value !== 0;
-    const normalized = String(value).trim().toLowerCase();
-    if (!normalized)
-        return defaultValue;
-    if (["true", "1", "yes", "on"].includes(normalized))
-        return true;
-    if (["false", "0", "no", "off"].includes(normalized))
-        return false;
-    return defaultValue;
-}
-function parse_integer_like(value, defaultValue) {
-    if (value === undefined || value === null || value === "")
-        return defaultValue;
-    const parsed = Number(value);
-    return Number.isFinite(parsed) && parsed >= 0 ? Math.floor(parsed) : defaultValue;
-}
-async function android_path_exists(path) {
-    const result = (await Tools.Files.exists(path, "android"));
-    return !!result?.exists;
-}
-async function get_android_file_type(path) {
-    const result = (await Tools.Files.info(path, "android"));
-    return String(result?.fileType ?? "").trim().toLowerCase();
-}
-async function ensure_android_directory(path) {
-    await Tools.Files.mkdir(path, true, "android");
-}
-async function delete_android_path_if_exists(path) {
-    if (!path)
-        return;
-    if (!(await android_path_exists(path)))
-        return;
-    await Tools.Files.deleteFile(path, true, "android");
-}
-async function cleanup_android_paths(paths) {
-    const uniquePaths = Array.from(new Set(paths.map((path) => normalize_android_path(path)).filter(Boolean)));
-    uniquePaths.sort((left, right) => right.length - left.length);
-    for (const path of uniquePaths) {
-        try {
-            await delete_android_path_if_exists(path);
-        }
-        catch {
-            // Ignore cleanup failures.
-        }
-    }
-}
-async function read_android_text_file(path) {
-    const result = (await Tools.Files.read({ path, environment: "android" }));
-    const content = typeof result?.content === "string" ? result.content : extract_string_result(result);
-    if (typeof content !== "string") {
-        throw new Error(`Failed to read text file: ${path}`);
-    }
-    return content;
-}
-function parse_json_record(raw) {
-    if (!raw)
-        return null;
-    try {
-        const parsed = JSON.parse(raw);
-        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed))
-            return null;
-        return parsed;
-    }
-    catch {
-        return null;
-    }
-}
-function find_sandbox_package_entry(payload, packageName) {
-    const targetKey = normalize_package_key(packageName);
-    const packages = payload?.packages ?? [];
-    return (packages.find((entry) => normalize_package_key(entry?.packageName) === targetKey) ?? null);
-}
-async function refresh_sandbox_packages_until(packageName, timeoutMs) {
-    const deadline = Date.now() + Math.max(0, timeoutMs);
-    let lastPayload = null;
-    let lastEntry = null;
-    while (true) {
-        lastPayload = await Tools.SoftwareSettings.listSandboxPackages();
-        lastEntry = find_sandbox_package_entry(lastPayload, packageName);
-        if (lastEntry) {
-            return {
-                payload: lastPayload,
-                packageEntry: lastEntry
-            };
-        }
-        if (Date.now() >= deadline) {
-            return {
-                payload: lastPayload,
-                packageEntry: lastEntry
-            };
-        }
-        await Tools.System.sleep(Math.min(300, Math.max(50, deadline - Date.now())));
-    }
-}
-async function wait_for_android_file(path, timeoutMs) {
-    const deadline = Date.now() + Math.max(0, timeoutMs);
-    while (true) {
-        if (await android_path_exists(path)) {
-            return true;
-        }
-        if (Date.now() >= deadline) {
-            return false;
-        }
-        await Tools.System.sleep(Math.min(300, Math.max(50, deadline - Date.now())));
-    }
-}
-function parse_json_text(raw) {
-    const text = String(raw ?? "").trim();
-    if (!text)
-        return null;
-    try {
-        return JSON.parse(text);
-    }
-    catch {
-        return null;
-    }
-}
-function extract_js_metadata_block(sourceText, sourcePath) {
-    const match = JS_METADATA_BLOCK_PATTERN.exec(sourceText);
-    if (!match) {
-        throw new Error(`Missing METADATA block: ${sourcePath}`);
-    }
-    return match[1].trim();
-}
-function parse_js_package_source(sourceText, sourcePath) {
-    const metadataBlock = extract_js_metadata_block(sourceText, sourcePath);
-    const packageName = JS_PACKAGE_NAME_PATTERN.exec(metadataBlock)?.[1]?.trim() ?? "";
-    if (!packageName) {
-        throw new Error(`Missing package metadata name: ${sourcePath}`);
-    }
-    return {
-        packageName,
-        metadataBlock
-    };
-}
-async function delete_duplicate_external_js_package_files(packageName, keepPath) {
-    const removedPaths = [];
-    const listing = (await Tools.Files.list(SANDBOX_EXTERNAL_PACKAGES_DIR, "android"));
-    for (const entry of listing?.entries ?? []) {
-        const entryName = String(entry?.name ?? "").trim();
-        if (!entryName || entry?.isDirectory || !entryName.toLowerCase().endsWith(".js")) {
-            continue;
-        }
-        const candidatePath = path_join(SANDBOX_EXTERNAL_PACKAGES_DIR, entryName);
-        if (same_android_path(candidatePath, keepPath)) {
-            continue;
-        }
-        try {
-            const candidateText = await read_android_text_file(candidatePath);
-            const candidateInfo = parse_js_package_source(candidateText, candidatePath);
-            if (normalize_package_key(candidateInfo.packageName) !== normalize_package_key(packageName)) {
-                continue;
-            }
-            await Tools.Files.deleteFile(candidatePath, false, "android");
-            removedPaths.push(candidatePath);
-        }
-        catch {
-            // Ignore files that cannot be parsed as sandbox packages.
-        }
-    }
-    return removedPaths;
-}
-function parse_toolpkg_manifest_text(text, manifestPath) {
-    let packageId = "";
-    let mainEntry = "";
-    let subpackageIds = [];
-    try {
-        const parsed = JSON.parse(text);
-        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-            packageId = String(parsed.toolpkg_id ?? "").trim();
-            mainEntry = String(parsed.main ?? "").trim();
-            if (Array.isArray(parsed.subpackages)) {
-                subpackageIds = parsed.subpackages
-                    .map((subpackage) => String(subpackage?.id ?? "").trim())
-                    .filter(Boolean);
-            }
-        }
-    }
-    catch {
-        // HJSON-like manifests will fall back to regex parsing below.
-    }
-    if (!packageId) {
-        packageId = TOOLPKG_ID_PATTERN.exec(text)?.[1]?.trim() ?? "";
-    }
-    if (!mainEntry) {
-        mainEntry = TOOLPKG_MAIN_PATTERN.exec(text)?.[1]?.trim() ?? "";
-    }
-    if (subpackageIds.length === 0) {
-        const matches = [];
-        const pattern = new RegExp(TOOLPKG_SUBPACKAGE_ID_PATTERN.source, TOOLPKG_SUBPACKAGE_ID_PATTERN.flags);
-        let match;
-        while ((match = pattern.exec(text)) !== null) {
-            const subpackageId = match[1]?.trim() ?? "";
-            if (subpackageId) {
-                matches.push(subpackageId);
-            }
-        }
-        subpackageIds = matches;
-    }
-    if (!packageId) {
-        throw new Error(`manifest.toolpkg_id is required: ${manifestPath}`);
-    }
-    if (!mainEntry) {
-        throw new Error(`manifest.main is required: ${manifestPath}`);
-    }
-    return {
-        packageId,
-        mainEntry: mainEntry.replace(/\\/g, "/").replace(/^\/+/, ""),
-        subpackageIds: Array.from(new Set(subpackageIds))
-    };
-}
-async function find_toolpkg_manifest_in_folder(folderPath) {
-    const manifestJson = path_join(folderPath, "manifest.json");
-    if (await android_path_exists(manifestJson)) {
-        return manifestJson;
-    }
-    const manifestHjson = path_join(folderPath, "manifest.hjson");
-    if (await android_path_exists(manifestHjson)) {
-        return manifestHjson;
-    }
-    throw new Error(`Missing manifest.json or manifest.hjson in folder: ${folderPath}`);
-}
-async function resolve_toolpkg_source(rawSourcePath) {
-    const sourcePath = normalize_android_path(rawSourcePath);
-    if (!sourcePath) {
-        throw new Error("Missing required parameter: source_path");
-    }
-    if (!(await android_path_exists(sourcePath))) {
-        throw new Error(`Source path does not exist: ${sourcePath}`);
-    }
-    const sourceType = await get_android_file_type(sourcePath);
-    let sourceKind = "folder";
-    let folderPath = sourcePath;
-    let archivePath;
-    const temporaryPaths = [];
-    const lowerBaseName = path_basename(sourcePath).toLowerCase();
-    if (sourceType === "directory") {
-        folderPath = sourcePath;
-    }
-    else if (sourceType === "file" && (lowerBaseName === "manifest.json" || lowerBaseName === "manifest.hjson")) {
-        folderPath = path_dirname(sourcePath);
-    }
-    else if (sourceType === "file" && lowerBaseName.endsWith(".toolpkg")) {
-        sourceKind = "archive";
-        archivePath = sourcePath;
-        const tempExtractDir = path_join(OPERIT_CLEAN_ON_EXIT_DIR, `all_about_myself_toolpkg_extract_${safe_debug_file_stem(lowerBaseName.replace(/\.toolpkg$/i, ""), "toolpkg")}_${Date.now()}`);
-        await ensure_android_directory(tempExtractDir);
-        await Tools.Files.unzip(sourcePath, tempExtractDir, "android");
-        folderPath = tempExtractDir;
-        temporaryPaths.push(tempExtractDir);
-    }
-    else {
-        throw new Error("ToolPkg source must be a folder, manifest.json/manifest.hjson, or an existing .toolpkg file");
-    }
-    const manifestPath = await find_toolpkg_manifest_in_folder(folderPath);
-    const manifestText = await read_android_text_file(manifestPath);
-    const manifest = parse_toolpkg_manifest_text(manifestText, manifestPath);
-    const mainPath = path_join(folderPath, manifest.mainEntry);
-    if (!(await android_path_exists(mainPath))) {
-        throw new Error(`manifest.main file does not exist: ${manifestPath} -> ${manifest.mainEntry}`);
-    }
-    return {
-        sourceKind,
-        sourcePath,
-        folderPath,
-        manifestPath,
-        packageId: manifest.packageId,
-        mainEntry: manifest.mainEntry,
-        subpackageIds: manifest.subpackageIds,
-        archivePath,
-        temporaryPaths
-    };
-}
-function collect_toolpkg_directory_entries(rootFile, currentFile, entries = []) {
-    const children = currentFile.listFiles();
-    const length = Number(children?.length ?? 0);
-    for (let index = 0; index < length; index += 1) {
-        const child = children[index];
-        const childName = String(child.getName?.() ?? child.name ?? "").trim();
-        if (!childName) {
-            continue;
-        }
-        if (child.isDirectory()) {
-            if (TOOLPKG_SKIP_DIR_NAMES.has(childName)) {
-                continue;
-            }
-            collect_toolpkg_directory_entries(rootFile, child, entries);
-            continue;
-        }
-        if (TOOLPKG_SKIP_FILE_NAMES.has(childName)) {
-            continue;
-        }
-        const rootPath = String(rootFile.getAbsolutePath()).replace(/\\/g, "/").replace(/\/+$/, "");
-        const childPath = String(child.getAbsolutePath()).replace(/\\/g, "/");
-        const relativePath = childPath.startsWith(`${rootPath}/`) ? childPath.slice(rootPath.length + 1) : childName;
-        entries.push({
-            file: child,
-            relativePath
-        });
-    }
-    return entries;
-}
-function create_toolpkg_archive_from_folder_contents(sourceFolderPath, destinationArchivePath) {
-    const File = Java.type("java.io.File");
-    const FileOutputStream = Java.type("java.io.FileOutputStream");
-    const BufferedOutputStream = Java.type("java.io.BufferedOutputStream");
-    const ZipOutputStream = Java.type("java.util.zip.ZipOutputStream");
-    const ZipEntry = Java.type("java.util.zip.ZipEntry");
-    const FileInputStream = Java.type("java.io.FileInputStream");
-    const Channels = Java.type("java.nio.channels.Channels");
-    const sourceRoot = new File(sourceFolderPath);
-    if (!sourceRoot.exists() || !sourceRoot.isDirectory()) {
-        throw new Error(`ToolPkg source folder does not exist or is not a directory: ${sourceFolderPath}`);
-    }
-    const destinationFile = new File(destinationArchivePath);
-    const parentDir = destinationFile.getParentFile();
-    if (parentDir && !parentDir.exists()) {
-        parentDir.mkdirs();
-    }
-    if (destinationFile.exists()) {
-        destinationFile.delete();
-    }
-    const entries = collect_toolpkg_directory_entries(sourceRoot, sourceRoot).sort((left, right) => left.relativePath.localeCompare(right.relativePath));
-    const zipStream = new ZipOutputStream(new BufferedOutputStream(new FileOutputStream(destinationFile)));
-    try {
-        for (const entry of entries) {
-            zipStream.putNextEntry(new ZipEntry(entry.relativePath));
-            const inputStream = new FileInputStream(entry.file);
-            try {
-                const sourceChannel = inputStream.getChannel();
-                const targetChannel = Channels.newChannel(zipStream);
-                sourceChannel.transferTo(0, sourceChannel.size(), targetChannel);
-            }
-            finally {
-                inputStream.close();
-            }
-            zipStream.closeEntry();
-        }
-    }
-    finally {
-        zipStream.close();
-    }
-}
-async function build_toolpkg_archive_from_folder(source) {
-    const tempBuildDir = path_join(OPERIT_CLEAN_ON_EXIT_DIR, `all_about_myself_toolpkg_build_${safe_debug_file_stem(source.packageId, "toolpkg")}_${Date.now()}`);
-    await ensure_android_directory(tempBuildDir);
-    const archivePath = path_join(tempBuildDir, `${safe_debug_file_stem(source.packageId, "toolpkg")}.toolpkg`);
-    create_toolpkg_archive_from_folder_contents(source.folderPath, archivePath);
-    if (!(await android_path_exists(archivePath))) {
-        throw new Error(`Failed to create ToolPkg archive: ${archivePath}`);
-    }
-    return {
-        archivePath,
-        temporaryPaths: [tempBuildDir]
-    };
-}
-function parse_requested_package_ids(raw) {
-    const input = String(raw ?? "").trim();
-    if (!input)
-        return [];
-    return Array.from(new Set(input.split(/[\r\n,]+/).map((item) => item.trim()).filter(Boolean)));
-}
-async function debug_install_js_package(params) {
-    const logs = [];
-    const logStep = (message) => {
-        logs.push(message);
-    };
-    const finish = (payload) => complete({
-        ...payload,
-        data: {
-            ...(payload.data ?? {}),
-            logs
-        }
-    });
-    try {
-        const sourcePath = normalize_android_path(params?.source_path);
-        logStep(`Resolved source_path -> ${sourcePath || "<empty>"}`);
-        if (!sourcePath) {
-            finish({
-                success: false,
-                message: "Missing required parameter: source_path"
+            const message = lang === "zh" ? zh : lang === "en" ? en : `${zh}\n\n---\n\n${en}`;
+            complete({
+                success: true,
+                message,
+                data: {
+                    lang,
+                    zh,
+                    en
+                }
             });
+        }
+        catch (error) {
+            complete({
+                success: false,
+                message: get_error_message(error)
+            });
+        }
+    }
+    async function list_sandbox_packages() {
+        try {
+            const result = await Tools.SoftwareSettings.listSandboxPackages();
+            complete({
+                success: true,
+                message: `Sandbox package list fetched: ${String(result.totalCount)} package(s).`,
+                data: result
+            });
+        }
+        catch (error) {
+            complete({
+                success: false,
+                message: get_error_message(error)
+            });
+        }
+    }
+    async function set_sandbox_package_enabled(params) {
+        try {
+            const packageName = params?.package_name ?? "";
+            const enabled = params?.enabled ?? false;
+            const result = await Tools.SoftwareSettings.setSandboxPackageEnabled(packageName, enabled);
+            complete({
+                success: true,
+                message: result.message || "Sandbox package switch updated.",
+                data: result
+            });
+        }
+        catch (error) {
+            complete({
+                success: false,
+                message: get_error_message(error)
+            });
+        }
+    }
+    const SANDBOX_EXTERNAL_PACKAGES_DIR = "/sdcard/Android/data/com.ai.assistance.operit/files/packages";
+    const TOOLPKG_DEBUG_INSTALL_ACTION = "com.ai.assistance.operit.DEBUG_INSTALL_TOOLPKG";
+    const TOOLPKG_DEBUG_INSTALL_COMPONENT = "com.ai.assistance.operit/.core.tools.packTool.ToolPkgDebugInstallReceiver";
+    const SANDBOX_SCRIPT_EXECUTION_ACTION = "com.ai.assistance.operit.EXECUTE_JS";
+    const SANDBOX_SCRIPT_EXECUTION_COMPONENT = "com.ai.assistance.operit/com.ai.assistance.operit.core.tools.javascript.ScriptExecutionReceiver";
+    const SANDBOX_SCRIPT_EXECUTION_MODE_SCRIPT = "script";
+    const SANDBOX_SCRIPT_EXECUTION_MODE_CODE = "code";
+    const SANDBOX_JS_TEMP_DIR = "/sdcard/Android/data/com.ai.assistance.operit/js_temp";
+    const DEFAULT_SANDBOX_REFRESH_TIMEOUT_MS = 1500;
+    const DEFAULT_TOOLPKG_INSTALL_WAIT_MS = 1500;
+    const DEFAULT_SANDBOX_SCRIPT_WAIT_MS = 15000;
+    const JS_METADATA_BLOCK_PATTERN = /\/\*\s*METADATA([\s\S]*?)\*\//m;
+    const JS_PACKAGE_NAME_PATTERN = /^\s*["']?name["']?\s*:\s*["']([^"']+)["']/m;
+    const TOOLPKG_ID_PATTERN = /^\s*["']?toolpkg_id["']?\s*:\s*["']([^"']+)["']/m;
+    const TOOLPKG_MAIN_PATTERN = /^\s*["']?main["']?\s*:\s*["']([^"']+)["']/m;
+    const TOOLPKG_SUBPACKAGE_ID_PATTERN = /^\s*["']?id["']?\s*:\s*["']([^"']+)["']/gm;
+    const TOOLPKG_SKIP_DIR_NAMES = new Set([".git", "__pycache__"]);
+    const TOOLPKG_SKIP_FILE_NAMES = new Set([".DS_Store", "Thumbs.db"]);
+    function normalize_android_path(raw) {
+        const normalized = String(raw ?? "").trim().replace(/\\/g, "/");
+        if (!normalized)
+            return "";
+        if (/^[a-zA-Z]+:\/\//.test(normalized))
+            return normalized;
+        if (normalized.startsWith("/"))
+            return normalized;
+        if (normalized.startsWith("sdcard/"))
+            return `/${normalized}`;
+        if (normalized.startsWith("Android/") || normalized.startsWith("Download/")) {
+            return `/sdcard/${normalized}`;
+        }
+        return normalized;
+    }
+    function normalize_package_key(raw) {
+        return String(raw ?? "").trim().toLowerCase();
+    }
+    function normalize_directory_path(path) {
+        const normalized = normalize_android_path(path).replace(/\/+/g, "/");
+        if (normalized === "/")
+            return normalized;
+        return normalized.replace(/\/+$/, "");
+    }
+    function same_android_path(left, right) {
+        return normalize_directory_path(left) === normalize_directory_path(right);
+    }
+    function path_dirname(path) {
+        const normalized = normalize_directory_path(path);
+        const index = normalized.lastIndexOf("/");
+        if (index < 0)
+            return "";
+        if (index === 0)
+            return "/";
+        return normalized.slice(0, index);
+    }
+    function path_basename(path) {
+        const normalized = normalize_directory_path(path);
+        const index = normalized.lastIndexOf("/");
+        return index >= 0 ? normalized.slice(index + 1) : normalized;
+    }
+    function path_join(...parts) {
+        const filtered = parts
+            .map((part) => String(part ?? "").trim().replace(/\\/g, "/"))
+            .filter(Boolean);
+        if (filtered.length === 0)
+            return "";
+        const leadingSlash = filtered[0].startsWith("/");
+        const joined = filtered.map((part) => part.replace(/^\/+|\/+$/g, "")).filter(Boolean).join("/");
+        return leadingSlash ? `/${joined}` : joined;
+    }
+    function safe_debug_file_stem(raw, fallback) {
+        const normalized = String(raw ?? "").trim().replace(/[^A-Za-z0-9._-]+/g, "_").replace(/^[_\.]+|[_\.]+$/g, "");
+        return normalized || fallback;
+    }
+    function parse_boolean_like(value, defaultValue) {
+        if (value === undefined || value === null || value === "")
+            return defaultValue;
+        if (typeof value === "boolean")
+            return value;
+        if (typeof value === "number")
+            return value !== 0;
+        const normalized = String(value).trim().toLowerCase();
+        if (!normalized)
+            return defaultValue;
+        if (["true", "1", "yes", "on"].includes(normalized))
+            return true;
+        if (["false", "0", "no", "off"].includes(normalized))
+            return false;
+        return defaultValue;
+    }
+    function parse_integer_like(value, defaultValue) {
+        if (value === undefined || value === null || value === "")
+            return defaultValue;
+        const parsed = Number(value);
+        return Number.isFinite(parsed) && parsed >= 0 ? Math.floor(parsed) : defaultValue;
+    }
+    async function android_path_exists(path) {
+        const result = (await Tools.Files.exists(path, "android"));
+        return !!result?.exists;
+    }
+    async function get_android_file_type(path) {
+        const result = (await Tools.Files.info(path, "android"));
+        return String(result?.fileType ?? "").trim().toLowerCase();
+    }
+    async function ensure_android_directory(path) {
+        await Tools.Files.mkdir(path, true, "android");
+    }
+    async function delete_android_path_if_exists(path) {
+        if (!path)
             return;
+        if (!(await android_path_exists(path)))
+            return;
+        await Tools.Files.deleteFile(path, true, "android");
+    }
+    async function cleanup_android_paths(paths) {
+        const uniquePaths = Array.from(new Set(paths.map((path) => normalize_android_path(path)).filter(Boolean)));
+        uniquePaths.sort((left, right) => right.length - left.length);
+        for (const path of uniquePaths) {
+            try {
+                await delete_android_path_if_exists(path);
+            }
+            catch {
+                // Ignore cleanup failures.
+            }
+        }
+    }
+    async function read_android_text_file(path) {
+        const result = (await Tools.Files.read({ path, environment: "android" }));
+        const content = typeof result?.content === "string" ? result.content : extract_string_result(result);
+        if (typeof content !== "string") {
+            throw new Error(`Failed to read text file: ${path}`);
+        }
+        return content;
+    }
+    function parse_json_record(raw) {
+        if (!raw)
+            return null;
+        try {
+            const parsed = JSON.parse(raw);
+            if (!parsed || typeof parsed !== "object" || Array.isArray(parsed))
+                return null;
+            return parsed;
+        }
+        catch {
+            return null;
+        }
+    }
+    function find_sandbox_package_entry(payload, packageName) {
+        const targetKey = normalize_package_key(packageName);
+        const packages = payload?.packages ?? [];
+        return (packages.find((entry) => normalize_package_key(entry?.packageName) === targetKey) ?? null);
+    }
+    async function refresh_sandbox_packages_until(packageName, timeoutMs) {
+        const deadline = Date.now() + Math.max(0, timeoutMs);
+        let lastPayload = null;
+        let lastEntry = null;
+        while (true) {
+            lastPayload = await Tools.SoftwareSettings.listSandboxPackages();
+            lastEntry = find_sandbox_package_entry(lastPayload, packageName);
+            if (lastEntry) {
+                return {
+                    payload: lastPayload,
+                    packageEntry: lastEntry
+                };
+            }
+            if (Date.now() >= deadline) {
+                return {
+                    payload: lastPayload,
+                    packageEntry: lastEntry
+                };
+            }
+            await Tools.System.sleep(Math.min(300, Math.max(50, deadline - Date.now())));
+        }
+    }
+    async function wait_for_android_file(path, timeoutMs) {
+        const deadline = Date.now() + Math.max(0, timeoutMs);
+        while (true) {
+            if (await android_path_exists(path)) {
+                return true;
+            }
+            if (Date.now() >= deadline) {
+                return false;
+            }
+            await Tools.System.sleep(Math.min(300, Math.max(50, deadline - Date.now())));
+        }
+    }
+    function parse_json_text(raw) {
+        const text = String(raw ?? "").trim();
+        if (!text)
+            return null;
+        try {
+            return JSON.parse(text);
+        }
+        catch {
+            return null;
+        }
+    }
+    function extract_js_metadata_block(sourceText, sourcePath) {
+        const match = JS_METADATA_BLOCK_PATTERN.exec(sourceText);
+        if (!match) {
+            throw new Error(`Missing METADATA block: ${sourcePath}`);
+        }
+        return match[1].trim();
+    }
+    function parse_js_package_source(sourceText, sourcePath) {
+        const metadataBlock = extract_js_metadata_block(sourceText, sourcePath);
+        const packageName = JS_PACKAGE_NAME_PATTERN.exec(metadataBlock)?.[1]?.trim() ?? "";
+        if (!packageName) {
+            throw new Error(`Missing package metadata name: ${sourcePath}`);
+        }
+        return {
+            packageName,
+            metadataBlock
+        };
+    }
+    async function delete_duplicate_external_js_package_files(packageName, keepPath) {
+        const removedPaths = [];
+        const listing = (await Tools.Files.list(SANDBOX_EXTERNAL_PACKAGES_DIR, "android"));
+        for (const entry of listing?.entries ?? []) {
+            const entryName = String(entry?.name ?? "").trim();
+            if (!entryName || entry?.isDirectory || !entryName.toLowerCase().endsWith(".js")) {
+                continue;
+            }
+            const candidatePath = path_join(SANDBOX_EXTERNAL_PACKAGES_DIR, entryName);
+            if (same_android_path(candidatePath, keepPath)) {
+                continue;
+            }
+            try {
+                const candidateText = await read_android_text_file(candidatePath);
+                const candidateInfo = parse_js_package_source(candidateText, candidatePath);
+                if (normalize_package_key(candidateInfo.packageName) !== normalize_package_key(packageName)) {
+                    continue;
+                }
+                await Tools.Files.deleteFile(candidatePath, false, "android");
+                removedPaths.push(candidatePath);
+            }
+            catch {
+                // Ignore files that cannot be parsed as sandbox packages.
+            }
+        }
+        return removedPaths;
+    }
+    function parse_toolpkg_manifest_text(text, manifestPath) {
+        let packageId = "";
+        let mainEntry = "";
+        let subpackageIds = [];
+        try {
+            const parsed = JSON.parse(text);
+            if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+                packageId = String(parsed.toolpkg_id ?? "").trim();
+                mainEntry = String(parsed.main ?? "").trim();
+                if (Array.isArray(parsed.subpackages)) {
+                    subpackageIds = parsed.subpackages
+                        .map((subpackage) => String(subpackage?.id ?? "").trim())
+                        .filter(Boolean);
+                }
+            }
+        }
+        catch {
+            // HJSON-like manifests will fall back to regex parsing below.
+        }
+        if (!packageId) {
+            packageId = TOOLPKG_ID_PATTERN.exec(text)?.[1]?.trim() ?? "";
+        }
+        if (!mainEntry) {
+            mainEntry = TOOLPKG_MAIN_PATTERN.exec(text)?.[1]?.trim() ?? "";
+        }
+        if (subpackageIds.length === 0) {
+            const matches = [];
+            const pattern = new RegExp(TOOLPKG_SUBPACKAGE_ID_PATTERN.source, TOOLPKG_SUBPACKAGE_ID_PATTERN.flags);
+            let match;
+            while ((match = pattern.exec(text)) !== null) {
+                const subpackageId = match[1]?.trim() ?? "";
+                if (subpackageId) {
+                    matches.push(subpackageId);
+                }
+            }
+            subpackageIds = matches;
+        }
+        if (!packageId) {
+            throw new Error(`manifest.toolpkg_id is required: ${manifestPath}`);
+        }
+        if (!mainEntry) {
+            throw new Error(`manifest.main is required: ${manifestPath}`);
+        }
+        return {
+            packageId,
+            mainEntry: mainEntry.replace(/\\/g, "/").replace(/^\/+/, ""),
+            subpackageIds: Array.from(new Set(subpackageIds))
+        };
+    }
+    async function find_toolpkg_manifest_in_folder(folderPath) {
+        const manifestJson = path_join(folderPath, "manifest.json");
+        if (await android_path_exists(manifestJson)) {
+            return manifestJson;
+        }
+        const manifestHjson = path_join(folderPath, "manifest.hjson");
+        if (await android_path_exists(manifestHjson)) {
+            return manifestHjson;
+        }
+        throw new Error(`Missing manifest.json or manifest.hjson in folder: ${folderPath}`);
+    }
+    async function resolve_toolpkg_source(rawSourcePath) {
+        const sourcePath = normalize_android_path(rawSourcePath);
+        if (!sourcePath) {
+            throw new Error("Missing required parameter: source_path");
+        }
+        if (!(await android_path_exists(sourcePath))) {
+            throw new Error(`Source path does not exist: ${sourcePath}`);
         }
         const sourceType = await get_android_file_type(sourcePath);
-        logStep(`Source type detected -> ${sourceType}`);
-        if (sourceType !== "file") {
-            finish({
-                success: false,
-                message: `JS source must be a file: ${sourcePath}`
-            });
-            return;
+        let sourceKind = "folder";
+        let folderPath = sourcePath;
+        let archivePath;
+        const temporaryPaths = [];
+        const lowerBaseName = path_basename(sourcePath).toLowerCase();
+        if (sourceType === "directory") {
+            folderPath = sourcePath;
         }
-        if (!sourcePath.toLowerCase().endsWith(".js")) {
-            finish({
-                success: false,
-                message: `JS debug install only supports .js files: ${sourcePath}`
-            });
-            return;
+        else if (sourceType === "file" && (lowerBaseName === "manifest.json" || lowerBaseName === "manifest.hjson")) {
+            folderPath = path_dirname(sourcePath);
         }
-        const sourceText = await read_android_text_file(sourcePath);
-        const packageInfo = parse_js_package_source(sourceText, sourcePath);
-        logStep(`Parsed package info -> packageName=${packageInfo.packageName}`);
-        const enableAfterInstall = parse_boolean_like(params?.enable_after_install, true);
-        const activateAfterInstall = parse_boolean_like(params?.activate_after_install, true);
-        const shouldEnable = enableAfterInstall || activateAfterInstall;
-        logStep(`Install options -> enableAfterInstall=${String(enableAfterInstall)}, activateAfterInstall=${String(activateAfterInstall)}, shouldEnable=${String(shouldEnable)}`);
-        await ensure_android_directory(SANDBOX_EXTERNAL_PACKAGES_DIR);
-        const targetPath = path_join(SANDBOX_EXTERNAL_PACKAGES_DIR, `${safe_debug_file_stem(packageInfo.packageName, "debug_js_package")}.js`);
-        logStep(`Target install path -> ${targetPath}`);
-        const copied = !same_android_path(sourcePath, targetPath);
-        if (copied) {
-            logStep("Source and target differ; replacing target file before copy.");
-            await delete_android_path_if_exists(targetPath);
-            await Tools.Files.copy(sourcePath, targetPath, false, "android", "android");
-            logStep("Package file copied to external sandbox directory.");
+        else if (sourceType === "file" && lowerBaseName.endsWith(".toolpkg")) {
+            sourceKind = "archive";
+            archivePath = sourcePath;
+            const tempExtractDir = path_join(OPERIT_CLEAN_ON_EXIT_DIR, `operit_editor_toolpkg_extract_${safe_debug_file_stem(lowerBaseName.replace(/\.toolpkg$/i, ""), "toolpkg")}_${Date.now()}`);
+            await ensure_android_directory(tempExtractDir);
+            await Tools.Files.unzip(sourcePath, tempExtractDir, "android");
+            folderPath = tempExtractDir;
+            temporaryPaths.push(tempExtractDir);
         }
         else {
-            logStep("Source path already matches target path; skipping file copy.");
+            throw new Error("ToolPkg source must be a folder, manifest.json/manifest.hjson, or an existing .toolpkg file");
         }
-        if (!(await android_path_exists(targetPath))) {
-            finish({
-                success: false,
-                message: `Installed JS package file is missing after copy: ${targetPath}`
+        const manifestPath = await find_toolpkg_manifest_in_folder(folderPath);
+        const manifestText = await read_android_text_file(manifestPath);
+        const manifest = parse_toolpkg_manifest_text(manifestText, manifestPath);
+        const mainPath = path_join(folderPath, manifest.mainEntry);
+        if (!(await android_path_exists(mainPath))) {
+            throw new Error(`manifest.main file does not exist: ${manifestPath} -> ${manifest.mainEntry}`);
+        }
+        return {
+            sourceKind,
+            sourcePath,
+            folderPath,
+            manifestPath,
+            packageId: manifest.packageId,
+            mainEntry: manifest.mainEntry,
+            subpackageIds: manifest.subpackageIds,
+            archivePath,
+            temporaryPaths
+        };
+    }
+    function collect_toolpkg_directory_entries(rootFile, currentFile, entries = []) {
+        const children = currentFile.listFiles();
+        const length = Number(children?.length ?? 0);
+        for (let index = 0; index < length; index += 1) {
+            const child = children[index];
+            const childName = String(child.getName?.() ?? child.name ?? "").trim();
+            if (!childName) {
+                continue;
+            }
+            if (child.isDirectory()) {
+                if (TOOLPKG_SKIP_DIR_NAMES.has(childName)) {
+                    continue;
+                }
+                collect_toolpkg_directory_entries(rootFile, child, entries);
+                continue;
+            }
+            if (TOOLPKG_SKIP_FILE_NAMES.has(childName)) {
+                continue;
+            }
+            const rootPath = String(rootFile.getAbsolutePath()).replace(/\\/g, "/").replace(/\/+$/, "");
+            const childPath = String(child.getAbsolutePath()).replace(/\\/g, "/");
+            const relativePath = childPath.startsWith(`${rootPath}/`) ? childPath.slice(rootPath.length + 1) : childName;
+            entries.push({
+                file: child,
+                relativePath
             });
-            return;
         }
-        logStep("Verified installed JS package file exists.");
-        const removedDuplicateFiles = await delete_duplicate_external_js_package_files(packageInfo.packageName, targetPath);
-        logStep(`Duplicate cleanup completed -> removed ${removedDuplicateFiles.length} file(s).`);
-        const refresh = await refresh_sandbox_packages_until(packageInfo.packageName, DEFAULT_SANDBOX_REFRESH_TIMEOUT_MS);
-        logStep(`Sandbox refresh completed -> found=${String(Boolean(refresh.packageEntry))}, builtIn=${String(refresh.packageEntry?.isBuiltIn ?? false)}`);
-        if (!refresh.packageEntry) {
+        return entries;
+    }
+    function create_toolpkg_archive_from_folder_contents(sourceFolderPath, destinationArchivePath) {
+        const File = Java.type("java.io.File");
+        const FileOutputStream = Java.type("java.io.FileOutputStream");
+        const BufferedOutputStream = Java.type("java.io.BufferedOutputStream");
+        const ZipOutputStream = Java.type("java.util.zip.ZipOutputStream");
+        const ZipEntry = Java.type("java.util.zip.ZipEntry");
+        const FileInputStream = Java.type("java.io.FileInputStream");
+        const Channels = Java.type("java.nio.channels.Channels");
+        const sourceRoot = new File(sourceFolderPath);
+        if (!sourceRoot.exists() || !sourceRoot.isDirectory()) {
+            throw new Error(`ToolPkg source folder does not exist or is not a directory: ${sourceFolderPath}`);
+        }
+        const destinationFile = new File(destinationArchivePath);
+        const parentDir = destinationFile.getParentFile();
+        if (parentDir && !parentDir.exists()) {
+            parentDir.mkdirs();
+        }
+        if (destinationFile.exists()) {
+            destinationFile.delete();
+        }
+        const entries = collect_toolpkg_directory_entries(sourceRoot, sourceRoot).sort((left, right) => left.relativePath.localeCompare(right.relativePath));
+        const zipStream = new ZipOutputStream(new BufferedOutputStream(new FileOutputStream(destinationFile)));
+        try {
+            for (const entry of entries) {
+                zipStream.putNextEntry(new ZipEntry(entry.relativePath));
+                const inputStream = new FileInputStream(entry.file);
+                try {
+                    const sourceChannel = inputStream.getChannel();
+                    const targetChannel = Channels.newChannel(zipStream);
+                    sourceChannel.transferTo(0, sourceChannel.size(), targetChannel);
+                }
+                finally {
+                    inputStream.close();
+                }
+                zipStream.closeEntry();
+            }
+        }
+        finally {
+            zipStream.close();
+        }
+    }
+    async function build_toolpkg_archive_from_folder(source) {
+        const tempBuildDir = path_join(OPERIT_CLEAN_ON_EXIT_DIR, `operit_editor_toolpkg_build_${safe_debug_file_stem(source.packageId, "toolpkg")}_${Date.now()}`);
+        await ensure_android_directory(tempBuildDir);
+        const archivePath = path_join(tempBuildDir, `${safe_debug_file_stem(source.packageId, "toolpkg")}.toolpkg`);
+        create_toolpkg_archive_from_folder_contents(source.folderPath, archivePath);
+        if (!(await android_path_exists(archivePath))) {
+            throw new Error(`Failed to create ToolPkg archive: ${archivePath}`);
+        }
+        return {
+            archivePath,
+            temporaryPaths: [tempBuildDir]
+        };
+    }
+    function parse_requested_package_ids(raw) {
+        const input = String(raw ?? "").trim();
+        if (!input)
+            return [];
+        return Array.from(new Set(input.split(/[\r\n,]+/).map((item) => item.trim()).filter(Boolean)));
+    }
+    async function debug_install_js_package(params) {
+        const logs = [];
+        const logStep = (message) => {
+            logs.push(message);
+        };
+        const finish = (payload) => complete({
+            ...payload,
+            data: {
+                ...(payload.data ?? {}),
+                logs
+            }
+        });
+        try {
+            const sourcePath = normalize_android_path(params?.source_path);
+            logStep(`Resolved source_path -> ${sourcePath || "<empty>"}`);
+            if (!sourcePath) {
+                finish({
+                    success: false,
+                    message: "Missing required parameter: source_path"
+                });
+                return;
+            }
+            const sourceType = await get_android_file_type(sourcePath);
+            logStep(`Source type detected -> ${sourceType}`);
+            if (sourceType !== "file") {
+                finish({
+                    success: false,
+                    message: `JS source must be a file: ${sourcePath}`
+                });
+                return;
+            }
+            if (!sourcePath.toLowerCase().endsWith(".js")) {
+                finish({
+                    success: false,
+                    message: `JS debug install only supports .js files: ${sourcePath}`
+                });
+                return;
+            }
+            const sourceText = await read_android_text_file(sourcePath);
+            const packageInfo = parse_js_package_source(sourceText, sourcePath);
+            logStep(`Parsed package info -> packageName=${packageInfo.packageName}`);
+            const enableAfterInstall = parse_boolean_like(params?.enable_after_install, true);
+            const activateAfterInstall = parse_boolean_like(params?.activate_after_install, true);
+            const shouldEnable = enableAfterInstall || activateAfterInstall;
+            logStep(`Install options -> enableAfterInstall=${String(enableAfterInstall)}, activateAfterInstall=${String(activateAfterInstall)}, shouldEnable=${String(shouldEnable)}`);
+            await ensure_android_directory(SANDBOX_EXTERNAL_PACKAGES_DIR);
+            const targetPath = path_join(SANDBOX_EXTERNAL_PACKAGES_DIR, `${safe_debug_file_stem(packageInfo.packageName, "debug_js_package")}.js`);
+            logStep(`Target install path -> ${targetPath}`);
+            const copied = !same_android_path(sourcePath, targetPath);
+            if (copied) {
+                logStep("Source and target differ; replacing target file before copy.");
+                await delete_android_path_if_exists(targetPath);
+                await Tools.Files.copy(sourcePath, targetPath, false, "android", "android");
+                logStep("Package file copied to external sandbox directory.");
+            }
+            else {
+                logStep("Source path already matches target path; skipping file copy.");
+            }
+            if (!(await android_path_exists(targetPath))) {
+                finish({
+                    success: false,
+                    message: `Installed JS package file is missing after copy: ${targetPath}`
+                });
+                return;
+            }
+            logStep("Verified installed JS package file exists.");
+            const removedDuplicateFiles = await delete_duplicate_external_js_package_files(packageInfo.packageName, targetPath);
+            logStep(`Duplicate cleanup completed -> removed ${removedDuplicateFiles.length} file(s).`);
+            const refresh = await refresh_sandbox_packages_until(packageInfo.packageName, DEFAULT_SANDBOX_REFRESH_TIMEOUT_MS);
+            logStep(`Sandbox refresh completed -> found=${String(Boolean(refresh.packageEntry))}, builtIn=${String(refresh.packageEntry?.isBuiltIn ?? false)}`);
+            if (!refresh.packageEntry) {
+                finish({
+                    success: false,
+                    message: `Sandbox package did not appear after refresh: ${packageInfo.packageName}`,
+                    data: {
+                        package_name: packageInfo.packageName,
+                        source_path: sourcePath,
+                        target_path: targetPath,
+                        refresh_result: refresh.payload
+                    }
+                });
+                return;
+            }
+            if (refresh.packageEntry.isBuiltIn) {
+                finish({
+                    success: false,
+                    message: `External JS package '${packageInfo.packageName}' did not take precedence over a built-in package with the same name.`,
+                    data: {
+                        package: refresh.packageEntry,
+                        source_path: sourcePath,
+                        target_path: targetPath
+                    }
+                });
+                return;
+            }
+            let enableResult = null;
+            if (shouldEnable) {
+                logStep(`Enabling sandbox package -> ${packageInfo.packageName}`);
+                enableResult = await Tools.SoftwareSettings.setSandboxPackageEnabled(packageInfo.packageName, true);
+                logStep(`Enable result -> ${enableResult.message || "<empty>"}`);
+            }
+            else {
+                logStep("Enable step skipped by configuration.");
+            }
+            let activateResult = null;
+            if (activateAfterInstall) {
+                logStep(`Activating package via use_package -> ${packageInfo.packageName}`);
+                activateResult = extract_string_result(await toolCall("use_package", { package_name: packageInfo.packageName }));
+                logStep(`Activation result -> ${activateResult || "<empty>"}`);
+            }
+            else {
+                logStep("Activation step skipped by configuration.");
+            }
             finish({
-                success: false,
-                message: `Sandbox package did not appear after refresh: ${packageInfo.packageName}`,
+                success: true,
+                message: `Debug JS package installed: ${packageInfo.packageName}`,
                 data: {
                     package_name: packageInfo.packageName,
                     source_path: sourcePath,
                     target_path: targetPath,
+                    copied,
+                    removed_duplicate_files: removedDuplicateFiles,
+                    package: refresh.packageEntry,
+                    enable_after_install: shouldEnable,
+                    activate_after_install: activateAfterInstall,
+                    enable_result: enableResult,
+                    activate_result: activateResult,
                     refresh_result: refresh.payload
                 }
             });
-            return;
         }
-        if (refresh.packageEntry.isBuiltIn) {
+        catch (error) {
+            logStep(`Execution failed -> ${get_error_message(error)}`);
             finish({
                 success: false,
-                message: `External JS package '${packageInfo.packageName}' did not take precedence over a built-in package with the same name.`,
-                data: {
-                    package: refresh.packageEntry,
-                    source_path: sourcePath,
-                    target_path: targetPath
+                message: get_error_message(error)
+            });
+        }
+    }
+    async function debug_install_toolpkg(params) {
+        const cleanupPaths = [];
+        const logs = [];
+        const logStep = (message) => {
+            logs.push(message);
+        };
+        const finish = (payload) => complete({
+            ...payload,
+            data: {
+                ...(payload.data ?? {}),
+                logs
+            }
+        });
+        let finalPayload = null;
+        try {
+            const resolvedSource = await resolve_toolpkg_source(params?.source_path ?? "");
+            logStep(`Resolved ToolPkg source -> kind=${resolvedSource.sourceKind}, packageId=${resolvedSource.packageId}, sourcePath=${resolvedSource.sourcePath}`);
+            cleanupPaths.push(...resolvedSource.temporaryPaths);
+            if (resolvedSource.temporaryPaths.length > 0) {
+                logStep(`Registered temporary paths -> ${resolvedSource.temporaryPaths.join(", ")}`);
+            }
+            let archivePath = resolvedSource.archivePath ?? "";
+            if (resolvedSource.sourceKind === "folder") {
+                logStep("Source is a folder; building temporary .toolpkg archive.");
+                const builtArchive = await build_toolpkg_archive_from_folder(resolvedSource);
+                archivePath = builtArchive.archivePath;
+                cleanupPaths.push(...builtArchive.temporaryPaths);
+                logStep(`Built archive -> ${archivePath}`);
+            }
+            await ensure_android_directory(SANDBOX_EXTERNAL_PACKAGES_DIR);
+            const targetPath = path_join(SANDBOX_EXTERNAL_PACKAGES_DIR, `${safe_debug_file_stem(resolvedSource.packageId, "toolpkg")}.toolpkg`);
+            logStep(`Target install path -> ${targetPath}`);
+            if (!same_android_path(archivePath, targetPath)) {
+                logStep("Archive path differs from target; replacing target archive before copy.");
+                await delete_android_path_if_exists(targetPath);
+                await Tools.Files.copy(archivePath, targetPath, false, "android", "android");
+                logStep("ToolPkg archive copied to external sandbox directory.");
+            }
+            else {
+                logStep("Archive path already matches target path; skipping archive copy.");
+            }
+            if (!(await android_path_exists(targetPath))) {
+                finalPayload = {
+                    success: false,
+                    message: `Installed ToolPkg archive is missing after copy: ${targetPath}`
+                };
+                return;
+            }
+            logStep("Verified installed ToolPkg archive exists.");
+            const resetSubpackageStates = parse_boolean_like(params?.reset_subpackage_states, true);
+            const waitMs = parse_integer_like(params?.wait_ms, DEFAULT_TOOLPKG_INSTALL_WAIT_MS);
+            logStep(`Install options -> resetSubpackageStates=${String(resetSubpackageStates)}, waitMs=${String(waitMs)}`);
+            const broadcastResult = await Tools.System.sendBroadcast({
+                action: TOOLPKG_DEBUG_INSTALL_ACTION,
+                component: TOOLPKG_DEBUG_INSTALL_COMPONENT,
+                extras: {
+                    package_name: resolvedSource.packageId,
+                    file_path: targetPath,
+                    reset_subpackage_states: resetSubpackageStates
                 }
             });
-            return;
-        }
-        let enableResult = null;
-        if (shouldEnable) {
-            logStep(`Enabling sandbox package -> ${packageInfo.packageName}`);
-            enableResult = await Tools.SoftwareSettings.setSandboxPackageEnabled(packageInfo.packageName, true);
-            logStep(`Enable result -> ${enableResult.message || "<empty>"}`);
-        }
-        else {
-            logStep("Enable step skipped by configuration.");
-        }
-        let activateResult = null;
-        if (activateAfterInstall) {
-            logStep(`Activating package via use_package -> ${packageInfo.packageName}`);
-            activateResult = extract_string_result(await toolCall("use_package", { package_name: packageInfo.packageName }));
-            logStep(`Activation result -> ${activateResult || "<empty>"}`);
-        }
-        else {
-            logStep("Activation step skipped by configuration.");
-        }
-        finish({
-            success: true,
-            message: `Debug JS package installed: ${packageInfo.packageName}`,
-            data: {
-                package_name: packageInfo.packageName,
-                source_path: sourcePath,
-                target_path: targetPath,
-                copied,
-                removed_duplicate_files: removedDuplicateFiles,
-                package: refresh.packageEntry,
-                enable_after_install: shouldEnable,
-                activate_after_install: activateAfterInstall,
-                enable_result: enableResult,
-                activate_result: activateResult,
-                refresh_result: refresh.payload
+            logStep(`Debug install broadcast dispatched -> ${extract_string_result(broadcastResult) || "<empty>"}`);
+            const refresh = await refresh_sandbox_packages_until(resolvedSource.packageId, waitMs);
+            logStep(`Sandbox refresh completed -> found=${String(Boolean(refresh.packageEntry))}, builtIn=${String(refresh.packageEntry?.isBuiltIn ?? false)}`);
+            if (!refresh.packageEntry) {
+                finalPayload = {
+                    success: false,
+                    message: `ToolPkg container did not appear after debug install: ${resolvedSource.packageId}`,
+                    data: {
+                        package_name: resolvedSource.packageId,
+                        source_path: resolvedSource.sourcePath,
+                        archive_path: targetPath,
+                        broadcast_result: broadcastResult,
+                        refresh_result: refresh.payload
+                    }
+                };
+                return;
             }
-        });
-    }
-    catch (error) {
-        logStep(`Execution failed -> ${get_error_message(error)}`);
-        finish({
-            success: false,
-            message: get_error_message(error)
-        });
-    }
-}
-async function debug_install_toolpkg(params) {
-    const cleanupPaths = [];
-    const logs = [];
-    const logStep = (message) => {
-        logs.push(message);
-    };
-    const finish = (payload) => complete({
-        ...payload,
-        data: {
-            ...(payload.data ?? {}),
-            logs
-        }
-    });
-    let finalPayload = null;
-    try {
-        const resolvedSource = await resolve_toolpkg_source(params?.source_path ?? "");
-        logStep(`Resolved ToolPkg source -> kind=${resolvedSource.sourceKind}, packageId=${resolvedSource.packageId}, sourcePath=${resolvedSource.sourcePath}`);
-        cleanupPaths.push(...resolvedSource.temporaryPaths);
-        if (resolvedSource.temporaryPaths.length > 0) {
-            logStep(`Registered temporary paths -> ${resolvedSource.temporaryPaths.join(", ")}`);
-        }
-        let archivePath = resolvedSource.archivePath ?? "";
-        if (resolvedSource.sourceKind === "folder") {
-            logStep("Source is a folder; building temporary .toolpkg archive.");
-            const builtArchive = await build_toolpkg_archive_from_folder(resolvedSource);
-            archivePath = builtArchive.archivePath;
-            cleanupPaths.push(...builtArchive.temporaryPaths);
-            logStep(`Built archive -> ${archivePath}`);
-        }
-        await ensure_android_directory(SANDBOX_EXTERNAL_PACKAGES_DIR);
-        const targetPath = path_join(SANDBOX_EXTERNAL_PACKAGES_DIR, `${safe_debug_file_stem(resolvedSource.packageId, "toolpkg")}.toolpkg`);
-        logStep(`Target install path -> ${targetPath}`);
-        if (!same_android_path(archivePath, targetPath)) {
-            logStep("Archive path differs from target; replacing target archive before copy.");
-            await delete_android_path_if_exists(targetPath);
-            await Tools.Files.copy(archivePath, targetPath, false, "android", "android");
-            logStep("ToolPkg archive copied to external sandbox directory.");
-        }
-        else {
-            logStep("Archive path already matches target path; skipping archive copy.");
-        }
-        if (!(await android_path_exists(targetPath))) {
-            finalPayload = {
-                success: false,
-                message: `Installed ToolPkg archive is missing after copy: ${targetPath}`
-            };
-            return;
-        }
-        logStep("Verified installed ToolPkg archive exists.");
-        const resetSubpackageStates = parse_boolean_like(params?.reset_subpackage_states, true);
-        const waitMs = parse_integer_like(params?.wait_ms, DEFAULT_TOOLPKG_INSTALL_WAIT_MS);
-        logStep(`Install options -> resetSubpackageStates=${String(resetSubpackageStates)}, waitMs=${String(waitMs)}`);
-        const broadcastResult = await Tools.System.sendBroadcast({
-            action: TOOLPKG_DEBUG_INSTALL_ACTION,
-            component: TOOLPKG_DEBUG_INSTALL_COMPONENT,
-            extras: {
-                package_name: resolvedSource.packageId,
-                file_path: targetPath,
-                reset_subpackage_states: resetSubpackageStates
+            if (refresh.packageEntry.isBuiltIn) {
+                finalPayload = {
+                    success: false,
+                    message: `Debug ToolPkg '${resolvedSource.packageId}' is shadowed by a built-in package with the same name.`,
+                    data: {
+                        package: refresh.packageEntry,
+                        broadcast_result: broadcastResult,
+                        refresh_result: refresh.payload
+                    }
+                };
+                return;
             }
-        });
-        logStep(`Debug install broadcast dispatched -> ${extract_string_result(broadcastResult) || "<empty>"}`);
-        const refresh = await refresh_sandbox_packages_until(resolvedSource.packageId, waitMs);
-        logStep(`Sandbox refresh completed -> found=${String(Boolean(refresh.packageEntry))}, builtIn=${String(refresh.packageEntry?.isBuiltIn ?? false)}`);
-        if (!refresh.packageEntry) {
+            const requestedSubpackages = parse_requested_package_ids(params?.activate_subpackages);
+            const knownSubpackageKeys = new Set(resolvedSource.subpackageIds.map(normalize_package_key));
+            const unknownRequestedSubpackages = knownSubpackageKeys.size === 0
+                ? []
+                : requestedSubpackages.filter((subpackageId) => !knownSubpackageKeys.has(normalize_package_key(subpackageId)));
+            const activationTargets = requestedSubpackages.filter((subpackageId) => !unknownRequestedSubpackages.includes(subpackageId));
+            logStep(`Subpackage activation plan -> requested=${requestedSubpackages.join(", ") || "<none>"}, targets=${activationTargets.join(", ") || "<none>"}, unknown=${unknownRequestedSubpackages.join(", ") || "<none>"}`);
+            const subpackageResults = [];
+            for (const subpackageId of activationTargets) {
+                logStep(`Enabling subpackage -> ${subpackageId}`);
+                const enableResult = await Tools.SoftwareSettings.setSandboxPackageEnabled(subpackageId, true);
+                logStep(`Subpackage enable result [${subpackageId}] -> ${enableResult.message || "<empty>"}`);
+                const activateResult = extract_string_result(await toolCall("use_package", { package_name: subpackageId }));
+                logStep(`Subpackage activate result [${subpackageId}] -> ${activateResult || "<empty>"}`);
+                subpackageResults.push({
+                    subpackage_id: subpackageId,
+                    enable_result: enableResult,
+                    activate_result: activateResult
+                });
+            }
             finalPayload = {
-                success: false,
-                message: `ToolPkg container did not appear after debug install: ${resolvedSource.packageId}`,
+                success: true,
+                message: `Debug ToolPkg installed: ${resolvedSource.packageId}`,
                 data: {
                     package_name: resolvedSource.packageId,
+                    source_kind: resolvedSource.sourceKind,
                     source_path: resolvedSource.sourcePath,
+                    manifest_path: resolvedSource.manifestPath,
+                    main_entry: resolvedSource.mainEntry,
                     archive_path: targetPath,
-                    broadcast_result: broadcastResult,
-                    refresh_result: refresh.payload
-                }
-            };
-            return;
-        }
-        if (refresh.packageEntry.isBuiltIn) {
-            finalPayload = {
-                success: false,
-                message: `Debug ToolPkg '${resolvedSource.packageId}' is shadowed by a built-in package with the same name.`,
-                data: {
+                    subpackage_ids: resolvedSource.subpackageIds,
+                    reset_subpackage_states: resetSubpackageStates,
+                    requested_activate_subpackages: requestedSubpackages,
+                    unknown_requested_subpackages: unknownRequestedSubpackages,
+                    subpackage_results: subpackageResults,
                     package: refresh.packageEntry,
                     broadcast_result: broadcastResult,
                     refresh_result: refresh.payload
                 }
             };
-            return;
         }
-        const requestedSubpackages = parse_requested_package_ids(params?.activate_subpackages);
-        const knownSubpackageKeys = new Set(resolvedSource.subpackageIds.map(normalize_package_key));
-        const unknownRequestedSubpackages = knownSubpackageKeys.size === 0
-            ? []
-            : requestedSubpackages.filter((subpackageId) => !knownSubpackageKeys.has(normalize_package_key(subpackageId)));
-        const activationTargets = requestedSubpackages.filter((subpackageId) => !unknownRequestedSubpackages.includes(subpackageId));
-        logStep(`Subpackage activation plan -> requested=${requestedSubpackages.join(", ") || "<none>"}, targets=${activationTargets.join(", ") || "<none>"}, unknown=${unknownRequestedSubpackages.join(", ") || "<none>"}`);
-        const subpackageResults = [];
-        for (const subpackageId of activationTargets) {
-            logStep(`Enabling subpackage -> ${subpackageId}`);
-            const enableResult = await Tools.SoftwareSettings.setSandboxPackageEnabled(subpackageId, true);
-            logStep(`Subpackage enable result [${subpackageId}] -> ${enableResult.message || "<empty>"}`);
-            const activateResult = extract_string_result(await toolCall("use_package", { package_name: subpackageId }));
-            logStep(`Subpackage activate result [${subpackageId}] -> ${activateResult || "<empty>"}`);
-            subpackageResults.push({
-                subpackage_id: subpackageId,
-                enable_result: enableResult,
-                activate_result: activateResult
-            });
+        catch (error) {
+            logStep(`Execution failed -> ${get_error_message(error)}`);
+            finalPayload = {
+                success: false,
+                message: get_error_message(error)
+            };
         }
-        finalPayload = {
-            success: true,
-            message: `Debug ToolPkg installed: ${resolvedSource.packageId}`,
+        finally {
+            if (cleanupPaths.length > 0) {
+                logStep(`Cleaning temporary paths -> ${cleanupPaths.join(", ")}`);
+            }
+            await cleanup_android_paths(cleanupPaths);
+            if (cleanupPaths.length > 0) {
+                logStep("Temporary path cleanup completed.");
+            }
+            if (finalPayload) {
+                finish(finalPayload);
+            }
+        }
+    }
+    async function debug_run_sandbox_script(params) {
+        const logs = [];
+        const logStep = (message) => {
+            logs.push(message);
+        };
+        const finish = (payload) => complete({
+            ...payload,
             data: {
-                package_name: resolvedSource.packageId,
-                source_kind: resolvedSource.sourceKind,
-                source_path: resolvedSource.sourcePath,
-                manifest_path: resolvedSource.manifestPath,
-                main_entry: resolvedSource.mainEntry,
-                archive_path: targetPath,
-                subpackage_ids: resolvedSource.subpackageIds,
-                reset_subpackage_states: resetSubpackageStates,
-                requested_activate_subpackages: requestedSubpackages,
-                unknown_requested_subpackages: unknownRequestedSubpackages,
-                subpackage_results: subpackageResults,
-                package: refresh.packageEntry,
-                broadcast_result: broadcastResult,
-                refresh_result: refresh.payload
+                ...(payload.data ?? {}),
+                logs
             }
-        };
-    }
-    catch (error) {
-        logStep(`Execution failed -> ${get_error_message(error)}`);
-        finalPayload = {
-            success: false,
-            message: get_error_message(error)
-        };
-    }
-    finally {
-        if (cleanupPaths.length > 0) {
-            logStep(`Cleaning temporary paths -> ${cleanupPaths.join(", ")}`);
-        }
-        await cleanup_android_paths(cleanupPaths);
-        if (cleanupPaths.length > 0) {
-            logStep("Temporary path cleanup completed.");
-        }
-        if (finalPayload) {
-            finish(finalPayload);
-        }
-    }
-}
-async function debug_run_sandbox_script(params) {
-    const logs = [];
-    const logStep = (message) => {
-        logs.push(message);
-    };
-    const finish = (payload) => complete({
-        ...payload,
-        data: {
-            ...(payload.data ?? {}),
-            logs
-        }
-    });
-    let finalPayload = null;
-    try {
-        const sourcePath = normalize_android_path(params?.source_path);
-        const sourceCode = typeof params?.source_code === "string" ? params.source_code : "";
-        const hasInlineCode = sourceCode.trim().length > 0;
-        const waitMs = parse_integer_like(params?.wait_ms, DEFAULT_SANDBOX_SCRIPT_WAIT_MS);
-        const paramsJson = String(params?.params_json ?? "{}").trim() || "{}";
-        const parsedParams = parse_json_text(paramsJson);
-        const envFilePath = normalize_android_path(params?.env_file_path);
-        const scriptLabel = safe_debug_file_stem(String(params?.script_label ?? "").trim(), "sandbox_script");
-        logStep(`Resolved input -> sourcePath=${sourcePath || "<empty>"}, hasInlineCode=${String(hasInlineCode)}, waitMs=${String(waitMs)}`);
-        if (!sourcePath && !hasInlineCode) {
-            finalPayload = {
-                success: false,
-                message: "Either source_path or source_code is required."
-            };
-            return;
-        }
-        if (sourcePath) {
-            const sourceType = await get_android_file_type(sourcePath);
-            logStep(`Source type detected -> ${sourceType}`);
-            if (sourceType !== "file") {
-                finalPayload = {
-                    success: false,
-                    message: `Sandbox script source must be a file: ${sourcePath}`
-                };
-                return;
-            }
-        }
-        if (!parsedParams || typeof parsedParams !== "object" || Array.isArray(parsedParams)) {
-            finalPayload = {
-                success: false,
-                message: `params_json must be a JSON object: ${paramsJson}`
-            };
-            return;
-        }
-        logStep("params_json parsed successfully.");
-        if (envFilePath) {
-            const envType = await get_android_file_type(envFilePath);
-            logStep(`Env file type detected -> ${envType}`);
-            if (envType !== "file") {
-                finalPayload = {
-                    success: false,
-                    message: `env_file_path must be a file: ${envFilePath}`
-                };
-                return;
-            }
-        }
-        const executionMode = hasInlineCode ? SANDBOX_SCRIPT_EXECUTION_MODE_CODE : SANDBOX_SCRIPT_EXECUTION_MODE_SCRIPT;
-        const scriptIdentityPath = sourcePath || path_join(SANDBOX_JS_TEMP_DIR, `${scriptLabel}_${Date.now()}.inline.js`);
-        logStep(`Execution mode -> ${executionMode}`);
-        logStep(`Execution target -> ${scriptIdentityPath}`);
-        const executionResult = await Tools.SoftwareSettings.executeSandboxScriptDirect({
-            source_path: sourcePath || undefined,
-            source_code: hasInlineCode ? sourceCode : undefined,
-            params_json: paramsJson,
-            env_file_path: envFilePath || undefined,
-            script_label: scriptLabel,
-            wait_ms: waitMs
         });
-        logStep(`Direct execution tool completed -> success=${String(Boolean(executionResult.success))}, durationMs=${String(executionResult.durationMs ?? "")}`);
-        finalPayload = {
-            success: executionResult.success,
-            message: executionResult.success
-                ? "Sandbox script executed successfully."
-                : String(executionResult.error ?? "Sandbox script execution failed."),
-            data: {
-                execution_mode: executionMode,
-                source_path: sourcePath,
-                has_inline_code: hasInlineCode,
-                env_file_path: envFilePath || null,
+        let finalPayload = null;
+        try {
+            const sourcePath = normalize_android_path(params?.source_path);
+            const sourceCode = typeof params?.source_code === "string" ? params.source_code : "";
+            const hasInlineCode = sourceCode.trim().length > 0;
+            const waitMs = parse_integer_like(params?.wait_ms, DEFAULT_SANDBOX_SCRIPT_WAIT_MS);
+            const paramsJson = String(params?.params_json ?? "{}").trim() || "{}";
+            const parsedParams = parse_json_text(paramsJson);
+            const envFilePath = normalize_android_path(params?.env_file_path);
+            const scriptLabel = safe_debug_file_stem(String(params?.script_label ?? "").trim(), "sandbox_script");
+            logStep(`Resolved input -> sourcePath=${sourcePath || "<empty>"}, hasInlineCode=${String(hasInlineCode)}, waitMs=${String(waitMs)}`);
+            if (!sourcePath && !hasInlineCode) {
+                finalPayload = {
+                    success: false,
+                    message: "Either source_path or source_code is required."
+                };
+                return;
+            }
+            if (sourcePath) {
+                const sourceType = await get_android_file_type(sourcePath);
+                logStep(`Source type detected -> ${sourceType}`);
+                if (sourceType !== "file") {
+                    finalPayload = {
+                        success: false,
+                        message: `Sandbox script source must be a file: ${sourcePath}`
+                    };
+                    return;
+                }
+            }
+            if (!parsedParams || typeof parsedParams !== "object" || Array.isArray(parsedParams)) {
+                finalPayload = {
+                    success: false,
+                    message: `params_json must be a JSON object: ${paramsJson}`
+                };
+                return;
+            }
+            logStep("params_json parsed successfully.");
+            if (envFilePath) {
+                const envType = await get_android_file_type(envFilePath);
+                logStep(`Env file type detected -> ${envType}`);
+                if (envType !== "file") {
+                    finalPayload = {
+                        success: false,
+                        message: `env_file_path must be a file: ${envFilePath}`
+                    };
+                    return;
+                }
+            }
+            const executionMode = hasInlineCode ? SANDBOX_SCRIPT_EXECUTION_MODE_CODE : SANDBOX_SCRIPT_EXECUTION_MODE_SCRIPT;
+            const scriptIdentityPath = sourcePath || path_join(SANDBOX_JS_TEMP_DIR, `${scriptLabel}_${Date.now()}.inline.js`);
+            logStep(`Execution mode -> ${executionMode}`);
+            logStep(`Execution target -> ${scriptIdentityPath}`);
+            const executionResult = await Tools.SoftwareSettings.executeSandboxScriptDirect({
+                source_path: sourcePath || undefined,
+                source_code: hasInlineCode ? sourceCode : undefined,
                 params_json: paramsJson,
-                execution_result: executionResult
-            }
-        };
+                env_file_path: envFilePath || undefined,
+                script_label: scriptLabel,
+                wait_ms: waitMs
+            });
+            logStep(`Direct execution tool completed -> success=${String(Boolean(executionResult.success))}, durationMs=${String(executionResult.durationMs ?? "")}`);
+            finalPayload = {
+                success: executionResult.success,
+                message: executionResult.success
+                    ? "Sandbox script executed successfully."
+                    : String(executionResult.error ?? "Sandbox script execution failed."),
+                data: {
+                    execution_mode: executionMode,
+                    source_path: sourcePath,
+                    has_inline_code: hasInlineCode,
+                    env_file_path: envFilePath || null,
+                    params_json: paramsJson,
+                    execution_result: executionResult
+                }
+            };
+        }
+        catch (error) {
+            logStep(`Execution failed -> ${get_error_message(error)}`);
+            finalPayload = {
+                success: false,
+                message: get_error_message(error)
+            };
+        }
+        finally {
+            finish(finalPayload ?? {
+                success: false,
+                message: "Sandbox script execution did not produce a final result."
+            });
+        }
     }
-    catch (error) {
-        logStep(`Execution failed -> ${get_error_message(error)}`);
-        finalPayload = {
-            success: false,
-            message: get_error_message(error)
-        };
-    }
-    finally {
-        finish(finalPayload ?? {
-            success: false,
-            message: "Sandbox script execution did not produce a final result."
-        });
-    }
-}
-function extract_string_result(result) {
-    if (typeof result === "string")
-        return result;
-    if (!result || typeof result !== "object" || Array.isArray(result))
+    function extract_string_result(result) {
+        if (typeof result === "string")
+            return result;
+        if (!result || typeof result !== "object" || Array.isArray(result))
+            return "";
+        const record = result;
+        if (typeof record.value === "string")
+            return record.value;
+        if (record.value !== undefined && record.value !== null)
+            return String(record.value);
+        if (typeof record.data === "string")
+            return record.data;
+        if (record.data !== undefined && record.data !== null)
+            return String(record.data);
         return "";
-    const record = result;
-    if (typeof record.value === "string")
-        return record.value;
-    if (record.value !== undefined && record.value !== null)
-        return String(record.value);
-    if (typeof record.data === "string")
-        return record.data;
-    if (record.data !== undefined && record.data !== null)
-        return String(record.data);
-    return "";
-}
-async function read_environment_variable(params) {
-    try {
-        const key = (params?.key ?? "").trim();
-        if (!key) {
-            complete({
-                success: false,
-                message: "Missing required parameter: key"
-            });
-            return;
-        }
-        const result = await Tools.SoftwareSettings.readEnvironmentVariable(key);
-        complete({
-            success: true,
-            message: result.exists ? `Environment variable read: ${key}` : `Environment variable not set: ${key}`,
-            data: result
-        });
     }
-    catch (error) {
-        complete({
-            success: false,
-            message: get_error_message(error)
-        });
-    }
-}
-async function write_environment_variable(params) {
-    try {
-        const key = (params?.key ?? "").trim();
-        if (!key) {
-            complete({
-                success: false,
-                message: "Missing required parameter: key"
-            });
-            return;
-        }
-        const value = params?.value ?? "";
-        const result = await Tools.SoftwareSettings.writeEnvironmentVariable(key, String(value));
-        complete({
-            success: true,
-            message: result.cleared ? `Environment variable cleared: ${key}` : `Environment variable written: ${key}`,
-            data: result
-        });
-    }
-    catch (error) {
-        complete({
-            success: false,
-            message: get_error_message(error)
-        });
-    }
-}
-async function restart_mcp_with_logs(params) {
-    try {
-        const timeoutMs = params?.timeout_ms;
-        const result = await Tools.SoftwareSettings.restartMcpWithLogs(timeoutMs);
-        complete({
-            success: true,
-            message: result.timedOut
-                ? `MCP restart timed out after ${String(result.elapsedMs)}ms.`
-                : `MCP restart completed: ${String(result.successCount)} success, ${String(result.failedCount)} failed.`,
-            data: result
-        });
-    }
-    catch (error) {
-        complete({
-            success: false,
-            message: get_error_message(error)
-        });
-    }
-}
-async function get_speech_services_config() {
-    try {
-        const result = await Tools.SoftwareSettings.getSpeechServicesConfig();
-        const parsed = result;
-        complete({
-            success: true,
-            message: "Speech services config fetched.",
-            data: {
-                parsed
+    async function read_environment_variable(params) {
+        try {
+            const key = (params?.key ?? "").trim();
+            if (!key) {
+                complete({
+                    success: false,
+                    message: "Missing required parameter: key"
+                });
+                return;
             }
-        });
-    }
-    catch (error) {
-        complete({
-            success: false,
-            message: get_error_message(error)
-        });
-    }
-}
-async function set_speech_services_config(params) {
-    try {
-        const updates = { ...(params ?? {}) };
-        if (Array.isArray(updates.tts_response_pipeline)) {
-            updates.tts_response_pipeline = JSON.stringify(updates.tts_response_pipeline);
-        }
-        const result = await Tools.SoftwareSettings.setSpeechServicesConfig(updates);
-        const parsed = result;
-        complete({
-            success: true,
-            message: "Speech services config updated.",
-            data: {
-                updates,
-                parsed
-            }
-        });
-    }
-    catch (error) {
-        complete({
-            success: false,
-            message: get_error_message(error)
-        });
-    }
-}
-async function test_tts_playback(params) {
-    try {
-        const text = (params?.text ?? "").trim();
-        if (!text) {
+            const result = await Tools.SoftwareSettings.readEnvironmentVariable(key);
             complete({
-                success: false,
-                message: "Missing required parameter: text"
-            });
-            return;
-        }
-        const options = { ...(params ?? {}) };
-        delete options.text;
-        const result = await Tools.SoftwareSettings.testTtsPlayback(text, options);
-        const success = result.playbackTriggered;
-        const detailMessage = (typeof result.errorMessage === "string" && result.errorMessage.trim().length > 0 && result.errorMessage) ||
-            "TTS playback test failed.";
-        complete({
-            success,
-            message: success ? "TTS playback test triggered." : detailMessage,
-            data: result
-        });
-    }
-    catch (error) {
-        complete({
-            success: false,
-            message: get_error_message(error)
-        });
-    }
-}
-async function list_model_configs() {
-    try {
-        const result = await Tools.SoftwareSettings.listModelConfigs();
-        complete({
-            success: true,
-            message: "Model configs listed.",
-            data: result
-        });
-    }
-    catch (error) {
-        complete({
-            success: false,
-            message: get_error_message(error)
-        });
-    }
-}
-async function create_model_config(params) {
-    try {
-        const options = { ...(params ?? {}) };
-        const result = await Tools.SoftwareSettings.createModelConfig(options);
-        complete({
-            success: true,
-            message: "Model config created.",
-            data: result
-        });
-    }
-    catch (error) {
-        complete({
-            success: false,
-            message: get_error_message(error)
-        });
-    }
-}
-async function update_model_config(params) {
-    try {
-        const configId = (params?.config_id ?? "").trim();
-        if (!configId) {
-            complete({
-                success: false,
-                message: "Missing required parameter: config_id"
-            });
-            return;
-        }
-        const { config_id: _ignoredConfigId, ...updates } = params ?? {};
-        const result = await Tools.SoftwareSettings.updateModelConfig(configId, updates);
-        complete({
-            success: true,
-            message: "Model config updated.",
-            data: result
-        });
-    }
-    catch (error) {
-        complete({
-            success: false,
-            message: get_error_message(error)
-        });
-    }
-}
-async function delete_model_config(params) {
-    try {
-        const configId = (params?.config_id ?? "").trim();
-        if (!configId) {
-            complete({
-                success: false,
-                message: "Missing required parameter: config_id"
-            });
-            return;
-        }
-        const result = await Tools.SoftwareSettings.deleteModelConfig(configId);
-        complete({
-            success: true,
-            message: "Model config deleted.",
-            data: result
-        });
-    }
-    catch (error) {
-        complete({
-            success: false,
-            message: get_error_message(error)
-        });
-    }
-}
-async function list_function_model_configs() {
-    try {
-        const result = await Tools.SoftwareSettings.listFunctionModelConfigs();
-        complete({
-            success: true,
-            message: "Function model bindings listed.",
-            data: result
-        });
-    }
-    catch (error) {
-        complete({
-            success: false,
-            message: get_error_message(error)
-        });
-    }
-}
-async function get_function_model_config(params) {
-    try {
-        const functionType = (params?.function_type ?? "").trim();
-        if (!functionType) {
-            complete({
-                success: false,
-                message: "Missing required parameter: function_type"
-            });
-            return;
-        }
-        const result = await Tools.SoftwareSettings.getFunctionModelConfig(functionType);
-        const config = result?.config ?? {};
-        const { contextLength: _contextLength, maxContextLength: _maxContextLength, enableMaxContextMode: _enableMaxContextMode, summaryTokenThreshold: _summaryTokenThreshold, enableSummary: _enableSummary, enableSummaryByMessageCount: _enableSummaryByMessageCount, summaryMessageCountThreshold: _summaryMessageCountThreshold, ...configWithoutContextSummary } = config;
-        const filteredResult = {
-            ...result,
-            config: configWithoutContextSummary
-        };
-        complete({
-            success: true,
-            message: "Function model config fetched.",
-            data: filteredResult
-        });
-    }
-    catch (error) {
-        complete({
-            success: false,
-            message: get_error_message(error)
-        });
-    }
-}
-function get_error_message(error) {
-    return error instanceof Error ? error.message : "Unknown error";
-}
-function pick_context_summary_fields(config) {
-    return {
-        context_length: config?.contextLength,
-        max_context_length: config?.maxContextLength,
-        enable_max_context_mode: config?.enableMaxContextMode,
-        summary_token_threshold: config?.summaryTokenThreshold,
-        enable_summary: config?.enableSummary,
-        enable_summary_by_message_count: config?.enableSummaryByMessageCount,
-        summary_message_count_threshold: config?.summaryMessageCountThreshold
-    };
-}
-async function get_context_summary_config(params) {
-    try {
-        const functionType = (params?.function_type ?? "CHAT").trim().toUpperCase();
-        if (!functionType) {
-            complete({
-                success: false,
-                message: "Missing required parameter: function_type"
-            });
-            return;
-        }
-        const result = (await Tools.SoftwareSettings.getFunctionModelConfig(functionType));
-        const config = result.config;
-        if (!config) {
-            complete({
-                success: false,
-                message: `No bound config found for function_type: ${functionType}`,
+                success: true,
+                message: result.exists ? `Environment variable read: ${key}` : `Environment variable not set: ${key}`,
                 data: result
             });
-            return;
         }
-        complete({
-            success: true,
-            message: `Context summary config fetched for ${functionType}.`,
-            data: {
-                function_type: functionType,
-                config_id: result.configId ?? config.id ?? "",
-                config_name: result.configName ?? config.name ?? "",
-                model_index: result.modelIndex ?? 0,
-                actual_model_index: result.actualModelIndex ?? 0,
-                selected_model: result.selectedModel ?? "",
-                context_summary: pick_context_summary_fields(config),
-                raw: result
+        catch (error) {
+            complete({
+                success: false,
+                message: get_error_message(error)
+            });
+        }
+    }
+    async function write_environment_variable(params) {
+        try {
+            const key = (params?.key ?? "").trim();
+            if (!key) {
+                complete({
+                    success: false,
+                    message: "Missing required parameter: key"
+                });
+                return;
             }
-        });
-    }
-    catch (error) {
-        complete({
-            success: false,
-            message: get_error_message(error)
-        });
-    }
-}
-async function set_context_summary_config(params) {
-    try {
-        const functionType = (params?.function_type ?? "CHAT").trim().toUpperCase();
-        if (!functionType) {
+            const value = params?.value ?? "";
+            const result = await Tools.SoftwareSettings.writeEnvironmentVariable(key, String(value));
+            complete({
+                success: true,
+                message: result.cleared ? `Environment variable cleared: ${key}` : `Environment variable written: ${key}`,
+                data: result
+            });
+        }
+        catch (error) {
             complete({
                 success: false,
-                message: "Missing required parameter: function_type"
+                message: get_error_message(error)
             });
-            return;
         }
-        const binding = (await Tools.SoftwareSettings.getFunctionModelConfig(functionType));
-        const configId = (binding.configId ?? binding.config?.id ?? "").trim();
-        if (!configId) {
+    }
+    async function restart_mcp_with_logs(params) {
+        try {
+            const timeoutMs = params?.timeout_ms;
+            const result = await Tools.SoftwareSettings.restartMcpWithLogs(timeoutMs);
+            complete({
+                success: true,
+                message: result.timedOut
+                    ? `MCP restart timed out after ${String(result.elapsedMs)}ms.`
+                    : `MCP restart completed: ${String(result.successCount)} success, ${String(result.failedCount)} failed.`,
+                data: result
+            });
+        }
+        catch (error) {
             complete({
                 success: false,
-                message: `No bound config found for function_type: ${functionType}`,
-                data: binding
+                message: get_error_message(error)
             });
-            return;
         }
-        const defaultUpdates = {
-            context_length: 48,
-            max_context_length: 128,
-            enable_max_context_mode: true,
-            summary_token_threshold: 0.7,
-            enable_summary: true,
-            enable_summary_by_message_count: true,
-            summary_message_count_threshold: 16
-        };
-        const updates = {
-            ...defaultUpdates,
-            ...(params?.context_length === undefined ? {} : { context_length: params.context_length }),
-            ...(params?.max_context_length === undefined
-                ? {}
-                : { max_context_length: params.max_context_length }),
-            ...(params?.enable_max_context_mode === undefined
-                ? {}
-                : { enable_max_context_mode: params.enable_max_context_mode }),
-            ...(params?.summary_token_threshold === undefined
-                ? {}
-                : { summary_token_threshold: params.summary_token_threshold }),
-            ...(params?.enable_summary === undefined ? {} : { enable_summary: params.enable_summary }),
-            ...(params?.enable_summary_by_message_count === undefined
-                ? {}
-                : { enable_summary_by_message_count: params.enable_summary_by_message_count }),
-            ...(params?.summary_message_count_threshold === undefined
-                ? {}
-                : { summary_message_count_threshold: params.summary_message_count_threshold })
-        };
-        const updateResult = (await Tools.SoftwareSettings.updateModelConfig(configId, updates));
-        complete({
-            success: true,
-            message: `Context summary config updated for ${functionType}.`,
-            data: {
-                function_type: functionType,
-                config_id: configId,
-                applied_updates: updates,
-                before: pick_context_summary_fields(binding.config),
-                after: pick_context_summary_fields(updateResult.config),
-                update_result: updateResult
+    }
+    async function get_speech_services_config() {
+        try {
+            const result = await Tools.SoftwareSettings.getSpeechServicesConfig();
+            const parsed = result;
+            complete({
+                success: true,
+                message: "Speech services config fetched.",
+                data: {
+                    parsed
+                }
+            });
+        }
+        catch (error) {
+            complete({
+                success: false,
+                message: get_error_message(error)
+            });
+        }
+    }
+    async function set_speech_services_config(params) {
+        try {
+            const updates = { ...(params ?? {}) };
+            if (Array.isArray(updates.tts_response_pipeline)) {
+                updates.tts_response_pipeline = JSON.stringify(updates.tts_response_pipeline);
             }
-        });
-    }
-    catch (error) {
-        complete({
-            success: false,
-            message: get_error_message(error)
-        });
-    }
-}
-async function set_function_model_config(params) {
-    try {
-        const functionType = (params?.function_type ?? "").trim();
-        const configId = (params?.config_id ?? "").trim();
-        if (!functionType) {
+            const result = await Tools.SoftwareSettings.setSpeechServicesConfig(updates);
+            const parsed = result;
+            complete({
+                success: true,
+                message: "Speech services config updated.",
+                data: {
+                    updates,
+                    parsed
+                }
+            });
+        }
+        catch (error) {
             complete({
                 success: false,
-                message: "Missing required parameter: function_type"
+                message: get_error_message(error)
             });
-            return;
         }
-        if (!configId) {
+    }
+    async function test_tts_playback(params) {
+        try {
+            const text = (params?.text ?? "").trim();
+            if (!text) {
+                complete({
+                    success: false,
+                    message: "Missing required parameter: text"
+                });
+                return;
+            }
+            const options = { ...(params ?? {}) };
+            delete options.text;
+            const result = await Tools.SoftwareSettings.testTtsPlayback(text, options);
+            const success = result.playbackTriggered;
+            const detailMessage = (typeof result.errorMessage === "string" && result.errorMessage.trim().length > 0 && result.errorMessage) ||
+                "TTS playback test failed.";
+            complete({
+                success,
+                message: success ? "TTS playback test triggered." : detailMessage,
+                data: result
+            });
+        }
+        catch (error) {
             complete({
                 success: false,
-                message: "Missing required parameter: config_id"
+                message: get_error_message(error)
             });
-            return;
         }
-        const result = await Tools.SoftwareSettings.setFunctionModelConfig(functionType, configId, params?.model_index);
-        complete({
-            success: true,
-            message: "Function model binding updated.",
-            data: result
-        });
     }
-    catch (error) {
-        complete({
-            success: false,
-            message: get_error_message(error)
-        });
-    }
-}
-async function test_model_config_connection(params) {
-    try {
-        const configId = (params?.config_id ?? "").trim();
-        if (!configId) {
+    async function list_model_configs() {
+        try {
+            const result = await Tools.SoftwareSettings.listModelConfigs();
+            complete({
+                success: true,
+                message: "Model configs listed.",
+                data: result
+            });
+        }
+        catch (error) {
             complete({
                 success: false,
-                message: "Missing required parameter: config_id"
+                message: get_error_message(error)
             });
-            return;
         }
-        const result = await Tools.SoftwareSettings.testModelConfigConnection(configId, params?.model_index);
-        const success = !!result?.success;
-        complete({
-            success,
-            message: success ? "Model config connection tests passed." : "Model config connection tests have failures.",
-            data: result
-        });
     }
-    catch (error) {
-        complete({
-            success: false,
-            message: get_error_message(error)
-        });
-    }
-}
-async function ping_mcp(params) {
-    try {
-        const packageName = (params?.package_name ?? "").trim();
-        if (!packageName) {
+    async function create_model_config(params) {
+        try {
+            const options = { ...(params ?? {}) };
+            const result = await Tools.SoftwareSettings.createModelConfig(options);
+            complete({
+                success: true,
+                message: "Model config created.",
+                data: result
+            });
+        }
+        catch (error) {
             complete({
                 success: false,
-                message: "Missing required parameter: package_name"
+                message: get_error_message(error)
             });
-            return;
         }
-        const result = await toolCall("use_package", { package_name: packageName });
-        complete({
-            success: true,
-            message: `Package probe finished: ${packageName}`,
-            data: result
-        });
     }
-    catch (error) {
-        complete({
-            success: false,
-            message: get_error_message(error)
-        });
+    async function update_model_config(params) {
+        try {
+            const configId = (params?.config_id ?? "").trim();
+            if (!configId) {
+                complete({
+                    success: false,
+                    message: "Missing required parameter: config_id"
+                });
+                return;
+            }
+            const { config_id: _ignoredConfigId, ...updates } = params ?? {};
+            const result = await Tools.SoftwareSettings.updateModelConfig(configId, updates);
+            complete({
+                success: true,
+                message: "Model config updated.",
+                data: result
+            });
+        }
+        catch (error) {
+            complete({
+                success: false,
+                message: get_error_message(error)
+            });
+        }
     }
-}
-exports.all_about_myself = all_about_myself;
-exports.how_make_skill = how_make_skill;
-exports.list_sandbox_packages = list_sandbox_packages;
-exports.set_sandbox_package_enabled = set_sandbox_package_enabled;
-exports.debug_install_js_package = debug_install_js_package;
-exports.debug_install_toolpkg = debug_install_toolpkg;
-exports.debug_run_sandbox_script = debug_run_sandbox_script;
-exports.read_environment_variable = read_environment_variable;
-exports.write_environment_variable = write_environment_variable;
-exports.restart_mcp_with_logs = restart_mcp_with_logs;
-exports.get_speech_services_config = get_speech_services_config;
-exports.set_speech_services_config = set_speech_services_config;
-exports.test_tts_playback = test_tts_playback;
-exports.list_model_configs = list_model_configs;
-exports.create_model_config = create_model_config;
-exports.update_model_config = update_model_config;
-exports.delete_model_config = delete_model_config;
-exports.list_function_model_configs = list_function_model_configs;
-exports.get_function_model_config = get_function_model_config;
-exports.get_context_summary_config = get_context_summary_config;
-exports.set_context_summary_config = set_context_summary_config;
-exports.set_function_model_config = set_function_model_config;
-exports.test_model_config_connection = test_model_config_connection;
-exports.ping_mcp = ping_mcp;
+    async function delete_model_config(params) {
+        try {
+            const configId = (params?.config_id ?? "").trim();
+            if (!configId) {
+                complete({
+                    success: false,
+                    message: "Missing required parameter: config_id"
+                });
+                return;
+            }
+            const result = await Tools.SoftwareSettings.deleteModelConfig(configId);
+            complete({
+                success: true,
+                message: "Model config deleted.",
+                data: result
+            });
+        }
+        catch (error) {
+            complete({
+                success: false,
+                message: get_error_message(error)
+            });
+        }
+    }
+    async function list_function_model_configs() {
+        try {
+            const result = await Tools.SoftwareSettings.listFunctionModelConfigs();
+            complete({
+                success: true,
+                message: "Function model bindings listed.",
+                data: result
+            });
+        }
+        catch (error) {
+            complete({
+                success: false,
+                message: get_error_message(error)
+            });
+        }
+    }
+    async function get_function_model_config(params) {
+        try {
+            const functionType = (params?.function_type ?? "").trim();
+            if (!functionType) {
+                complete({
+                    success: false,
+                    message: "Missing required parameter: function_type"
+                });
+                return;
+            }
+            const result = await Tools.SoftwareSettings.getFunctionModelConfig(functionType);
+            const config = result?.config ?? {};
+            const { contextLength: _contextLength, maxContextLength: _maxContextLength, enableMaxContextMode: _enableMaxContextMode, summaryTokenThreshold: _summaryTokenThreshold, enableSummary: _enableSummary, enableSummaryByMessageCount: _enableSummaryByMessageCount, summaryMessageCountThreshold: _summaryMessageCountThreshold, ...configWithoutContextSummary } = config;
+            const filteredResult = {
+                ...result,
+                config: configWithoutContextSummary
+            };
+            complete({
+                success: true,
+                message: "Function model config fetched.",
+                data: filteredResult
+            });
+        }
+        catch (error) {
+            complete({
+                success: false,
+                message: get_error_message(error)
+            });
+        }
+    }
+    function get_error_message(error) {
+        return error instanceof Error ? error.message : "Unknown error";
+    }
+    function pick_context_summary_fields(config) {
+        return {
+            context_length: config?.contextLength,
+            max_context_length: config?.maxContextLength,
+            enable_max_context_mode: config?.enableMaxContextMode,
+            summary_token_threshold: config?.summaryTokenThreshold,
+            enable_summary: config?.enableSummary,
+            enable_summary_by_message_count: config?.enableSummaryByMessageCount,
+            summary_message_count_threshold: config?.summaryMessageCountThreshold
+        };
+    }
+    async function get_context_summary_config(params) {
+        try {
+            const functionType = (params?.function_type ?? "CHAT").trim().toUpperCase();
+            if (!functionType) {
+                complete({
+                    success: false,
+                    message: "Missing required parameter: function_type"
+                });
+                return;
+            }
+            const result = (await Tools.SoftwareSettings.getFunctionModelConfig(functionType));
+            const config = result.config;
+            if (!config) {
+                complete({
+                    success: false,
+                    message: `No bound config found for function_type: ${functionType}`,
+                    data: result
+                });
+                return;
+            }
+            complete({
+                success: true,
+                message: `Context summary config fetched for ${functionType}.`,
+                data: {
+                    function_type: functionType,
+                    config_id: result.configId ?? config.id ?? "",
+                    config_name: result.configName ?? config.name ?? "",
+                    model_index: result.modelIndex ?? 0,
+                    actual_model_index: result.actualModelIndex ?? 0,
+                    selected_model: result.selectedModel ?? "",
+                    context_summary: pick_context_summary_fields(config),
+                    raw: result
+                }
+            });
+        }
+        catch (error) {
+            complete({
+                success: false,
+                message: get_error_message(error)
+            });
+        }
+    }
+    async function set_context_summary_config(params) {
+        try {
+            const functionType = (params?.function_type ?? "CHAT").trim().toUpperCase();
+            if (!functionType) {
+                complete({
+                    success: false,
+                    message: "Missing required parameter: function_type"
+                });
+                return;
+            }
+            const binding = (await Tools.SoftwareSettings.getFunctionModelConfig(functionType));
+            const configId = (binding.configId ?? binding.config?.id ?? "").trim();
+            if (!configId) {
+                complete({
+                    success: false,
+                    message: `No bound config found for function_type: ${functionType}`,
+                    data: binding
+                });
+                return;
+            }
+            const defaultUpdates = {
+                context_length: 48,
+                max_context_length: 128,
+                enable_max_context_mode: true,
+                summary_token_threshold: 0.7,
+                enable_summary: true,
+                enable_summary_by_message_count: true,
+                summary_message_count_threshold: 16
+            };
+            const updates = {
+                ...defaultUpdates,
+                ...(params?.context_length === undefined ? {} : { context_length: params.context_length }),
+                ...(params?.max_context_length === undefined
+                    ? {}
+                    : { max_context_length: params.max_context_length }),
+                ...(params?.enable_max_context_mode === undefined
+                    ? {}
+                    : { enable_max_context_mode: params.enable_max_context_mode }),
+                ...(params?.summary_token_threshold === undefined
+                    ? {}
+                    : { summary_token_threshold: params.summary_token_threshold }),
+                ...(params?.enable_summary === undefined ? {} : { enable_summary: params.enable_summary }),
+                ...(params?.enable_summary_by_message_count === undefined
+                    ? {}
+                    : { enable_summary_by_message_count: params.enable_summary_by_message_count }),
+                ...(params?.summary_message_count_threshold === undefined
+                    ? {}
+                    : { summary_message_count_threshold: params.summary_message_count_threshold })
+            };
+            const updateResult = (await Tools.SoftwareSettings.updateModelConfig(configId, updates));
+            complete({
+                success: true,
+                message: `Context summary config updated for ${functionType}.`,
+                data: {
+                    function_type: functionType,
+                    config_id: configId,
+                    applied_updates: updates,
+                    before: pick_context_summary_fields(binding.config),
+                    after: pick_context_summary_fields(updateResult.config),
+                    update_result: updateResult
+                }
+            });
+        }
+        catch (error) {
+            complete({
+                success: false,
+                message: get_error_message(error)
+            });
+        }
+    }
+    async function set_function_model_config(params) {
+        try {
+            const functionType = (params?.function_type ?? "").trim();
+            const configId = (params?.config_id ?? "").trim();
+            if (!functionType) {
+                complete({
+                    success: false,
+                    message: "Missing required parameter: function_type"
+                });
+                return;
+            }
+            if (!configId) {
+                complete({
+                    success: false,
+                    message: "Missing required parameter: config_id"
+                });
+                return;
+            }
+            const result = await Tools.SoftwareSettings.setFunctionModelConfig(functionType, configId, params?.model_index);
+            complete({
+                success: true,
+                message: "Function model binding updated.",
+                data: result
+            });
+        }
+        catch (error) {
+            complete({
+                success: false,
+                message: get_error_message(error)
+            });
+        }
+    }
+    async function test_model_config_connection(params) {
+        try {
+            const configId = (params?.config_id ?? "").trim();
+            if (!configId) {
+                complete({
+                    success: false,
+                    message: "Missing required parameter: config_id"
+                });
+                return;
+            }
+            const result = await Tools.SoftwareSettings.testModelConfigConnection(configId, params?.model_index);
+            const success = !!result?.success;
+            complete({
+                success,
+                message: success ? "Model config connection tests passed." : "Model config connection tests have failures.",
+                data: result
+            });
+        }
+        catch (error) {
+            complete({
+                success: false,
+                message: get_error_message(error)
+            });
+        }
+    }
+    async function ping_mcp(params) {
+        try {
+            const packageName = (params?.package_name ?? "").trim();
+            if (!packageName) {
+                complete({
+                    success: false,
+                    message: "Missing required parameter: package_name"
+                });
+                return;
+            }
+            const result = await toolCall("use_package", { package_name: packageName });
+            complete({
+                success: true,
+                message: `Package probe finished: ${packageName}`,
+                data: result
+            });
+        }
+        catch (error) {
+            complete({
+                success: false,
+                message: get_error_message(error)
+            });
+        }
+    }
+    return {
+        operit_editor,
+        how_make_skill,
+        list_sandbox_packages,
+        set_sandbox_package_enabled,
+        debug_install_js_package,
+        debug_install_toolpkg,
+        debug_run_sandbox_script,
+        read_environment_variable,
+        write_environment_variable,
+        restart_mcp_with_logs,
+        get_speech_services_config,
+        set_speech_services_config,
+        test_tts_playback,
+        list_model_configs,
+        create_model_config,
+        update_model_config,
+        delete_model_config,
+        list_function_model_configs,
+        get_function_model_config,
+        get_context_summary_config,
+        set_context_summary_config,
+        set_function_model_config,
+        test_model_config_connection,
+        ping_mcp
+    };
+})();
+exports.operit_editor = operitEditorPackage.operit_editor;
+exports.how_make_skill = operitEditorPackage.how_make_skill;
+exports.list_sandbox_packages = operitEditorPackage.list_sandbox_packages;
+exports.set_sandbox_package_enabled = operitEditorPackage.set_sandbox_package_enabled;
+exports.debug_install_js_package = operitEditorPackage.debug_install_js_package;
+exports.debug_install_toolpkg = operitEditorPackage.debug_install_toolpkg;
+exports.debug_run_sandbox_script = operitEditorPackage.debug_run_sandbox_script;
+exports.read_environment_variable = operitEditorPackage.read_environment_variable;
+exports.write_environment_variable = operitEditorPackage.write_environment_variable;
+exports.restart_mcp_with_logs = operitEditorPackage.restart_mcp_with_logs;
+exports.get_speech_services_config = operitEditorPackage.get_speech_services_config;
+exports.set_speech_services_config = operitEditorPackage.set_speech_services_config;
+exports.test_tts_playback = operitEditorPackage.test_tts_playback;
+exports.list_model_configs = operitEditorPackage.list_model_configs;
+exports.create_model_config = operitEditorPackage.create_model_config;
+exports.update_model_config = operitEditorPackage.update_model_config;
+exports.delete_model_config = operitEditorPackage.delete_model_config;
+exports.list_function_model_configs = operitEditorPackage.list_function_model_configs;
+exports.get_function_model_config = operitEditorPackage.get_function_model_config;
+exports.get_context_summary_config = operitEditorPackage.get_context_summary_config;
+exports.set_context_summary_config = operitEditorPackage.set_context_summary_config;
+exports.set_function_model_config = operitEditorPackage.set_function_model_config;
+exports.test_model_config_connection = operitEditorPackage.test_model_config_connection;
+exports.ping_mcp = operitEditorPackage.ping_mcp;

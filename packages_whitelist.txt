@@ -26,7 +26,7 @@ various_search.js
 workflow.js
 xai_draw.js
 openai_draw.js
-all_about_myself.js
+operit_editor.js
 vflow_trigger.js
 browser.js
 windows_control

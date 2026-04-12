@@ -445,6 +445,7 @@ fun ChatHistorySelector(
         activePrompt: ActivePrompt
 ) {
     var chatToEdit by remember { mutableStateOf<ChatHistory?>(null) }
+    var chatToDelete by remember { mutableStateOf<ChatHistory?>(null) }
     var chatItemActionTarget by remember { mutableStateOf<ChatHistory?>(null) }
     var showNewGroupDialog by remember { mutableStateOf(false) }
     var newGroupName by remember { mutableStateOf("") }
@@ -473,6 +474,17 @@ fun ChatHistorySelector(
     var availableCharacterGroups by remember { mutableStateOf<List<CharacterGroupCard>>(emptyList()) }
     var resolvedGroupNameById by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
 
+    fun promptDeleteChat(history: ChatHistory) {
+        if (history.locked) {
+            onDeleteChat(history.id)
+            return
+        }
+        if (deletingChatIds.contains(history.id)) {
+            return
+        }
+        chatToDelete = history
+    }
+
     fun requestDeleteChat(history: ChatHistory) {
         if (history.locked) {
             onDeleteChat(history.id)
@@ -486,6 +498,37 @@ fun ChatHistorySelector(
             delay(deleteAnimationDurationMs)
             onDeleteChat(history.id)
         }
+    }
+
+    if (chatToDelete != null) {
+        val deletingChat = chatToDelete!!
+        AlertDialog(
+            onDismissRequest = { chatToDelete = null },
+            title = { Text(stringResource(R.string.confirm_delete_chat)) },
+            text = {
+                Text(
+                    text = stringResource(R.string.delete_chat_confirmation, deletingChat.title)
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        requestDeleteChat(deletingChat)
+                        chatToDelete = null
+                    },
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error
+                    )
+                ) {
+                    Text(stringResource(R.string.confirm_delete_action))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { chatToDelete = null }) {
+                    Text(stringResource(R.string.cancel))
+                }
+            }
+        )
     }
 
     LaunchedEffect(Unit) {
@@ -1028,7 +1071,7 @@ fun ChatHistorySelector(
                                 contentDescription = context.getString(R.string.delete)
                             }
                             .clickable {
-                                requestDeleteChat(chatItemActionTarget!!)
+                                promptDeleteChat(chatItemActionTarget!!)
                                 chatItemActionTarget = null
                             },
                         color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f)
@@ -2132,7 +2175,7 @@ fun ChatHistorySelector(
                     }
                     is HistoryListItem.Item -> {
                         val deleteAction = SwipeAction(
-                            onSwipe = { requestDeleteChat(item.history) },
+                            onSwipe = { promptDeleteChat(item.history) },
                             icon = {
                                 Icon(
                                     modifier = Modifier.padding(16.dp),

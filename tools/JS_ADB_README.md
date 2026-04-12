@@ -133,7 +133,7 @@ OPERIT_RESULT_WAIT_SECONDS=30 ./execute_js.sh path/to/your/script.js functionNam
 
 ## Sandbox Script Debug Notes
 
-When you use `run_sandbox_script.sh` / `run_sandbox_script.bat`, or call package tools such as `all_about_myself:debug_run_sandbox_script` with `source_code`, the code is executed as a **top-level script snippet**, not as `function(params) { ... }`.
+When you use `run_sandbox_script.sh` / `run_sandbox_script.bat`, or call package tools such as `operit_editor:debug_run_sandbox_script` with `source_code`, the code is executed as a **top-level script snippet**, not as `function(params) { ... }`.
 
 That means:
 

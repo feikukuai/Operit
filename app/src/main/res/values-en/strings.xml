@@ -4888,6 +4888,8 @@
     <string name="delete_residual_chats_confirmation">Are you sure you want to delete %2$d residual chat(s) under \"%1$s\"?\n\nLocked chats will be skipped, and this action cannot be undone.</string>
     <string name="deleted_residual_chats_count">Deleted %1$d residual chat(s)</string>
     <string name="deleted_residual_chats_with_skipped_locked">Deleted %1$d residual chat(s), skipped %2$d locked chat(s)</string>
+    <string name="confirm_delete_chat">Confirm Delete Chat</string>
+    <string name="delete_chat_confirmation">Are you sure you want to delete chat \"%1$s\"?\n\nThis action cannot be undone.</string>
     <string name="click_to_manage_missing_card">Click to manage this missing-card entry</string>
     <string name="character_fallback">C</string>
     <string name="selected_chats_count">Selected %1$d / %2$d</string>
