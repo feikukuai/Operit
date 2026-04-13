@@ -221,6 +221,41 @@ class MCPBridgeClient(private val context: Context, private val serviceName: Str
     private val bridge = MCPBridge.getInstance(context)
     private val isConnected = AtomicBoolean(false)
     private var lastPingTime = 0L
+    @Volatile private var lastConnectionFailureDetail: String? = null
+
+    fun getLastConnectionFailureDetail(): String? = lastConnectionFailureDetail
+
+    private fun setLastConnectionFailureDetail(detail: String?) {
+        lastConnectionFailureDetail = detail?.trim()?.takeIf { it.isNotEmpty() }
+    }
+
+    private fun buildSpawnFailureDetail(spawnResp: JSONObject?, fallbackMessage: String): String {
+        val errorObj = spawnResp?.optJSONObject("error")
+        val errorMessage = errorObj?.optString("message")?.takeIf { it.isNotBlank() } ?: fallbackMessage
+        val dataObj = errorObj?.optJSONObject("data")
+        val lastError = dataObj?.optString("lastError")?.trim().orEmpty()
+        val logs = dataObj?.optString("logs")?.trim().orEmpty()
+        val logSnippet =
+            logs.lineSequence()
+                .map { it.trim() }
+                .filter { it.isNotEmpty() }
+                .toList()
+                .takeLast(6)
+                .joinToString(" | ")
+                .take(500)
+
+        return buildString {
+            append(errorMessage)
+            if (lastError.isNotBlank() && !errorMessage.contains(lastError)) {
+                append(" Last error: ")
+                append(lastError)
+            }
+            if (logSnippet.isNotBlank()) {
+                append(" Logs: ")
+                append(logSnippet)
+            }
+        }
+    }
 
     /**
      * Connect to the MCP service.
@@ -233,6 +268,7 @@ class MCPBridgeClient(private val context: Context, private val serviceName: Str
                     if (ping()) {
                         AppLogger.d(TAG, "Service $serviceName is already connected and responsive.")
                         isConnected.set(true)
+                        setLastConnectionFailureDetail(null)
                         return@withContext true
                     }
 
@@ -247,11 +283,15 @@ class MCPBridgeClient(private val context: Context, private val serviceName: Str
                     if (serviceInfo == null) {
                         AppLogger.w(TAG, "Service $serviceName is not registered with the bridge.")
                         isConnected.set(false)
+                        setLastConnectionFailureDetail(
+                            "Service is not registered with the bridge. The bridge may have restarted, reset, or the runtime service name may not match the plugin ID."
+                        )
                         return@withContext false
                     }
 
                     if (serviceInfo.active && serviceInfo.ready) {
                         isConnected.set(true)
+                        setLastConnectionFailureDetail(null)
                         return@withContext true
                     }
 
@@ -263,6 +303,7 @@ class MCPBridgeClient(private val context: Context, private val serviceName: Str
                         if (ready) {
                             AppLogger.i(TAG, "Successfully connected to service $serviceName.")
                             isConnected.set(true)
+                            setLastConnectionFailureDetail(null)
                             return@withContext true
                         }
                     }
@@ -272,10 +313,14 @@ class MCPBridgeClient(private val context: Context, private val serviceName: Str
                             ?: "service not ready"
                     AppLogger.e(TAG, "Failed to connect to service $serviceName: $errorMsg")
                     isConnected.set(false)
+                    setLastConnectionFailureDetail(buildSpawnFailureDetail(spawnResp, errorMsg))
                     return@withContext false
                 } catch (e: Exception) {
                     AppLogger.e(TAG, "Error connecting to MCP service $serviceName: ${e.message}", e)
                     isConnected.set(false)
+                    setLastConnectionFailureDetail(
+                        "Exception while connecting: ${e.message ?: e.javaClass.simpleName}"
+                    )
                     return@withContext false
                 }
             }

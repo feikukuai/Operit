@@ -16,7 +16,10 @@ import com.ai.assistance.operit.core.chat.logMessageTiming
 import com.ai.assistance.operit.core.chat.messageTimingNow
 import com.ai.assistance.operit.core.chat.hooks.PromptHookContext
 import com.ai.assistance.operit.core.chat.hooks.PromptHookRegistry
-import com.ai.assistance.operit.core.chat.hooks.toPromptMessages
+import com.ai.assistance.operit.core.chat.hooks.PromptTurn
+import com.ai.assistance.operit.core.chat.hooks.PromptTurnKind
+import com.ai.assistance.operit.core.chat.hooks.appendUserTurnIfMissing
+import com.ai.assistance.operit.core.chat.hooks.toPromptTurns
 import com.ai.assistance.operit.core.chat.hooks.toRoleContentPairs
 import com.ai.assistance.operit.core.application.ActivityLifecycleManager
 import com.ai.assistance.operit.core.tools.AIToolHandler
@@ -359,7 +362,7 @@ class EnhancedAIService private constructor(private val context: Context) {
         val streamBuffer: StringBuilder = StringBuilder(),
         val roundManager: ConversationRoundManager = ConversationRoundManager(),
         val isConversationActive: AtomicBoolean = AtomicBoolean(true),
-        val conversationHistory: MutableList<Pair<String, String>>,
+        val conversationHistory: MutableList<PromptTurn>,
         val eventChannel: MutableSharedStream<TextStreamEvent>,
     )
 
@@ -550,14 +553,12 @@ class EnhancedAIService private constructor(private val context: Context) {
 
     private suspend fun estimatePreparedRequestWindow(
         serviceForFunction: AIService,
-        message: String,
-        preparedHistory: List<Pair<String, String>>,
+        preparedHistory: List<PromptTurn>,
         availableTools: List<ToolPrompt>?,
         publishEstimate: Boolean
     ): Int {
         val windowSize =
             serviceForFunction.calculateInputTokens(
-                message = message,
                 chatHistory = preparedHistory,
                 availableTools = availableTools
             )
@@ -578,7 +579,7 @@ class EnhancedAIService private constructor(private val context: Context) {
 
     suspend fun estimateRequestWindowFromMemory(
         message: String,
-        chatHistory: List<Pair<String, String>>,
+        chatHistory: List<PromptTurn>,
         chatId: String? = null,
         workspacePath: String? = null,
         workspaceEnv: String? = null,
@@ -653,7 +654,7 @@ class EnhancedAIService private constructor(private val context: Context) {
                     promptFunctionType = promptFunctionType.name,
                     rawInput = message,
                     processedInput = finalProcessedInput,
-                    preparedHistory = finalPreparedHistory.toPromptMessages(),
+                    preparedHistory = finalPreparedHistory,
                     modelParameters = serializePromptHookModelParameters(modelParameters),
                     availableTools = serializePromptHookToolPrompts(availableTools),
                     metadata =
@@ -668,27 +669,26 @@ class EnhancedAIService private constructor(private val context: Context) {
                 dispatchHooks = PromptHookRegistry::dispatchPromptEstimateFinalizeHooks
             )
         finalProcessedInput = beforeFinalizeContext.processedInput ?: finalProcessedInput
-        finalPreparedHistory = beforeFinalizeContext.preparedHistory.toRoleContentPairs()
+        finalPreparedHistory = beforeFinalizeContext.preparedHistory
         val beforeSendContext =
             applyPromptFinalizeHooks(
                 beforeFinalizeContext.copy(
                     stage = "before_send_to_model",
                     processedInput = finalProcessedInput,
-                    preparedHistory = finalPreparedHistory.toPromptMessages()
+                    preparedHistory = finalPreparedHistory
                 ),
                 dispatchHooks = PromptHookRegistry::dispatchPromptEstimateFinalizeHooks
             )
         finalProcessedInput = beforeSendContext.processedInput ?: finalProcessedInput
-        finalPreparedHistory = beforeSendContext.preparedHistory.toRoleContentPairs()
+        finalPreparedHistory = beforeSendContext.preparedHistory
         if (!ChatUtils.isGeminiProviderModel(serviceForFunction.providerModel)) {
             finalProcessedInput = ChatUtils.stripGeminiThoughtSignatureMeta(finalProcessedInput)
-            finalPreparedHistory = ChatUtils.stripGeminiThoughtSignatureMeta(finalPreparedHistory)
+            finalPreparedHistory = ChatUtils.stripGeminiThoughtSignatureMetaTurns(finalPreparedHistory)
         }
 
         return estimatePreparedRequestWindow(
             serviceForFunction = serviceForFunction,
-            message = finalProcessedInput,
-            preparedHistory = finalPreparedHistory,
+            preparedHistory = finalPreparedHistory.appendUserTurnIfMissing(finalProcessedInput),
             availableTools = availableTools,
             publishEstimate = publishEstimate
         )
@@ -698,7 +698,7 @@ class EnhancedAIService private constructor(private val context: Context) {
     suspend fun sendMessage(
         message: String,
         chatId: String? = null,
-        chatHistory: List<Pair<String, String>> = emptyList(),
+        chatHistory: List<PromptTurn> = emptyList(),
         workspacePath: String? = null,
         workspaceEnv: String? = null,
         functionType: FunctionType = FunctionType.CHAT,
@@ -835,7 +835,7 @@ class EnhancedAIService private constructor(private val context: Context) {
                                 promptFunctionType = promptFunctionType.name,
                                 rawInput = message,
                                 processedInput = finalProcessedInput,
-                                preparedHistory = finalPreparedHistory.toPromptMessages(),
+                                preparedHistory = finalPreparedHistory,
                                 modelParameters = serializePromptHookModelParameters(modelParameters),
                                 availableTools = serializePromptHookToolPrompts(availableTools),
                                 metadata =
@@ -849,27 +849,27 @@ class EnhancedAIService private constructor(private val context: Context) {
                             )
                         )
                     finalProcessedInput = beforeFinalizeContext.processedInput ?: finalProcessedInput
-                    finalPreparedHistory = beforeFinalizeContext.preparedHistory.toRoleContentPairs()
+                    finalPreparedHistory = beforeFinalizeContext.preparedHistory
                     val beforeSendContext =
                         applyPromptFinalizeHooks(
                             beforeFinalizeContext.copy(
                                 stage = "before_send_to_model",
                                 processedInput = finalProcessedInput,
-                                preparedHistory = finalPreparedHistory.toPromptMessages()
+                                preparedHistory = finalPreparedHistory
                             )
                         )
                     finalProcessedInput = beforeSendContext.processedInput ?: finalProcessedInput
-                    finalPreparedHistory = beforeSendContext.preparedHistory.toRoleContentPairs()
+                    finalPreparedHistory = beforeSendContext.preparedHistory
                     if (!ChatUtils.isGeminiProviderModel(serviceForFunction.providerModel)) {
                         finalProcessedInput = ChatUtils.stripGeminiThoughtSignatureMeta(finalProcessedInput)
-                        finalPreparedHistory = ChatUtils.stripGeminiThoughtSignatureMeta(finalPreparedHistory)
+                        finalPreparedHistory = ChatUtils.stripGeminiThoughtSignatureMetaTurns(finalPreparedHistory)
                     }
+                    val requestHistory = finalPreparedHistory.appendUserTurnIfMissing(finalProcessedInput)
                     execContext.conversationHistory.clear()
-                    execContext.conversationHistory.addAll(finalPreparedHistory)
+                    execContext.conversationHistory.addAll(requestHistory)
                     estimatePreparedRequestWindow(
                         serviceForFunction = serviceForFunction,
-                        message = finalProcessedInput,
-                        preparedHistory = finalPreparedHistory,
+                        preparedHistory = requestHistory,
                         availableTools = availableTools,
                         publishEstimate = true
                     )
@@ -880,8 +880,7 @@ class EnhancedAIService private constructor(private val context: Context) {
                     val responseStream =
                             serviceForFunction.sendMessage(
                                     context = this@EnhancedAIService.context,
-                                    message = finalProcessedInput,
-                                    chatHistory = finalPreparedHistory,
+                                    chatHistory = requestHistory,
                                     modelParameters = modelParameters,
                                     enableThinking = enableThinking,
                                     stream = stream,
@@ -978,12 +977,6 @@ class EnhancedAIService private constructor(private val context: Context) {
                         } finally {
                             revisionJob?.cancelAndJoin()
                         }
-                    }
-
-                    // 流收集完成后，添加用户消息到对话历史
-                    // 只有在成功收到响应后，才将用户消息添加到历史记录中
-                    if (execContext.conversationHistory.lastOrNull() != Pair("user", finalProcessedInput)) {
-                        execContext.conversationHistory.add(Pair("user", finalProcessedInput))
                     }
 
                     // Update accumulated token counts and persist them
@@ -1521,7 +1514,9 @@ class EnhancedAIService private constructor(private val context: Context) {
                 context.roundManager.appendContent("\n$pureThinkingWarning")
                 collector.emit(pureThinkingWarning)
                 try {
-                    context.conversationHistory.add(Pair("tool", pureThinkingWarning))
+                    context.conversationHistory.add(
+                        PromptTurn(kind = PromptTurnKind.TOOL_RESULT, content = pureThinkingWarning)
+                    )
                 } catch (e: Exception) {
                     AppLogger.e(TAG, "添加纯思考告警到历史记录失败", e)
                     return
@@ -1602,7 +1597,12 @@ class EnhancedAIService private constructor(private val context: Context) {
 
             // Add current assistant message to conversation history
             try {
-                context.conversationHistory.add(Pair("assistant", context.roundManager.getCurrentRoundContent()))
+                context.conversationHistory.add(
+                    PromptTurn(
+                        kind = PromptTurnKind.ASSISTANT,
+                        content = context.roundManager.getCurrentRoundContent()
+                    )
+                )
             } catch (e: Exception) {
                 AppLogger.e(TAG, "添加助手消息到历史记录失败", e)
                 return
@@ -1664,7 +1664,9 @@ class EnhancedAIService private constructor(private val context: Context) {
                     context.roundManager.appendContent(warning)
                     collector.emit(warning)
                     try {
-                        context.conversationHistory.add(Pair("tool", warning))
+                        context.conversationHistory.add(
+                            PromptTurn(kind = PromptTurnKind.TOOL_RESULT, content = warning)
+                        )
                     } catch (e: Exception) {
                         AppLogger.e(TAG, "添加任务完成跳过工具警告到历史记录失败", e)
                     }
@@ -1679,7 +1681,9 @@ class EnhancedAIService private constructor(private val context: Context) {
                     context.roundManager.appendContent(userNeedContent)
                     collector.emit(userNeedContent)
                     try {
-                        context.conversationHistory.add(Pair("tool", userNeedContent))
+                        context.conversationHistory.add(
+                            PromptTurn(kind = PromptTurnKind.TOOL_RESULT, content = userNeedContent)
+                        )
                     } catch (e: Exception) {
                         AppLogger.e(TAG, "添加工具调用警告到历史记录失败", e)
                     }
@@ -1779,7 +1783,7 @@ class EnhancedAIService private constructor(private val context: Context) {
                 com.ai.assistance.operit.api.chat.library.ProblemLibrary.saveProblemAsync(
                         this@EnhancedAIService.context,
                         toolHandler,
-                        context.conversationHistory,
+                        context.conversationHistory.toRoleContentPairs(),
                         content,
                         multiServiceManager.getServiceForFunction(FunctionType.PROBLEM_LIBRARY)
                 )
@@ -1981,7 +1985,13 @@ class EnhancedAIService private constructor(private val context: Context) {
         }
 
         // Add tool result to conversation history
-        context.conversationHistory.add(Pair("tool", toolResultMessage))
+        context.conversationHistory.add(
+            PromptTurn(
+                kind = PromptTurnKind.TOOL_RESULT,
+                content = toolResultMessage,
+                toolName = toolNames.ifBlank { null }
+            )
+        )
 
         val normalizedChatHistory =
             conversationService.normalizeConversationHistoryForModel(context.conversationHistory)
@@ -1990,7 +2000,6 @@ class EnhancedAIService private constructor(private val context: Context) {
 
         // Get current conversation history is now just the normalized context history
         val currentChatHistory = context.conversationHistory
-        val modelToolResultMessage = currentChatHistory.lastOrNull()?.second ?: toolResultMessage
 
         // 不再需要，因为结果在调用时已实时输出
         // context.roundManager.appendContent(toolResultMessage)
@@ -2033,7 +2042,6 @@ class EnhancedAIService private constructor(private val context: Context) {
  
         val currentTokens = estimatePreparedRequestWindow(
             serviceForFunction = serviceForFunction,
-            message = modelToolResultMessage,
             preparedHistory = currentChatHistory,
             availableTools = availableTools,
             publishEstimate = true
@@ -2066,7 +2074,6 @@ class EnhancedAIService private constructor(private val context: Context) {
                 val responseStream =
                         serviceForFunction.sendMessage(
                                 context = this@EnhancedAIService.context,
-                                message = modelToolResultMessage,
                                 chatHistory = currentChatHistory,
                                 modelParameters = modelParameters,
                                 enableThinking = enableThinking,
@@ -2280,8 +2287,15 @@ class EnhancedAIService private constructor(private val context: Context) {
             messages: List<Pair<String, String>>,
             previousSummary: String?
     ): String {
+        return generateSummaryFromPromptTurns(messages.toPromptTurns(), previousSummary)
+    }
+
+    suspend fun generateSummaryFromPromptTurns(
+            messages: List<PromptTurn>,
+            previousSummary: String?
+    ): String {
         // 调用ConversationService中的方法
-        return conversationService.generateSummary(messages, previousSummary, multiServiceManager)
+        return conversationService.generateSummaryFromPromptTurns(messages, previousSummary, multiServiceManager)
     }
 
     /**
@@ -2316,7 +2330,7 @@ class EnhancedAIService private constructor(private val context: Context) {
 
     /** Prepare the conversation history with system prompt */
     private suspend fun prepareConversationHistory(
-            chatHistory: List<Pair<String, String>>,
+            chatHistory: List<PromptTurn>,
             processedInput: String,
             chatId: String?,
             workspacePath: String?,
@@ -2339,7 +2353,7 @@ class EnhancedAIService private constructor(private val context: Context) {
                 PromptHookRegistry::dispatchSystemPromptComposeHooks,
             dispatchToolPromptComposeHooks: (PromptHookContext) -> PromptHookContext =
                 PromptHookRegistry::dispatchToolPromptComposeHooks
-    ): List<Pair<String, String>> {
+    ): List<PromptTurn> {
         // Check if backend image recognition service is configured (for intent-based vision)
         // For subtasks, always disable backend image recognition (only support OCR)
         val hasImageRecognition = if (isSubTask) false else multiServiceManager.hasImageRecognitionConfigured()

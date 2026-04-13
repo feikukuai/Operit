@@ -1,6 +1,7 @@
 package com.ai.assistance.operit.api.chat.llmprovider
 
 import android.content.Context
+import com.ai.assistance.operit.core.chat.hooks.PromptTurn
 import com.ai.assistance.operit.data.model.ApiProviderType
 import com.ai.assistance.operit.data.model.ModelParameter
 import com.ai.assistance.operit.data.model.ToolPrompt
@@ -51,8 +52,7 @@ class OpenRouterProvider(
 
     override fun createRequestBody(
         context: Context,
-        message: String,
-        chatHistory: List<Pair<String, String>>,
+        chatHistory: List<PromptTurn>,
         modelParameters: List<ModelParameter<*>>,
         enableThinking: Boolean,
         stream: Boolean,
@@ -61,7 +61,6 @@ class OpenRouterProvider(
     ): RequestBody {
         val baseRequestBodyJson = super.createRequestBodyInternal(
             context,
-            message,
             chatHistory,
             modelParameters,
             stream,

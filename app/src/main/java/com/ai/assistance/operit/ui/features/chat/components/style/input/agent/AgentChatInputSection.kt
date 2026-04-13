@@ -376,6 +376,25 @@ fun AgentChatInputSection(
     val showQueueAction = isProcessing && hasDraftText
     val showCancelAction = isProcessing && !showQueueAction
     val sendButtonEnabled = true
+    val tokenLimitWarning: @Composable () -> Unit = {
+        if (isOverTokenLimit && canSendMessage && !showQueueAction) {
+            Text(
+                text =
+                    context.getString(
+                        R.string.token_limit_exceeded_message,
+                        userMessageTokens + currentWindowSize,
+                        maxTokens,
+                    ),
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.labelSmall,
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp)
+                        .padding(bottom = 4.dp),
+            )
+        }
+    }
 
     val voicePermissionLauncher =
         rememberLauncherForActivityResult(
@@ -1005,6 +1024,8 @@ fun AgentChatInputSection(
                             }
                         }
                     }
+
+                    tokenLimitWarning()
                 }
             }
             } else {
@@ -1302,6 +1323,8 @@ fun AgentChatInputSection(
                                 }
                             }
                         }
+
+                        tokenLimitWarning()
                     }
                 }
             }
@@ -1363,20 +1386,6 @@ fun AgentChatInputSection(
                 onManualMemoryUpdate = onManualMemoryUpdate,
                 onDismiss = { showExtraSettingsPopup.value = false },
             )
-
-            if (isOverTokenLimit && canSendMessage && !showQueueAction) {
-                Text(
-                    text =
-                        context.getString(
-                            R.string.token_limit_exceeded_message,
-                            userMessageTokens + currentWindowSize,
-                            maxTokens,
-                        ),
-                    color = MaterialTheme.colorScheme.error,
-                    style = MaterialTheme.typography.labelSmall,
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp).padding(bottom = 4.dp),
-                )
-            }
 
             AttachmentSelectorPopupPanel(
                 visible = showAttachmentPanel,

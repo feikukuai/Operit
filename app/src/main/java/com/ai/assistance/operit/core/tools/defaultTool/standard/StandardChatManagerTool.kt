@@ -11,6 +11,7 @@ import com.ai.assistance.operit.api.chat.EnhancedAIService
 import com.ai.assistance.operit.util.AppLogger
 import com.ai.assistance.operit.util.ChatMarkupRegex
 import com.ai.assistance.operit.util.stream.SharedStream
+import com.ai.assistance.operit.core.chat.hooks.toPromptTurns
 import com.ai.assistance.operit.core.tools.AgentStatusResultData
 import com.ai.assistance.operit.core.tools.ChatCreationResultData
 import com.ai.assistance.operit.core.tools.ChatFindResultData
@@ -1601,7 +1602,7 @@ class StandardChatManagerTool(private val context: Context) {
                 enhancedService.sendMessage(
                     message = message,
                     chatId = chatId,
-                    chatHistory = chatHistory,
+                    chatHistory = chatHistory.toPromptTurns(),
                     workspacePath = workspacePath,
                     functionType = functionType,
                     promptFunctionType = promptFunctionType,

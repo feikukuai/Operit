@@ -198,6 +198,18 @@ const linuxSshTools = (function () {
         privateKeyPath: "LINUX_SSH_PRIVATE_KEY_PATH",
         timeoutMs: "LINUX_SSH_TIMEOUT_MS"
     };
+    const CONFIGURE_SSH_CONFIG_OPTIONS = {
+        persistIfProvided: true,
+        requireAuth: false,
+        allowParamConnection: true,
+        allowParamAuth: true
+    };
+    const STORED_SSH_CONFIG_OPTIONS = {
+        persistIfProvided: false,
+        requireAuth: true,
+        allowParamConnection: false,
+        allowParamAuth: false
+    };
     /**
      * Tool params are pre-converted by Kotlin based on metadata.
      * Keep only business-rule validation in TS.
@@ -295,6 +307,54 @@ const linuxSshTools = (function () {
     function shellQuote(value) {
         return `'${asText(value).replace(/'/g, `'"'"'`)}'`;
     }
+    function stripWrappingQuotes(value) {
+        let text = asText(value).trim();
+        while (text.length >= 2) {
+            const first = text.charAt(0);
+            const last = text.charAt(text.length - 1);
+            const wrappedBySingleQuote = first === "'" && last === "'";
+            const wrappedByDoubleQuote = first === "\"" && last === "\"";
+            if (!wrappedBySingleQuote && !wrappedByDoubleQuote) {
+                break;
+            }
+            text = text.slice(1, -1).trim();
+        }
+        return text;
+    }
+    function createErrorResult(error) {
+        return {
+            success: false,
+            packageVersion: PACKAGE_VERSION,
+            error: error && error.message ? error.message : String(error)
+        };
+    }
+    function createSuccessResult(data) {
+        return {
+            success: true,
+            packageVersion: PACKAGE_VERSION,
+            ...(data || {})
+        };
+    }
+    async function runTool(action) {
+        try {
+            return await action();
+        }
+        catch (error) {
+            return createErrorResult(error);
+        }
+    }
+    async function persistToolResult(fileLabel, data) {
+        return await persistResultOutputIfTooLong({
+            packageVersion: PACKAGE_VERSION,
+            ...(data || {})
+        }, fileLabel);
+    }
+    function mergeToolResult(data, source) {
+        return mergePersistedOutput({
+            packageVersion: PACKAGE_VERSION,
+            ...(data || {})
+        }, source);
+    }
     function extractStringResult(result) {
         if (typeof result === "string") {
             return result;
@@ -360,7 +420,7 @@ const linuxSshTools = (function () {
         const host = firstNonBlank(allowParamConnection && params ? asText(params.host) : "", readEnv(ENV_KEYS.host));
         const username = firstNonBlank(allowParamConnection && params ? asText(params.username) : "", readEnv(ENV_KEYS.username));
         const password = firstNonBlank(allowParamAuth && params ? asText(params.password) : "", readEnv(ENV_KEYS.password));
-        const privateKeyPath = firstNonBlank(allowParamAuth && params ? asText(params.private_key_path) : "", readEnv(ENV_KEYS.privateKeyPath));
+        const privateKeyPath = firstNonBlank(allowParamAuth && params ? stripWrappingQuotes(params.private_key_path) : "", stripWrappingQuotes(readEnv(ENV_KEYS.privateKeyPath)));
         const portRaw = firstNonBlank(allowParamConnection && params ? asText(params.port) : "", readEnv(ENV_KEYS.port), String(DEFAULT_PORT));
         const timeoutRaw = firstNonBlank(params && asText(params.timeout_ms), readEnv(ENV_KEYS.timeoutMs), String(DEFAULT_TIMEOUT_MS));
         const port = parsePositiveInt(portRaw, DEFAULT_PORT);
@@ -385,19 +445,14 @@ const linuxSshTools = (function () {
             timeoutMs
         };
     }
+    async function resolveConfiguredSshConfig(params) {
+        return await resolveSshConfig(params, CONFIGURE_SSH_CONFIG_OPTIONS);
+    }
+    async function resolveStoredSshConfig(params) {
+        return await resolveSshConfig(params, STORED_SSH_CONFIG_OPTIONS);
+    }
     async function createLocalTerminalSession() {
         return await Tools.System.terminal.create(DEFAULT_TERMINAL_SESSION_NAME);
-    }
-    async function runLocalCommand(command, timeoutMs) {
-        const session = await createLocalTerminalSession();
-        const effectiveTimeout = parsePositiveInt(timeoutMs, DEFAULT_TIMEOUT_MS);
-        const result = await Tools.System.terminal.exec(session.sessionId, command, effectiveTimeout);
-        return {
-            sessionId: result.sessionId || session.sessionId,
-            exitCode: Number(result.exitCode || 0),
-            timedOut: !!result.timedOut,
-            output: asText(result.output)
-        };
     }
     function buildHiddenExecutorKey(scope) {
         const normalizedScope = firstNonBlank(scope, "default")
@@ -417,16 +472,6 @@ const linuxSshTools = (function () {
             exitCode: Number(result.exitCode || 0),
             timedOut: !!result.timedOut,
             output: asText(result.output)
-        };
-    }
-    function createVisibleRunner() {
-        return async function execute(command, timeoutMs) {
-            return await runLocalCommand(command, timeoutMs);
-        };
-    }
-    function createHiddenRunner(scope) {
-        return async function execute(command, timeoutMs) {
-            return await runLocalHiddenCommand(command, timeoutMs, scope);
         };
     }
     async function ensureLocalCommand(runner, commandName, installScript) {
@@ -501,7 +546,10 @@ const linuxSshTools = (function () {
         return `${base} ${shellQuote(remoteCommand)}`;
     }
     async function runRemoteCommandHidden(config, remoteCommand, timeoutMs, scope) {
-        const runner = createHiddenRunner(scope || "remote");
+        const effectiveScope = firstNonBlank(scope, "remote");
+        const runner = async function execute(command, commandTimeoutMs) {
+            return await runLocalHiddenCommand(command, commandTimeoutMs, effectiveScope);
+        };
         await ensureLocalSshDependencies(config, runner);
         const command = buildSshCommand(config, remoteCommand, false);
         const result = await runner(command, timeoutMs || config.timeoutMs);
@@ -714,41 +762,19 @@ const linuxSshTools = (function () {
         }
     }
     async function linux_ssh_configure(params) {
-        try {
-            const config = await resolveSshConfig(params, {
-                persistIfProvided: true,
-                requireAuth: false,
-                allowParamConnection: true,
-                allowParamAuth: true
-            });
+        return await runTool(async () => {
+            await resolveConfiguredSshConfig(params);
             const testConnection = params?.test_connection === true;
-            let connection = null;
-            if (testConnection) {
-                connection = await linux_ssh_test_connection(params);
-            }
-            return {
-                success: true,
-                packageVersion: PACKAGE_VERSION,
+            const connection = testConnection ? await linux_ssh_test_connection(params) : null;
+            return createSuccessResult({
                 testConnection,
                 connection
-            };
-        }
-        catch (error) {
-            return {
-                success: false,
-                packageVersion: PACKAGE_VERSION,
-                error: error && error.message ? error.message : String(error)
-            };
-        }
+            });
+        });
     }
     async function linux_ssh_test_connection(params) {
-        try {
-            const config = await resolveSshConfig(params, {
-                persistIfProvided: false,
-                requireAuth: true,
-                allowParamConnection: false,
-                allowParamAuth: false
-            });
+        return await runTool(async () => {
+            const config = await resolveStoredSshConfig(params);
             const timeoutMs = params?.timeout_ms ?? config.timeoutMs;
             const command = [
                 "printf '__OPERIT_CONNECT_BEGIN__\\n'",
@@ -760,104 +786,64 @@ const linuxSshTools = (function () {
             const result = await runRemoteCommandHidden(config, command, timeoutMs, "remote");
             const success = result.exitCode === 0 && !result.timedOut;
             const block = extractBlock(result.output, "__OPERIT_CONNECT_BEGIN__", "__OPERIT_CONNECT_END__");
-            return await persistResultOutputIfTooLong({
+            return await persistToolResult("linux_ssh_test_connection_output", {
                 success,
-                packageVersion: PACKAGE_VERSION,
                 timeoutMs,
                 exitCode: result.exitCode,
                 timedOut: result.timedOut,
                 output: block || result.output,
                 error: success ? "" : `SSH connection failed, exitCode=${result.exitCode}`
-            }, "linux_ssh_test_connection_output");
-        }
-        catch (error) {
-            return {
-                success: false,
-                packageVersion: PACKAGE_VERSION,
-                error: error && error.message ? error.message : String(error)
-            };
-        }
+            });
+        });
     }
     async function linux_ssh_exec(params) {
-        try {
+        return await runTool(async () => {
             const command = asText(params?.command).trim();
             if (!command) {
                 throw new Error("command cannot be empty");
             }
-            const config = await resolveSshConfig(params, {
-                persistIfProvided: false,
-                requireAuth: true,
-                allowParamConnection: false,
-                allowParamAuth: false
-            });
+            const config = await resolveStoredSshConfig(params);
             const timeoutMs = params?.timeout_ms ?? config.timeoutMs;
             const result = await runRemoteCommandHidden(config, command, timeoutMs, "remote");
             const success = result.exitCode === 0 && !result.timedOut;
-            return await persistResultOutputIfTooLong({
+            return await persistToolResult("linux_ssh_exec_output", {
                 success,
-                packageVersion: PACKAGE_VERSION,
                 timeoutMs,
                 exitCode: result.exitCode,
                 timedOut: result.timedOut,
                 output: result.output,
                 sessionId: result.sessionId,
                 error: success ? "" : `Remote command failed, exitCode=${result.exitCode}`
-            }, "linux_ssh_exec_output");
-        }
-        catch (error) {
-            return {
-                success: false,
-                packageVersion: PACKAGE_VERSION,
-                error: error && error.message ? error.message : String(error)
-            };
-        }
+            });
+        });
     }
     async function linux_ssh_ensure_tmux(params) {
-        try {
-            const config = await resolveSshConfig(params, {
-                persistIfProvided: false,
-                requireAuth: true,
-                allowParamConnection: false,
-                allowParamAuth: false
-            });
+        return await runTool(async () => {
+            const config = await resolveStoredSshConfig(params);
             const tmuxResult = await ensureRemoteTmux(config);
-            return mergePersistedOutput({
+            return mergeToolResult({
                 success: !!tmuxResult.success,
-                packageVersion: PACKAGE_VERSION,
                 exitCode: tmuxResult.exitCode,
                 timedOut: tmuxResult.timedOut,
                 output: tmuxResult.output,
                 error: tmuxResult.success ? "" : "Failed to install or verify tmux on remote host"
             }, tmuxResult);
-        }
-        catch (error) {
-            return {
-                success: false,
-                packageVersion: PACKAGE_VERSION,
-                error: error && error.message ? error.message : String(error)
-            };
-        }
+        });
     }
     async function linux_ssh_tmux_run(params) {
-        try {
+        return await runTool(async () => {
             const command = asText(params?.command).trim();
             if (!command) {
                 throw new Error("command cannot be empty");
             }
-            const config = await resolveSshConfig(params, {
-                persistIfProvided: false,
-                requireAuth: true,
-                allowParamConnection: false,
-                allowParamAuth: false
-            });
+            const config = await resolveStoredSshConfig(params);
             const tmuxSessionName = DEFAULT_TMUX_SESSION_NAME;
             const requestedWindowName = asText(params?.window_name).trim();
-            const workdir = asText(params?.workdir).trim();
+            const workdir = stripWrappingQuotes(params?.workdir);
             const tmuxReady = await ensureRemoteTmux(config);
             if (!tmuxReady.success) {
-                return mergePersistedOutput({
+                return mergeToolResult({
                     success: false,
-                    packageVersion: PACKAGE_VERSION,
                     tmuxSessionName,
                     requestedWindowName,
                     workdir,
@@ -869,9 +855,8 @@ const linuxSshTools = (function () {
             }
             const targetWindowReady = await ensureRemoteTmuxWindow(config, requestedWindowName);
             if (!targetWindowReady.success || !targetWindowReady.windowName) {
-                return mergePersistedOutput({
+                return mergeToolResult({
                     success: false,
-                    packageVersion: PACKAGE_VERSION,
                     tmuxSessionName,
                     requestedWindowName,
                     workdir,
@@ -900,9 +885,8 @@ const linuxSshTools = (function () {
             ].join("\n");
             const result = await runRemoteCommandHidden(config, buildRemoteShellCommand(script, [targetWindow, workdir, command], false), config.timeoutMs, "tmux");
             const success = result.exitCode === 0 && !result.timedOut && result.output.includes("__OPERIT_TMUX_RUN_OK__");
-            return await persistResultOutputIfTooLong({
+            return await persistToolResult("linux_ssh_tmux_run_output", {
                 success,
-                packageVersion: PACKAGE_VERSION,
                 tmuxSessionName,
                 windowName,
                 tmuxTarget: targetWindow,
@@ -911,32 +895,19 @@ const linuxSshTools = (function () {
                 timedOut: result.timedOut,
                 output: result.output,
                 error: success ? "" : `tmux run failed, exitCode=${result.exitCode}`
-            }, "linux_ssh_tmux_run_output");
-        }
-        catch (error) {
-            return {
-                success: false,
-                packageVersion: PACKAGE_VERSION,
-                error: error && error.message ? error.message : String(error)
-            };
-        }
+            });
+        });
     }
     async function linux_ssh_tmux_capture(params) {
-        try {
-            const config = await resolveSshConfig(params, {
-                persistIfProvided: false,
-                requireAuth: true,
-                allowParamConnection: false,
-                allowParamAuth: false
-            });
+        return await runTool(async () => {
+            const config = await resolveStoredSshConfig(params);
             const tmuxSessionName = DEFAULT_TMUX_SESSION_NAME;
             const windowName = asText(params?.window_name).trim();
             const maxLines = params?.max_lines ?? 200;
             const tmuxReady = await ensureRemoteTmux(config);
             if (!tmuxReady.success) {
-                return mergePersistedOutput({
+                return mergeToolResult({
                     success: false,
-                    packageVersion: PACKAGE_VERSION,
                     tmuxSessionName,
                     windowName,
                     maxLines,
@@ -956,9 +927,8 @@ const linuxSshTools = (function () {
             const result = await runRemoteCommandHidden(config, script, config.timeoutMs, "tmux");
             const success = result.exitCode === 0 && !result.timedOut;
             const content = extractBlock(result.output, "__OPERIT_TMUX_CAPTURE_BEGIN__", "__OPERIT_TMUX_CAPTURE_END__");
-            return await persistResultOutputIfTooLong({
+            return await persistToolResult("linux_ssh_tmux_capture_output", {
                 success,
-                packageVersion: PACKAGE_VERSION,
                 tmuxSessionName,
                 windowName,
                 maxLines,
@@ -966,30 +936,17 @@ const linuxSshTools = (function () {
                 timedOut: result.timedOut,
                 output: content || result.output,
                 error: success ? "" : `tmux capture failed, exitCode=${result.exitCode}`
-            }, "linux_ssh_tmux_capture_output");
-        }
-        catch (error) {
-            return {
-                success: false,
-                packageVersion: PACKAGE_VERSION,
-                error: error && error.message ? error.message : String(error)
-            };
-        }
+            });
+        });
     }
     async function linux_ssh_tmux_list_windows(params) {
-        try {
-            const config = await resolveSshConfig(params, {
-                persistIfProvided: false,
-                requireAuth: true,
-                allowParamConnection: false,
-                allowParamAuth: false
-            });
+        return await runTool(async () => {
+            const config = await resolveStoredSshConfig(params);
             const tmuxSessionName = DEFAULT_TMUX_SESSION_NAME;
             const tmuxReady = await ensureRemoteTmux(config);
             if (!tmuxReady.success) {
-                return mergePersistedOutput({
+                return mergeToolResult({
                     success: false,
-                    packageVersion: PACKAGE_VERSION,
                     tmuxSessionName,
                     sessionExists: false,
                     windows: [],
@@ -1025,9 +982,8 @@ const linuxSshTools = (function () {
                     label: index ? `#${index} ${name}` : name
                 };
             });
-            return await persistResultOutputIfTooLong({
+            return await persistToolResult("linux_ssh_tmux_list_windows_output", {
                 success,
-                packageVersion: PACKAGE_VERSION,
                 tmuxSessionName,
                 sessionExists: !notFound,
                 windows,
@@ -1038,18 +994,11 @@ const linuxSshTools = (function () {
                 error: notFound
                     ? `tmux session not found: ${tmuxSessionName}`
                     : (success ? "" : `tmux list windows failed, exitCode=${result.exitCode}`)
-            }, "linux_ssh_tmux_list_windows_output");
-        }
-        catch (error) {
-            return {
-                success: false,
-                packageVersion: PACKAGE_VERSION,
-                error: error && error.message ? error.message : String(error)
-            };
-        }
+            });
+        });
     }
     async function linux_ssh_tmux_input(params) {
-        try {
+        return await runTool(async () => {
             const requestedWindowName = asText(params?.window_name).trim();
             const inputText = params?.input !== undefined && params?.input !== null
                 ? asText(params.input)
@@ -1063,18 +1012,12 @@ const linuxSshTools = (function () {
             if (!inputText && !controlKey) {
                 throw new Error("At least one of input/control is required");
             }
-            const config = await resolveSshConfig(params, {
-                persistIfProvided: false,
-                requireAuth: true,
-                allowParamConnection: false,
-                allowParamAuth: false
-            });
+            const config = await resolveStoredSshConfig(params);
             const tmuxSessionName = DEFAULT_TMUX_SESSION_NAME;
             const tmuxReady = await ensureRemoteTmux(config);
             if (!tmuxReady.success) {
-                return mergePersistedOutput({
+                return mergeToolResult({
                     success: false,
-                    packageVersion: PACKAGE_VERSION,
                     tmuxSessionName,
                     windowName: requestedWindowName,
                     input: inputText,
@@ -1087,9 +1030,8 @@ const linuxSshTools = (function () {
             }
             const targetWindowReady = await ensureRemoteTmuxWindow(config, requestedWindowName);
             if (!targetWindowReady.success || !targetWindowReady.windowName) {
-                return mergePersistedOutput({
+                return mergeToolResult({
                     success: false,
-                    packageVersion: PACKAGE_VERSION,
                     tmuxSessionName,
                     windowName: requestedWindowName,
                     input: inputText,
@@ -1112,9 +1054,8 @@ const linuxSshTools = (function () {
             scriptLines.push("printf '__OPERIT_TMUX_INPUT_OK__\\n'");
             const result = await runRemoteCommandHidden(config, scriptLines.join("\n"), config.timeoutMs, "tmux");
             const success = result.exitCode === 0 && !result.timedOut && result.output.includes("__OPERIT_TMUX_INPUT_OK__");
-            return await persistResultOutputIfTooLong({
+            return await persistToolResult("linux_ssh_tmux_input_output", {
                 success,
-                packageVersion: PACKAGE_VERSION,
                 tmuxSessionName,
                 windowName,
                 tmuxTarget: targetWindow,
@@ -1124,35 +1065,22 @@ const linuxSshTools = (function () {
                 timedOut: result.timedOut,
                 output: result.output,
                 error: success ? "" : `tmux input failed, exitCode=${result.exitCode}`
-            }, "linux_ssh_tmux_input_output");
-        }
-        catch (error) {
-            return {
-                success: false,
-                packageVersion: PACKAGE_VERSION,
-                error: error && error.message ? error.message : String(error)
-            };
-        }
+            });
+        });
     }
     async function linux_ssh_tmux_close(params) {
-        try {
+        return await runTool(async () => {
             const tmuxSessionName = DEFAULT_TMUX_SESSION_NAME;
             const windowName = asText(params?.window_name).trim();
             if (!windowName) {
                 throw new Error("window_name cannot be empty");
             }
-            const config = await resolveSshConfig(params, {
-                persistIfProvided: false,
-                requireAuth: true,
-                allowParamConnection: false,
-                allowParamAuth: false
-            });
+            const config = await resolveStoredSshConfig(params);
             const targetWindow = `${tmuxSessionName}:${windowName}`;
             const tmuxReady = await ensureRemoteTmux(config);
             if (!tmuxReady.success) {
-                return mergePersistedOutput({
+                return mergeToolResult({
                     success: false,
-                    packageVersion: PACKAGE_VERSION,
                     tmuxSessionName,
                     windowName,
                     tmuxTarget: targetWindow,
@@ -1174,9 +1102,8 @@ const linuxSshTools = (function () {
             const sessionExists = !hasExactMarkerLine(result.output, "__OPERIT_TMUX_NOT_FOUND__");
             const windowExists = !hasExactMarkerLine(result.output, "__OPERIT_TMUX_WINDOW_NOT_FOUND__");
             const success = result.exitCode === 0 && !result.timedOut && sessionExists && windowExists && result.output.includes("__OPERIT_TMUX_CLOSE_OK__");
-            return await persistResultOutputIfTooLong({
+            return await persistToolResult("linux_ssh_tmux_close_output", {
                 success,
-                packageVersion: PACKAGE_VERSION,
                 tmuxSessionName,
                 windowName,
                 tmuxTarget: targetWindow,
@@ -1190,18 +1117,11 @@ const linuxSshTools = (function () {
                     : (!windowExists
                         ? `tmux window not found: ${windowName}`
                         : (success ? "" : `tmux close failed, exitCode=${result.exitCode}`))
-            }, "linux_ssh_tmux_close_output");
-        }
-        catch (error) {
-            return {
-                success: false,
-                packageVersion: PACKAGE_VERSION,
-                error: error && error.message ? error.message : String(error)
-            };
-        }
+            });
+        });
     }
     async function linux_ssh_terminal_input(params) {
-        try {
+        return await runTool(async () => {
             const input = params?.input;
             const control = params?.control;
             if (input === undefined && control === undefined) {
@@ -1212,51 +1132,28 @@ const linuxSshTools = (function () {
                 input: input === undefined ? undefined : asText(input),
                 control: control === undefined ? undefined : asText(control)
             });
-            return {
-                success: true,
-                packageVersion: PACKAGE_VERSION,
+            return createSuccessResult({
                 sessionId: session.sessionId,
                 result: extractStringResult(result)
-            };
-        }
-        catch (error) {
-            return {
-                success: false,
-                packageVersion: PACKAGE_VERSION,
-                error: error && error.message ? error.message : String(error)
-            };
-        }
+            });
+        });
     }
     async function linux_ssh_terminal_screen(params) {
-        try {
+        return await runTool(async () => {
             const session = await createLocalTerminalSession();
             const result = await Tools.System.terminal.screen(session.sessionId);
-            return {
-                success: true,
-                packageVersion: PACKAGE_VERSION,
+            return createSuccessResult({
                 sessionId: result.sessionId || session.sessionId,
                 rows: Number(result.rows || 0),
                 cols: Number(result.cols || 0),
                 content: asText(result.content)
-            };
-        }
-        catch (error) {
-            return {
-                success: false,
-                packageVersion: PACKAGE_VERSION,
-                error: error && error.message ? error.message : String(error)
-            };
-        }
+            });
+        });
     }
     async function linux_ssh_ls(params) {
-        try {
-            const config = await resolveSshConfig(params, {
-                persistIfProvided: false,
-                requireAuth: true,
-                allowParamConnection: false,
-                allowParamAuth: false
-            });
-            const path = asText(params?.path).trim();
+        return await runTool(async () => {
+            const config = await resolveStoredSshConfig(params);
+            const path = stripWrappingQuotes(params?.path);
             const displayPath = firstNonBlank(path, "~");
             const script = [
                 "raw_path=\"$1\"",
@@ -1265,36 +1162,23 @@ const linuxSshTools = (function () {
             ].join("\n");
             const result = await runRemoteCommandHidden(config, buildRemoteShellCommand(script, [path], false), config.timeoutMs, "fs");
             const success = result.exitCode === 0 && !result.timedOut;
-            return await persistResultOutputIfTooLong({
+            return await persistToolResult("linux_ssh_ls_output", {
                 success,
-                packageVersion: PACKAGE_VERSION,
                 path: displayPath,
                 exitCode: result.exitCode,
                 timedOut: result.timedOut,
                 output: result.output,
                 error: success ? "" : `ls failed, exitCode=${result.exitCode}`
-            }, "linux_ssh_ls_output");
-        }
-        catch (error) {
-            return {
-                success: false,
-                packageVersion: PACKAGE_VERSION,
-                error: error && error.message ? error.message : String(error)
-            };
-        }
+            });
+        });
     }
     async function linux_ssh_read(params) {
-        try {
-            const path = asText(params?.path).trim();
+        return await runTool(async () => {
+            const path = stripWrappingQuotes(params?.path);
             if (!path) {
                 throw new Error("path cannot be empty");
             }
-            const config = await resolveSshConfig(params, {
-                persistIfProvided: false,
-                requireAuth: true,
-                allowParamConnection: false,
-                allowParamAuth: false
-            });
+            const config = await resolveStoredSshConfig(params);
             const lineStart = params?.line_start;
             const lineEnd = params?.line_end;
             const useSudo = params?.sudo === true;
@@ -1302,61 +1186,38 @@ const linuxSshTools = (function () {
                 throw new Error("line_end must be greater than or equal to line_start");
             }
             const readResult = await readRemoteFileContent(config, path, lineStart, lineEnd, useSudo);
-            return {
-                success: true,
-                packageVersion: PACKAGE_VERSION,
+            return createSuccessResult({
                 path,
                 lineStart: lineStart === undefined ? null : lineStart,
                 lineEnd: lineEnd === undefined ? null : lineEnd,
                 content: readResult.content
-            };
-        }
-        catch (error) {
-            return {
-                success: false,
-                packageVersion: PACKAGE_VERSION,
-                error: error && error.message ? error.message : String(error)
-            };
-        }
+            });
+        });
     }
     async function linux_ssh_write(params) {
-        try {
-            const path = asText(params?.path).trim();
+        return await runTool(async () => {
+            const path = stripWrappingQuotes(params?.path);
             if (!path) {
                 throw new Error("path cannot be empty");
             }
             if (params?.content === undefined || params?.content === null) {
                 throw new Error("content cannot be null");
             }
-            const config = await resolveSshConfig(params, {
-                persistIfProvided: false,
-                requireAuth: true,
-                allowParamConnection: false,
-                allowParamAuth: false
-            });
+            const config = await resolveStoredSshConfig(params);
             const content = asText(params.content);
             const append = params?.append === true;
             const useSudo = params?.sudo === true;
             await writeRemoteFileContent(config, path, content, append, useSudo);
-            return {
-                success: true,
-                packageVersion: PACKAGE_VERSION,
+            return createSuccessResult({
                 path,
                 append,
                 contentLength: content.length
-            };
-        }
-        catch (error) {
-            return {
-                success: false,
-                packageVersion: PACKAGE_VERSION,
-                error: error && error.message ? error.message : String(error)
-            };
-        }
+            });
+        });
     }
     async function linux_ssh_edit(params) {
-        try {
-            const path = asText(params?.path).trim();
+        return await runTool(async () => {
+            const path = stripWrappingQuotes(params?.path);
             if (!path) {
                 throw new Error("path cannot be empty");
             }
@@ -1367,12 +1228,7 @@ const linuxSshTools = (function () {
             if (params?.new_text === undefined || params?.new_text === null) {
                 throw new Error("new_text cannot be null");
             }
-            const config = await resolveSshConfig(params, {
-                persistIfProvided: false,
-                requireAuth: true,
-                allowParamConnection: false,
-                allowParamAuth: false
-            });
+            const config = await resolveStoredSshConfig(params);
             const newText = asText(params.new_text);
             const expectedReplacements = params?.expected_replacements ?? 1;
             const useSudo = params?.sudo === true;
@@ -1385,23 +1241,14 @@ const linuxSshTools = (function () {
             }
             const updated = parts.join(newText);
             await writeRemoteFileContent(config, path, updated, false, useSudo);
-            return {
-                success: true,
-                packageVersion: PACKAGE_VERSION,
+            return createSuccessResult({
                 path,
                 replacements,
                 expectedReplacements,
                 beforeLength: source.length,
                 afterLength: updated.length
-            };
-        }
-        catch (error) {
-            return {
-                success: false,
-                packageVersion: PACKAGE_VERSION,
-                error: error && error.message ? error.message : String(error)
-            };
-        }
+            });
+        });
     }
     return {
         linux_ssh_configure,

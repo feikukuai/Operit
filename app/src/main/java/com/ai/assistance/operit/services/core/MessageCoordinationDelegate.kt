@@ -5,6 +5,8 @@ import com.ai.assistance.operit.R
 import com.ai.assistance.operit.util.AppLogger
 import com.ai.assistance.operit.api.chat.EnhancedAIService
 import com.ai.assistance.operit.core.chat.AIMessageManager
+import com.ai.assistance.operit.core.chat.hooks.PromptTurn
+import com.ai.assistance.operit.core.chat.hooks.PromptTurnKind
 import com.ai.assistance.operit.core.config.FunctionalPrompts
 import com.ai.assistance.operit.api.chat.enhance.MultiServiceManager
 import com.ai.assistance.operit.api.chat.llmprovider.AIService
@@ -789,8 +791,7 @@ class MessageCoordinationDelegate(
         runCatching {
             val stream = plannerService.sendMessage(
                 context = context,
-                message = prompt,
-                chatHistory = emptyList(),
+                chatHistory = listOf(PromptTurn(kind = PromptTurnKind.USER, content = prompt)),
                 modelParameters = modelParameters,
                 enableThinking = false,
                 stream = false,

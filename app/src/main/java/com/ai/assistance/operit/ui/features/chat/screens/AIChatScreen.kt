@@ -18,12 +18,12 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Terminal
@@ -63,8 +63,6 @@ import com.ai.assistance.operit.ui.features.chat.components.style.input.classic.
 import com.ai.assistance.operit.ui.features.chat.components.style.input.classic.ClassicChatSettingsBar
 import com.ai.assistance.operit.ui.features.chat.components.style.input.common.PendingQueueMessageItem
 import com.ai.assistance.operit.ui.features.chat.components.style.bubble.BubbleImageStyleConfig
-import com.ai.assistance.operit.ui.features.chat.components.lazy.LazyLayoutCacheWindow
-import com.ai.assistance.operit.ui.features.chat.components.lazy.rememberLazyListState as rememberChatLazyListState
 import com.ai.assistance.operit.ui.features.chat.components.AndroidExportDialog
 import com.ai.assistance.operit.ui.features.chat.components.ExportCompleteDialog
 import com.ai.assistance.operit.ui.features.chat.components.ExportPlatformDialog
@@ -103,7 +101,7 @@ import com.ai.assistance.operit.ui.theme.getTextColorForBackground
 
 
 @RequiresApi(Build.VERSION_CODES.O)
-@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 @Preview(showBackground = true)
 fun AIChatScreen(
@@ -382,10 +380,7 @@ val actualViewModel: ChatViewModel = viewModel ?: viewModel { ChatViewModel(cont
     val canDrawOverlays = remember { mutableStateOf(Settings.canDrawOverlays(context)) }
 
     // UI state
-    val scrollState =
-        rememberChatLazyListState(
-            cacheWindow = LazyLayoutCacheWindow(aheadFraction = 1.5f, behindFraction = 0.75f)
-        )
+    val scrollState = rememberScrollState()
     val historyListState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
     val characterCardManager = remember { CharacterCardManager.getInstance(context) }
@@ -645,7 +640,7 @@ val actualViewModel: ChatViewModel = viewModel ?: viewModel { ChatViewModel(cont
             if (autoScrollToBottom) {
                 try {
                     if (chatHistory.isNotEmpty()) {
-                        scrollState.animateScrollToEnd()
+                        scrollState.animateScrollTo(scrollState.maxValue)
                     }
                 } catch (e: Exception) {
                     // AppLogger.e("AIChatScreen", "自动滚动失败", e)
@@ -659,7 +654,7 @@ val actualViewModel: ChatViewModel = viewModel ?: viewModel { ChatViewModel(cont
         if (autoScrollToBottom) {
             try {
                 if (chatHistory.isNotEmpty()) {
-                    scrollState.animateScrollToEnd()
+                    scrollState.animateScrollTo(scrollState.maxValue)
                 }
             } catch (e: Exception) {
                 // AppLogger.e("AIChatScreen", "自动滚动失败", e)

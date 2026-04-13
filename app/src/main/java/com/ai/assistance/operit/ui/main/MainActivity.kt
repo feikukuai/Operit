@@ -1,6 +1,7 @@
 package com.ai.assistance.operit.ui.main
 
 import android.Manifest
+import android.app.ActivityManager
 import android.content.Context
 import android.content.pm.PackageManager
 import android.content.res.Configuration
@@ -33,6 +34,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.lifecycle.Observer
 import androidx.lifecycle.lifecycleScope
 import com.ai.assistance.operit.R
+import com.ai.assistance.operit.api.chat.AIForegroundService
 import com.ai.assistance.operit.core.tools.AIToolHandler
 import com.ai.assistance.operit.data.migration.ChatHistoryMigrationManager
 import com.ai.assistance.operit.data.preferences.AgreementPreferences
@@ -112,6 +114,7 @@ class MainActivity : ComponentActivity() {
 
     private var pendingSharedLinks: List<String>? = null
     private var pendingShortcutNavItem: NavItem? = null
+    private var pendingShortcutRequestId: Long = 0L
 
     // 通知权限请求启动器
     private val notificationPermissionLauncher = registerForActivityResult(
@@ -209,6 +212,24 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun restoreRuntimeTaskViewVisibilityIfNeeded() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) return
+        if (AIForegroundService.isRunning.get()) return
+
+        try {
+            val activityManager = getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
+            activityManager?.appTasks?.forEach { task ->
+                try {
+                    task.setExcludeFromRecents(false)
+                } catch (e: Exception) {
+                    AppLogger.e(TAG, "恢复最近任务可见性失败", e)
+                }
+            }
+        } catch (e: Exception) {
+            AppLogger.e(TAG, "恢复运行时任务视图可见性失败", e)
+        }
+    }
+
     override fun attachBaseContext(newBase: Context) {
         // 获取当前设置的语言
         val code = LocaleUtils.getCurrentLanguage(newBase)
@@ -242,6 +263,7 @@ class MainActivity : ComponentActivity() {
 
         // Handle the intent that started the activity
         handleIntent(intent)
+        restoreRuntimeTaskViewVisibilityIfNeeded()
 
         // 语言设置已在Application中初始化，这里无需重复
 
@@ -283,6 +305,7 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent) // 重要：更新当前Intent
         AppLogger.d(TAG, "onNewIntent: Received intent with action: ${intent?.action}")
+        restoreRuntimeTaskViewVisibilityIfNeeded()
         val isGitHubOAuthCallback = intent?.data?.let { uri ->
             uri.scheme == "operit" && uri.host == "github-oauth-callback"
         } == true
@@ -310,6 +333,7 @@ class MainActivity : ComponentActivity() {
     private fun handleIntent(intent: Intent?): Boolean {
         if (intent?.action == ACTION_OPEN_SETTINGS_SHORTCUT) {
             pendingShortcutNavItem = NavItem.Settings
+            pendingShortcutRequestId = System.currentTimeMillis()
             AppLogger.d(TAG, "Shortcut requested opening settings")
             return true
         }
@@ -750,20 +774,28 @@ class MainActivity : ComponentActivity() {
                             // 处理待处理的分享文件
                             processPendingSharedFiles()
                             processPendingSharedLinks()
+                            val shortcutNavItem = if (!showPreferencesGuide) pendingShortcutNavItem else null
+                            val shortcutNavRequestId =
+                                if (!showPreferencesGuide) pendingShortcutRequestId else 0L
                             val initialNavItem = when {
                                 showPreferencesGuide -> NavItem.UserPreferencesGuide
-                                pendingShortcutNavItem != null -> pendingShortcutNavItem!!
+                                shortcutNavItem != null -> shortcutNavItem
                                 else -> NavItem.AiChat
                             }
-                            if (!showPreferencesGuide && pendingShortcutNavItem != null) {
-                                pendingShortcutNavItem = null
-                            }
-                            
+
                             CompositionLocalProvider(LocalPluginLoadingState provides pluginLoadingState) {
                                 // 主应用界面 (始终存在于底层)
                                 OperitApp(
                                         initialNavItem = initialNavItem,
-                                        toolHandler = toolHandler
+                                        toolHandler = toolHandler,
+                                        shortcutNavRequest = shortcutNavItem,
+                                        shortcutNavRequestId = shortcutNavRequestId,
+                                        onShortcutNavHandled = { handledRequestId ->
+                                            if (pendingShortcutRequestId == handledRequestId) {
+                                                pendingShortcutNavItem = null
+                                                pendingShortcutRequestId = 0L
+                                            }
+                                        }
                                 )
                             }
                         }

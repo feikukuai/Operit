@@ -12,6 +12,7 @@ import com.ai.assistance.operit.data.preferences.MemorySearchSettingsPreferences
 import com.ai.assistance.operit.data.preferences.preferencesManager
 import com.ai.assistance.operit.data.repository.MemoryRepository
 import com.ai.assistance.operit.util.ChatUtils
+import com.ai.assistance.operit.core.chat.hooks.toPromptTurns
 import com.ai.assistance.operit.core.config.FunctionalPrompts
 import com.ai.assistance.operit.util.LocaleUtils
 import kotlinx.coroutines.CoroutineScope
@@ -166,11 +167,15 @@ object ProblemLibrary {
         )
 
         val userMessage = FunctionalPrompts.memoryAutoCategorizeUserMessage(useEnglish)
-        val messages = listOf(Pair("system", systemPrompt), Pair("user", userMessage))
+            val messages = listOf(Pair("system", systemPrompt), Pair("user", userMessage)).toPromptTurns()
         val result = StringBuilder()
         
         withContext(Dispatchers.IO) {
-            val stream = aiService.sendMessage(context = context, message = userMessage, chatHistory = messages)
+            val stream =
+                aiService.sendMessage(
+                    context = context,
+                    chatHistory = messages
+                )
             stream.collect { content -> result.append(content) }
         }
         
@@ -544,11 +549,15 @@ object ProblemLibrary {
             )
 
             val analysisMessage = buildAnalysisMessage(context, query, solution, conversationHistory, useEnglish)
-            val messages = listOf(Pair("system", systemPrompt), Pair("user", analysisMessage))
+            val messages = listOf(Pair("system", systemPrompt), Pair("user", analysisMessage)).toPromptTurns()
             val result = StringBuilder()
 
             withContext(Dispatchers.IO) {
-                val stream = aiService.sendMessage(context = context, message = analysisMessage, chatHistory = messages)
+                val stream =
+                    aiService.sendMessage(
+                        context = context,
+                        chatHistory = messages
+                    )
                 stream.collect { content -> result.append(content) }
             }
 

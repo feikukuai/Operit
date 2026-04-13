@@ -1,6 +1,9 @@
 package com.ai.assistance.operit.api.chat.llmprovider
 
 import android.content.Context
+import com.ai.assistance.operit.core.chat.hooks.PromptTurn
+import com.ai.assistance.operit.core.chat.hooks.PromptTurnKind
+import com.ai.assistance.operit.core.chat.hooks.mergeAdjacentTurns
 import com.ai.assistance.operit.data.model.ApiProviderType
 import com.ai.assistance.operit.data.model.ModelParameter
 import com.ai.assistance.operit.data.model.ToolPrompt
@@ -43,8 +46,7 @@ class KimiProvider(
 
     override fun createRequestBody(
         context: Context,
-        message: String,
-        chatHistory: List<Pair<String, String>>,
+        chatHistory: List<PromptTurn>,
         modelParameters: List<ModelParameter<*>>,
         enableThinking: Boolean,
         stream: Boolean,
@@ -62,7 +64,7 @@ class KimiProvider(
 
         if (!enableThinking) {
             val baseRequestBodyJson =
-                super.createRequestBodyInternal(context, message, chatHistory, modelParameters, stream, availableTools, preserveThinkInHistory)
+                super.createRequestBodyInternal(context, chatHistory, modelParameters, stream, availableTools, preserveThinkInHistory)
             val jsonObject = JSONObject(baseRequestBodyJson)
             applyThinkingParams(jsonObject)
             return createJsonRequestBody(jsonObject.toString())
@@ -121,13 +123,10 @@ class KimiProvider(
         val messagesArray =
             buildMessagesWithReasoning(
                 context,
-                message,
                 chatHistory,
                 effectiveEnableToolCall
             )
         jsonObject.put("messages", messagesArray)
-
-        tokenCacheManager.calculateInputTokens(message, chatHistory, toolsJson)
 
         val logJson = JSONObject(jsonObject.toString())
         if (logJson.has("tools")) {
@@ -142,142 +141,280 @@ class KimiProvider(
 
     private fun buildMessagesWithReasoning(
         context: Context,
-        message: String,
-        chatHistory: List<Pair<String, String>>,
+        chatHistory: List<PromptTurn>,
         useToolCall: Boolean
     ): JSONArray {
         val messagesArray = JSONArray()
+        val effectiveHistory = chatHistory.mergeAdjacentTurns()
 
-        val isMessageInHistory = chatHistory.isNotEmpty() && chatHistory.last().second == message
-        val effectiveHistory = if (isMessageInHistory) {
-            chatHistory
-        } else {
-            chatHistory + ("user" to message)
+        var queuedAssistantToolText: String? = null
+        var queuedAssistantReasoning: String? = null
+        var queuedToolCalls = JSONArray()
+        val queuedToolCallIds = mutableListOf<String>()
+        val openToolCallIds = mutableListOf<String>()
+
+        fun appendQueuedAssistantToolText(text: String) {
+            if (text.isBlank()) return
+            queuedAssistantToolText =
+                if (queuedAssistantToolText.isNullOrBlank()) {
+                    text
+                } else {
+                    queuedAssistantToolText + "\n" + text
+                }
         }
 
-        val lastToolCallIds = mutableListOf<String>()
+        fun appendQueuedAssistantReasoning(reasoningContent: String) {
+            if (reasoningContent.isBlank()) return
+            queuedAssistantReasoning =
+                if (queuedAssistantReasoning.isNullOrBlank()) {
+                    reasoningContent
+                } else {
+                    queuedAssistantReasoning + "\n" + reasoningContent
+                }
+        }
+
+        fun queueToolCalls(textContent: String, toolCalls: JSONArray, reasoningContent: String = "") {
+            appendQueuedAssistantToolText(textContent)
+            appendQueuedAssistantReasoning(reasoningContent)
+            for (i in 0 until toolCalls.length()) {
+                val toolCall = toolCalls.optJSONObject(i) ?: continue
+                queuedToolCalls.put(toolCall)
+                val callId = toolCall.optString("id", "").trim()
+                if (callId.isNotEmpty()) {
+                    queuedToolCallIds.add(callId)
+                }
+            }
+        }
+
+        fun emitQueuedToolCallsIfNeeded() {
+            if (queuedToolCalls.length() == 0) return
+
+            messagesArray.put(
+                JSONObject().apply {
+                    put("role", "assistant")
+                    put("reasoning_content", queuedAssistantReasoning.orEmpty())
+                    if (!queuedAssistantToolText.isNullOrBlank()) {
+                        put("content", buildContentField(context, queuedAssistantToolText!!))
+                    } else {
+                        put("content", null)
+                    }
+                    put("tool_calls", queuedToolCalls)
+                }
+            )
+
+            openToolCallIds.addAll(queuedToolCallIds)
+            queuedAssistantToolText = null
+            queuedAssistantReasoning = null
+            queuedToolCalls = JSONArray()
+            queuedToolCallIds.clear()
+        }
+
+        fun flushOpenToolCallsAsCancelled(reason: String) {
+            emitQueuedToolCallsIfNeeded()
+            if (openToolCallIds.isEmpty()) return
+
+            AppLogger.w(
+                "KimiProvider",
+                "发现未完成的tool_calls，按取消处理: count=${openToolCallIds.size}, reason=$reason"
+            )
+            for (toolCallId in openToolCallIds) {
+                messagesArray.put(
+                    JSONObject().apply {
+                        put("role", "tool")
+                        put("tool_call_id", toolCallId)
+                        put("content", "User cancelled")
+                    }
+                )
+            }
+            openToolCallIds.clear()
+        }
 
         if (effectiveHistory.isNotEmpty()) {
-            val standardizedHistory = ChatUtils.mapChatHistoryToStandardRoles(effectiveHistory, extractThinking = true)
-            val mergedHistory = mutableListOf<Pair<String, String>>()
+            for (turn in effectiveHistory) {
+                val originalContent = comparableContentForTurn(turn, preserveThinkInHistory = true)
+                if (useToolCall) {
+                    when (turn.kind) {
+                        PromptTurnKind.SYSTEM -> {
+                            flushOpenToolCallsAsCancelled("system_boundary")
+                            messagesArray.put(
+                                JSONObject().apply {
+                                    put("role", "system")
+                                    put("content", buildContentField(context, originalContent))
+                                }
+                            )
+                        }
 
-            for ((role, content) in standardizedHistory) {
-                if (mergedHistory.isNotEmpty() && role == mergedHistory.last().first && role != "system") {
-                    val lastMessage = mergedHistory.last()
-                    mergedHistory[mergedHistory.size - 1] =
-                        Pair(lastMessage.first, lastMessage.second + "\n" + content)
-                } else {
-                    mergedHistory.add(Pair(role, content))
-                }
-            }
+                        PromptTurnKind.USER,
+                        PromptTurnKind.SUMMARY -> {
+                            flushOpenToolCallsAsCancelled("user_boundary")
+                            messagesArray.put(
+                                JSONObject().apply {
+                                    put("role", "user")
+                                    put("content", buildContentField(context, originalContent))
+                                }
+                            )
+                        }
 
-            for ((role, originalContent) in mergedHistory) {
-                if (role == "assistant") {
-                    val (content, reasoningContent) = ChatUtils.extractThinkingContent(originalContent)
+                        PromptTurnKind.ASSISTANT -> {
+                            val (content, reasoningContent) = ChatUtils.extractThinkingContent(originalContent)
+                            val (textContent, parsedToolCalls) = parseXmlToolCalls(content)
+                            val toolCalls =
+                                if (parsedToolCalls != null) {
+                                    wrapPackageToolCallsWithProxy(parsedToolCalls)
+                                } else {
+                                    null
+                                }
 
-                    if (useToolCall) {
-                        val (textContent, parsedToolCalls) = parseXmlToolCalls(content)
-                        val toolCalls =
-                            if (parsedToolCalls != null) {
-                                wrapPackageToolCallsWithProxy(parsedToolCalls)
+                            if (toolCalls != null && toolCalls.length() > 0) {
+                                if (openToolCallIds.isNotEmpty()) {
+                                    flushOpenToolCallsAsCancelled("assistant_tool_call_before_result")
+                                }
+                                queueToolCalls(textContent, toolCalls, reasoningContent)
                             } else {
-                                parsedToolCalls
-                            }
-                        val historyMessage = JSONObject()
-                        historyMessage.put("role", role)
-                        historyMessage.put("reasoning_content", reasoningContent)
-
-                        val effectiveContent = if (content.isBlank()) {
-                            "[Empty]"
-                        } else if (textContent.isNotEmpty()) {
-                            textContent
-                        } else {
-                            null
-                        }
-
-                        if (effectiveContent != null) {
-                            historyMessage.put("content", buildContentField(context, effectiveContent))
-                        } else {
-                            historyMessage.put("content", null)
-                        }
-
-                        if (toolCalls != null && toolCalls.length() > 0) {
-                            historyMessage.put("tool_calls", toolCalls)
-                            lastToolCallIds.clear()
-                            for (i in 0 until toolCalls.length()) {
-                                lastToolCallIds.add(toolCalls.getJSONObject(i).getString("id"))
+                                flushOpenToolCallsAsCancelled("assistant_boundary")
+                                messagesArray.put(
+                                    JSONObject().apply {
+                                        put("role", "assistant")
+                                        put("reasoning_content", reasoningContent)
+                                        put("content", buildContentField(context, content.ifBlank { "[Empty]" }))
+                                    }
+                                )
                             }
                         }
 
-                        messagesArray.put(historyMessage)
-                    } else {
-                        val historyMessage = JSONObject()
-                        historyMessage.put("role", role)
-                        historyMessage.put("reasoning_content", reasoningContent)
-                        historyMessage.put("content", buildContentField(context, content.ifBlank { "[Empty]" }))
-                        messagesArray.put(historyMessage)
+                        PromptTurnKind.TOOL_CALL -> {
+                            val (textContent, parsedToolCalls) = parseXmlToolCalls(originalContent)
+                            val toolCalls =
+                                if (parsedToolCalls != null) {
+                                    wrapPackageToolCallsWithProxy(parsedToolCalls)
+                                } else {
+                                    null
+                                }
+
+                            if (toolCalls != null && toolCalls.length() > 0) {
+                                if (openToolCallIds.isNotEmpty()) {
+                                    flushOpenToolCallsAsCancelled("typed_tool_call_before_result")
+                                }
+                                queueToolCalls(textContent, toolCalls)
+                            } else {
+                                flushOpenToolCallsAsCancelled("typed_tool_call_without_payload")
+                                messagesArray.put(
+                                    JSONObject().apply {
+                                        put("role", "assistant")
+                                        put("reasoning_content", "")
+                                        put("content", buildContentField(context, originalContent.ifBlank { "[Empty]" }))
+                                    }
+                                )
+                            }
+                        }
+
+                        PromptTurnKind.TOOL_RESULT -> {
+                            emitQueuedToolCallsIfNeeded()
+                            val (textContent, toolResults) = parseXmlToolResults(originalContent)
+                            val resultsList = toolResults ?: emptyList()
+
+                            if (resultsList.isNotEmpty() && openToolCallIds.isNotEmpty()) {
+                                val validCount = minOf(resultsList.size, openToolCallIds.size)
+                                repeat(validCount) { index ->
+                                    val (_, resultContent) = resultsList[index]
+                                    messagesArray.put(
+                                        JSONObject().apply {
+                                            put("role", "tool")
+                                            put("tool_call_id", openToolCallIds[index])
+                                            put("content", resultContent)
+                                        }
+                                    )
+                                }
+                                repeat(validCount) {
+                                    openToolCallIds.removeAt(0)
+                                }
+
+                                if (resultsList.size > validCount) {
+                                    AppLogger.w(
+                                        "KimiProvider",
+                                        "发现多余的tool_result: ${resultsList.size} results vs ${validCount} pending tool_calls"
+                                    )
+                                }
+
+                                if (textContent.isNotEmpty()) {
+                                    messagesArray.put(
+                                        JSONObject().apply {
+                                            put("role", "user")
+                                            put("content", buildContentField(context, textContent))
+                                        }
+                                    )
+                                }
+                            } else {
+                                flushOpenToolCallsAsCancelled("tool_result_without_structured_match")
+                                val fallbackContent =
+                                    when {
+                                        textContent.isNotEmpty() -> textContent
+                                        originalContent.isNotBlank() -> originalContent
+                                        else -> "[Empty]"
+                                    }
+                                messagesArray.put(
+                                    JSONObject().apply {
+                                        put("role", "user")
+                                        put("content", buildContentField(context, fallbackContent))
+                                    }
+                                )
+                            }
+                        }
                     }
                 } else {
-                    if (useToolCall && role == "user") {
-                        val (textContent, toolResults) = parseXmlToolResults(originalContent)
-                        var hasHandledToolCalls = false
-
-                        if (lastToolCallIds.isNotEmpty()) {
-                            val resultsList = toolResults ?: emptyList()
-                            val resultCount = resultsList.size
-                            val callCount = lastToolCallIds.size
-
-                            for (i in 0 until callCount) {
-                                val toolCallId = lastToolCallIds[i]
-                                val toolMessage = JSONObject()
-                                toolMessage.put("role", "tool")
-                                toolMessage.put("tool_call_id", toolCallId)
-
-                                if (i < resultCount) {
-                                    val (_, resultContent) = resultsList[i]
-                                    toolMessage.put("content", resultContent)
-                                } else {
-                                    toolMessage.put("content", "User cancelled")
+                    when (turn.kind) {
+                        PromptTurnKind.SYSTEM -> {
+                            messagesArray.put(
+                                JSONObject().apply {
+                                    put("role", "system")
+                                    put("content", buildContentField(context, originalContent))
                                 }
-                                messagesArray.put(toolMessage)
-                            }
-
-                            hasHandledToolCalls = true
-                            if (resultCount > callCount) {
-                                AppLogger.w("KimiProvider", "发现多余的tool_result: $resultCount results vs $callCount tool_calls")
-                            }
-                            lastToolCallIds.clear()
+                            )
                         }
 
-                        if (textContent.isNotEmpty()) {
-                            val userMessage = JSONObject()
-                            userMessage.put("role", "user")
-                            userMessage.put("content", buildContentField(context, textContent))
-                            messagesArray.put(userMessage)
-                        } else if (!hasHandledToolCalls) {
-                            val historyMessage = JSONObject()
-                            historyMessage.put("role", role)
-                            historyMessage.put("content", buildContentField(context, originalContent))
-                            messagesArray.put(historyMessage)
-                        } else {
+                        PromptTurnKind.USER,
+                        PromptTurnKind.SUMMARY,
+                        PromptTurnKind.TOOL_RESULT -> {
+                            messagesArray.put(
+                                JSONObject().apply {
+                                    put("role", "user")
+                                    put("content", buildContentField(context, originalContent))
+                                }
+                            )
                         }
-                    } else {
-                        val historyMessage = JSONObject()
-                        historyMessage.put("role", role)
-                        historyMessage.put("content", buildContentField(context, originalContent))
-                        messagesArray.put(historyMessage)
+
+                        PromptTurnKind.ASSISTANT -> {
+                            val (content, reasoningContent) = ChatUtils.extractThinkingContent(originalContent)
+                            messagesArray.put(
+                                JSONObject().apply {
+                                    put("role", "assistant")
+                                    put("reasoning_content", reasoningContent)
+                                    put("content", buildContentField(context, content.ifBlank { "[Empty]" }))
+                                }
+                            )
+                        }
+
+                        PromptTurnKind.TOOL_CALL -> {
+                            messagesArray.put(
+                                JSONObject().apply {
+                                    put("role", "assistant")
+                                    put("reasoning_content", "")
+                                    put("content", buildContentField(context, originalContent.ifBlank { "[Empty]" }))
+                                }
+                            )
+                        }
                     }
                 }
             }
         }
 
+        flushOpenToolCallsAsCancelled("history_end")
         return messagesArray
     }
 
     override suspend fun sendMessage(
         context: Context,
-        message: String,
-        chatHistory: List<Pair<String, String>>,
+        chatHistory: List<PromptTurn>,
         modelParameters: List<ModelParameter<*>>,
         enableThinking: Boolean,
         stream: Boolean,
@@ -289,7 +426,6 @@ class KimiProvider(
     ): Stream<String> {
         return super.sendMessage(
             context,
-            message,
             chatHistory,
             modelParameters,
             enableThinking,

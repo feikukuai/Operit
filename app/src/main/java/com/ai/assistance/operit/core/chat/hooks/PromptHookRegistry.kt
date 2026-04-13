@@ -5,11 +5,6 @@ import java.util.concurrent.CopyOnWriteArrayList
 
 private const val TAG = "PromptHookRegistry"
 
-data class PromptMessage(
-    val role: String,
-    val content: String
-)
-
 data class PromptHookContext(
     val stage: String,
     val chatId: String? = null,
@@ -18,8 +13,8 @@ data class PromptHookContext(
     val useEnglish: Boolean? = null,
     val rawInput: String? = null,
     val processedInput: String? = null,
-    val chatHistory: List<PromptMessage> = emptyList(),
-    val preparedHistory: List<PromptMessage> = emptyList(),
+    val chatHistory: List<PromptTurn> = emptyList(),
+    val preparedHistory: List<PromptTurn> = emptyList(),
     val systemPrompt: String? = null,
     val toolPrompt: String? = null,
     val modelParameters: List<Map<String, Any?>> = emptyList(),
@@ -30,8 +25,8 @@ data class PromptHookContext(
 data class PromptHookMutation(
     val rawInput: String? = null,
     val processedInput: String? = null,
-    val chatHistory: List<PromptMessage>? = null,
-    val preparedHistory: List<PromptMessage>? = null,
+    val chatHistory: List<PromptTurn>? = null,
+    val preparedHistory: List<PromptTurn>? = null,
     val systemPrompt: String? = null,
     val toolPrompt: String? = null,
     val metadata: Map<String, Any?> = emptyMap()
@@ -77,18 +72,6 @@ interface PromptEstimateFinalizeHook {
     val id: String
 
     fun onEvent(context: PromptHookContext): PromptHookMutation? = null
-}
-
-fun List<Pair<String, String>>.toPromptMessages(): List<PromptMessage> {
-    return map { (role, content) ->
-        PromptMessage(role = role, content = content)
-    }
-}
-
-fun List<PromptMessage>.toRoleContentPairs(): List<Pair<String, String>> {
-    return map { message ->
-        message.role to message.content
-    }
 }
 
 object PromptHookRegistry {

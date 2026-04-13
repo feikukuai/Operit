@@ -60,6 +60,8 @@ class DisplayPreferencesManager private constructor(private val context: Context
         // 自动化显示与行为相关设置的 Key
         private val KEY_ENABLE_EXPERIMENTAL_VIRTUAL_DISPLAY =
             booleanPreferencesKey("enable_experimental_virtual_display")
+        private val KEY_HIDE_RUNTIME_TASK_VIEW =
+            booleanPreferencesKey("hide_runtime_task_view")
 
         private val KEY_SCREENSHOT_FORMAT = stringPreferencesKey("screenshot_format")
         private val KEY_SCREENSHOT_QUALITY = intPreferencesKey("screenshot_quality")
@@ -175,6 +177,11 @@ class DisplayPreferencesManager private constructor(private val context: Context
             preferences[KEY_ENABLE_EXPERIMENTAL_VIRTUAL_DISPLAY] ?: true
         }
 
+    val hideRuntimeTaskView: Flow<Boolean> =
+        context.displayPreferencesDataStore.data.map { preferences ->
+            preferences[KEY_HIDE_RUNTIME_TASK_VIEW] ?: false
+        }
+
     val screenshotFormat: Flow<String> =
         context.displayPreferencesDataStore.data.map { preferences ->
             preferences[KEY_SCREENSHOT_FORMAT] ?: "PNG"
@@ -221,6 +228,7 @@ class DisplayPreferencesManager private constructor(private val context: Context
         enableReplyNotificationVibration: Boolean? = null,
         enableEnterToSend: Boolean? = null,
         enableExperimentalVirtualDisplay: Boolean? = null,
+        hideRuntimeTaskView: Boolean? = null,
         screenshotFormat: String? = null,
         screenshotQuality: Int? = null,
         screenshotScalePercent: Int? = null,
@@ -246,6 +254,9 @@ class DisplayPreferencesManager private constructor(private val context: Context
             enableEnterToSend?.let { preferences[KEY_ENABLE_ENTER_TO_SEND] = it }
             enableExperimentalVirtualDisplay?.let {
                 preferences[KEY_ENABLE_EXPERIMENTAL_VIRTUAL_DISPLAY] = it
+            }
+            hideRuntimeTaskView?.let {
+                preferences[KEY_HIDE_RUNTIME_TASK_VIEW] = it
             }
             screenshotFormat?.let { preferences[KEY_SCREENSHOT_FORMAT] = it }
             screenshotQuality?.let { preferences[KEY_SCREENSHOT_QUALITY] = it }
@@ -309,6 +320,7 @@ class DisplayPreferencesManager private constructor(private val context: Context
             preferences[KEY_ENABLE_REPLY_NOTIFICATION_VIBRATION] = false
             preferences[KEY_ENABLE_ENTER_TO_SEND] = false
             preferences[KEY_ENABLE_EXPERIMENTAL_VIRTUAL_DISPLAY] = true
+            preferences[KEY_HIDE_RUNTIME_TASK_VIEW] = false
             preferences.remove(KEY_SCREENSHOT_FORMAT)
             preferences.remove(KEY_SCREENSHOT_QUALITY)
             preferences.remove(KEY_SCREENSHOT_SCALE_PERCENT)

@@ -11,16 +11,15 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.keyframes
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
@@ -29,44 +28,33 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.automirrored.rounded.VolumeUp
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.input.pointer.PointerEventPass
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -86,16 +74,12 @@ import androidx.compose.material.icons.filled.AccountTree
 import androidx.compose.material.icons.filled.Summarize
 import androidx.compose.ui.draw.alpha
 import com.ai.assistance.operit.api.chat.llmprovider.MediaLinkParser
-import com.ai.assistance.operit.ui.features.chat.components.lazy.LazyListState
-import com.ai.assistance.operit.ui.features.chat.components.lazy.RecyclerLazyColumn
-import com.ai.assistance.operit.ui.features.chat.components.lazy.itemsIndexed
 import com.ai.assistance.operit.ui.features.chat.components.style.cursor.CursorStyleChatMessage
 import com.ai.assistance.operit.ui.features.chat.components.style.bubble.BubbleImageStyleConfig
 import com.ai.assistance.operit.ui.features.chat.components.style.bubble.BubbleStyleChatMessage
 import com.ai.assistance.operit.util.ChatMarkupRegex
 import com.ai.assistance.operit.util.WaifuMessageProcessor
-import kotlinx.coroutines.flow.collect
-import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
 /**
  * 清理消息中的XML标签，保留Markdown格式和纯文本内容
@@ -231,7 +215,7 @@ enum class ChatStyle {
 @Composable
 fun ChatArea(
     chatHistory: List<ChatMessage>,
-    scrollState: LazyListState,
+    scrollState: ScrollState,
     aiReferences: List<AiReference> = emptyList(),
     isLoading: Boolean,
     enableDialogs: Boolean = true,
@@ -280,14 +264,28 @@ fun ChatArea(
 ) {
     // 记住当前深度状态，但当chatHistory发生变化时重置为1
     var currentDepth = remember(chatHistory) { mutableStateOf(1) }
-    val messageHeightMemory = rememberChatMessageHeightMemory(chatHistory)
+    var viewportHeightPx by remember { mutableStateOf(0) }
+    val messageAnchors = remember(chatHistory) { mutableStateMapOf<Int, ChatScrollMessageAnchor>() }
+    var pendingJumpToMessageIndex by remember(chatHistory) { mutableStateOf<Int?>(null) }
     val lastMessage = chatHistory.lastOrNull()
-    // 仅在首个chunk到达前显示加载点，避免父层跟随每个chunk重组。
     var hasLastAiMessageStartedStreaming by remember(lastMessage?.timestamp) {
         mutableStateOf(
-            lastMessage?.let { it.sender == "ai" && it.content.isNotBlank() } == true
+            lastMessage?.let { it.sender == "ai" && it.content.isNotBlank() } == true,
         )
     }
+
+    val messagesCount = chatHistory.size
+    val paginationWindow =
+        calculatePaginationWindow(
+            chatHistory = chatHistory,
+            messagesPerPage = messagesPerPage,
+            depth = currentDepth.value,
+        )
+    val minVisibleIndex = paginationWindow.minVisibleIndex
+    val hasMoreMessages = paginationWindow.hasMoreMessages
+    val visibleRange = minVisibleIndex until messagesCount
+    val pendingTargetAnchor = pendingJumpToMessageIndex?.let { messageAnchors[it] }
+
     LaunchedEffect(lastMessage?.timestamp, lastMessage?.contentStream) {
         val lastAiMessageHasStaticContent =
             lastMessage?.let { it.sender == "ai" && it.content.isNotBlank() } == true
@@ -308,6 +306,45 @@ fun ChatArea(
         }
     }
 
+    LaunchedEffect(minVisibleIndex, messagesCount) {
+        messageAnchors.keys
+            .toList()
+            .filterNot { it in visibleRange }
+            .forEach(messageAnchors::remove)
+    }
+
+    LaunchedEffect(
+        pendingJumpToMessageIndex,
+        minVisibleIndex,
+        messagesCount,
+        currentDepth.value,
+        pendingTargetAnchor,
+        scrollState.maxValue,
+    ) {
+        val targetIndex = pendingJumpToMessageIndex ?: return@LaunchedEffect
+        if (targetIndex !in chatHistory.indices) {
+            pendingJumpToMessageIndex = null
+            return@LaunchedEffect
+        }
+
+        if (targetIndex !in visibleRange) {
+            val requiredDepth = findDepthForMessage(chatHistory, messagesPerPage, targetIndex)
+            if (requiredDepth != currentDepth.value) {
+                currentDepth.value = requiredDepth
+            }
+            return@LaunchedEffect
+        }
+
+        val targetAnchor = pendingTargetAnchor ?: return@LaunchedEffect
+        val targetOffset = targetAnchor.absoluteTopPx.roundToInt().coerceIn(0, scrollState.maxValue)
+        if (targetIndex == messagesCount - 1) {
+            scrollState.animateScrollTo(scrollState.maxValue)
+        } else {
+            scrollState.animateScrollTo(targetOffset)
+        }
+        pendingJumpToMessageIndex = null
+    }
+
     val showLoadingIndicator =
         isLoading &&
             (
@@ -321,152 +358,128 @@ fun ChatArea(
     val shouldHideLastAiMessage =
         showLoadingIndicator && chatStyle == ChatStyle.BUBBLE && lastMessage?.sender == "ai"
 
-    val messagesCount = chatHistory.size
-    val paginationWindow =
-        calculatePaginationWindow(
-            chatHistory = chatHistory,
-            messagesPerPage = messagesPerPage,
-            depth = currentDepth.value,
-        )
-    val minVisibleIndex = paginationWindow.minVisibleIndex
-    val hasMoreMessages = paginationWindow.hasMoreMessages
-    val visibleMessages = chatHistory.subList(minVisibleIndex, messagesCount)
-    var pendingJumpToMessageIndex by remember(chatHistory) { mutableStateOf<Int?>(null) }
-    var wasAtTop by remember(messagesCount, minVisibleIndex, hasMoreMessages) { mutableStateOf(false) }
-
-    LaunchedEffect(scrollState, messagesCount, minVisibleIndex, hasMoreMessages) {
-        snapshotFlow {
-            scrollState.firstVisibleItemIndex == 0 && scrollState.firstVisibleItemScrollOffset == 0
-        }.collect { isAtTop ->
-            if (hasMoreMessages && isAtTop && !wasAtTop) {
-                currentDepth.value += 1
-            }
-            wasAtTop = isAtTop
-        }
-    }
-
-    LaunchedEffect(pendingJumpToMessageIndex, minVisibleIndex, visibleMessages.size, messagesCount) {
-        val targetIndex = pendingJumpToMessageIndex ?: return@LaunchedEffect
-        if (targetIndex !in chatHistory.indices) {
-            pendingJumpToMessageIndex = null
-            return@LaunchedEffect
-        }
-        if (targetIndex < minVisibleIndex || targetIndex >= minVisibleIndex + visibleMessages.size) {
-            val requiredDepth = findDepthForMessage(chatHistory, messagesPerPage, targetIndex)
-            if (requiredDepth != currentDepth.value) {
-                currentDepth.value = requiredDepth
-            }
-            return@LaunchedEffect
-        }
-
-        if (targetIndex == messagesCount - 1) {
-            scrollState.animateScrollToEnd()
-        } else {
-            scrollState.scrollToItem(targetIndex - minVisibleIndex)
-        }
-        pendingJumpToMessageIndex = null
-    }
-
     Box(
         modifier =
             modifier
-            .fillMaxWidth()
-            .background(Color.Transparent),
+                .background(Color.Transparent)
+                .onGloballyPositioned { coordinates ->
+                    viewportHeightPx = coordinates.size.height
+                },
     ) {
-        RecyclerLazyColumn(
-            modifier = Modifier.fillMaxWidth(),
-            state = scrollState,
-            contentPadding =
-                androidx.compose.foundation.layout.PaddingValues(
-                    start = horizontalPadding,
-                    top = topPadding,
-                    end = horizontalPadding,
-                    bottom = bottomPadding,
-                ),
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = horizontalPadding)
+                    .verticalScroll(scrollState)
+                    .background(Color.Transparent)
+                    .padding(top = topPadding, bottom = bottomPadding),
         ) {
-            itemsIndexed(
-                items = visibleMessages,
-                key = { _, message -> message.timestamp },
-            ) { relativeIndex, message ->
+            if (hasMoreMessages) {
+                Text(
+                    text = stringResource(id = R.string.load_more_history),
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .clickable { currentDepth.value += 1 }
+                            .padding(vertical = 16.dp),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color.Gray,
+                    textAlign = TextAlign.Center,
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+            }
+
+            chatHistory.subList(minVisibleIndex, messagesCount).forEachIndexed { relativeIndex, message ->
                 val actualIndex = minVisibleIndex + relativeIndex
                 val isLastAiMessage = actualIndex == messagesCount - 1 && message.sender == "ai"
                 val shouldHide = shouldHideLastAiMessage && isLastAiMessage
 
-                MessageItem(
-                    index = actualIndex,
-                    message = message,
-                    enableDialogs = enableDialogs,
-                    userMessageColor = userMessageColor,
-                    aiMessageColor = aiMessageColor,
-                    userTextColor = userTextColor,
-                    aiTextColor = aiTextColor,
-                    systemMessageColor = systemMessageColor,
-                    systemTextColor = systemTextColor,
-                    thinkingBackgroundColor = thinkingBackgroundColor,
-                    thinkingTextColor = thinkingTextColor,
-                    onSelectMessageToEdit = onSelectMessageToEdit,
-                    onCopyMessage = onCopyMessage,
-                    onDeleteMessage = onDeleteMessage,
-                    onDeleteMessagesFrom = onDeleteMessagesFrom,
-                    onRollbackToMessage = onRollbackToMessage,
-                    onSpeakMessage = onSpeakMessage,
-                    onReplyToMessage = onReplyToMessage,
-                    onCreateBranch = onCreateBranch,
-                    onInsertSummary = onInsertSummary,
-                    onMentionRoleFromAvatar = onMentionRoleFromAvatar,
-                    chatStyle = chatStyle,
-                    cursorUserBubbleLiquidGlass = cursorUserBubbleLiquidGlass,
-                    cursorUserBubbleWaterGlass = cursorUserBubbleWaterGlass,
-                    isHidden = shouldHide,
-                    isMultiSelectMode = isMultiSelectMode,
-                    isSelected = selectedMessageIndices.contains(actualIndex),
-                    onToggleSelection = { onToggleMessageSelection?.invoke(actualIndex) },
-                    onToggleMultiSelectMode = onToggleMultiSelectMode,
-                    messageIndex = actualIndex,
-                    bubbleUserImageStyle = bubbleUserImageStyle,
-                    bubbleAiImageStyle = bubbleAiImageStyle,
-                    bubbleUserRoundedCornersEnabled = bubbleUserRoundedCornersEnabled,
-                    bubbleAiRoundedCornersEnabled = bubbleAiRoundedCornersEnabled,
-                    bubbleUserContentPaddingLeft = bubbleUserContentPaddingLeft,
-                    bubbleUserContentPaddingRight = bubbleUserContentPaddingRight,
-                    bubbleAiContentPaddingLeft = bubbleAiContentPaddingLeft,
-                    bubbleAiContentPaddingRight = bubbleAiContentPaddingRight,
-                    messageHeightMemory = messageHeightMemory,
-                )
+                key(message.timestamp) {
+                    Box(
+                        modifier =
+                            Modifier.onGloballyPositioned { coordinates ->
+                                messageAnchors[actualIndex] =
+                                    ChatScrollMessageAnchor(
+                                        absoluteTopPx = coordinates.positionInParent().y,
+                                        heightPx = coordinates.size.height,
+                                    )
+                            },
+                    ) {
+                        MessageItem(
+                            index = actualIndex,
+                            message = message,
+                            enableDialogs = enableDialogs,
+                            userMessageColor = userMessageColor,
+                            aiMessageColor = aiMessageColor,
+                            userTextColor = userTextColor,
+                            aiTextColor = aiTextColor,
+                            systemMessageColor = systemMessageColor,
+                            systemTextColor = systemTextColor,
+                            thinkingBackgroundColor = thinkingBackgroundColor,
+                            thinkingTextColor = thinkingTextColor,
+                            onSelectMessageToEdit = onSelectMessageToEdit,
+                            onCopyMessage = onCopyMessage,
+                            onDeleteMessage = onDeleteMessage,
+                            onDeleteMessagesFrom = onDeleteMessagesFrom,
+                            onRollbackToMessage = onRollbackToMessage,
+                            onSpeakMessage = onSpeakMessage,
+                            onReplyToMessage = onReplyToMessage,
+                            onCreateBranch = onCreateBranch,
+                            onInsertSummary = onInsertSummary,
+                            onMentionRoleFromAvatar = onMentionRoleFromAvatar,
+                            chatStyle = chatStyle,
+                            cursorUserBubbleLiquidGlass = cursorUserBubbleLiquidGlass,
+                            cursorUserBubbleWaterGlass = cursorUserBubbleWaterGlass,
+                            isHidden = shouldHide,
+                            isMultiSelectMode = isMultiSelectMode,
+                            isSelected = selectedMessageIndices.contains(actualIndex),
+                            onToggleSelection = { onToggleMessageSelection?.invoke(actualIndex) },
+                            onToggleMultiSelectMode = onToggleMultiSelectMode,
+                            messageIndex = actualIndex,
+                            bubbleUserImageStyle = bubbleUserImageStyle,
+                            bubbleAiImageStyle = bubbleAiImageStyle,
+                            bubbleUserRoundedCornersEnabled = bubbleUserRoundedCornersEnabled,
+                            bubbleAiRoundedCornersEnabled = bubbleAiRoundedCornersEnabled,
+                            bubbleUserContentPaddingLeft = bubbleUserContentPaddingLeft,
+                            bubbleUserContentPaddingRight = bubbleUserContentPaddingRight,
+                            bubbleAiContentPaddingLeft = bubbleAiContentPaddingLeft,
+                            bubbleAiContentPaddingRight = bubbleAiContentPaddingRight,
+                        )
+                    }
+                }
 
                 Spacer(modifier = Modifier.height(8.dp))
             }
 
             if (showLoadingIndicator) {
-                item(key = "loading_indicator") {
-                    when (chatStyle) {
-                        ChatStyle.BUBBLE -> {
-                            Column(
-                                modifier =
-                                    Modifier
-                                        .fillMaxWidth()
-                                        .padding(vertical = 0.dp)
-                                        .offset(y = (-24).dp),
-                            ) {
-                                Box(modifier = Modifier.padding(start = 16.dp)) {
-                                    if (showChatFloatingDotsAnimation) {
-                                        LoadingDotsIndicator(aiTextColor)
-                                    }
+                when (chatStyle) {
+                    ChatStyle.BUBBLE -> {
+                        Column(
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 0.dp)
+                                    .offset(y = (-24).dp),
+                        ) {
+                            Box(modifier = Modifier.padding(start = 16.dp)) {
+                                if (showChatFloatingDotsAnimation) {
+                                    LoadingDotsIndicator(aiTextColor)
                                 }
                             }
                         }
+                    }
 
-                        ChatStyle.CURSOR -> {
-                            Column(
-                                modifier =
-                                    Modifier
-                                        .fillMaxWidth()
-                                        .padding(vertical = 0.dp),
-                            ) {
-                                Box(modifier = Modifier.padding(start = 16.dp)) {
-                                    if (showChatFloatingDotsAnimation) {
-                                        LoadingDotsIndicator(aiTextColor)
-                                    }
+                    ChatStyle.CURSOR -> {
+                        Column(
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 0.dp),
+                        ) {
+                            Box(modifier = Modifier.padding(start = 16.dp)) {
+                                if (showChatFloatingDotsAnimation) {
+                                    LoadingDotsIndicator(aiTextColor)
                                 }
                             }
                         }
@@ -474,16 +487,14 @@ fun ChatArea(
                 }
             }
 
-            item(key = "chat_bottom_spacing") {
-                Spacer(modifier = Modifier.height(16.dp))
-            }
+            Spacer(modifier = Modifier.height(16.dp))
         }
 
         ChatScrollNavigator(
             chatHistory = chatHistory,
             scrollState = scrollState,
-            minVisibleIndex = minVisibleIndex,
-            visibleMessageCount = visibleMessages.size,
+            messageAnchors = messageAnchors,
+            viewportHeightPx = viewportHeightPx,
             onJumpToMessage = { targetIndex ->
                 onAutoScrollToBottomChange?.invoke(targetIndex == messagesCount - 1)
                 pendingJumpToMessageIndex = targetIndex
@@ -494,7 +505,6 @@ fun ChatArea(
                     .offset(y = (-56).dp)
                     .padding(end = 10.dp),
         )
-
     }
 }
 
@@ -540,7 +550,6 @@ private fun MessageItem(
     bubbleUserContentPaddingRight: Float = 12f,
     bubbleAiContentPaddingLeft: Float = 12f,
     bubbleAiContentPaddingRight: Float = 12f,
-    messageHeightMemory: ChatMessageHeightMemory,
 ) {
     val context = LocalContext.current
     var showContextMenu by remember { mutableStateOf(false) }
@@ -591,7 +600,6 @@ private fun MessageItem(
                     thinkingTextColor = thinkingTextColor,
                     supportToolMarkup = true,
                     initialThinkingExpanded = true,
-                    heightMemory = messageHeightMemory,
                     onDeleteMessage = onDeleteMessage,
                     index = index,
                     enableDialogs = enableDialogs,
@@ -619,7 +627,6 @@ private fun MessageItem(
                     bubbleAiContentPaddingLeft = bubbleAiContentPaddingLeft,
                     bubbleAiContentPaddingRight = bubbleAiContentPaddingRight,
                     isHidden = isHidden,
-                    heightMemory = messageHeightMemory,
                     onDeleteMessage = onDeleteMessage,
                     index = index,
                     enableDialogs = enableDialogs,

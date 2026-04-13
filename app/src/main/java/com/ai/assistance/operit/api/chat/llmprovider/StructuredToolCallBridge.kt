@@ -1,5 +1,8 @@
 package com.ai.assistance.operit.api.chat.llmprovider
 
+import com.ai.assistance.operit.core.chat.hooks.PromptTurn
+import com.ai.assistance.operit.core.chat.hooks.PromptTurnKind
+import com.ai.assistance.operit.core.chat.hooks.mergeAdjacentTurns
 import com.ai.assistance.operit.data.model.ToolParameterSchema
 import com.ai.assistance.operit.data.model.ToolPrompt
 import com.ai.assistance.operit.util.ChatMarkupRegex
@@ -23,7 +26,7 @@ internal object StructuredToolCallBridge {
     }
 
     fun buildMessagesJson(
-        history: List<Pair<String, String>>,
+        history: List<PromptTurn>,
         preserveThinkInHistory: Boolean
     ): String {
         return buildStructuredMessages(history, preserveThinkInHistory).toString()
@@ -44,120 +47,209 @@ internal object StructuredToolCallBridge {
     }
 
     private fun buildStructuredMessages(
-        history: List<Pair<String, String>>,
+        history: List<PromptTurn>,
         preserveThinkInHistory: Boolean
     ): JSONArray {
-        val standardizedHistory = ChatUtils.mapChatHistoryToStandardRoles(
-            history,
-            extractThinking = preserveThinkInHistory
-        )
-        val mergedHistory = mergeConsecutiveMessages(standardizedHistory)
+        val mergedHistory = mergeConsecutiveMessages(history)
         val messagesArray = JSONArray()
-        val lastToolCallIds = mutableListOf<String>()
+        var queuedAssistantToolText: String? = null
+        var queuedToolCalls = JSONArray()
+        val queuedToolCallIds = mutableListOf<String>()
+        val openToolCallIds = mutableListOf<String>()
 
-        for ((role, content) in mergedHistory) {
-            when (role) {
-                "assistant" -> {
+        fun appendQueuedAssistantToolText(text: String) {
+            if (text.isBlank()) return
+            queuedAssistantToolText =
+                if (queuedAssistantToolText.isNullOrBlank()) {
+                    text
+                } else {
+                    queuedAssistantToolText + "\n" + text
+                }
+        }
+
+        fun queueToolCalls(textContent: String, toolCalls: JSONArray) {
+            appendQueuedAssistantToolText(textContent)
+            for (i in 0 until toolCalls.length()) {
+                val toolCall = toolCalls.optJSONObject(i) ?: continue
+                queuedToolCalls.put(toolCall)
+                val callId = toolCall.optString("id", "").trim()
+                if (callId.isNotEmpty()) {
+                    queuedToolCallIds.add(callId)
+                }
+            }
+        }
+
+        fun emitQueuedToolCallsIfNeeded() {
+            if (queuedToolCalls.length() == 0) return
+
+            messagesArray.put(
+                JSONObject().apply {
+                    put("role", "assistant")
+                    put(
+                        "content",
+                        if (!queuedAssistantToolText.isNullOrBlank()) {
+                            queuedAssistantToolText
+                        } else {
+                            JSONObject.NULL
+                        }
+                    )
+                    put("tool_calls", queuedToolCalls)
+                }
+            )
+
+            openToolCallIds.addAll(queuedToolCallIds)
+            queuedAssistantToolText = null
+            queuedToolCalls = JSONArray()
+            queuedToolCallIds.clear()
+        }
+
+        fun flushOpenToolCallsAsCancelled() {
+            emitQueuedToolCallsIfNeeded()
+            if (openToolCallIds.isEmpty()) return
+
+            for (toolCallId in openToolCallIds) {
+                messagesArray.put(
+                    JSONObject().apply {
+                        put("role", "tool")
+                        put("tool_call_id", toolCallId)
+                        put("content", "User cancelled")
+                    }
+                )
+            }
+            openToolCallIds.clear()
+        }
+
+        for (turn in mergedHistory) {
+            val content =
+                if (!preserveThinkInHistory && turn.kind == PromptTurnKind.ASSISTANT) {
+                    ChatUtils.removeThinkingContent(turn.content)
+                } else {
+                    turn.content
+                }
+
+            when (turn.kind) {
+                PromptTurnKind.SYSTEM -> {
+                    flushOpenToolCallsAsCancelled()
+                    messagesArray.put(
+                        JSONObject().apply {
+                            put("role", "system")
+                            put("content", nonEmptyContent(content))
+                        }
+                    )
+                }
+
+                PromptTurnKind.USER,
+                PromptTurnKind.SUMMARY -> {
+                    flushOpenToolCallsAsCancelled()
+                    messagesArray.put(
+                        JSONObject().apply {
+                            put("role", "user")
+                            put("content", nonEmptyContent(content))
+                        }
+                    )
+                }
+
+                PromptTurnKind.ASSISTANT -> {
                     val (textContent, parsedToolCalls) = parseXmlToolCalls(content)
                     val toolCalls =
                         if (parsedToolCalls != null) {
                             wrapPackageToolCallsWithProxy(parsedToolCalls)
                         } else {
-                            parsedToolCalls
+                            null
                         }
-                    val historyMessage = JSONObject().apply {
-                        put("role", role)
-                    }
 
                     if (toolCalls != null && toolCalls.length() > 0) {
-                        historyMessage.put("content", if (textContent.isNotBlank()) textContent else JSONObject.NULL)
-                        historyMessage.put("tool_calls", toolCalls)
-                        lastToolCallIds.clear()
-                        for (i in 0 until toolCalls.length()) {
-                            val callId = toolCalls.optJSONObject(i)?.optString("id", "") ?: ""
-                            if (callId.isNotBlank()) {
-                                lastToolCallIds.add(callId)
-                            }
-                        }
+                        flushOpenToolCallsAsCancelled()
+                        queueToolCalls(textContent, toolCalls)
                     } else {
-                        historyMessage.put("content", nonEmptyContent(content))
-                        lastToolCallIds.clear()
+                        flushOpenToolCallsAsCancelled()
+                        messagesArray.put(
+                            JSONObject().apply {
+                                put("role", "assistant")
+                                put("content", nonEmptyContent(content))
+                            }
+                        )
                     }
-
-                    messagesArray.put(historyMessage)
                 }
 
-                "user" -> {
-                    val (textContent, toolResults) = parseXmlToolResults(content)
-                    var hasHandledToolCalls = false
+                PromptTurnKind.TOOL_CALL -> {
+                    val (textContent, parsedToolCalls) = parseXmlToolCalls(content)
+                    val toolCalls =
+                        if (parsedToolCalls != null) {
+                            wrapPackageToolCallsWithProxy(parsedToolCalls)
+                        } else {
+                            null
+                        }
 
-                    if (lastToolCallIds.isNotEmpty()) {
-                        val resultsList = toolResults ?: emptyList()
-                        for (i in lastToolCallIds.indices) {
+                    if (toolCalls != null && toolCalls.length() > 0) {
+                        flushOpenToolCallsAsCancelled()
+                        queueToolCalls(textContent, toolCalls)
+                    } else {
+                        flushOpenToolCallsAsCancelled()
+                        messagesArray.put(
+                            JSONObject().apply {
+                                put("role", "assistant")
+                                put("content", nonEmptyContent(content))
+                            }
+                        )
+                    }
+                }
+
+                PromptTurnKind.TOOL_RESULT -> {
+                    emitQueuedToolCallsIfNeeded()
+                    val (textContent, toolResults) = parseXmlToolResults(content)
+                    val resultsList = toolResults ?: emptyList()
+
+                    if (resultsList.isNotEmpty() && openToolCallIds.isNotEmpty()) {
+                        val validCount = minOf(resultsList.size, openToolCallIds.size)
+                        repeat(validCount) { index ->
+                            val result = resultsList[index]
                             val toolMessage = JSONObject().apply {
                                 put("role", "tool")
-                                put("tool_call_id", lastToolCallIds[i])
-                            }
-                            val result = resultsList.getOrNull(i)
-                            if (result != null) {
+                                put("tool_call_id", openToolCallIds[index])
                                 if (!result.name.isNullOrBlank()) {
-                                    toolMessage.put("name", result.name)
+                                    put("name", result.name)
                                 }
-                                toolMessage.put("content", nonEmptyContent(result.content))
-                            } else {
-                                toolMessage.put("content", "User cancelled")
+                                put("content", nonEmptyContent(result.content))
                             }
                             messagesArray.put(toolMessage)
                         }
-                        hasHandledToolCalls = true
-                        lastToolCallIds.clear()
-                    }
-
-                    when {
-                        textContent.isNotBlank() -> {
-                            messagesArray.put(JSONObject().apply {
-                                put("role", role)
-                                put("content", textContent)
-                            })
+                        repeat(validCount) {
+                            openToolCallIds.removeAt(0)
                         }
-
-                        !hasHandledToolCalls -> {
-                            messagesArray.put(JSONObject().apply {
-                                put("role", role)
-                                put("content", nonEmptyContent(content))
-                            })
+                        if (textContent.isNotBlank()) {
+                            messagesArray.put(
+                                JSONObject().apply {
+                                    put("role", "user")
+                                    put("content", textContent)
+                                }
+                            )
                         }
+                    } else {
+                        flushOpenToolCallsAsCancelled()
+                        messagesArray.put(
+                            JSONObject().apply {
+                                put("role", "user")
+                                put(
+                                    "content",
+                                    when {
+                                        textContent.isNotBlank() -> textContent
+                                        else -> nonEmptyContent(content)
+                                    }
+                                )
+                            }
+                        )
                     }
-                }
-
-                else -> {
-                    lastToolCallIds.clear()
-                    messagesArray.put(JSONObject().apply {
-                        put("role", role)
-                        put("content", nonEmptyContent(content))
-                    })
                 }
             }
         }
 
+        flushOpenToolCallsAsCancelled()
         return messagesArray
     }
 
-    private fun mergeConsecutiveMessages(history: List<Pair<String, String>>): List<Pair<String, String>> {
-        if (history.isEmpty()) {
-            return history
-        }
-
-        val mergedHistory = mutableListOf<Pair<String, String>>()
-        for ((role, content) in history) {
-            if (mergedHistory.isNotEmpty() && role == mergedHistory.last().first && role != "system") {
-                val lastMessage = mergedHistory.last()
-                mergedHistory[mergedHistory.lastIndex] = role to (lastMessage.second + "\n" + content)
-            } else {
-                mergedHistory.add(role to content)
-            }
-        }
-        return mergedHistory
+    private fun mergeConsecutiveMessages(history: List<PromptTurn>): List<PromptTurn> {
+        return history.mergeAdjacentTurns()
     }
 
     private fun nonEmptyContent(content: String): String {

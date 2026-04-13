@@ -4,6 +4,8 @@ import android.content.Context
 import com.ai.assistance.operit.util.AppLogger
 import com.ai.assistance.operit.api.chat.EnhancedAIService
 import com.ai.assistance.operit.api.chat.llmprovider.AIService
+import com.ai.assistance.operit.core.chat.hooks.PromptTurn
+import com.ai.assistance.operit.core.chat.hooks.PromptTurnKind
 import com.ai.assistance.operit.core.tools.DirectoryListingData
 import com.ai.assistance.operit.core.tools.FileContentData
 import com.ai.assistance.operit.core.tools.FileApplyResultData
@@ -212,8 +214,7 @@ open class StandardFileSystemTools(protected val context: Context) {
         val stream =
             service.sendMessage(
                 context = context,
-                message = prompt,
-                chatHistory = emptyList(),
+                chatHistory = listOf(PromptTurn(kind = PromptTurnKind.USER, content = prompt)),
                 modelParameters = modelParameters,
                 enableThinking = false,
                 stream = false,

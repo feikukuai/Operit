@@ -1,6 +1,7 @@
 package com.ai.assistance.operit.api.chat.llmprovider
 
 import android.content.Context
+import com.ai.assistance.operit.core.chat.hooks.PromptTurn
 import com.ai.assistance.operit.data.model.ModelParameter
 import com.ai.assistance.operit.data.model.ToolPrompt
 import com.ai.assistance.operit.util.stream.Stream
@@ -14,8 +15,7 @@ class RateLimitedAIService(
 
     override suspend fun sendMessage(
         context: Context,
-        message: String,
-        chatHistory: List<Pair<String, String>>,
+        chatHistory: List<PromptTurn>,
         modelParameters: List<ModelParameter<*>>,
         enableThinking: Boolean,
         stream: Boolean,
@@ -31,7 +31,6 @@ class RateLimitedAIService(
         try {
             delegate.sendMessage(
                 context = context,
-                message = message,
                 chatHistory = chatHistory,
                 modelParameters = modelParameters,
                 enableThinking = enableThinking,

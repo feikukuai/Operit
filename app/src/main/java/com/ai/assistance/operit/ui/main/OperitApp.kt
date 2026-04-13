@@ -53,7 +53,13 @@ val LocalTopBarActions = compositionLocalOf<(@Composable (RowScope.() -> Unit)) 
 data class NavGroup(@StringRes val titleResId: Int, val items: List<NavItem>)
 
 @Composable
-fun OperitApp(initialNavItem: NavItem = NavItem.AiChat, toolHandler: AIToolHandler? = null) {
+fun OperitApp(
+    initialNavItem: NavItem = NavItem.AiChat,
+    toolHandler: AIToolHandler? = null,
+    shortcutNavRequest: NavItem? = null,
+    shortcutNavRequestId: Long = 0L,
+    onShortcutNavHandled: (Long) -> Unit = {}
+) {
     val navController = rememberNavController()
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
@@ -73,6 +79,26 @@ fun OperitApp(initialNavItem: NavItem = NavItem.AiChat, toolHandler: AIToolHandl
 
     // 用于存储由子屏幕提供的TopAppBar Actions
     var topBarActions by remember { mutableStateOf<@Composable RowScope.() -> Unit>({}) }
+    var lastHandledShortcutRequestId by remember { mutableStateOf(0L) }
+
+    LaunchedEffect(shortcutNavRequestId, shortcutNavRequest) {
+        val requestNavItem = shortcutNavRequest
+        if (requestNavItem == null || shortcutNavRequestId == 0L) {
+            return@LaunchedEffect
+        }
+        if (shortcutNavRequestId == lastHandledShortcutRequestId) {
+            return@LaunchedEffect
+        }
+
+        val targetScreen = OperitRouter.getScreenForNavItem(requestNavItem)
+
+        backStack.clear()
+        isNavigatingBack = false
+        selectedItem = requestNavItem
+        currentScreen = targetScreen
+        lastHandledShortcutRequestId = shortcutNavRequestId
+        onShortcutNavHandled(shortcutNavRequestId)
+    }
 
     // 当currentScreen改变时，检查是否需要清空TopBarActions
     // 这是为了解决从有action的屏幕导航到无action的屏幕时，action残留的问题

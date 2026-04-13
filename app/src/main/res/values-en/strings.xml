@@ -5400,6 +5400,8 @@
     <string name="confirm_skill_git_import_deployment">I confirm that this Skill can be properly installed and used through the app\'s Git repository import method</string>
     <string name="experimental_virtual_display">Experimental Virtual Display</string>
     <string name="experimental_virtual_display_description">Use ADB+Shizuku automation based on virtual display. This feature is still experimental and may be unstable.</string>
+    <string name="hide_runtime_task_view">Hide runtime task view</string>
+    <string name="hide_runtime_task_view_description">Hide the app card from system recents while AI is processing or executing tools to reduce accidental dismissal.</string>
     <string name="get_skill">Get Skill</string>
     <string name="import_or_install_skill">Import Skill</string>
     <string name="login_github_for_skill_market">Login to GitHub for better Skill market experience</string>

@@ -9,6 +9,8 @@ import com.ai.assistance.operit.api.chat.EnhancedAIService
 import com.ai.assistance.operit.api.chat.enhance.InputProcessor
 import com.ai.assistance.operit.api.chat.llmprovider.MediaLinkParser
 import com.ai.assistance.operit.api.chat.llmprovider.MediaLinkBuilder
+import com.ai.assistance.operit.core.chat.hooks.PromptTurn
+import com.ai.assistance.operit.core.chat.hooks.PromptTurnKind
 import com.ai.assistance.operit.core.chat.plugins.MessageProcessingController
 import com.ai.assistance.operit.core.chat.plugins.MessageProcessingHookParams
 import com.ai.assistance.operit.core.chat.plugins.MessageProcessingPluginRegistry
@@ -340,8 +342,8 @@ object AIMessageManager {
             details = "chatKey=$chatKey, source=${chatHistory.size}, result=${memory.size}, splitByRole=$splitHistoryByRole, groupOrchestration=$groupOrchestrationMode"
         )
         if (splitHistoryByRole && !currentRoleName.isNullOrBlank()) {
-            val assistantCount = memory.count { it.first == "assistant" }
-            val userCount = memory.count { it.first == "user" }
+            val assistantCount = memory.count { it.kind == PromptTurnKind.ASSISTANT }
+            val userCount = memory.count { it.kind == PromptTurnKind.USER }
             AppLogger.d(
                 TAG,
                 "按角色拆解历史: role=$currentRoleName, assistant=$assistantCount, user=$userCount, total=${memory.size}"
@@ -355,8 +357,8 @@ object AIMessageManager {
 
             val memoryAfterImageLimit = limitImageLinksInChatHistory(memory, maxImageHistoryUserTurns)
             val memoryForRequest = limitMediaLinksInChatHistory(memoryAfterImageLimit, maxMediaHistoryUserTurns)
-            val beforeImageLinkCount = memory.count { (_, content) -> MediaLinkParser.hasImageLinks(content) }
-            val afterImageLinkCount = memoryForRequest.count { (_, content) -> MediaLinkParser.hasImageLinks(content) }
+            val beforeImageLinkCount = memory.count { MediaLinkParser.hasImageLinks(it.content) }
+            val afterImageLinkCount = memoryForRequest.count { MediaLinkParser.hasImageLinks(it.content) }
             if (beforeImageLinkCount != afterImageLinkCount) {
                 AppLogger.d(
                     TAG,
@@ -364,8 +366,8 @@ object AIMessageManager {
                 )
             }
 
-            val beforeMediaLinkCount = memory.count { (_, content) -> MediaLinkParser.hasMediaLinks(content) }
-            val afterMediaLinkCount = memoryForRequest.count { (_, content) -> MediaLinkParser.hasMediaLinks(content) }
+            val beforeMediaLinkCount = memory.count { MediaLinkParser.hasMediaLinks(it.content) }
+            val afterMediaLinkCount = memoryForRequest.count { MediaLinkParser.hasMediaLinks(it.content) }
             if (beforeMediaLinkCount != afterMediaLinkCount) {
                 AppLogger.d(
                     TAG,
@@ -528,49 +530,49 @@ object AIMessageManager {
     }
 
     private fun limitMediaLinksInChatHistory(
-        history: List<Pair<String, String>>,
+        history: List<PromptTurn>,
         keepLastUserMediaTurns: Int
-    ): List<Pair<String, String>> {
+    ): List<PromptTurn> {
         val limit = keepLastUserMediaTurns.coerceAtLeast(0)
-        val totalUserTurns = history.count { (role, _) -> role == "user" }
+        val totalUserTurns = history.count { it.kind == PromptTurnKind.USER }
         val keepFromTurn = (totalUserTurns - limit).coerceAtLeast(0)
 
         var currentUserTurnIndex = -1
-        return history.map { (role, content) ->
-            if (role == "user") {
+        return history.map { turn ->
+            if (turn.kind == PromptTurnKind.USER) {
                 currentUserTurnIndex += 1
             }
 
             val shouldKeepMedia = limit > 0 && currentUserTurnIndex >= keepFromTurn
-            if (!shouldKeepMedia && MediaLinkParser.hasMediaLinks(content)) {
-                val removed = MediaLinkParser.removeMediaLinks(content).trim()
-                role to (removed.ifBlank { context.getString(R.string.ai_message_media_omitted) })
+            if (!shouldKeepMedia && MediaLinkParser.hasMediaLinks(turn.content)) {
+                val removed = MediaLinkParser.removeMediaLinks(turn.content).trim()
+                turn.copy(content = removed.ifBlank { context.getString(R.string.ai_message_media_omitted) })
             } else {
-                role to content
+                turn
             }
         }
     }
 
     private fun limitImageLinksInChatHistory(
-        history: List<Pair<String, String>>,
+        history: List<PromptTurn>,
         keepLastUserImageTurns: Int
-    ): List<Pair<String, String>> {
+    ): List<PromptTurn> {
         val limit = keepLastUserImageTurns.coerceAtLeast(0)
-        val totalUserTurns = history.count { (role, _) -> role == "user" }
+        val totalUserTurns = history.count { it.kind == PromptTurnKind.USER }
         val keepFromTurn = (totalUserTurns - limit).coerceAtLeast(0)
 
         var currentUserTurnIndex = -1
-        return history.map { (role, content) ->
-            if (role == "user") {
+        return history.map { turn ->
+            if (turn.kind == PromptTurnKind.USER) {
                 currentUserTurnIndex += 1
             }
 
             val shouldKeepImages = limit > 0 && currentUserTurnIndex >= keepFromTurn
-            if (!shouldKeepImages && MediaLinkParser.hasImageLinks(content)) {
-                val removed = MediaLinkParser.removeImageLinks(content).trim()
-                role to (removed.ifBlank { context.getString(R.string.ai_message_image_omitted) })
+            if (!shouldKeepImages && MediaLinkParser.hasImageLinks(turn.content)) {
+                val removed = MediaLinkParser.removeImageLinks(turn.content).trim()
+                turn.copy(content = removed.ifBlank { context.getString(R.string.ai_message_image_omitted) })
             } else {
-                role to content
+                turn
             }
         }
     }
@@ -1158,7 +1160,7 @@ object AIMessageManager {
         splitByRole: Boolean = false,
         targetRoleName: String? = null,
         groupOrchestrationMode: Boolean = false
-    ): List<Pair<String, String>> {
+    ): List<PromptTurn> {
         val totalStartTime = messageTimingNow()
         // 1. 找到最后一条总结消息，只处理总结之后的消息
         val lastSummaryIndex = messages.indexOfLast { it.sender == "summary" }
@@ -1194,12 +1196,16 @@ object AIMessageManager {
                         isRoleScopedMode,
                         groupOrchestrationMode
                     )
-                    "summary" -> "user" to message.content
+                    "summary" ->
+                        PromptTurn(
+                            kind = PromptTurnKind.SUMMARY,
+                            content = message.content
+                        )
                     else -> null
                 }
             }
-        val assistantCount = processedMessages.count { it.first == "assistant" }
-        val userCount = processedMessages.count { it.first == "user" }
+        val assistantCount = processedMessages.count { it.kind == PromptTurnKind.ASSISTANT }
+        val userCount = processedMessages.count { it.kind == PromptTurnKind.USER }
         logMessageTiming(
             stage = "getMemoryFromMessages.total",
             startTimeMs = totalStartTime,
@@ -1213,21 +1219,27 @@ object AIMessageManager {
         isRoleScopedMode: Boolean,
         targetRoleName: String,
         removeStatusTags: (String) -> String
-    ): Pair<String, String>? {
+    ): PromptTurn? {
         // 清理思考内容
         val cleanedContent = ChatUtils.removeThinkingContent(message.content).trim()
         val contentWithoutStatus = removeStatusTags(cleanedContent)
 
         // 非角色隔离模式：直接返回 assistant 消息
         if (!isRoleScopedMode) {
-            return "assistant" to message.content
+            return PromptTurn(
+                kind = PromptTurnKind.ASSISTANT,
+                content = message.content
+            )
         }
 
         // 角色隔离模式：判断是当前角色还是其他角色
         val messageRoleName = message.roleName.trim()
         return if (messageRoleName == targetRoleName) {
             // 当前角色的消息：作为 assistant 返回
-            "assistant" to message.content
+            PromptTurn(
+                kind = PromptTurnKind.ASSISTANT,
+                content = message.content
+            )
         } else {
             // 其他角色的消息：转换为 user 消息，添加角色标签
             val roleLabel = if (messageRoleName.isNotBlank()) messageRoleName else "unknown"
@@ -1235,7 +1247,10 @@ object AIMessageManager {
             if (bridgedContent.isBlank()) {
                 null
             } else {
-                "user" to "[From role: $roleLabel]\n$bridgedContent"
+                PromptTurn(
+                    kind = PromptTurnKind.USER,
+                    content = "[From role: $roleLabel]\n$bridgedContent"
+                )
             }
         }
     }
@@ -1244,20 +1259,23 @@ object AIMessageManager {
         message: ChatMessage,
         isRoleScopedMode: Boolean,
         groupOrchestrationMode: Boolean
-    ): Pair<String, String> {
+    ): PromptTurn {
         val baseContent = message.content
 
         // 群组编排模式 + 角色隔离模式：给用户消息添加 [From user] 前缀
         if (groupOrchestrationMode && isRoleScopedMode) {
             val trimmed = baseContent.trim()
             return when {
-                trimmed.isBlank() -> "user" to baseContent
-                trimmed.startsWith("[From user]") -> "user" to trimmed
-                else -> "user" to "[From user]\n$trimmed"
+                trimmed.isBlank() ->
+                    PromptTurn(kind = PromptTurnKind.USER, content = baseContent)
+                trimmed.startsWith("[From user]") ->
+                    PromptTurn(kind = PromptTurnKind.USER, content = trimmed)
+                else ->
+                    PromptTurn(kind = PromptTurnKind.USER, content = "[From user]\n$trimmed")
             }
         }
 
         // 其他模式：直接返回
-        return "user" to baseContent
+        return PromptTurn(kind = PromptTurnKind.USER, content = baseContent)
     }
 }

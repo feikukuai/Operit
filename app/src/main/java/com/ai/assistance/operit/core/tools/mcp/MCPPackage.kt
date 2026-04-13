@@ -22,6 +22,11 @@ data class MCPPackage(
     companion object {
         private const val TAG = "MCPPackage"
 
+        data class LoadResult(
+            val mcpPackage: MCPPackage?,
+            val errorMessage: String? = null
+        )
+
         /**
          * 从服务器创建MCP包
          *
@@ -30,6 +35,10 @@ data class MCPPackage(
          * @return 创建的MCP包，如果连接失败则返回null
          */
         fun fromServer(context: Context, serverConfig: MCPServerConfig): MCPPackage? {
+            return loadFromServer(context, serverConfig).mcpPackage
+        }
+
+        fun loadFromServer(context: Context, serverConfig: MCPServerConfig): LoadResult {
             // 创建桥接客户端
             val bridgeClient = MCPBridgeClient(context, serverConfig.name)
             com.ai.assistance.operit.util.AppLogger.d(TAG, "正在连接到MCP服务器: ${serverConfig.name}")
@@ -39,7 +48,12 @@ data class MCPPackage(
                 val connected = runBlocking { bridgeClient.connect() }
                 if (!connected) {
                     com.ai.assistance.operit.util.AppLogger.w(TAG, "无法连接到MCP服务器: ${serverConfig.name}")
-                    return null
+                    return LoadResult(
+                        mcpPackage = null,
+                        errorMessage =
+                            bridgeClient.getLastConnectionFailureDetail()
+                                ?: "Connection failed, but no detailed reason was reported."
+                    )
                 }
 
                 com.ai.assistance.operit.util.AppLogger.d(TAG, "成功连接到MCP服务器: ${serverConfig.name}，开始获取工具列表")
@@ -51,7 +65,7 @@ data class MCPPackage(
                     // 不要因为没有工具就返回null
                     // 返回一个包含空工具列表的有效包
                     com.ai.assistance.operit.util.AppLogger.d(TAG, "创建不包含工具的MCP包 - 服务已连接但没有工具")
-                    return MCPPackage(serverConfig, emptyList())
+                    return LoadResult(mcpPackage = MCPPackage(serverConfig, emptyList()))
                 }
 
                 com.ai.assistance.operit.util.AppLogger.d(TAG, "成功从MCP服务器获取 ${jsonTools.size} 个工具")
@@ -109,12 +123,15 @@ data class MCPPackage(
                 // 注意：不要断开连接！让客户端保持活跃状态
                 // 客户端会被缓存在MCPManager中以供后续使用
                 com.ai.assistance.operit.util.AppLogger.d(TAG, "成功创建MCP包，包含 ${mcpTools.size} 个工具，保持连接活跃")
-                return MCPPackage(serverConfig, mcpTools)
+                return LoadResult(mcpPackage = MCPPackage(serverConfig, mcpTools))
             } catch (e: Exception) {
                 com.ai.assistance.operit.util.AppLogger.e(TAG, "创建MCP包时出错: ${e.message}", e)
                 // 只有在发生异常时才断开连接
                 bridgeClient.disconnect()
-                return null
+                return LoadResult(
+                    mcpPackage = null,
+                    errorMessage = e.message ?: "Unexpected exception while creating MCP package"
+                )
             }
         }
     }

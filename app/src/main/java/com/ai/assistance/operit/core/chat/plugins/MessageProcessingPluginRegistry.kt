@@ -2,6 +2,7 @@ package com.ai.assistance.operit.core.chat.plugins
 
 import android.content.Context
 import com.ai.assistance.operit.api.chat.EnhancedAIService
+import com.ai.assistance.operit.core.chat.hooks.PromptTurn
 import com.ai.assistance.operit.util.stream.Stream
 import java.util.concurrent.CopyOnWriteArrayList
 
@@ -9,7 +10,7 @@ data class MessageProcessingHookParams(
     val context: Context,
     val enhancedAIService: EnhancedAIService,
     val messageContent: String,
-    val chatHistory: List<Pair<String, String>>,
+    val chatHistory: List<PromptTurn>,
     val workspacePath: String?,
     val maxTokens: Int,
     val tokenUsageThreshold: Double,

@@ -10,6 +10,7 @@ import com.ai.assistance.operit.core.chat.plugins.MessageProcessingExecution
 import com.ai.assistance.operit.core.chat.plugins.MessageProcessingHookParams
 import com.ai.assistance.operit.core.chat.plugins.MessageProcessingPlugin
 import com.ai.assistance.operit.core.chat.plugins.MessageProcessingPluginRegistry
+import com.ai.assistance.operit.core.chat.hooks.PromptTurn
 import com.ai.assistance.operit.core.tools.AIToolHandler
 import com.ai.assistance.operit.core.tools.packTool.PackageManager
 import com.ai.assistance.operit.core.tools.packTool.ToolPkgContainerRuntime
@@ -188,11 +189,20 @@ private object ToolPkgMessageProcessingBridgePlugin : MessageProcessingPlugin {
     ): Map<String, Any?> {
         return mapOf(
             "messageContent" to params.messageContent,
-            "chatHistory" to params.chatHistory.map { listOf(it.first, it.second) },
+            "chatHistory" to params.chatHistory.map(::promptTurnToMap),
             "workspacePath" to params.workspacePath,
             "maxTokens" to params.maxTokens,
             "tokenUsageThreshold" to params.tokenUsageThreshold,
             "probeOnly" to probeOnly
+        )
+    }
+
+    private fun promptTurnToMap(turn: PromptTurn): Map<String, Any?> {
+        return mapOf(
+            "kind" to turn.kind.name,
+            "content" to turn.content,
+            "toolName" to turn.toolName,
+            "metadata" to turn.metadata
         )
     }
 

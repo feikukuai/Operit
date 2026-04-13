@@ -23,6 +23,7 @@ import com.ai.assistance.operit.R
 import com.ai.assistance.operit.api.chat.EnhancedAIService
 import com.ai.assistance.operit.api.chat.llmprovider.AIService
 import com.ai.assistance.operit.core.tools.StringResultData
+import com.ai.assistance.operit.core.chat.hooks.toPromptTurns
 import com.ai.assistance.operit.util.ChatMarkupRegex
 import com.ai.assistance.operit.data.model.CharacterCard
 import com.ai.assistance.operit.data.model.FunctionType
@@ -378,8 +379,7 @@ fun PersonaCardGenerationScreen(
 
         val stream = aiService.sendMessage(
             context = context,
-            message = prompt,
-            chatHistory = fullHistory
+            chatHistory = (fullHistory + ("user" to prompt)).toPromptTurns()
         )
         Pair(stream, aiService)
     }

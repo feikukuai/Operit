@@ -7,7 +7,10 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -283,37 +286,47 @@ class ThinkToolsXmlNodeGrouper(
                         Modifier.fillMaxWidth()
                             .padding(top = 4.dp, bottom = 8.dp, start = 24.dp)
                 ) {
-                    Column(modifier = Modifier.fillMaxWidth()) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
                         slice.forEachIndexed { idx, node ->
                             val absoluteIndex = group.startIndex + idx
                             val innerKey = "think-tools-$rendererId-${group.stableKey}-$absoluteIndex"
                             androidx.compose.runtime.key(innerKey) {
-                                if (node.type == MarkdownProcessorType.XML_BLOCK) {
-                                    val alreadyAppeared = appearedKeys[innerKey] == true
-                                    var itemVisible by remember(innerKey, alreadyAppeared) {
-                                        mutableStateOf(alreadyAppeared)
-                                    }
-
-                                    LaunchedEffect(innerKey) {
-                                        if (!alreadyAppeared) {
-                                            itemVisible = true
-                                            appearedKeys[innerKey] = true
+                                when {
+                                    node.type == MarkdownProcessorType.XML_BLOCK -> {
+                                        val alreadyAppeared = appearedKeys[innerKey] == true
+                                        var itemVisible by remember(innerKey, alreadyAppeared) {
+                                            mutableStateOf(alreadyAppeared)
                                         }
+
+                                        LaunchedEffect(innerKey) {
+                                            if (!alreadyAppeared) {
+                                                itemVisible = true
+                                                appearedKeys[innerKey] = true
+                                            }
+                                        }
+
+                                        val itemAlpha by animateFloatAsState(
+                                            targetValue = if (itemVisible) 1f else 0f,
+                                            animationSpec = tween(durationMillis = 800),
+                                            label = "fadeIn-$innerKey"
+                                        )
+
+                                        xmlRenderer.RenderXmlContent(
+                                            xmlContent = node.content,
+                                            modifier = Modifier.fillMaxWidth().graphicsLayer { this.alpha = itemAlpha },
+                                            textColor = textColor,
+                                            xmlStream = xmlStreamResolver(absoluteIndex),
+                                            renderInstanceKey = innerKey
+                                        )
                                     }
 
-                                    val itemAlpha by animateFloatAsState(
-                                        targetValue = if (itemVisible) 1f else 0f,
-                                        animationSpec = tween(durationMillis = 800),
-                                        label = "fadeIn-$innerKey"
-                                    )
-
-                                    xmlRenderer.RenderXmlContent(
-                                        xmlContent = node.content,
-                                        modifier = Modifier.fillMaxWidth().graphicsLayer { this.alpha = itemAlpha },
-                                        textColor = textColor,
-                                        xmlStream = xmlStreamResolver(absoluteIndex),
-                                        renderInstanceKey = innerKey
-                                    )
+                                    node.type == MarkdownProcessorType.PLAIN_TEXT && node.content.isBlank() -> {
+                                        // Preserve parser-produced blank separators inside grouped rendering.
+                                        Spacer(modifier = Modifier.fillMaxWidth().height(4.dp))
+                                    }
                                 }
                             }
                         }

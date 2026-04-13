@@ -2660,9 +2660,12 @@ private constructor(private val context: Context, private val aiToolHandler: AIT
                 ?: return "Cannot get MCP server configuration: $serverName"
 
         // 创建MCP包
+        val mcpLoadResult = MCPPackage.loadFromServer(context, serverConfig)
         val mcpPackage =
-            MCPPackage.fromServer(context, serverConfig)
-                ?: return "Cannot connect to MCP server: $serverName"
+            mcpLoadResult.mcpPackage
+                ?: return mcpLoadResult.errorMessage?.let {
+                    "Cannot connect to MCP server '$serverName': $it"
+                } ?: "Cannot connect to MCP server: $serverName"
 
         // 转换为标准工具包
         val toolPackage = mcpPackage.toToolPackage()

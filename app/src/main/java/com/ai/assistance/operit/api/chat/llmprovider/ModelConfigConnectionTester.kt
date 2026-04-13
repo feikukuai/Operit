@@ -8,6 +8,9 @@ import com.ai.assistance.operit.data.model.ToolPrompt
 import com.ai.assistance.operit.data.model.getModelByIndex
 import com.ai.assistance.operit.data.model.getValidModelIndex
 import com.ai.assistance.operit.data.preferences.ModelConfigManager
+import com.ai.assistance.operit.core.chat.hooks.PromptTurn
+import com.ai.assistance.operit.core.chat.hooks.PromptTurnKind
+import com.ai.assistance.operit.core.chat.hooks.toPromptTurns
 import com.ai.assistance.operit.util.AssetCopyUtils
 import com.ai.assistance.operit.util.ChatMarkupRegex
 import com.ai.assistance.operit.util.ImagePoolManager
@@ -87,8 +90,7 @@ object ModelConfigConnectionTester {
             runCase(ModelConnectionTestType.CHAT) {
                 service.sendMessage(
                     context,
-                    "Hi",
-                    emptyList(),
+                    listOf(PromptTurn(kind = PromptTurnKind.USER, content = "Hi")),
                     parameters,
                     stream = false,
                     enableRetry = false
@@ -128,8 +130,7 @@ object ModelConfigConnectionTester {
                         )
                         service.sendMessage(
                             context,
-                            "Hi",
-                            testHistory,
+                            testHistory.toPromptTurns(),
                             parameters,
                             stream = false,
                             availableTools = availableTools,
@@ -157,8 +158,7 @@ object ModelConfigConnectionTester {
                             }
                         service.sendMessage(
                             context,
-                            prompt,
-                            emptyList(),
+                            listOf(PromptTurn(kind = PromptTurnKind.USER, content = prompt)),
                             parameters,
                             stream = false,
                             enableRetry = false
@@ -186,8 +186,7 @@ object ModelConfigConnectionTester {
                             }
                         service.sendMessage(
                             context,
-                            prompt,
-                            emptyList(),
+                            listOf(PromptTurn(kind = PromptTurnKind.USER, content = prompt)),
                             parameters,
                             stream = false,
                             enableRetry = false
@@ -215,8 +214,7 @@ object ModelConfigConnectionTester {
                             }
                         service.sendMessage(
                             context,
-                            prompt,
-                            emptyList(),
+                            listOf(PromptTurn(kind = PromptTurnKind.USER, content = prompt)),
                             parameters,
                             stream = false,
                             enableRetry = false

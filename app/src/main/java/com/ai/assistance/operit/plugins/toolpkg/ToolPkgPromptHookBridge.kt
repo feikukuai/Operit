@@ -8,7 +8,8 @@ import com.ai.assistance.operit.core.chat.hooks.PromptHookContext
 import com.ai.assistance.operit.core.chat.hooks.PromptHookMutation
 import com.ai.assistance.operit.core.chat.hooks.PromptHookRegistry
 import com.ai.assistance.operit.core.chat.hooks.PromptInputHook
-import com.ai.assistance.operit.core.chat.hooks.PromptMessage
+import com.ai.assistance.operit.core.chat.hooks.PromptTurn
+import com.ai.assistance.operit.core.chat.hooks.PromptTurnKind
 import com.ai.assistance.operit.core.chat.hooks.SystemPromptComposeHook
 import com.ai.assistance.operit.core.chat.hooks.ToolPromptComposeHook
 import com.ai.assistance.operit.core.tools.packTool.PackageManager
@@ -345,8 +346,8 @@ internal object ToolPkgPromptHookBridge {
             put("useEnglish", context.useEnglish)
             put("rawInput", context.rawInput)
             put("processedInput", context.processedInput)
-            put("chatHistory", context.chatHistory.map(::promptMessageToMap))
-            put("preparedHistory", context.preparedHistory.map(::promptMessageToMap))
+            put("chatHistory", context.chatHistory.map(::promptTurnToMap))
+            put("preparedHistory", context.preparedHistory.map(::promptTurnToMap))
             put("systemPrompt", context.systemPrompt)
             put("toolPrompt", context.toolPrompt)
             put("modelParameters", context.modelParameters)
@@ -355,10 +356,12 @@ internal object ToolPkgPromptHookBridge {
         }
     }
 
-    private fun promptMessageToMap(message: PromptMessage): Map<String, Any?> {
+    private fun promptTurnToMap(message: PromptTurn): Map<String, Any?> {
         return mapOf(
-            "role" to message.role,
-            "content" to message.content
+            "kind" to message.kind.name,
+            "content" to message.content,
+            "toolName" to message.toolName,
+            "metadata" to message.metadata
         )
     }
 
@@ -396,7 +399,7 @@ internal object ToolPkgPromptHookBridge {
         return when (decoded) {
             null -> null
             is JSONArray -> {
-                val messages = parsePromptMessages(decoded) ?: return null
+                val messages = parsePromptTurns(decoded) ?: return null
                 if (context.stage == "before_prepare_history") {
                     PromptHookMutation(chatHistory = messages)
                 } else {
@@ -440,7 +443,7 @@ internal object ToolPkgPromptHookBridge {
             null -> null
             is String -> PromptHookMutation(processedInput = decoded)
             is JSONArray -> {
-                val messages = parsePromptMessages(decoded) ?: return null
+                val messages = parsePromptTurns(decoded) ?: return null
                 PromptHookMutation(preparedHistory = messages)
             }
             is JSONObject -> parsePromptHookObject(decoded)
@@ -453,30 +456,34 @@ internal object ToolPkgPromptHookBridge {
         return PromptHookMutation(
             rawInput = jsonObject.optString("rawInput").takeIf { it.isNotBlank() },
             processedInput = jsonObject.optString("processedInput").takeIf { it.isNotBlank() },
-            chatHistory = parsePromptMessages(jsonObject.optJSONArray("chatHistory")),
-            preparedHistory = parsePromptMessages(jsonObject.optJSONArray("preparedHistory")),
+            chatHistory = parsePromptTurns(jsonObject.optJSONArray("chatHistory")),
+            preparedHistory = parsePromptTurns(jsonObject.optJSONArray("preparedHistory")),
             systemPrompt = jsonObject.optString("systemPrompt").takeIf { it.isNotBlank() },
             toolPrompt = jsonObject.optString("toolPrompt").takeIf { it.isNotBlank() },
             metadata = metadata
         )
     }
 
-    private fun parsePromptMessages(jsonArray: JSONArray?): List<PromptMessage>? {
+    private fun parsePromptTurns(jsonArray: JSONArray?): List<PromptTurn>? {
         if (jsonArray == null) {
             return null
         }
-        val result = mutableListOf<PromptMessage>()
+        val result = mutableListOf<PromptTurn>()
         for (index in 0 until jsonArray.length()) {
             val item = jsonArray.opt(index) as? JSONObject ?: continue
-            val role = item.optString("role").trim()
+            val kind =
+                item.optString("kind")
+                    .trim()
+                    .takeIf { it.isNotBlank() }
+                    ?.let { runCatching { PromptTurnKind.valueOf(it.uppercase()) }.getOrNull() }
+                    ?: continue
             val content = item.optString("content")
-            if (role.isBlank()) {
-                continue
-            }
             result.add(
-                PromptMessage(
-                    role = role,
-                    content = content
+                PromptTurn(
+                    kind = kind,
+                    content = content,
+                    toolName = item.optString("toolName").takeIf { it.isNotBlank() },
+                    metadata = item.optJSONObject("metadata")?.let(::jsonObjectToMap).orEmpty()
                 )
             )
         }

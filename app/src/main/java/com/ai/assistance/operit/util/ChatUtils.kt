@@ -1,5 +1,8 @@
 package com.ai.assistance.operit.util
 
+import com.ai.assistance.operit.core.chat.hooks.PromptTurn
+import com.ai.assistance.operit.core.chat.hooks.withContent
+
 /** Utility functions for chat message handling */
 object ChatUtils {
     fun stripGeminiThoughtSignatureMeta(content: String): String {
@@ -9,6 +12,12 @@ object ChatUtils {
     fun stripGeminiThoughtSignatureMeta(messages: List<Pair<String, String>>): List<Pair<String, String>> {
         return messages.map { (role, content) ->
             role to stripGeminiThoughtSignatureMeta(content)
+        }
+    }
+
+    fun stripGeminiThoughtSignatureMetaTurns(messages: List<PromptTurn>): List<PromptTurn> {
+        return messages.map { turn ->
+            turn.withContent(stripGeminiThoughtSignatureMeta(turn.content))
         }
     }
 
@@ -66,45 +75,6 @@ object ChatUtils {
         val chineseCharCount = text.count { it.code in 0x4E00..0x9FFF }
         val otherCharCount = text.length - chineseCharCount
         return (chineseCharCount * 1.5 + otherCharCount * 0.25).toInt()
-    }
-
-    /**
-     * 将聊天历史映射为标准角色格式
-     * @param chatHistory 原始聊天历史
-     * @param extractThinking 是否提取思考内容而不是删除（用于需要reasoning_content的场景）
-     * @return 如果extractThinking=false，返回标准格式的聊天历史（assistant消息已移除思考内容）
-     *         如果extractThinking=true，返回Pair(标准格式聊天历史, 思考内容映射Map<消息索引, 思考内容>)
-     */
-    fun mapChatHistoryToStandardRoles(
-            chatHistory: List<Pair<String, String>>,
-            extractThinking: Boolean = false
-    ): List<Pair<String, String>> {
-        return chatHistory.map { (role, content) ->
-            // Map role to standard format
-            val standardRole = when (role) {
-                "ai" -> "assistant"
-                "tool" -> "user"
-                "user" -> "user"
-                "system" -> "system"
-                "summary" -> "user"
-                else -> role
-            }
-            
-            // 对于assistant角色的消息，移除或保留思考内容
-            val processedContent =
-                    if (standardRole == "assistant" || role == "ai") {
-                        if (extractThinking) {
-                            // 保留原始内容，由调用者自行处理
-                            content
-                        } else {
-                            // 移除思考内容
-                            removeThinkingContent(content)
-                        }
-                    } else {
-                        content
-                    }
-            Pair(standardRole, processedContent)
-        }
     }
 
     /**

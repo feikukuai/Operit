@@ -820,7 +820,7 @@ class CustomXmlRenderer(
 
     /** 渲染工具结果标签 <tool_result name="..." status="..."><content>...</content></tool_result> */
     @Composable
-    private fun renderToolResult(content: String, _modifier: Modifier, _textColor: Color) {
+    private fun renderToolResult(content: String, modifier: Modifier, _textColor: Color) {
         val clipboardManager = LocalClipboardManager.current
 
         val renderState =
@@ -885,6 +885,7 @@ class CustomXmlRenderer(
                             clipboardManager.setText(AnnotatedString(errorContent))
                         }
                     },
+                    modifier = modifier,
                     enableDialog = enableDialogs  // 传递弹窗启用状态
             )
         }

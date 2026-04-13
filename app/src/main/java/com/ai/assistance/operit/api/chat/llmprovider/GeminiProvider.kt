@@ -1,6 +1,10 @@
 package com.ai.assistance.operit.api.chat.llmprovider
 
 import com.ai.assistance.operit.util.AppLogger
+import com.ai.assistance.operit.core.chat.hooks.PromptTurn
+import com.ai.assistance.operit.core.chat.hooks.PromptTurnKind
+import com.ai.assistance.operit.core.chat.hooks.mergeAdjacentTurns
+import com.ai.assistance.operit.core.chat.hooks.toPromptTurns
 import com.ai.assistance.operit.data.model.ApiProviderType
 import com.ai.assistance.operit.data.model.ModelOption
 import com.ai.assistance.operit.data.model.ModelParameter
@@ -121,13 +125,33 @@ class GeminiProvider(
     }
 
     override suspend fun calculateInputTokens(
-            message: String,
-            chatHistory: List<Pair<String, String>>,
+            chatHistory: List<PromptTurn>,
             availableTools: List<ToolPrompt>?
     ): Int {
         // 构建工具定义的JSON字符串
         val toolsJson = buildToolsJson(availableTools)
-        return tokenCacheManager.calculateInputTokens(message, chatHistory, toolsJson)
+        val comparableHistory =
+            ChatUtils.stripGeminiThoughtSignatureMeta(
+                chatHistory.map { turn ->
+                    val comparableRole =
+                        when (turn.kind) {
+                            PromptTurnKind.SYSTEM -> "system"
+                            PromptTurnKind.USER -> "user"
+                            PromptTurnKind.ASSISTANT -> "assistant"
+                            PromptTurnKind.TOOL_CALL -> "tool_call"
+                            PromptTurnKind.TOOL_RESULT -> "tool_result"
+                            PromptTurnKind.SUMMARY -> "summary"
+                        }
+                    val comparableContent =
+                        if (turn.kind == PromptTurnKind.ASSISTANT) {
+                            ChatUtils.removeThinkingContent(turn.content)
+                        } else {
+                            turn.content
+                        }
+                    comparableRole to comparableContent
+                }
+            )
+        return tokenCacheManager.calculateInputTokens(comparableHistory, toolsJson)
     }
     
     /**
@@ -197,7 +221,7 @@ class GeminiProvider(
 
     private data class GeminiFunctionCallPayload(
         val textContent: String,
-        val functionCall: JSONObject?,
+        val functionCalls: List<JSONObject>,
         val thoughtSignature: String?
     )
 
@@ -253,55 +277,56 @@ class GeminiProvider(
     
     /**
      * 解析XML格式的tool调用，转换为Gemini FunctionCall格式
-     * @return 文本内容、functionCall对象、以及挂在Part级别的thought signature
+     * @return 文本内容、functionCall对象列表、以及挂在Part级别的thought signature
      */
     private fun parseXmlToolCalls(content: String): GeminiFunctionCallPayload {
         if (!enableToolCall) {
             return GeminiFunctionCallPayload(
                 textContent = content,
-                functionCall = null,
+                functionCalls = emptyList(),
                 thoughtSignature = null
             )
         }
 
         val thoughtSignaturePayload = extractGeminiThoughtSignaturePayload(content)
         val sanitizedContent = thoughtSignaturePayload.contentWithoutMeta
-        val match = ChatMarkupRegex.toolCallPattern.find(sanitizedContent) // Gemini 一次只能调用一个工具
+        val matches = ChatMarkupRegex.toolCallPattern.findAll(sanitizedContent).toList()
         
-        if (match == null) {
+        if (matches.isEmpty()) {
             return GeminiFunctionCallPayload(
                 textContent = sanitizedContent,
-                functionCall = null,
+                functionCalls = emptyList(),
                 thoughtSignature = null
             )
         }
-        
-        val toolName = match.groupValues[2]
-        val toolBody = match.groupValues[3]
-        
-        // 解析参数
-        val args = JSONObject()
-        
-        ChatMarkupRegex.toolParamPattern.findAll(toolBody).forEach { paramMatch ->
-            val paramName = paramMatch.groupValues[1]
-            val paramValue = XmlEscaper.unescape(paramMatch.groupValues[2].trim())
-            args.put(paramName, paramValue)
+
+        val functionCalls =
+            matches.map { match ->
+                val toolName = match.groupValues[2]
+                val toolBody = match.groupValues[3]
+
+                val args = JSONObject()
+                ChatMarkupRegex.toolParamPattern.findAll(toolBody).forEach { paramMatch ->
+                    val paramName = paramMatch.groupValues[1]
+                    val paramValue = XmlEscaper.unescape(paramMatch.groupValues[2].trim())
+                    args.put(paramName, paramValue)
+                }
+
+                AppLogger.d(TAG, "XML→GeminiFunctionCall: $toolName")
+                JSONObject().apply {
+                    put("name", toolName)
+                    put("args", args)
+                }
+            }
+
+        var textContent = sanitizedContent
+        matches.forEach { match ->
+            textContent = textContent.replace(match.value, "").trim()
         }
-        
-        // 构建functionCall对象（Gemini格式）
-        val functionCall = JSONObject().apply {
-            put("name", toolName)
-            put("args", args)
-        }
-        
-        AppLogger.d(TAG, "XML→GeminiFunctionCall: $toolName")
-        
-        // 从文本内容中移除tool标签
-        val textContent = sanitizedContent.replace(match.value, "").trim()
         
         return GeminiFunctionCallPayload(
             textContent = textContent,
-            functionCall = functionCall,
+            functionCalls = functionCalls,
             thoughtSignature = thoughtSignaturePayload.thoughtSignature
         )
     }
@@ -467,8 +492,7 @@ class GeminiProvider(
     }
 
     private fun buildContentsAndCountTokens(
-            message: String,
-            chatHistory: List<Pair<String, String>>,
+            chatHistory: List<PromptTurn>,
             toolsJson: String? = null,
             preserveThinkInHistory: Boolean = false
     ): Pair<Pair<JSONArray, JSONObject?>, Int> {
@@ -476,32 +500,38 @@ class GeminiProvider(
         var systemInstruction: JSONObject? = null
 
         // 使用TokenCacheManager计算token数量
-        val sanitizedMessageForTokenCount = ChatUtils.stripGeminiThoughtSignatureMeta(message)
-        val sanitizedHistoryForTokenCount = ChatUtils.stripGeminiThoughtSignatureMeta(chatHistory)
+        val sanitizedHistoryForTokenCount =
+            ChatUtils.stripGeminiThoughtSignatureMeta(
+                chatHistory.map { turn ->
+                    val comparableRole =
+                        when (turn.kind) {
+                            PromptTurnKind.SYSTEM -> "system"
+                            PromptTurnKind.USER -> "user"
+                            PromptTurnKind.ASSISTANT -> "assistant"
+                            PromptTurnKind.TOOL_CALL -> "tool_call"
+                            PromptTurnKind.TOOL_RESULT -> "tool_result"
+                            PromptTurnKind.SUMMARY -> "summary"
+                        }
+                    val comparableContent =
+                        if (!preserveThinkInHistory && turn.kind == PromptTurnKind.ASSISTANT) {
+                            ChatUtils.removeThinkingContent(turn.content)
+                        } else {
+                            turn.content
+                        }
+                    comparableRole to comparableContent
+                }
+            )
         val tokenCount = tokenCacheManager.calculateInputTokens(
-            sanitizedMessageForTokenCount,
             sanitizedHistoryForTokenCount,
             toolsJson
         )
 
-        // 检查当前消息是否已经在历史记录的末尾（避免重复）
-        val isMessageInHistory =
-            chatHistory.isNotEmpty() &&
-                ChatUtils.stripGeminiThoughtSignatureMeta(chatHistory.last().second) == sanitizedMessageForTokenCount
-        
-        // 如果消息已在历史中，只处理历史；否则需要处理历史+当前消息
-        val effectiveHistory = if (isMessageInHistory) {
-            chatHistory
-        } else {
-            chatHistory + ("user" to message)
-        }
-
-        val standardizedHistory = ChatUtils.mapChatHistoryToStandardRoles(effectiveHistory, extractThinking = preserveThinkInHistory)
+        val effectiveHistory = chatHistory.mergeAdjacentTurns()
 
         // Find and process system message first
-        val systemMessage = standardizedHistory.find { it.first == "system" }
-        if (systemMessage != null) {
-            val systemContent = systemMessage.second
+        val systemMessages = effectiveHistory.filter { it.kind == PromptTurnKind.SYSTEM }
+        if (systemMessages.isNotEmpty()) {
+            val systemContent = systemMessages.joinToString("\n\n") { it.content }
             logDebug("发现系统消息: ${systemContent.take(50)}...")
 
             systemInstruction = JSONObject().apply {
@@ -512,104 +542,260 @@ class GeminiProvider(
         }
 
         // Process the rest of the history
-        val historyWithoutSystem = standardizedHistory.filter { it.first != "system" }
-        val mergedHistory = mutableListOf<Pair<String, String>>()
-        for ((role, content) in historyWithoutSystem) {
-            if (mergedHistory.isNotEmpty() && mergedHistory.last().first == role) {
-                val lastMessage = mergedHistory.last()
-                mergedHistory[mergedHistory.size - 1] =
-                    Pair(role, lastMessage.second + "\n" + content)
-                logDebug("合并连续的 $role 消息")
-            } else {
-                mergedHistory.add(Pair(role, content))
+        val historyWithoutSystem = effectiveHistory.filter { it.kind != PromptTurnKind.SYSTEM }
+        var queuedAssistantToolText: String? = null
+        var queuedAssistantThoughtSignature: String? = null
+        val queuedFunctionCalls = mutableListOf<JSONObject>()
+        val openFunctionCallNames = mutableListOf<String>()
+
+        fun appendParts(target: JSONArray, parts: JSONArray) {
+            for (index in 0 until parts.length()) {
+                target.put(parts.get(index))
             }
         }
 
-        for ((role, content) in mergedHistory) {
-            val geminiRole = if (role == "assistant") "model" else role
-            val contentWithoutGeminiMeta = ChatMarkupRegex.removeGeminiThoughtSignatureMeta(content)
-            
-            // 当启用Tool Call API时，转换XML格式的工具调用
-            if (enableToolCall) {
-                if (role == "assistant") {
-                    // 解析assistant消息中的XML tool calls
-                    val functionCallPayload = parseXmlToolCalls(content)
-                    
-                    val partsArray = JSONArray()
-                    // 先添加文本内容
-                    if (functionCallPayload.textContent.isNotEmpty()) {
-                        val messageParts = buildPartsArray(functionCallPayload.textContent)
-                        for (i in 0 until messageParts.length()) {
-                            partsArray.put(messageParts.getJSONObject(i))
-                        }
-                    }
-                    // 再添加functionCall
-                    if (functionCallPayload.functionCall != null) {
-                        partsArray.put(JSONObject().apply {
-                            put("functionCall", functionCallPayload.functionCall)
-                            functionCallPayload.thoughtSignature?.let { signature ->
+        fun appendQueuedAssistantToolText(text: String) {
+            if (text.isBlank()) return
+            queuedAssistantToolText =
+                if (queuedAssistantToolText.isNullOrBlank()) {
+                    text
+                } else {
+                    queuedAssistantToolText + "\n" + text
+                }
+        }
+
+        fun queueFunctionCalls(
+            textContent: String,
+            functionCalls: List<JSONObject>,
+            thoughtSignature: String? = null
+        ) {
+            appendQueuedAssistantToolText(textContent)
+            if (queuedAssistantThoughtSignature == null && !thoughtSignature.isNullOrBlank()) {
+                queuedAssistantThoughtSignature = thoughtSignature
+            }
+            queuedFunctionCalls.addAll(functionCalls)
+        }
+
+        fun emitQueuedFunctionCallsIfNeeded() {
+            if (queuedFunctionCalls.isEmpty()) return
+
+            val partsArray = JSONArray()
+            if (!queuedAssistantToolText.isNullOrBlank()) {
+                appendParts(partsArray, buildPartsArray(queuedAssistantToolText!!))
+            }
+            queuedFunctionCalls.forEachIndexed { index, functionCall ->
+                partsArray.put(
+                    JSONObject().apply {
+                        put("functionCall", functionCall)
+                        if (index == 0) {
+                            queuedAssistantThoughtSignature?.let { signature ->
                                 put("thought_signature", signature)
                             }
-                        })
-                        logDebug("历史XML→GeminiFunctionCall: ${functionCallPayload.functionCall.optString("name")}")
-                    }
-                    
-                    val contentObject = JSONObject().apply {
-                        put("role", geminiRole)
-                        put("parts", partsArray)
-                    }
-                    contentsArray.put(contentObject)
-                } else if (role == "user") {
-                    // 解析user消息中的XML tool_result
-                    val (textContent, functionResponses) = parseXmlToolResults(contentWithoutGeminiMeta)
-                    
-                    val partsArray = JSONArray()
-                    // 先添加所有functionResponse
-                    if (functionResponses != null && functionResponses.isNotEmpty()) {
-                        functionResponses.forEach { functionResponse ->
-                            partsArray.put(JSONObject().apply {
-                                put("functionResponse", functionResponse)
-                            })
-                            logDebug("历史XML→GeminiFunctionResponse: ${functionResponse.optString("name")}")
                         }
                     }
-                    // 再添加文本内容
-                    if (textContent.isNotEmpty()) {
-                        val messageParts = buildPartsArray(textContent)
-                        for (i in 0 until messageParts.length()) {
-                            partsArray.put(messageParts.getJSONObject(i))
-                        }
+                )
+            }
+
+            contentsArray.put(
+                JSONObject().apply {
+                    put("role", "model")
+                    put("parts", partsArray)
+                }
+            )
+
+            queuedFunctionCalls.forEach { functionCall ->
+                openFunctionCallNames.add(functionCall.optString("name", "").trim())
+            }
+            queuedAssistantToolText = null
+            queuedAssistantThoughtSignature = null
+            queuedFunctionCalls.clear()
+        }
+
+        fun appendCancelledOpenFunctionResponses(target: JSONArray, reason: String): Boolean {
+            emitQueuedFunctionCallsIfNeeded()
+            if (openFunctionCallNames.isEmpty()) return false
+
+            logDebug("发现未完成的Gemini functionCall，按取消处理: count=${openFunctionCallNames.size}, reason=$reason")
+            openFunctionCallNames.forEach { functionName ->
+                target.put(
+                    JSONObject().apply {
+                        put(
+                            "functionResponse",
+                            JSONObject().apply {
+                                put("name", functionName.ifBlank { "cancelled_function" })
+                                put(
+                                    "response",
+                                    JSONObject().apply {
+                                        put("result", "User cancelled")
+                                    }
+                                )
+                            }
+                        )
                     }
-                    
-                    // 如果没有任何内容，保留原始content
-                    if (partsArray.length() == 0) {
-                        partsArray.put(JSONObject().apply {
-                            put("text", contentWithoutGeminiMeta)
-                        })
-                    }
-                    
-                    val contentObject = JSONObject().apply {
-                        put("role", geminiRole)
-                        put("parts", partsArray)
-                    }
-                    contentsArray.put(contentObject)
+                )
+            }
+            openFunctionCallNames.clear()
+            return true
+        }
+
+        fun flushOpenFunctionCallsAsCancelled(reason: String) {
+            val partsArray = JSONArray()
+            if (!appendCancelledOpenFunctionResponses(partsArray, reason)) return
+            contentsArray.put(
+                JSONObject().apply {
+                    put("role", "user")
+                    put("parts", partsArray)
+                }
+            )
+        }
+
+        for (turn in historyWithoutSystem) {
+            val content =
+                if (!preserveThinkInHistory && turn.kind == PromptTurnKind.ASSISTANT) {
+                    ChatUtils.removeThinkingContent(turn.content)
                 } else {
-                    // system等其他角色正常处理
-                    val contentObject = JSONObject().apply {
+                    turn.content
+                }
+            val contentWithoutGeminiMeta = ChatMarkupRegex.removeGeminiThoughtSignatureMeta(content)
+
+            if (enableToolCall) {
+                when (turn.kind) {
+                    PromptTurnKind.ASSISTANT -> {
+                        val functionCallPayload = parseXmlToolCalls(content)
+                        if (functionCallPayload.functionCalls.isNotEmpty()) {
+                            if (openFunctionCallNames.isNotEmpty()) {
+                                flushOpenFunctionCallsAsCancelled("assistant_function_call_before_result")
+                            }
+                            queueFunctionCalls(
+                                functionCallPayload.textContent,
+                                functionCallPayload.functionCalls,
+                                functionCallPayload.thoughtSignature
+                            )
+                        } else {
+                            flushOpenFunctionCallsAsCancelled("assistant_boundary")
+                            contentsArray.put(
+                                JSONObject().apply {
+                                    put("role", "model")
+                                    put("parts", buildPartsArray(contentWithoutGeminiMeta))
+                                }
+                            )
+                        }
+                    }
+
+                    PromptTurnKind.TOOL_CALL -> {
+                        val functionCallPayload = parseXmlToolCalls(content)
+                        if (functionCallPayload.functionCalls.isNotEmpty()) {
+                            if (openFunctionCallNames.isNotEmpty()) {
+                                flushOpenFunctionCallsAsCancelled("typed_function_call_before_result")
+                            }
+                            queueFunctionCalls(
+                                functionCallPayload.textContent,
+                                functionCallPayload.functionCalls,
+                                functionCallPayload.thoughtSignature
+                            )
+                        } else {
+                            flushOpenFunctionCallsAsCancelled("typed_tool_call_without_payload")
+                            contentsArray.put(
+                                JSONObject().apply {
+                                    put("role", "model")
+                                    put("parts", buildPartsArray(contentWithoutGeminiMeta))
+                                }
+                            )
+                        }
+                    }
+
+                    PromptTurnKind.USER,
+                    PromptTurnKind.SUMMARY -> {
+                        val partsArray = JSONArray()
+                        appendCancelledOpenFunctionResponses(partsArray, "user_boundary")
+                        appendParts(partsArray, buildPartsArray(contentWithoutGeminiMeta))
+                        contentsArray.put(
+                            JSONObject().apply {
+                                put("role", "user")
+                                put("parts", partsArray)
+                            }
+                        )
+                    }
+
+                    PromptTurnKind.TOOL_RESULT -> {
+                        emitQueuedFunctionCallsIfNeeded()
+                        val (textContent, functionResponses) = parseXmlToolResults(contentWithoutGeminiMeta)
+                        val responsesList = functionResponses ?: emptyList()
+
+                        if (responsesList.isNotEmpty() && openFunctionCallNames.isNotEmpty()) {
+                            val partsArray = JSONArray()
+                            val validCount = minOf(responsesList.size, openFunctionCallNames.size)
+
+                            repeat(validCount) { index ->
+                                val response = JSONObject(responsesList[index].toString())
+                                val pendingName = openFunctionCallNames[index]
+                                if (pendingName.isNotBlank()) {
+                                    response.put("name", pendingName)
+                                }
+                                partsArray.put(
+                                    JSONObject().apply {
+                                        put("functionResponse", response)
+                                    }
+                                )
+                                logDebug("历史XML→GeminiFunctionResponse: ${response.optString("name")}")
+                            }
+
+                            repeat(validCount) {
+                                openFunctionCallNames.removeAt(0)
+                            }
+
+                            if (responsesList.size > validCount) {
+                                logDebug("发现多余的Gemini functionResponse: ${responsesList.size} results vs ${validCount} pending functionCalls")
+                            }
+
+                            if (textContent.isNotEmpty()) {
+                                appendParts(partsArray, buildPartsArray(textContent))
+                            }
+
+                            contentsArray.put(
+                                JSONObject().apply {
+                                    put("role", "user")
+                                    put("parts", partsArray)
+                                }
+                            )
+                        } else {
+                            val partsArray = JSONArray()
+                            appendCancelledOpenFunctionResponses(partsArray, "tool_result_without_structured_match")
+                            val fallbackContent =
+                                when {
+                                    textContent.isNotEmpty() -> textContent
+                                    contentWithoutGeminiMeta.isNotBlank() -> contentWithoutGeminiMeta
+                                    else -> "[Empty]"
+                                }
+                            appendParts(partsArray, buildPartsArray(fallbackContent))
+                            contentsArray.put(
+                                JSONObject().apply {
+                                    put("role", "user")
+                                    put("parts", partsArray)
+                                }
+                            )
+                        }
+                    }
+
+                    PromptTurnKind.SYSTEM -> Unit
+                }
+            } else {
+                val geminiRole =
+                    when (turn.kind) {
+                        PromptTurnKind.ASSISTANT,
+                        PromptTurnKind.TOOL_CALL -> "model"
+                        else -> "user"
+                    }
+                contentsArray.put(
+                    JSONObject().apply {
                         put("role", geminiRole)
                         put("parts", buildPartsArray(contentWithoutGeminiMeta))
                     }
-                    contentsArray.put(contentObject)
-                }
-            } else {
-                // 不启用Tool Call API时，保持原样
-                val contentObject = JSONObject().apply {
-                    put("role", geminiRole)
-                    put("parts", buildPartsArray(contentWithoutGeminiMeta))
-                }
-                contentsArray.put(contentObject)
+                )
             }
         }
+
+        flushOpenFunctionCallsAsCancelled("history_end")
 
         return Pair(Pair(contentsArray, systemInstruction), tokenCount)
     }
@@ -815,8 +1001,7 @@ class GeminiProvider(
     /** 发送消息到Gemini API */
     override suspend fun sendMessage(
             context: Context,
-            message: String,
-            chatHistory: List<Pair<String, String>>,
+            chatHistory: List<PromptTurn>,
             modelParameters: List<ModelParameter<*>>,
             enableThinking: Boolean,
             stream: Boolean,
@@ -888,7 +1073,7 @@ class GeminiProvider(
                     )
                 }
 
-                val requestBody = createRequestBody(context, message, chatHistory, modelParameters, enableThinking, availableTools, preserveThinkInHistory)
+                val requestBody = createRequestBody(context, chatHistory, modelParameters, enableThinking, availableTools, preserveThinkInHistory)
                 onTokensUpdated(
                         tokenCacheManager.totalInputTokenCount,
                         tokenCacheManager.cachedInputTokenCount,
@@ -971,8 +1156,7 @@ class GeminiProvider(
     /** 创建请求体 */
     private fun createRequestBody(
             context: Context,
-            message: String,
-            chatHistory: List<Pair<String, String>>,
+            chatHistory: List<PromptTurn>,
             modelParameters: List<ModelParameter<*>>,
             enableThinking: Boolean,
             availableTools: List<ToolPrompt>? = null,
@@ -1010,7 +1194,7 @@ class GeminiProvider(
             null
         }
 
-        val (contentsResult, _) = buildContentsAndCountTokens(message, chatHistory, toolsJson, preserveThinkInHistory)
+        val (contentsResult, _) = buildContentsAndCountTokens(chatHistory, toolsJson, preserveThinkInHistory)
         val (contentsArray, systemInstruction) = contentsResult
 
         if (systemInstruction != null) {
@@ -1703,8 +1887,18 @@ class GeminiProvider(
             // 通过发送一条短消息来测试完整的连接、认证和API端点。
             // 这比getModelsList更可靠，因为它直接命中了聊天API。
             // 提供一个通用的系统提示，以防止某些需要它的模型出现错误。
-            val testHistory = listOf("system" to "You are a helpful assistant.")
-            val stream = sendMessage(context, "Hi", testHistory, emptyList(), false, false, null, onTokensUpdated = { _, _, _ -> }, onNonFatalError = {}, enableRetry = false)
+            val testHistory = listOf("system" to "You are a helpful assistant.").toPromptTurns()
+            val stream = sendMessage(
+                context,
+                testHistory + PromptTurn(kind = PromptTurnKind.USER, content = "Hi"),
+                emptyList(),
+                false,
+                false,
+                null,
+                onTokensUpdated = { _, _, _ -> },
+                onNonFatalError = {},
+                enableRetry = false
+            )
 
             // 消耗流以确保连接有效。
             // 对 "Hi" 的响应应该很短，所以这会很快完成。

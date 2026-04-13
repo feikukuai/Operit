@@ -8,6 +8,7 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.collectIsDraggedAsState
@@ -62,6 +63,11 @@ private data class ChatScrollNavigatorSnapshot(
     val isScrollInProgress: Boolean,
 )
 
+internal data class ChatScrollMessageAnchor(
+    val absoluteTopPx: Float,
+    val heightPx: Int,
+)
+
 @Composable
 internal fun ChatScrollNavigator(
     chatHistory: List<ChatMessage>,
@@ -99,6 +105,167 @@ internal fun ChatScrollNavigator(
                         scrollState = scrollState,
                         minVisibleIndex = minVisibleIndex,
                         visibleMessageCount = visibleMessageCount,
+                        totalMessageCount = chatHistory.size,
+                    ),
+                isScrollInProgress = scrollState.isScrollInProgress,
+            )
+        }.collectLatest { snapshot ->
+            snapshot.centeredMessageIndex?.let { currentMessageIndex = it }
+            if (!userScrollSessionActive) {
+                return@collectLatest
+            }
+            if (snapshot.isScrollInProgress || currentIsDragged) {
+                showNavigatorChip = true
+                return@collectLatest
+            }
+            delay(650)
+            if (!scrollState.isScrollInProgress && !currentIsDragged) {
+                showNavigatorChip = false
+                userScrollSessionActive = false
+            }
+        }
+    }
+
+    val activeMessageIndex = currentMessageIndex
+
+    AnimatedVisibility(
+        visible = showNavigatorChip && activeMessageIndex != null,
+        modifier = modifier,
+        enter = fadeIn(animationSpec = tween(180)) + slideInHorizontally(initialOffsetX = { it / 2 }),
+        exit = fadeOut(animationSpec = tween(120)) + slideOutHorizontally(targetOffsetX = { it / 2 }),
+    ) {
+        val bubbleColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.84f)
+        val anchorLineColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f)
+        val anchorDotColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.92f)
+        val progress =
+            if (chatHistory.size <= 1) {
+                1f
+            } else {
+                (activeMessageIndex!!.toFloat() / (chatHistory.lastIndex).toFloat()).coerceIn(0f, 1f)
+            }
+
+        Row(
+            modifier =
+                Modifier.clickable {
+                    showLocatorDialog = true
+                    showNavigatorChip = false
+                    userScrollSessionActive = false
+                },
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Surface(
+                shape =
+                    RoundedCornerShape(
+                        topStart = 14.dp,
+                        bottomStart = 14.dp,
+                        topEnd = 10.dp,
+                        bottomEnd = 10.dp,
+                    ),
+                color = bubbleColor,
+                tonalElevation = 3.dp,
+                shadowElevation = 4.dp,
+                border =
+                    BorderStroke(
+                        width = 1.dp,
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.12f),
+                    ),
+            ) {
+                Box(
+                    modifier =
+                        Modifier
+                            .width(20.dp)
+                            .height(58.dp)
+                            .padding(vertical = 8.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Canvas(modifier = Modifier.size(width = 8.dp, height = 34.dp)) {
+                        val centerX = size.width / 2f
+                        val topY = 2.dp.toPx()
+                        val bottomY = size.height - 2.dp.toPx()
+                        val dotCenterY = topY + (bottomY - topY) * progress
+                        drawLine(
+                            color = anchorLineColor,
+                            start = Offset(centerX, topY),
+                            end = Offset(centerX, bottomY),
+                            strokeWidth = 1.5.dp.toPx(),
+                        )
+                        drawCircle(
+                            color = anchorDotColor,
+                            radius = 3.dp.toPx(),
+                            center = Offset(centerX, dotCenterY),
+                        )
+                    }
+                }
+            }
+
+            Canvas(
+                modifier =
+                    Modifier
+                        .offset(x = (-1).dp)
+                        .size(width = 9.dp, height = 18.dp),
+            ) {
+                val arrowPath =
+                    Path().apply {
+                        moveTo(0f, 0f)
+                        lineTo(size.width, size.height / 2f)
+                        lineTo(0f, size.height)
+                        close()
+                    }
+                drawPath(path = arrowPath, color = bubbleColor)
+            }
+        }
+    }
+
+    if (showLocatorDialog && activeMessageIndex != null) {
+        ChatMessageLocatorDialog(
+            chatHistory = chatHistory,
+            currentMessageIndex = activeMessageIndex,
+            onDismiss = { showLocatorDialog = false },
+            onJumpToMessage = { targetIndex ->
+                showLocatorDialog = false
+                onJumpToMessage(targetIndex)
+            },
+        )
+    }
+}
+
+@Composable
+internal fun ChatScrollNavigator(
+    chatHistory: List<ChatMessage>,
+    scrollState: ScrollState,
+    messageAnchors: Map<Int, ChatScrollMessageAnchor>,
+    viewportHeightPx: Int,
+    onJumpToMessage: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    if (chatHistory.size <= 1 || viewportHeightPx <= 0) {
+        return
+    }
+
+    val isDragged by scrollState.interactionSource.collectIsDraggedAsState()
+    val currentIsDragged by rememberUpdatedState(isDragged)
+    var showNavigatorChip by remember { mutableStateOf(false) }
+    var userScrollSessionActive by remember { mutableStateOf(false) }
+    var showLocatorDialog by remember { mutableStateOf(false) }
+    var currentMessageIndex by remember(chatHistory) {
+        mutableStateOf(chatHistory.lastIndex.takeIf { it >= 0 })
+    }
+
+    LaunchedEffect(isDragged) {
+        if (isDragged) {
+            userScrollSessionActive = true
+            showNavigatorChip = true
+        }
+    }
+
+    LaunchedEffect(scrollState, viewportHeightPx, chatHistory.size) {
+        snapshotFlow {
+            ChatScrollNavigatorSnapshot(
+                centeredMessageIndex =
+                    resolveCenteredMessageIndex(
+                        scrollState = scrollState,
+                        viewportHeightPx = viewportHeightPx,
+                        messageAnchors = messageAnchors,
                         totalMessageCount = chatHistory.size,
                     ),
                 isScrollInProgress = scrollState.isScrollInProgress,
@@ -435,6 +602,28 @@ private fun resolveCenteredMessageIndex(
             } ?: return null
 
     return (minVisibleIndex + visibleMessageItem.index).coerceIn(0, totalMessageCount - 1)
+}
+
+private fun resolveCenteredMessageIndex(
+    scrollState: ScrollState,
+    viewportHeightPx: Int,
+    messageAnchors: Map<Int, ChatScrollMessageAnchor>,
+    totalMessageCount: Int,
+): Int? {
+    if (viewportHeightPx <= 0 || totalMessageCount <= 0 || messageAnchors.isEmpty()) {
+        return null
+    }
+
+    val viewportCenter = scrollState.value + viewportHeightPx / 2f
+    val centeredMessage =
+        messageAnchors
+            .entries
+            .filter { it.key in 0 until totalMessageCount }
+            .minByOrNull { (_, anchor) ->
+                abs((anchor.absoluteTopPx + anchor.heightPx / 2f) - viewportCenter)
+            } ?: return null
+
+    return centeredMessage.key.coerceIn(0, totalMessageCount - 1)
 }
 
 private fun senderLabelRes(sender: String): Int =

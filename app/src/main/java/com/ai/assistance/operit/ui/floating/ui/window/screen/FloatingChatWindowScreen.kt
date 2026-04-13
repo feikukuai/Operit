@@ -4,7 +4,6 @@ import android.annotation.SuppressLint
 import com.ai.assistance.operit.util.AppLogger
 import androidx.compose.animation.core.*
 import androidx.compose.animation.*
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -15,6 +14,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
@@ -59,10 +60,6 @@ import com.ai.assistance.operit.ui.features.chat.components.ChatMessageHeightMem
 import com.ai.assistance.operit.ui.features.chat.components.ScrollToBottomButton
 import com.ai.assistance.operit.ui.features.chat.components.animateScrollToEnd
 import com.ai.assistance.operit.ui.features.chat.components.rememberChatMessageHeightMemory
-import com.ai.assistance.operit.ui.features.chat.components.lazy.LazyLayoutCacheWindow
-import com.ai.assistance.operit.ui.features.chat.components.lazy.RecyclerLazyColumn
-import com.ai.assistance.operit.ui.features.chat.components.lazy.itemsIndexed
-import com.ai.assistance.operit.ui.features.chat.components.lazy.rememberLazyListState as rememberChatLazyListState
 import com.ai.assistance.operit.ui.features.chat.components.style.cursor.CursorStyleChatMessage
 import com.ai.assistance.operit.ui.floating.ui.window.components.*
 import com.ai.assistance.operit.ui.floating.ui.window.models.*
@@ -622,16 +619,12 @@ private fun ColumnScope.ChatContentArea(
 
 /** 聊天消息视图 */
 @SuppressLint("SuspiciousIndentation")
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun ChatMessagesView(
     floatContext: FloatContext,
     viewModel: FloatingChatWindowModeViewModel
 ) {
-    val scrollState =
-        rememberChatLazyListState(
-            cacheWindow = LazyLayoutCacheWindow(aheadFraction = 1.5f, behindFraction = 0.75f)
-        )
+    val scrollState = rememberLazyListState()
     val messageHeightMemory = rememberChatMessageHeightMemory(floatContext.messages)
     val coroutineScope = rememberCoroutineScope()
     val userMessageColor = MaterialTheme.colorScheme.primaryContainer
@@ -711,7 +704,7 @@ private fun ChatMessagesView(
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        RecyclerLazyColumn(
+        LazyColumn(
             modifier = Modifier
                 .fillMaxSize(),
             state = scrollState,

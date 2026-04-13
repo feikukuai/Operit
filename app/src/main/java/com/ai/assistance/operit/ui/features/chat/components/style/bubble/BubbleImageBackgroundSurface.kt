@@ -637,12 +637,35 @@ private fun DrawScope.drawSlice(
 ) {
     if (srcW <= 0 || srcH <= 0 || dstW <= 0 || dstH <= 0) return
 
+    val bitmapWidth = bitmap.width
+    val bitmapHeight = bitmap.height
+    if (bitmapWidth <= 0 || bitmapHeight <= 0) return
+
+    val safeSrcX = srcX.coerceIn(0, bitmapWidth - 1)
+    val safeSrcY = srcY.coerceIn(0, bitmapHeight - 1)
+    val safeSrcW = min(srcW, bitmapWidth - safeSrcX)
+    val safeSrcH = min(srcH, bitmapHeight - safeSrcY)
+    if (safeSrcW <= 0 || safeSrcH <= 0) return
+
+    val safeDstW =
+        if (safeSrcW == srcW) {
+            dstW
+        } else {
+            max(1, (dstW * (safeSrcW.toFloat() / srcW.toFloat())).roundToInt())
+        }
+    val safeDstH =
+        if (safeSrcH == srcH) {
+            dstH
+        } else {
+            max(1, (dstH * (safeSrcH.toFloat() / srcH.toFloat())).roundToInt())
+        }
+
     drawImage(
         image = bitmap,
-        srcOffset = IntOffset(srcX, srcY),
-        srcSize = IntSize(srcW, srcH),
+        srcOffset = IntOffset(safeSrcX, safeSrcY),
+        srcSize = IntSize(safeSrcW, safeSrcH),
         dstOffset = IntOffset(dstX, dstY),
-        dstSize = IntSize(dstW, dstH),
+        dstSize = IntSize(safeDstW, safeDstH),
     )
 }
 

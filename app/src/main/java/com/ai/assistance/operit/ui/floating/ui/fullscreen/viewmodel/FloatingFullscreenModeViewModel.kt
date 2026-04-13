@@ -64,6 +64,7 @@ class FloatingFullscreenModeViewModel(
      private var aiStreamJob: Job? = null
      private var activeAiStreamIdentity: Int? = null
      private var activeAiMessageTimestamp: Long? = null
+     private var ttsSpeakJob: Job? = null
 
     private val wakePrefs by lazy { WakeWordPreferences(context.applicationContext) }
     private var inactivityTimeoutSeconds: Int = WakeWordPreferences.DEFAULT_VOICE_CALL_INACTIVITY_TIMEOUT_SECONDS
@@ -125,6 +126,8 @@ class FloatingFullscreenModeViewModel(
     }
 
     private fun stopCurrentTtsPlayback() {
+        ttsSpeakJob?.cancel()
+        ttsSpeakJob = null
         coroutineScope.launch { speechManager.voiceService.stop() }
     }
 
@@ -277,10 +280,28 @@ class FloatingFullscreenModeViewModel(
             if (armMicSuppression && isWaveActive) {
                 suppressRecognitionUntilMs = System.currentTimeMillis() + FULLSCREEN_TTS_CAPTURE_SUPPRESS_MS
             }
-            speechManager.speak(cleanText, interrupt)
+            enqueueSpeak(cleanText, interrupt)
             return true
         }
         return false
+    }
+
+    private fun enqueueSpeak(text: String, interrupt: Boolean) {
+        val previousJob = if (interrupt) {
+            ttsSpeakJob?.cancel()
+            null
+        } else {
+            ttsSpeakJob
+        }
+
+        ttsSpeakJob =
+            coroutineScope.launch {
+                try {
+                    previousJob?.join()
+                    speechManager.voiceService.speak(text, interrupt)
+                } catch (_: kotlinx.coroutines.CancellationException) {
+                }
+            }
     }
 
     // ===== 语音交互 =====
@@ -431,10 +452,12 @@ class FloatingFullscreenModeViewModel(
          }
      }
 
-    fun cleanup() {
+     fun cleanup() {
         val view = floatContext.chatService?.getComposeView()
         speechManager.releaseFocus(view)
         speechManager.cleanup()
+        ttsSpeakJob?.cancel()
+        ttsSpeakJob = null
         cancelPendingVoiceCaptureResume()
 
         prefsJob?.cancel()

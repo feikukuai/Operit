@@ -33,6 +33,7 @@ fun ToolResultDisplay(
         result: String,
         isSuccess: Boolean = true,
         onCopyResult: () -> Unit = {},
+        modifier: Modifier = Modifier,
         enableDialog: Boolean = true  // 新增参数：是否启用弹窗功能，默认启用
 ) {
     val context = LocalContext.current
@@ -64,17 +65,35 @@ fun ToolResultDisplay(
         } else {
             context.getString(R.string.execution_failed)
         }
-    val semanticDescription = remember(toolName, summaryText, isSuccess) {
+    val semanticResultText = remember(result, hasContent) {
+        if (!hasContent) {
+            ""
+        } else {
+            result
+                .replace("\n", " ")
+                .replace(Regex("\\s+"), " ")
+                .trim()
+                .let { normalized ->
+                    if (normalized.length <= 20) normalized else normalized.take(20) + "..."
+                }
+        }
+    }
+    val semanticDescription = remember(toolName, summaryText, semanticResultText, isSuccess, hasContent) {
         val resultLabel = context.getString(R.string.tool_execution_result)
         val statusLabel =
             if (isSuccess) context.getString(R.string.success) else context.getString(R.string.failed)
-        "$resultLabel: $toolName, $statusLabel, $summaryText"
+        if (hasContent && semanticResultText.isNotBlank()) {
+            "$resultLabel: $toolName, $statusLabel, $semanticResultText"
+        } else {
+            "$resultLabel: $toolName, $statusLabel, $summaryText"
+        }
     }
 
     CanvasToolResultRow(
         summary = summaryText,
         isSuccess = isSuccess,
         semanticDescription = semanticDescription,
+        modifier = modifier,
         emphasizeSummary = !hasContent,
         onClick =
             if (hasContent && enableDialog) {

@@ -5,6 +5,9 @@ import android.net.Uri
 import android.os.Environment
 import android.util.Base64
 import com.ai.assistance.operit.R
+import com.ai.assistance.operit.core.chat.hooks.PromptTurn
+import com.ai.assistance.operit.core.chat.hooks.PromptTurnKind
+import com.ai.assistance.operit.core.chat.hooks.mergeAdjacentTurns
 import com.ai.assistance.operit.data.model.ApiProviderType
 import com.ai.assistance.operit.data.model.ModelOption
 import com.ai.assistance.operit.data.model.ModelParameter
@@ -211,11 +214,14 @@ open class OpenAIProvider(
 
      override suspend fun testConnection(context: Context): Result<String> {
          return try {
-             val testHistory = listOf("system" to "You are a helpful assistant.")
+             val testHistory =
+                 listOf(
+                     PromptTurn(kind = PromptTurnKind.SYSTEM, content = "You are a helpful assistant."),
+                     PromptTurn(kind = PromptTurnKind.USER, content = "Hi")
+                 )
              val stream =
                  sendMessage(
                      context,
-                     "Hi",
                      testHistory,
                      emptyList(),
                      false,
@@ -506,8 +512,7 @@ open class OpenAIProvider(
     // 创建请求体
     protected open fun createRequestBody(
         context: Context,
-        message: String,
-        chatHistory: List<Pair<String, String>>,
+        chatHistory: List<PromptTurn>,
         modelParameters: List<ModelParameter<*>> = emptyList(),
         enableThinking: Boolean = false,
         stream: Boolean = true,
@@ -515,7 +520,7 @@ open class OpenAIProvider(
         preserveThinkInHistory: Boolean = false
     ): RequestBody {
         val jsonString =
-            createRequestBodyInternal(context, message, chatHistory, modelParameters, stream, availableTools, preserveThinkInHistory)
+            createRequestBodyInternal(context, chatHistory, modelParameters, stream, availableTools, preserveThinkInHistory)
         return createJsonRequestBody(jsonString)
     }
 
@@ -528,8 +533,7 @@ open class OpenAIProvider(
      */
     protected fun createRequestBodyInternal(
         context: Context,
-        message: String,
-        chatHistory: List<Pair<String, String>>,
+        chatHistory: List<PromptTurn>,
         modelParameters: List<ModelParameter<*>> = emptyList(),
         stream: Boolean = true,
         availableTools: List<ToolPrompt>? = null,
@@ -604,7 +608,6 @@ open class OpenAIProvider(
         // 使用新的核心逻辑构建消息并获取token计数
         val (messagesArray, tokenCount) = buildMessagesAndCountTokens(
             context,
-            message,
             chatHistory,
             effectiveEnableToolCall,
             toolsJson,
@@ -630,6 +633,58 @@ open class OpenAIProvider(
         val sanitizedLogJson = sanitizeImageDataForLogging(logJson)
         logLargeString("AIService", sanitizedLogJson.toString(4), "Request body: ")
         return finalRequestObject.toString()
+    }
+
+    protected open fun comparableRoleForTurn(turn: PromptTurn): String {
+        return when (turn.kind) {
+            PromptTurnKind.SYSTEM -> "system"
+            PromptTurnKind.USER -> "user"
+            PromptTurnKind.ASSISTANT -> "assistant"
+            PromptTurnKind.TOOL_CALL -> "tool_call"
+            PromptTurnKind.TOOL_RESULT -> "tool_result"
+            PromptTurnKind.SUMMARY -> "summary"
+        }
+    }
+
+    protected open fun providerRoleForTurn(turn: PromptTurn): String {
+        return when (turn.kind) {
+            PromptTurnKind.SYSTEM -> "system"
+            PromptTurnKind.USER,
+            PromptTurnKind.SUMMARY,
+            PromptTurnKind.TOOL_RESULT -> "user"
+            PromptTurnKind.ASSISTANT,
+            PromptTurnKind.TOOL_CALL -> "assistant"
+        }
+    }
+
+    protected open fun comparableContentForTurn(
+        turn: PromptTurn,
+        preserveThinkInHistory: Boolean
+    ): String {
+        return if (!preserveThinkInHistory && turn.kind == PromptTurnKind.ASSISTANT) {
+            ChatUtils.removeThinkingContent(turn.content)
+        } else {
+            turn.content
+        }
+    }
+
+    protected open fun buildComparableHistory(
+        chatHistory: List<PromptTurn>,
+        preserveThinkInHistory: Boolean
+    ): List<Pair<String, String>> {
+        return chatHistory.map { turn ->
+            comparableRoleForTurn(turn) to comparableContentForTurn(turn, preserveThinkInHistory)
+        }
+    }
+
+    protected open fun buildEffectiveHistory(
+        chatHistory: List<PromptTurn>
+    ): List<PromptTurn> {
+        return chatHistory
+    }
+
+    protected open fun mergePromptTurnsForProvider(history: List<PromptTurn>): List<PromptTurn> {
+        return history.mergeAdjacentTurns()
     }
 
     /**
@@ -752,8 +807,7 @@ open class OpenAIProvider(
      */
     protected fun buildMessagesAndCountTokens(
         context: Context,
-        message: String,
-        chatHistory: List<Pair<String, String>>,
+        chatHistory: List<PromptTurn>,
         useToolCall: Boolean = false,
         toolsJson: String? = null,
         preserveThinkInHistory: Boolean = false
@@ -761,147 +815,222 @@ open class OpenAIProvider(
         val messagesArray = JSONArray()
 
         // 使用TokenCacheManager计算token数量（包含工具定义）
-        val tokenCount = tokenCacheManager.calculateInputTokens(message, chatHistory, toolsJson)
+        val comparableHistory = buildComparableHistory(chatHistory, preserveThinkInHistory)
+        val tokenCount = tokenCacheManager.calculateInputTokens(comparableHistory, toolsJson)
 
-        // 检查当前消息是否已经在历史记录的末尾（避免重复）
-        val isMessageInHistory = chatHistory.isNotEmpty() && chatHistory.last().second == message
+        val effectiveHistory = mergePromptTurnsForProvider(buildEffectiveHistory(chatHistory))
 
-        // 如果消息已在历史中，只处理历史；否则需要处理历史+当前消息
-        val effectiveHistory = if (isMessageInHistory) {
-            chatHistory
-        } else {
-            chatHistory + ("user" to message)
+        var queuedAssistantToolText: String? = null
+        var queuedToolCalls = JSONArray()
+        val queuedToolCallIds = mutableListOf<String>()
+        val openToolCallIds = mutableListOf<String>()
+
+        fun appendQueuedAssistantToolText(text: String) {
+            if (text.isBlank()) return
+            queuedAssistantToolText =
+                if (queuedAssistantToolText.isNullOrBlank()) {
+                    text
+                } else {
+                    queuedAssistantToolText + "\n" + text
+                }
         }
 
-        // 追踪上一个assistant消息中的tool_call_ids，用于匹配tool结果
-        val lastToolCallIds = mutableListOf<String>()
-
-        // 添加聊天历史（包含当前消息如果它不在历史中）
-        if (effectiveHistory.isNotEmpty()) {
-            val standardizedHistory = ChatUtils.mapChatHistoryToStandardRoles(effectiveHistory, extractThinking = preserveThinkInHistory)
-            val mergedHistory = mutableListOf<Pair<String, String>>()
-
-            for ((role, content) in standardizedHistory) {
-                if (mergedHistory.isNotEmpty() &&
-                    role == mergedHistory.last().first &&
-                    role != "system"
-                ) {
-                    val lastMessage = mergedHistory.last()
-                    mergedHistory[mergedHistory.size - 1] =
-                        Pair(lastMessage.first, lastMessage.second + "\n" + content)
-                    AppLogger.d("AIService", "合并连续的 $role 消息")
-                } else {
-                    mergedHistory.add(Pair(role, content))
+        fun queueToolCalls(textContent: String, toolCalls: JSONArray) {
+            appendQueuedAssistantToolText(textContent)
+            for (i in 0 until toolCalls.length()) {
+                val toolCall = toolCalls.optJSONObject(i) ?: continue
+                queuedToolCalls.put(toolCall)
+                val callId = toolCall.optString("id", "").trim()
+                if (callId.isNotEmpty()) {
+                    queuedToolCallIds.add(callId)
                 }
             }
+        }
 
-            for ((role, content) in mergedHistory) {
+        fun emitQueuedToolCallsIfNeeded() {
+            if (queuedToolCalls.length() == 0) return
+
+            val historyMessage = JSONObject()
+            historyMessage.put("role", "assistant")
+            val effectiveContent = when {
+                !queuedAssistantToolText.isNullOrBlank() -> queuedAssistantToolText
+                else -> null
+            }
+            if (effectiveContent != null) {
+                historyMessage.put("content", buildContentField(context, effectiveContent))
+            } else {
+                historyMessage.put("content", null)
+            }
+            historyMessage.put("tool_calls", queuedToolCalls)
+            messagesArray.put(historyMessage)
+
+            openToolCallIds.addAll(queuedToolCallIds)
+            queuedAssistantToolText = null
+            queuedToolCalls = JSONArray()
+            queuedToolCallIds.clear()
+        }
+
+        fun flushOpenToolCallsAsCancelled(reason: String) {
+            emitQueuedToolCallsIfNeeded()
+            if (openToolCallIds.isEmpty()) return
+
+            AppLogger.w(
+                "AIService",
+                "发现未完成的tool_calls，按取消处理: count=${openToolCallIds.size}, reason=$reason"
+            )
+            for (toolCallId in openToolCallIds) {
+                messagesArray.put(
+                    JSONObject().apply {
+                        put("role", "tool")
+                        put("tool_call_id", toolCallId)
+                        put("content", "User cancelled")
+                    }
+                )
+            }
+            openToolCallIds.clear()
+        }
+
+        // 添加聊天历史
+        if (effectiveHistory.isNotEmpty()) {
+            for (turn in effectiveHistory) {
+                val content = comparableContentForTurn(turn, preserveThinkInHistory)
                 // 当启用Tool Call API时，转换XML格式的工具调用
                 if (useToolCall) {
-                    if (role == "assistant") {
-                        // 解析assistant消息中的XML tool calls
-                        val (textContent, parsedToolCalls) = parseXmlToolCalls(content)
-                        val toolCalls =
-                            if (parsedToolCalls != null) {
-                                wrapPackageToolCallsWithProxy(parsedToolCalls)
-                            } else {
-                                parsedToolCalls
-                            }
-                        val historyMessage = JSONObject()
-                        historyMessage.put("role", role)
-
-                        // 检查是否为空消息，如果是则填充 "[空消息]"
-                        val effectiveContent = if (content.isBlank()) {
-                            AppLogger.d("AIService", "发现空的assistant消息，填充为[空消息]")
-                            "[Empty]"
-                        } else if (textContent.isNotEmpty()) {
-                            textContent
-                        } else {
-                            null
-                        }
-
-                        if (effectiveContent != null) {
-                            historyMessage.put("content", buildContentField(context, effectiveContent))
-                        } else {
-                            historyMessage.put("content", null)
-                        }
-                        if (toolCalls != null && toolCalls.length() > 0) {
-                            historyMessage.put("tool_calls", toolCalls)
-                            // 记录这些tool_call_ids供后续tool消息使用
-                            lastToolCallIds.clear()
-                            for (i in 0 until toolCalls.length()) {
-                                lastToolCallIds.add(toolCalls.getJSONObject(i).getString("id"))
-                            }
-                        }
-                        messagesArray.put(historyMessage)
-                    } else if (role == "user") {
-                        // 解析user消息中的XML tool_result
-                        val (textContent, toolResults) = parseXmlToolResults(content)
-
-                        // 标记是否处理了tool_call（包括结果或取消）
-                        var hasHandledToolCalls = false
-
-                        // 如果有待处理的tool call，需要添加结果或取消状态
-                        if (lastToolCallIds.isNotEmpty()) {
-                            val resultsList = toolResults ?: emptyList()
-                            val resultCount = resultsList.size
-                            val callCount = lastToolCallIds.size
-
-                            // 遍历所有待处理的tool call
-                            for (i in 0 until callCount) {
-                                val toolCallId = lastToolCallIds[i]
-                                val toolMessage = JSONObject()
-                                toolMessage.put("role", "tool")
-                                toolMessage.put("tool_call_id", toolCallId)
-
-                                if (i < resultCount) {
-                                    // 有对应的结果
-                                    val (_, resultContent) = resultsList[i]
-                                    toolMessage.put("content", resultContent)
-                                } else {
-                                    // 没有结果，补充取消状态
-                                    toolMessage.put("content", "User cancelled")
+                    when (turn.kind) {
+                        PromptTurnKind.SYSTEM -> {
+                            flushOpenToolCallsAsCancelled("system_boundary")
+                            messagesArray.put(
+                                JSONObject().apply {
+                                    put("role", "system")
+                                    put("content", buildContentField(context, content))
                                 }
-                                messagesArray.put(toolMessage)
-                            }
+                            )
+                        }
 
-                            hasHandledToolCalls = true
+                        PromptTurnKind.USER,
+                        PromptTurnKind.SUMMARY -> {
+                            flushOpenToolCallsAsCancelled("user_boundary")
+                            messagesArray.put(
+                                JSONObject().apply {
+                                    put("role", "user")
+                                    put("content", buildContentField(context, content))
+                                }
+                            )
+                        }
 
-                            // 如果有多余的tool_result，记录警告
-                            if (resultCount > callCount) {
-                                AppLogger.w(
-                                    "AIService",
-                                    "发现多余的tool_result: $resultCount results vs $callCount tool_calls"
+                        PromptTurnKind.ASSISTANT -> {
+                            val (textContent, parsedToolCalls) = parseXmlToolCalls(content)
+                            val toolCalls =
+                                if (parsedToolCalls != null) {
+                                    wrapPackageToolCallsWithProxy(parsedToolCalls)
+                                } else {
+                                    null
+                                }
+
+                            if (toolCalls != null && toolCalls.length() > 0) {
+                                if (openToolCallIds.isNotEmpty()) {
+                                    flushOpenToolCallsAsCancelled("assistant_tool_call_before_result")
+                                }
+                                queueToolCalls(textContent, toolCalls)
+                            } else {
+                                flushOpenToolCallsAsCancelled("assistant_boundary")
+                                val effectiveContent = if (content.isBlank()) {
+                                    AppLogger.d("AIService", "发现空的assistant消息，填充为[空消息]")
+                                    "[Empty]"
+                                } else {
+                                    content
+                                }
+                                messagesArray.put(
+                                    JSONObject().apply {
+                                        put("role", "assistant")
+                                        put("content", buildContentField(context, effectiveContent))
+                                    }
                                 )
                             }
-
-                            // 使用后清空
-                            lastToolCallIds.clear()
                         }
 
-                        // 如果还有其他文本内容，添加为user消息
-                        if (textContent.isNotEmpty()) {
-                            val historyMessage = JSONObject()
-                            historyMessage.put("role", role)
-                            historyMessage.put("content", buildContentField(context, textContent))
-                            messagesArray.put(historyMessage)
-                        } else if (!hasHandledToolCalls) {
-                            // 如果没有处理任何tool_call（且无剩余文本），说明这是一个普通用户消息或者无法匹配的工具结果
-                            // 保留原始content
-                            val historyMessage = JSONObject()
-                            historyMessage.put("role", role)
-                            historyMessage.put("content", buildContentField(context, content))
-                            messagesArray.put(historyMessage)
-                        } else {
+                        PromptTurnKind.TOOL_CALL -> {
+                            val (textContent, parsedToolCalls) = parseXmlToolCalls(content)
+                            val toolCalls =
+                                if (parsedToolCalls != null) {
+                                    wrapPackageToolCallsWithProxy(parsedToolCalls)
+                                } else {
+                                    null
+                                }
+
+                            if (toolCalls != null && toolCalls.length() > 0) {
+                                if (openToolCallIds.isNotEmpty()) {
+                                    flushOpenToolCallsAsCancelled("typed_tool_call_before_result")
+                                }
+                                queueToolCalls(textContent, toolCalls)
+                            } else {
+                                flushOpenToolCallsAsCancelled("typed_tool_call_without_payload")
+                                val effectiveContent = if (content.isBlank()) "[Empty]" else content
+                                messagesArray.put(
+                                    JSONObject().apply {
+                                        put("role", "assistant")
+                                        put("content", buildContentField(context, effectiveContent))
+                                    }
+                                )
+                            }
                         }
-                    } else {
-                        // system等其他角色正常处理
-                        val historyMessage = JSONObject()
-                        historyMessage.put("role", role)
-                        historyMessage.put("content", buildContentField(context, content))
-                        messagesArray.put(historyMessage)
+
+                        PromptTurnKind.TOOL_RESULT -> {
+                            emitQueuedToolCallsIfNeeded()
+                            val (textContent, toolResults) = parseXmlToolResults(content)
+                            val resultsList = toolResults ?: emptyList()
+
+                            if (resultsList.isNotEmpty() && openToolCallIds.isNotEmpty()) {
+                                val validCount = minOf(resultsList.size, openToolCallIds.size)
+                                repeat(validCount) { index ->
+                                    val (_, resultContent) = resultsList[index]
+                                    messagesArray.put(
+                                        JSONObject().apply {
+                                            put("role", "tool")
+                                            put("tool_call_id", openToolCallIds[index])
+                                            put("content", resultContent)
+                                        }
+                                    )
+                                }
+                                repeat(validCount) {
+                                    openToolCallIds.removeAt(0)
+                                }
+
+                                if (resultsList.size > validCount) {
+                                    AppLogger.w(
+                                        "AIService",
+                                        "发现多余的tool_result: ${resultsList.size} results vs ${validCount} pending tool_calls"
+                                    )
+                                }
+
+                                if (textContent.isNotEmpty()) {
+                                    messagesArray.put(
+                                        JSONObject().apply {
+                                            put("role", "user")
+                                            put("content", buildContentField(context, textContent))
+                                        }
+                                    )
+                                }
+                            } else {
+                                flushOpenToolCallsAsCancelled("tool_result_without_structured_match")
+                                val fallbackContent =
+                                    when {
+                                        textContent.isNotEmpty() -> textContent
+                                        content.isNotBlank() -> content
+                                        else -> "[Empty]"
+                                    }
+                                messagesArray.put(
+                                    JSONObject().apply {
+                                        put("role", "user")
+                                        put("content", buildContentField(context, fallbackContent))
+                                    }
+                                )
+                            }
+                        }
                     }
                 } else {
+                    flushOpenToolCallsAsCancelled("tool_call_api_disabled")
+                    val role = providerRoleForTurn(turn)
                     // 不启用Tool Call API时，保持原样
                     val historyMessage = JSONObject()
                     historyMessage.put("role", role)
@@ -920,12 +1049,13 @@ open class OpenAIProvider(
             }
         }
 
+        flushOpenToolCallsAsCancelled("history_end")
+
         return Pair(messagesArray, tokenCount)
     }
 
     override suspend fun calculateInputTokens(
-        message: String,
-        chatHistory: List<Pair<String, String>>,
+        chatHistory: List<PromptTurn>,
         availableTools: List<ToolPrompt>?
     ): Int {
         // 构建工具定义的JSON字符串
@@ -935,9 +1065,12 @@ open class OpenAIProvider(
                 if (tools.length() > 0) tools.toString() else null
             } else {
                 null
-            }
+        }
         // 使用TokenCacheManager计算token数量
-        return tokenCacheManager.calculateInputTokens(message, chatHistory, toolsJson)
+        return tokenCacheManager.calculateInputTokens(
+            buildComparableHistory(chatHistory, preserveThinkInHistory = false),
+            toolsJson
+        )
     }
 
     // ==================== Tool Call 支持 ====================
@@ -2046,8 +2179,7 @@ open class OpenAIProvider(
 
     override suspend fun sendMessage(
         context: Context,
-        message: String,
-        chatHistory: List<Pair<String, String>>,
+        chatHistory: List<PromptTurn>,
         modelParameters: List<ModelParameter<*>>,
         enableThinking: Boolean,
         stream: Boolean,
@@ -2070,7 +2202,7 @@ open class OpenAIProvider(
 
             AppLogger.d(
                 "AIService",
-                "【发送消息】开始处理sendMessage请求，消息长度: ${message.length}，历史记录数量: ${chatHistory.size}"
+                "【发送消息】开始处理sendMessage请求，历史记录数量: ${chatHistory.size}，最后一条长度: ${chatHistory.lastOrNull()?.content?.length ?: 0}"
             )
 
             val maxRetries = LlmRetryPolicy.MAX_RETRY_ATTEMPTS
@@ -2095,7 +2227,6 @@ open class OpenAIProvider(
                         )
                     }
 
-                    val currentMessage = message
                     val currentHistory = chatHistory
 
                 AppLogger.d(
@@ -2105,7 +2236,6 @@ open class OpenAIProvider(
                 // 直接传递原始历史记录给createRequestBody，让具体的Provider决定如何处理（例如Deepseek需要保留<think>标签）
                 val requestBody = createRequestBody(
                     context,
-                    currentMessage,
                     currentHistory,
                     modelParameters,
                     enableThinking,

@@ -4862,6 +4862,8 @@
     <string name="ui_accessibility_mode_description">为 TalkBack 等无障碍用户优化 UI 自动化行为，优先给出可朗读的操作步骤，谨慎执行自动点击。</string>
     <string name="experimental_virtual_display">实验性虚拟屏幕</string>
     <string name="experimental_virtual_display_description">使用基于虚拟屏幕的 ADB+Shizuku 自动化，功能仍在实验阶段，可能不稳定。</string>
+    <string name="hide_runtime_task_view">运行时任务视图隐藏</string>
+    <string name="hide_runtime_task_view_description">AI 处理消息或执行工具时，从系统最近任务中隐藏应用任务卡片，避免在最近任务里被误滑关闭。</string>
     
     <!-- Chat History Management -->
     <string name="default_profile_name">默认配置</string>

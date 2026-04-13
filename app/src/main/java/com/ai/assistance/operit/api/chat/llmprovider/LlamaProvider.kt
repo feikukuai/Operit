@@ -4,6 +4,8 @@ import android.content.Context
 import android.os.Environment
 import com.ai.assistance.llama.LlamaSession
 import com.ai.assistance.operit.R
+import com.ai.assistance.operit.core.chat.hooks.PromptTurn
+import com.ai.assistance.operit.core.chat.hooks.PromptTurnKind
 import com.ai.assistance.operit.data.model.ApiProviderType
 import com.ai.assistance.operit.data.model.ModelOption
 import com.ai.assistance.operit.data.model.ModelParameter
@@ -122,8 +124,7 @@ class LlamaProvider(
     }
 
     override suspend fun calculateInputTokens(
-        message: String,
-        chatHistory: List<Pair<String, String>>,
+        chatHistory: List<PromptTurn>,
         availableTools: List<ToolPrompt>?
     ): Int {
         return withContext(Dispatchers.IO) {
@@ -132,16 +133,14 @@ class LlamaProvider(
                 if (s == null) return@runCatching null
 
                 val prompt = if (shouldUseToolCall(availableTools)) {
-                    val fullHistory = chatHistory + ("user" to message)
                     val messagesJson = StructuredToolCallBridge.buildMessagesJson(
-                        history = fullHistory,
+                        history = chatHistory,
                         preserveThinkInHistory = false
                     )
                     val toolsJson = StructuredToolCallBridge.buildToolsJson(availableTools)
                     s.applyStructuredChatTemplate(messagesJson, toolsJson, true)
                 } else {
                     val (roles, contents) = buildPlainPromptMessages(
-                        message = message,
                         chatHistory = chatHistory,
                         preserveThinkInHistory = false
                     )
@@ -155,8 +154,7 @@ class LlamaProvider(
 
     override suspend fun sendMessage(
         context: Context,
-        message: String,
-        chatHistory: List<Pair<String, String>>,
+        chatHistory: List<PromptTurn>,
         modelParameters: List<ModelParameter<*>>,
         enableThinking: Boolean,
         stream: Boolean,
@@ -195,16 +193,14 @@ class LlamaProvider(
 
         val prompt = withContext(Dispatchers.IO) {
             if (effectiveEnableToolCall) {
-                val fullHistory = chatHistory + ("user" to message)
                 val messagesJson = StructuredToolCallBridge.buildMessagesJson(
-                    history = fullHistory,
+                    history = chatHistory,
                     preserveThinkInHistory = preserveThinkInHistory
                 )
                 val toolsJson = StructuredToolCallBridge.buildToolsJson(availableTools)
                 s.applyStructuredChatTemplate(messagesJson, toolsJson, true)
             } else {
                 val (roles, contents) = buildPlainPromptMessages(
-                    message = message,
                     chatHistory = chatHistory,
                     preserveThinkInHistory = preserveThinkInHistory
                 )
@@ -337,24 +333,36 @@ class LlamaProvider(
     }
 
     private fun buildPlainPromptMessages(
-        message: String,
-        chatHistory: List<Pair<String, String>>,
+        chatHistory: List<PromptTurn>,
         preserveThinkInHistory: Boolean
     ): Pair<List<String>, List<String>> {
-        val normalizedHistory = ChatUtils.mapChatHistoryToStandardRoles(
-            chatHistory,
-            extractThinking = preserveThinkInHistory
-        )
-        val roles = ArrayList<String>(normalizedHistory.size + 1)
-        val contents = ArrayList<String>(normalizedHistory.size + 1)
+        val normalizedHistory =
+            chatHistory.map { turn ->
+                val role =
+                    when (turn.kind) {
+                        PromptTurnKind.SYSTEM -> "system"
+                        PromptTurnKind.USER,
+                        PromptTurnKind.SUMMARY,
+                        PromptTurnKind.TOOL_RESULT -> "user"
+                        PromptTurnKind.ASSISTANT,
+                        PromptTurnKind.TOOL_CALL -> "assistant"
+                    }
+                val content =
+                    if (!preserveThinkInHistory && turn.kind == PromptTurnKind.ASSISTANT) {
+                        ChatUtils.removeThinkingContent(turn.content)
+                    } else {
+                        turn.content
+                    }
+                role to content
+            }
+        val roles = ArrayList<String>(normalizedHistory.size)
+        val contents = ArrayList<String>(normalizedHistory.size)
 
         for ((role, content) in normalizedHistory) {
             roles.add(role)
             contents.add(content)
         }
 
-        roles.add("user")
-        contents.add(message)
         return roles to contents
     }
 

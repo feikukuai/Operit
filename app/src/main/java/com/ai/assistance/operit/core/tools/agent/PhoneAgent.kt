@@ -12,6 +12,7 @@ import android.view.KeyEvent
 import androidx.core.content.FileProvider
 import com.ai.assistance.operit.R
 import com.ai.assistance.operit.api.chat.llmprovider.AIService
+import com.ai.assistance.operit.core.chat.hooks.toPromptTurns
 import com.ai.assistance.operit.core.tools.AIToolHandler
 import com.ai.assistance.operit.core.tools.AppListData
 import com.ai.assistance.operit.core.tools.defaultTool.standard.StandardUITools
@@ -622,8 +623,7 @@ class PhoneAgent(
 
         val responseStream = uiService.sendMessage(
             context = context,
-            message = userMessage,
-            chatHistory = _contextHistory.toList(),
+            chatHistory = _contextHistory.toList().toPromptTurns(),
             enableThinking = false,
             stream = true,
             preserveThinkInHistory = true

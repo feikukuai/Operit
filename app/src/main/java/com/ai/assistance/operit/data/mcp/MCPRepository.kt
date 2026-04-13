@@ -1194,9 +1194,13 @@ class MCPRepository(private val context: Context) {
             return emptyList()
         }
 
-        val mcpPackage = MCPPackage.fromServer(context, serverConfig)
+        val mcpLoadResult = MCPPackage.loadFromServer(context, serverConfig)
+        val mcpPackage = mcpLoadResult.mcpPackage
         if (mcpPackage == null) {
-            AppLogger.w(TAG, "无法从服务器 $pluginId 获取MCP包")
+            AppLogger.w(
+                TAG,
+                "无法从服务器 $pluginId 获取MCP包: ${mcpLoadResult.errorMessage ?: "unknown reason"}"
+            )
             return emptyList()
         }
 

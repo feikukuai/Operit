@@ -5,6 +5,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.app.ActivityManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -676,6 +677,10 @@ class AIForegroundService : Service() {
     private var characterName: String? = null
     private var avatarUri: String? = null
     private var isAiBusy: Boolean = false
+    @Volatile
+    private var hideRuntimeTaskViewEnabled: Boolean = false
+    @Volatile
+    private var lastAppliedRuntimeTaskViewHidden: Boolean? = null
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val chatRuntimeHolder by lazy { ChatRuntimeHolder.getInstance(applicationContext) }
@@ -897,10 +902,59 @@ class AIForegroundService : Service() {
                 specialUse = runCatching { externalHttpPreferences.getEnabled() }.getOrDefault(false)
             )
         )
+        observeRuntimeTaskViewPreference()
         observeChatRuntimeStats()
         startWakeMonitoring()
         startExternalHttpMonitoring()
         AppLogger.d(TAG, "AI 前台服务已启动。")
+    }
+
+    private fun observeRuntimeTaskViewPreference() {
+        serviceScope.launch {
+            try {
+                DisplayPreferencesManager
+                    .getInstance(applicationContext)
+                    .hideRuntimeTaskView
+                    .collectLatest { enabled ->
+                        hideRuntimeTaskViewEnabled = enabled
+                        updateRuntimeTaskViewVisibility()
+                    }
+            } catch (e: Exception) {
+                AppLogger.e(TAG, "监听运行时任务视图隐藏设置失败: ${e.message}", e)
+            }
+        }
+    }
+
+    private fun updateAiBusyState(isBusy: Boolean) {
+        isAiBusy = isBusy
+        updateRuntimeTaskViewVisibility()
+    }
+
+    private fun updateRuntimeTaskViewVisibility() {
+        val shouldHide = hideRuntimeTaskViewEnabled && isAiBusy
+        if (lastAppliedRuntimeTaskViewHidden == shouldHide) return
+
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) return
+
+        try {
+            val activityManager = getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
+            val appTasks = activityManager?.appTasks.orEmpty()
+            if (appTasks.isEmpty()) {
+                AppLogger.d(TAG, "更新运行时任务视图隐藏状态时未找到任务: hidden=$shouldHide")
+                return
+            }
+            appTasks.forEach { task ->
+                try {
+                    task.setExcludeFromRecents(shouldHide)
+                } catch (e: Exception) {
+                    AppLogger.e(TAG, "设置任务最近任务可见性失败: hidden=$shouldHide", e)
+                }
+            }
+            lastAppliedRuntimeTaskViewHidden = shouldHide
+            AppLogger.d(TAG, "运行时任务视图隐藏状态已更新: hidden=$shouldHide, taskCount=${appTasks.size}")
+        } catch (e: Exception) {
+            AppLogger.e(TAG, "更新运行时任务视图隐藏状态失败: hidden=$shouldHide", e)
+        }
     }
 
     private fun observeChatRuntimeStats() {
@@ -969,7 +1023,7 @@ class AIForegroundService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_EXIT_APP) {
             isRunning.set(false)
-            isAiBusy = false
+            updateAiBusyState(false)
 
             try {
                 AIMessageManager.cancelCurrentOperation()
@@ -1120,7 +1174,7 @@ class AIForegroundService : Service() {
             try {
                 AIMessageManager.cancelCurrentOperation()
                 // 立即刷新通知状态（真正的状态重置由 EnhancedAIService.cancelConversation/stopAiService 完成）
-                isAiBusy = false
+                updateAiBusyState(false)
             } catch (e: Exception) {
                 AppLogger.e(TAG, "取消当前AI任务失败: ${e.message}", e)
             }
@@ -1137,7 +1191,7 @@ class AIForegroundService : Service() {
 
             val state = it.getStringExtra(EXTRA_STATE)
             if (state != null) {
-                isAiBusy = state == STATE_RUNNING
+                updateAiBusyState(state == STATE_RUNNING)
                 val alwaysListeningEnabled = isAlwaysListeningEnabledNow()
                 val externalHttpEnabled =
                     externalHttpStateFlow.value.isRunning || isExternalHttpEnabledNow()
@@ -1178,6 +1232,7 @@ class AIForegroundService : Service() {
         )
         super.onDestroy()
         isRunning.set(false)
+        updateAiBusyState(false)
         hideKeepAliveOverlay()
         stopWakeMonitoring()
         AppLogger.d(TAG, "AI 前台服务已销毁。")

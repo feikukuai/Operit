@@ -1,6 +1,7 @@
 package com.ai.assistance.operit.api.chat.llmprovider
 
 import com.ai.assistance.operit.util.AppLogger
+import com.ai.assistance.operit.core.chat.hooks.PromptTurn
 import com.ai.assistance.operit.data.model.ModelParameter
 import com.ai.assistance.operit.data.model.ToolPrompt
 import okhttp3.OkHttpClient
@@ -42,8 +43,7 @@ class DoubaoAIProvider(
      */
     override fun createRequestBody(
         context: android.content.Context,
-        message: String,
-        chatHistory: List<Pair<String, String>>,
+        chatHistory: List<PromptTurn>,
         modelParameters: List<ModelParameter<*>>,
         enableThinking: Boolean,
         stream: Boolean,
@@ -51,7 +51,7 @@ class DoubaoAIProvider(
         preserveThinkInHistory: Boolean
     ): RequestBody {
         // 首先，调用父类的实现来获取一个标准的OpenAI格式的请求体JSON对象
-        val baseRequestBodyJson = super.createRequestBodyInternal(context, message, chatHistory, modelParameters, stream, availableTools, preserveThinkInHistory)
+        val baseRequestBodyJson = super.createRequestBodyInternal(context, chatHistory, modelParameters, stream, availableTools, preserveThinkInHistory)
         val jsonObject = JSONObject(baseRequestBodyJson)
 
         // 豆包思考模式显式传参，避免依赖服务端默认值

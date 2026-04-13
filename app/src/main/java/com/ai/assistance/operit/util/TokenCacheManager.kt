@@ -86,32 +86,19 @@ class TokenCacheManager {
     /**
      * 计算输入token数量，利用缓存优化重复计算
      * 
-     * @param message 当前用户消息
-     * @param chatHistory 完整的聊天历史
+     * @param chatHistory 完整的聊天历史（必须已包含本次最新输入）
      * @param toolsJson 工具定义的JSON字符串（可选）
      * @return 总的输入token数量
      */
     fun calculateInputTokens(
-        message: String,
         chatHistory: List<Pair<String, String>>,
         toolsJson: String? = null
     ): Int {
-        // 检查message是否已经在chatHistory的末尾
-        // 如果在，说明chatHistory已经包含了当前消息，计算时需要避免重复
-        val isMessageInHistory = chatHistory.isNotEmpty() && chatHistory.last().second == message
-        
-        // 获取有效的历史记录（排除当前消息，如果它已经在历史中）
-        val effectiveHistory = if (isMessageInHistory) {
-            chatHistory.dropLast(1)
-        } else {
-            chatHistory
-        }
-
         // 构建包含工具定义的历史记录列表
         // 策略：将toolsJson拼接到System Prompt前面，或者作为第一条System消息
         // 这样可以利用前缀匹配机制缓存工具定义
         val historyWithTools = if (!toolsJson.isNullOrEmpty()) {
-            val mutableHistory = effectiveHistory.toMutableList()
+            val mutableHistory = chatHistory.toMutableList()
             val systemIndex = mutableHistory.indexOfFirst { it.first == "system" }
             
             if (systemIndex != -1) {
@@ -124,7 +111,7 @@ class TokenCacheManager {
             }
             mutableHistory.toList()
         } else {
-            effectiveHistory
+            chatHistory
         }
 
         // 找到与之前历史的公共前缀长度
@@ -146,9 +133,7 @@ class TokenCacheManager {
             
             // 计算新增部分的token数量 (history剩下的部分 + 当前消息)
             val newPart = historyWithTools.drop(commonPrefixLength)
-            val newPartTokens = calculateTokensForHistory(newPart)
-            val messageTokens = ChatUtils.estimateTokenCount(message)
-            val newTokens = newPartTokens + messageTokens
+            val newTokens = calculateTokensForHistory(newPart)
             
             _cachedInputTokenCount = cachedTokens
             _currentInputTokenCount = newTokens
@@ -160,24 +145,18 @@ class TokenCacheManager {
         } else {
             // 没有公共前缀，重新计算所有token
             val historyTokens = calculateTokensForHistory(historyWithTools)
-            val messageTokens = ChatUtils.estimateTokenCount(message)
-            
             _cachedInputTokenCount = 0
-            _currentInputTokenCount = historyTokens + messageTokens
+            _currentInputTokenCount = historyTokens
             
             // 更新缓存的历史记录 token 数量
-            previousHistoryTokenCount = historyTokens + messageTokens
+            previousHistoryTokenCount = historyTokens
             
             AppLogger.d("TokenCacheManager", "重新计算所有tokens: ${_currentInputTokenCount}")
         }
         
         // 更新缓存的历史记录列表（包含工具定义）
-        // 注意：只有在message非空时才更新缓存，避免空字符串污染缓存
-        // 空字符串通常用于临时检查token使用率，不应影响后续的缓存匹配
-        if (message.isNotEmpty()) {
-            val newHistory = historyWithTools.toMutableList()
-            newHistory.add("user" to message)
-            previousChatHistory = newHistory
+        if (chatHistory.isNotEmpty()) {
+            previousChatHistory = historyWithTools
         }
         
         return totalInputTokenCount

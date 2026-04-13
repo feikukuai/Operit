@@ -5,6 +5,9 @@ import android.os.Environment
 import android.util.Base64
 import com.ai.assistance.operit.R
 import com.ai.assistance.operit.util.AppLogger
+import com.ai.assistance.operit.core.chat.hooks.PromptTurn
+import com.ai.assistance.operit.core.chat.hooks.PromptTurnKind
+import com.ai.assistance.operit.core.chat.hooks.toPromptTurns
 import com.ai.assistance.operit.util.FFmpegUtil
 import com.ai.assistance.operit.util.ImagePoolManager
 import com.ai.assistance.operit.util.MediaPoolManager
@@ -468,6 +471,30 @@ class MNNProvider(
         return trimmed
     }
 
+    private fun flattenTypedHistory(
+        chatHistory: List<PromptTurn>,
+        preserveThinkInHistory: Boolean
+    ): List<Pair<String, String>> {
+        return chatHistory.map { turn ->
+            val role =
+                when (turn.kind) {
+                    PromptTurnKind.SYSTEM -> "system"
+                    PromptTurnKind.USER,
+                    PromptTurnKind.SUMMARY,
+                    PromptTurnKind.TOOL_RESULT -> "user"
+                    PromptTurnKind.ASSISTANT,
+                    PromptTurnKind.TOOL_CALL -> "assistant"
+                }
+            val content =
+                if (!preserveThinkInHistory && turn.kind == PromptTurnKind.ASSISTANT) {
+                    com.ai.assistance.operit.util.ChatUtils.removeThinkingContent(turn.content)
+                } else {
+                    turn.content
+                }
+            role to content
+        }
+    }
+
     private fun trimHistoryToStructuredTokenBudget(
         session: MNNLlmSession,
         history: List<Pair<String, String>>,
@@ -481,7 +508,7 @@ class MNNProvider(
 
         fun countCandidate(candidate: List<Pair<String, String>>): Int {
             val messagesJson = StructuredToolCallBridge.buildMessagesJson(
-                candidate,
+                candidate.toPromptTurns(),
                 preserveThinkInHistory
             )
             return session.countTokensStructured(messagesJson, toolsJson)
@@ -560,7 +587,6 @@ class MNNProvider(
      * 构建完整的提示词（包含历史记录）
      */
     private fun buildPrompt(
-        message: String,
         chatHistory: List<Pair<String, String>>
     ): String {
         val promptBuilder = StringBuilder()
@@ -575,8 +601,6 @@ class MNNProvider(
             }
         }
 
-        // 添加当前消息
-        promptBuilder.append(context.getString(R.string.mnn_message_format, message))
         promptBuilder.append(context.getString(R.string.mnn_assistant))
         
         return promptBuilder.toString()
@@ -584,8 +608,7 @@ class MNNProvider(
 
     override suspend fun sendMessage(
         context: Context,
-        message: String,
-        chatHistory: List<Pair<String, String>>,
+        chatHistory: List<PromptTurn>,
         modelParameters: List<ModelParameter<*>>,
         enableThinking: Boolean,
         stream: Boolean,
@@ -623,20 +646,18 @@ class MNNProvider(
             // 应用模型参数（采样参数）
             applyModelParameters(session, modelParameters)
 
-            // 如果消息为空，不添加到历史记录
-            if (message.isBlank()) {
+            if (chatHistory.isEmpty()) {
                 AppLogger.d(TAG, "消息为空，跳过处理")
                 return@stream
             }
 
             val useInternalToolCall = shouldUseInternalToolCall(availableTools)
-            // 构建历史记录（添加当前消息）
-            val fullHistory = chatHistory.toMutableList().apply { add("user" to message) }
+            val flattenedHistory = flattenTypedHistory(chatHistory, preserveThinkInHistory)
 
             val modelDir = getModelDir(context, modelName)
             val maxAllTokens = cachedModelMaxAllTokens ?: readModelMaxAllTokens(modelDir).also { cachedModelMaxAllTokens = it }
 
-            val multimodalHistory = fullHistory.map { (role, content) ->
+            val multimodalHistory = flattenedHistory.map { (role, content) ->
                 val processed = preprocessMultimodalText(content, modelDir)
                 requestTempFiles.addAll(processed.tempFiles)
                 role to processed.text
@@ -669,7 +690,7 @@ class MNNProvider(
 
             val messagesJson = if (useInternalToolCall) {
                 StructuredToolCallBridge.buildMessagesJson(
-                    safeHistory,
+                    safeHistory.toPromptTurns(),
                     preserveThinkInHistory
                 )
             } else {
@@ -680,7 +701,7 @@ class MNNProvider(
                 session.countTokensStructured(messagesJson!!, toolsJson)
             } else {
                 kotlin.runCatching { session.countTokensWithHistory(safeHistory) }
-                    .getOrElse { countTokens(buildPrompt(message, chatHistory)) }
+                    .getOrElse { countTokens(buildPrompt(flattenedHistory)) }
             }
             onTokensUpdated(_inputTokenCount, 0, 0)
 
@@ -982,35 +1003,29 @@ class MNNProvider(
     }
 
     override suspend fun calculateInputTokens(
-        message: String,
-        chatHistory: List<Pair<String, String>>,
+        chatHistory: List<PromptTurn>,
         availableTools: List<ToolPrompt>?
     ): Int {
+        val flattenedHistory = flattenTypedHistory(chatHistory, preserveThinkInHistory = false)
         val initResult = initModel()
         if (initResult.isFailure) {
-            val prompt = buildPrompt(message, chatHistory)
+            val prompt = buildPrompt(flattenedHistory)
             return countTokens(prompt)
         }
 
         val session = llmSession ?: run {
-            val prompt = buildPrompt(message, chatHistory)
+            val prompt = buildPrompt(flattenedHistory)
             return countTokens(prompt)
         }
 
         val modelDir = getModelDir(context, modelName)
         val maxAllTokens = cachedModelMaxAllTokens ?: readModelMaxAllTokens(modelDir).also { cachedModelMaxAllTokens = it }
 
-        val fullHistory = chatHistory.toMutableList().apply {
-            if (message.isNotBlank()) {
-                add("user" to message)
-            }
-        }
-
         val maxPromptTokens = (maxAllTokens - 512).coerceAtLeast(128)
-        val safeHistory = trimHistoryToTokenBudget(session, fullHistory, maxPromptTokens)
+        val safeHistory = trimHistoryToTokenBudget(session, flattenedHistory, maxPromptTokens)
         return kotlin.runCatching { session.countTokensWithHistory(safeHistory) }
             .getOrElse {
-                val prompt = buildPrompt(message, chatHistory)
+                val prompt = buildPrompt(flattenedHistory)
                 countTokens(prompt)
             }
     }

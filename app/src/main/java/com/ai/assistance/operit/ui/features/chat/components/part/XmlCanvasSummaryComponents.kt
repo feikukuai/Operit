@@ -199,17 +199,29 @@ internal fun CanvasToolResultRow(
     val copyTint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
     val rowInteractionSource = remember { MutableInteractionSource() }
     val copyInteractionSource = remember { MutableInteractionSource() }
+    val rowModifier =
+        if (onClick != null) {
+            Modifier
+                .semantics {
+                    contentDescription = semanticDescription
+                    role = Role.Button
+                }
+                .indication(rowInteractionSource, ripple())
+                .clickable(
+                    interactionSource = rowInteractionSource,
+                    indication = null,
+                    role = Role.Button,
+                    onClick = onClick,
+                )
+        } else {
+            Modifier.semantics { contentDescription = semanticDescription }
+        }
 
     BoxWithConstraints(
         modifier =
             modifier
                 .fillMaxWidth()
-                .semantics {
-                    contentDescription = semanticDescription
-                    if (onClick != null) {
-                        role = Role.Button
-                    }
-                }
+                .then(rowModifier)
     ) {
         val widthPx = with(density) { maxWidth.roundToPx() }.fastCoerceAtLeast(1)
         val startPaddingPx = with(density) { 24.dp.roundToPx() }
@@ -289,22 +301,6 @@ internal fun CanvasToolResultRow(
                         }
                     }
                 }
-            }
-
-            if (onClick != null) {
-                Box(
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .fillMaxHeight()
-                            .indication(rowInteractionSource, ripple())
-                            .clickable(
-                                interactionSource = rowInteractionSource,
-                                indication = null,
-                                role = Role.Button,
-                                onClick = onClick,
-                            )
-                )
             }
 
             if (onCopyClick != null && trailingSlotPx > 0) {

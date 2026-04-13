@@ -235,11 +235,16 @@ class MCPToolExecutor(private val context: Context, private val mcpManager: MCPM
         // 获取MCP桥接客户端
         val mcpClient = mcpManager.getOrCreateClient(serverName)
         if (mcpClient == null) {
+            val detailedReason = mcpManager.getLastConnectionFailureReason(serverName)
             return ToolResult(
                     toolName = tool.name,
                     success = false,
                     result = StringResultData(""),
-                    error = "Cannot connect to MCP server: $serverName"
+                    error =
+                            detailedReason?.let {
+                                "Cannot connect to MCP server '$serverName': $it"
+                            }
+                                    ?: "Cannot connect to MCP server: $serverName"
             )
         }
 
@@ -419,6 +424,7 @@ class MCPManager(private val context: Context) {
 
     // 缓存服务器配置
     private val serverConfigCache = ConcurrentHashMap<String, MCPServerConfig>()
+    private val connectionFailureReasons = ConcurrentHashMap<String, String>()
 
     /**
      * 检查服务器是否已注册
@@ -437,6 +443,10 @@ class MCPManager(private val context: Context) {
      */
     fun getRegisteredServers(): Map<String, MCPServerConfig> {
         return serverConfigCache.toMap()
+    }
+
+    fun getLastConnectionFailureReason(serverName: String): String? {
+        return connectionFailureReasons[serverName]
     }
 
     /**
@@ -461,16 +471,26 @@ class MCPManager(private val context: Context) {
                 val reconnected = kotlinx.coroutines.runBlocking { cachedClient.connect() }
                 if (reconnected) {
                     AppLogger.d(TAG, "成功重新连接到服务: $serverName")
+                    connectionFailureReasons.remove(serverName)
                     return cachedClient
                 }
                 // 客户端不再可用，从缓存移除
+                connectionFailureReasons[serverName] =
+                        cachedClient.getLastConnectionFailureDetail()
+                                ?: "Reconnect attempt failed, but the client did not report a detailed reason."
                 AppLogger.w(TAG, "无法重新连接到服务: $serverName，将创建新的连接")
                 clientCache.remove(serverName)
             }
         }
 
         // 获取服务器配置
-        val serverConfig = serverConfigCache[serverName] ?: return null
+        val serverConfig =
+                serverConfigCache[serverName]
+                        ?: run {
+                            connectionFailureReasons[serverName] =
+                                    "Server is not registered in MCPManager. This usually means the runtime registration never happened, was cleared, or the requested server name does not match the registered service name."
+                            return null
+                        }
 
         try {
             // 创建新的桥接客户端
@@ -485,11 +505,17 @@ class MCPManager(private val context: Context) {
                 // 连接成功，在会话期间保持此连接
                 AppLogger.d(TAG, "成功连接到服务: $serverName，将在会话期间保持连接")
                 clientCache[serverName] = client
+                connectionFailureReasons.remove(serverName)
                 return client
             } else {
+                connectionFailureReasons[serverName] =
+                        client.getLastConnectionFailureDetail()
+                                ?: "Connection attempt failed, but no detailed reason was reported by the bridge client."
                 AppLogger.w(TAG, "无法连接到服务: $serverName")
             }
         } catch (e: Exception) {
+            connectionFailureReasons[serverName] =
+                    "Exception while creating bridge client: ${e.message ?: e.javaClass.simpleName}"
             AppLogger.e(TAG, "创建桥接客户端时出错: ${e.message}", e)
         }
 
@@ -504,6 +530,7 @@ class MCPManager(private val context: Context) {
      */
     fun registerServer(serverName: String, serverConfig: MCPServerConfig) {
         serverConfigCache[serverName] = serverConfig
+        connectionFailureReasons.remove(serverName)
 
         // 如果已有缓存的客户端，需要更新或移除
         if (clientCache.containsKey(serverName)) {
@@ -520,6 +547,7 @@ class MCPManager(private val context: Context) {
      */
     fun unregisterServer(serverName: String) {
         serverConfigCache.remove(serverName)
+        connectionFailureReasons.remove(serverName)
 
         // 关闭并移除对应客户端缓存
         val oldClient = clientCache.remove(serverName)

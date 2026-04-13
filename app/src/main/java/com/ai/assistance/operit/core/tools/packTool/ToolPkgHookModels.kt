@@ -29,16 +29,18 @@ data class ToolPkgToolLifecycleEventPayload(
     val resultJson: Map<String, Any?>? = null
 )
 
-data class ToolPkgPromptMessage(
-    val role: String,
-    val content: String
+data class ToolPkgPromptTurn(
+    val kind: String,
+    val content: String,
+    val toolName: String? = null,
+    val metadata: Map<String, Any?> = emptyMap()
 )
 
 data class ToolPkgPromptHookObjectResult(
     val rawInput: String? = null,
     val processedInput: String? = null,
-    val chatHistory: List<ToolPkgPromptMessage>? = null,
-    val preparedHistory: List<ToolPkgPromptMessage>? = null,
+    val chatHistory: List<ToolPkgPromptTurn>? = null,
+    val preparedHistory: List<ToolPkgPromptTurn>? = null,
     val systemPrompt: String? = null,
     val toolPrompt: String? = null,
     val metadata: Map<String, Any?> = emptyMap()

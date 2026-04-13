@@ -26,6 +26,9 @@ import com.ai.assistance.operit.util.AssetCopyUtils
 import com.ai.assistance.operit.api.chat.llmprovider.AIServiceFactory
 import com.ai.assistance.operit.api.chat.llmprovider.MediaLinkBuilder
 import com.ai.assistance.operit.api.chat.EnhancedAIService
+import com.ai.assistance.operit.core.chat.hooks.PromptTurn
+import com.ai.assistance.operit.core.chat.hooks.PromptTurnKind
+import com.ai.assistance.operit.core.chat.hooks.toPromptTurns
 import com.ai.assistance.operit.data.model.FunctionType
 import com.ai.assistance.operit.data.model.ModelConfigSummary
 import com.ai.assistance.operit.data.model.getModelByIndex
@@ -511,7 +514,13 @@ fun FunctionConfigCard(
                                                     val parameters =
                                                         modelConfigManager.getModelParametersForConfig(configWithSelectedModel.id)
                                                     val buffer = StringBuilder()
-                                                    service.sendMessage(context, prompt, emptyList(), parameters, stream = false, enableRetry = false)
+                                                    service.sendMessage(
+                                                        context,
+                                                        listOf(PromptTurn(kind = PromptTurnKind.USER, content = prompt)),
+                                                        parameters,
+                                                        stream = false,
+                                                        enableRetry = false
+                                                    )
                                                         .collect { chunk -> buffer.append(chunk) }
                                                     buffer.toString()
                                                 }
@@ -534,7 +543,13 @@ fun FunctionConfigCard(
                                                     val parameters =
                                                         modelConfigManager.getModelParametersForConfig(configWithSelectedModel.id)
                                                     val buffer = StringBuilder()
-                                                    service.sendMessage(context, prompt, emptyList(), parameters, stream = false, enableRetry = false)
+                                                    service.sendMessage(
+                                                        context,
+                                                        listOf(PromptTurn(kind = PromptTurnKind.USER, content = prompt)),
+                                                        parameters,
+                                                        stream = false,
+                                                        enableRetry = false
+                                                    )
                                                         .collect { chunk -> buffer.append(chunk) }
                                                     buffer.toString()
                                                 }
@@ -557,7 +572,13 @@ fun FunctionConfigCard(
                                                     val parameters =
                                                         modelConfigManager.getModelParametersForConfig(configWithSelectedModel.id)
                                                     val buffer = StringBuilder()
-                                                    service.sendMessage(context, prompt, emptyList(), parameters, stream = false, enableRetry = false)
+                                                    service.sendMessage(
+                                                        context,
+                                                        listOf(PromptTurn(kind = PromptTurnKind.USER, content = prompt)),
+                                                        parameters,
+                                                        stream = false,
+                                                        enableRetry = false
+                                                    )
                                                         .collect { chunk -> buffer.append(chunk) }
                                                     buffer.toString()
                                                 }
@@ -573,7 +594,13 @@ fun FunctionConfigCard(
                                                     val parameters =
                                                         modelConfigManager.getModelParametersForConfig(configWithSelectedModel.id)
                                                     val buffer = StringBuilder()
-                                                    service.sendMessage(context, prompt, emptyList(), parameters, stream = false, enableRetry = false)
+                                                    service.sendMessage(
+                                                        context,
+                                                        listOf(PromptTurn(kind = PromptTurnKind.USER, content = prompt)),
+                                                        parameters,
+                                                        stream = false,
+                                                        enableRetry = false
+                                                    )
                                                         .collect { chunk -> buffer.append(chunk) }
                                                     buffer.toString()
                                                 }
@@ -586,8 +613,10 @@ fun FunctionConfigCard(
                                                     val buffer = StringBuilder()
                                                     service.sendMessage(
                                                         context,
-                                                        userPrompt,
-                                                        listOf("system" to systemPrompt),
+                                                        listOf(
+                                                            PromptTurn(kind = PromptTurnKind.SYSTEM, content = systemPrompt),
+                                                            PromptTurn(kind = PromptTurnKind.USER, content = userPrompt)
+                                                        ),
                                                         parameters,
                                                         stream = false,
                                                         enableRetry = false
@@ -614,8 +643,10 @@ fun FunctionConfigCard(
                                                     val buffer = StringBuilder()
                                                     service.sendMessage(
                                                         context,
-                                                        userPrompt,
-                                                        listOf("system" to systemPrompt),
+                                                        listOf(
+                                                            PromptTurn(kind = PromptTurnKind.SYSTEM, content = systemPrompt),
+                                                            PromptTurn(kind = PromptTurnKind.USER, content = userPrompt)
+                                                        ),
                                                         parameters,
                                                         stream = false,
                                                         enableRetry = false
@@ -626,7 +657,13 @@ fun FunctionConfigCard(
                                                     val parameters =
                                                         modelConfigManager.getModelParametersForConfig(configWithSelectedModel.id)
                                                     val buffer = StringBuilder()
-                                                    service.sendMessage(context, "Hi", emptyList(), parameters, stream = false, enableRetry = false)
+                                                    service.sendMessage(
+                                                        context,
+                                                        listOf(PromptTurn(kind = PromptTurnKind.USER, content = "Hi")),
+                                                        parameters,
+                                                        stream = false,
+                                                        enableRetry = false
+                                                    )
                                                         .collect { chunk -> buffer.append(chunk) }
                                                     buffer.toString()
                                                 }
@@ -636,7 +673,13 @@ fun FunctionConfigCard(
                                                     val prompt =
                                                         "Connection test: return {\"order\":[{\"id\":\"test\",\"speak\":true}]} only."
                                                     val buffer = StringBuilder()
-                                                    service.sendMessage(context, prompt, emptyList(), parameters, stream = false, enableRetry = false)
+                                                    service.sendMessage(
+                                                        context,
+                                                        listOf(PromptTurn(kind = PromptTurnKind.USER, content = prompt)),
+                                                        parameters,
+                                                        stream = false,
+                                                        enableRetry = false
+                                                    )
                                                         .collect { chunk -> buffer.append(chunk) }
                                                     buffer.toString()
                                                 }

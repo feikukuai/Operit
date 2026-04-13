@@ -3,6 +3,10 @@ package com.ai.assistance.operit.api.chat.llmprovider
 import android.content.Context
 import com.ai.assistance.operit.util.AppLogger
 import com.ai.assistance.operit.R
+import com.ai.assistance.operit.core.chat.hooks.PromptTurn
+import com.ai.assistance.operit.core.chat.hooks.PromptTurnKind
+import com.ai.assistance.operit.core.chat.hooks.mergeAdjacentTurns
+import com.ai.assistance.operit.core.chat.hooks.toPromptTurns
 import com.ai.assistance.operit.data.model.ApiProviderType
 import com.ai.assistance.operit.data.model.ModelOption
 import com.ai.assistance.operit.data.model.ModelParameter
@@ -215,20 +219,6 @@ class ClaudeProvider(
             tokenCacheManager.outputTokenCount
         )
         return true
-    }
-
-    private fun ensurePromptCacheBreakpoint(jsonObject: JSONObject) {
-        if (jsonObject.has("cache_control")) {
-            return
-        }
-
-        jsonObject.put(
-            "cache_control",
-            JSONObject().apply {
-                put("type", PROMPT_CACHE_CONTROL_TYPE)
-            }
-        )
-        AppLogger.d("AIService", "已为Claude请求附加自动Prompt Cache断点")
     }
 
     // ==================== Tool Call 支持 ====================
@@ -519,167 +509,433 @@ class ClaudeProvider(
         return json
     }
 
-    /**
-     * 构建Claude的消息体和计算Token的核心逻辑
-     */
-    private fun buildMessagesAndCountTokens(
-            message: String,
-            chatHistory: List<Pair<String, String>>,
-            preserveThinkInHistory: Boolean
-    ): Triple<JSONArray, String?, Int> {
-        val messagesArray = JSONArray()
+    private data class ClaudeSerializedHistory(
+        val messagesArray: JSONArray,
+        val systemBlocks: JSONArray?
+    )
 
-        // 使用TokenCacheManager计算token数量
-        val tokenCount = tokenCacheManager.calculateInputTokens(message, chatHistory)
-
-        // 检查当前消息是否已经在历史记录的末尾（避免重复）
-        val isMessageInHistory = chatHistory.isNotEmpty() && chatHistory.last().second == message
-        
-        // 如果消息已在历史中，只处理历史；否则需要处理历史+当前消息
-        val effectiveHistory = if (isMessageInHistory) {
-            chatHistory
-        } else {
-            chatHistory + ("user" to message)
+    private fun cacheControlObject(): JSONObject {
+        return JSONObject().apply {
+            put("type", PROMPT_CACHE_CONTROL_TYPE)
         }
+    }
 
-        // 提取系统消息
-        val systemMessages = effectiveHistory.filter { it.first.equals("system", ignoreCase = true) }
-        var systemPrompt: String? = null
-
-        if (systemMessages.isNotEmpty()) {
-            systemPrompt = systemMessages.joinToString("\n\n") { it.second }
+    private fun attachCacheControlIfAbsent(block: JSONObject): Boolean {
+        if (block.has("cache_control")) {
+            return false
         }
+        block.put("cache_control", cacheControlObject())
+        return true
+    }
 
-        // 处理用户和助手消息
-        val historyWithoutSystem =
-                ChatUtils.mapChatHistoryToStandardRoles(effectiveHistory, extractThinking = preserveThinkInHistory).filter {
-                    it.first != "system"
+    private fun findLastContentBlock(messagesArray: JSONArray): JSONObject? {
+        for (messageIndex in messagesArray.length() - 1 downTo 0) {
+            val messageObject = messagesArray.optJSONObject(messageIndex) ?: continue
+            val contentArray = messageObject.optJSONArray("content") ?: continue
+            for (contentIndex in contentArray.length() - 1 downTo 0) {
+                val contentBlock = contentArray.optJSONObject(contentIndex)
+                if (contentBlock != null) {
+                    return contentBlock
                 }
-        
-        val mergedHistory = mutableListOf<Pair<String, String>>()
-        for ((role, content) in historyWithoutSystem) {
-            if (mergedHistory.isNotEmpty() && mergedHistory.last().first == role) {
-                val lastMessage = mergedHistory.last()
-                mergedHistory[mergedHistory.size - 1] =
-                    Pair(role, lastMessage.second + "\n" + content)
-            } else {
-                mergedHistory.add(Pair(role, content))
+            }
+        }
+        return null
+    }
+
+    private fun applyStableCacheBreakpoints(
+        tools: JSONArray?,
+        systemBlocks: JSONArray?,
+        messagesArray: JSONArray
+    ): Int {
+        var breakpoints = 0
+
+        if (tools != null && tools.length() > 0) {
+            val lastTool = tools.optJSONObject(tools.length() - 1)
+            if (lastTool != null && attachCacheControlIfAbsent(lastTool)) {
+                breakpoints++
             }
         }
 
-        // 追踪上一个assistant消息中的tool_use ids，用于匹配tool结果
-        val lastToolUseIds = mutableListOf<String>()
-        
-        // 添加历史消息
-        for ((role, content) in mergedHistory) {
-            val claudeRole = if (role == "assistant") "assistant" else "user"
-            
-            // 当启用Tool Call API时，转换XML格式的工具调用
-            if (enableToolCall) {
-                if (role == "assistant") {
-                    // 解析assistant消息中的XML tool calls
-                    val (textContent, toolUses) = parseXmlToolCalls(content)
-                    
-                    val contentArray = JSONArray()
-                    // 先添加文本内容
-                    if (textContent.isNotEmpty()) {
-                        appendContentBlocks(contentArray, buildContentArray(textContent))
-                    }
-                    // 再添加tool_use
-                    if (toolUses != null && toolUses.length() > 0) {
-                        for (i in 0 until toolUses.length()) {
-                            contentArray.put(toolUses.getJSONObject(i))
+        if (systemBlocks != null && systemBlocks.length() > 0) {
+            val lastSystemBlock = systemBlocks.optJSONObject(systemBlocks.length() - 1)
+            if (lastSystemBlock != null && attachCacheControlIfAbsent(lastSystemBlock)) {
+                breakpoints++
+            }
+        }
+
+        val lastMessageBlock = findLastContentBlock(messagesArray)
+        if (lastMessageBlock != null && attachCacheControlIfAbsent(lastMessageBlock)) {
+            breakpoints++
+        }
+
+        return breakpoints
+    }
+
+    private fun buildComparableHistory(
+        systemBlocks: JSONArray?,
+        messagesArray: JSONArray
+    ): List<Pair<String, String>> {
+        val comparableHistory = mutableListOf<Pair<String, String>>()
+
+        if (systemBlocks != null && systemBlocks.length() > 0) {
+            comparableHistory.add("system" to stableJsonValue(systemBlocks))
+        }
+
+        for (messageIndex in 0 until messagesArray.length()) {
+            val messageObject = messagesArray.optJSONObject(messageIndex) ?: continue
+            val role = messageObject.optString("role")
+            val contentArray = messageObject.optJSONArray("content") ?: JSONArray()
+            comparableHistory.add(role to stableJsonValue(contentArray))
+        }
+
+        return comparableHistory
+    }
+
+    private fun stableJsonValue(value: Any?): String {
+        return when (value) {
+            null -> "null"
+            is JSONObject -> {
+                val keys = mutableListOf<String>()
+                val iterator = value.keys()
+                while (iterator.hasNext()) {
+                    keys.add(iterator.next())
+                }
+                keys.sort()
+                keys.joinToString(prefix = "{", postfix = "}") { key ->
+                    "\"$key\":${stableJsonValue(value.opt(key))}"
+                }
+            }
+            is JSONArray -> {
+                (0 until value.length()).joinToString(prefix = "[", postfix = "]") { index ->
+                    stableJsonValue(value.opt(index))
+                }
+            }
+            is String -> JSONObject.quote(value)
+            is Number,
+            is Boolean -> value.toString()
+            else -> JSONObject.quote(value.toString())
+        }
+    }
+
+    private fun buildSerializedHistory(
+        chatHistory: List<PromptTurn>,
+        preserveThinkInHistory: Boolean
+    ): ClaudeSerializedHistory {
+        val messagesArray = JSONArray()
+        val effectiveHistory = chatHistory.mergeAdjacentTurns()
+
+        val systemMessages = effectiveHistory.filter { it.kind == PromptTurnKind.SYSTEM }
+        val systemPrompt =
+            systemMessages
+                .takeIf { it.isNotEmpty() }
+                ?.joinToString("\n\n") { it.content }
+        val systemBlocks =
+            systemPrompt
+                ?.takeIf { it.isNotEmpty() }
+                ?.let { prompt ->
+                    JSONArray().put(
+                        JSONObject().apply {
+                            put("type", "text")
+                            put("text", prompt)
                         }
-                        // 记录这些tool_use ids供后续tool_result使用
-                        lastToolUseIds.clear()
-                        for (i in 0 until toolUses.length()) {
-                            lastToolUseIds.add(toolUses.getJSONObject(i).getString("id"))
-                        }
-                    }
-                    
-                    val messageObject = JSONObject()
-                    messageObject.put("role", claudeRole)
-                    messageObject.put("content", contentArray)
-                    messagesArray.put(messageObject)
-                } else if (role == "user") {
-                    // 解析user消息中的XML tool_result
-                    val (textContent, toolResults) = parseXmlToolResults(content)
-                    
-                    val contentArray = JSONArray()
-                    // 先添加tool_result（只转换有对应tool_use_id的）
-                    if (toolResults != null && toolResults.isNotEmpty() && lastToolUseIds.isNotEmpty()) {
-                        // 只转换有对应tool_use_id的tool_result
-                        val validCount = minOf(toolResults.size, lastToolUseIds.size)
-                        
-                        for (index in 0 until validCount) {
-                            val (_, resultContent) = toolResults[index]
-                            contentArray.put(JSONObject().apply {
-                                put("type", "tool_result")
-                                put("tool_use_id", lastToolUseIds[index])
-                                put("content", resultContent)
-                            })
-                            AppLogger.d("AIService", "历史XML→ClaudeToolResult: ID=${lastToolUseIds[index]}, content length=${resultContent.length}")
-                        }
-                        
-                        // 如果有多余的tool_result，记录警告
-                        if (toolResults.size > validCount) {
-                            AppLogger.w("AIService", "发现多余的tool_result: ${toolResults.size} results vs ${lastToolUseIds.size} tool_uses，忽略多余的${toolResults.size - validCount}个")
-                        }
-                        
-                        lastToolUseIds.clear()
-                    }
-                    // 再添加文本内容
-                    if (textContent.isNotEmpty()) {
-                        appendContentBlocks(contentArray, buildContentArray(textContent))
-                    } else if (contentArray.length() == 0) {
-                        // 如果没有任何内容，保留原始content
-                        appendContentBlocks(contentArray, buildContentArray(content))
-                    }
-                    
-                    val messageObject = JSONObject()
-                    messageObject.put("role", claudeRole)
-                    messageObject.put("content", contentArray)
-                    messagesArray.put(messageObject)
+                    )
+                }
+
+        val historyWithoutSystem = effectiveHistory.filter { it.kind != PromptTurnKind.SYSTEM }
+        var queuedAssistantToolText: String? = null
+        var queuedToolUses = JSONArray()
+        val queuedToolUseIds = mutableListOf<String>()
+        val openToolUseIds = mutableListOf<String>()
+
+        fun appendQueuedAssistantToolText(text: String) {
+            if (text.isBlank()) return
+            queuedAssistantToolText =
+                if (queuedAssistantToolText.isNullOrBlank()) {
+                    text
                 } else {
-                    // system等其他角色正常处理
-                    val messageObject = JSONObject()
-                    messageObject.put("role", claudeRole)
-                    messageObject.put("content", buildContentArray(content))
-                    messagesArray.put(messageObject)
+                    queuedAssistantToolText + "\n" + text
+                }
+        }
+
+        fun queueToolUses(textContent: String, toolUses: JSONArray) {
+            appendQueuedAssistantToolText(textContent)
+            for (i in 0 until toolUses.length()) {
+                val toolUse = toolUses.optJSONObject(i) ?: continue
+                queuedToolUses.put(toolUse)
+                val toolUseId = toolUse.optString("id", "").trim()
+                if (toolUseId.isNotEmpty()) {
+                    queuedToolUseIds.add(toolUseId)
+                }
+            }
+        }
+
+        fun emitQueuedToolUsesIfNeeded() {
+            if (queuedToolUses.length() == 0) return
+
+            val contentArray = JSONArray()
+            if (!queuedAssistantToolText.isNullOrBlank()) {
+                appendContentBlocks(contentArray, buildContentArray(queuedAssistantToolText!!))
+            }
+            for (i in 0 until queuedToolUses.length()) {
+                contentArray.put(queuedToolUses.getJSONObject(i))
+            }
+
+            messagesArray.put(
+                JSONObject().apply {
+                    put("role", "assistant")
+                    put("content", contentArray)
+                }
+            )
+
+            openToolUseIds.addAll(queuedToolUseIds)
+            queuedAssistantToolText = null
+            queuedToolUses = JSONArray()
+            queuedToolUseIds.clear()
+        }
+
+        fun appendCancelledOpenToolUses(target: JSONArray, reason: String): Boolean {
+            emitQueuedToolUsesIfNeeded()
+            if (openToolUseIds.isEmpty()) return false
+
+            AppLogger.w(
+                "AIService",
+                "发现未完成的tool_use，按取消处理: count=${openToolUseIds.size}, reason=$reason"
+            )
+            for (toolUseId in openToolUseIds) {
+                target.put(
+                    JSONObject().apply {
+                        put("type", "tool_result")
+                        put("tool_use_id", toolUseId)
+                        put("content", "User cancelled")
+                    }
+                )
+            }
+            openToolUseIds.clear()
+            return true
+        }
+
+        fun flushOpenToolUsesAsCancelled(reason: String) {
+            val contentArray = JSONArray()
+            if (!appendCancelledOpenToolUses(contentArray, reason)) return
+            messagesArray.put(
+                JSONObject().apply {
+                    put("role", "user")
+                    put("content", contentArray)
+                }
+            )
+        }
+
+        for (turn in historyWithoutSystem) {
+            val content =
+                if (!preserveThinkInHistory && turn.kind == PromptTurnKind.ASSISTANT) {
+                    ChatUtils.removeThinkingContent(turn.content)
+                } else {
+                    turn.content
+                }
+
+            if (enableToolCall) {
+                when (turn.kind) {
+                    PromptTurnKind.SYSTEM -> Unit
+
+                    PromptTurnKind.ASSISTANT -> {
+                        val (textContent, toolUses) = parseXmlToolCalls(content)
+                        if (toolUses != null && toolUses.length() > 0) {
+                            if (openToolUseIds.isNotEmpty()) {
+                                flushOpenToolUsesAsCancelled("assistant_tool_use_before_result")
+                            }
+                            queueToolUses(textContent, toolUses)
+                        } else {
+                            flushOpenToolUsesAsCancelled("assistant_boundary")
+                            messagesArray.put(
+                                JSONObject().apply {
+                                    put("role", "assistant")
+                                    put("content", buildContentArray(content))
+                                }
+                            )
+                        }
+                    }
+
+                    PromptTurnKind.TOOL_CALL -> {
+                        val (textContent, toolUses) = parseXmlToolCalls(content)
+                        if (toolUses != null && toolUses.length() > 0) {
+                            if (openToolUseIds.isNotEmpty()) {
+                                flushOpenToolUsesAsCancelled("typed_tool_use_before_result")
+                            }
+                            queueToolUses(textContent, toolUses)
+                        } else {
+                            flushOpenToolUsesAsCancelled("typed_tool_call_without_payload")
+                            messagesArray.put(
+                                JSONObject().apply {
+                                    put("role", "assistant")
+                                    put("content", buildContentArray(content))
+                                }
+                            )
+                        }
+                    }
+
+                    PromptTurnKind.USER,
+                    PromptTurnKind.SUMMARY -> {
+                        val contentArray = JSONArray()
+                        appendCancelledOpenToolUses(contentArray, "user_boundary")
+                        appendContentBlocks(contentArray, buildContentArray(content))
+                        messagesArray.put(
+                            JSONObject().apply {
+                                put("role", "user")
+                                put("content", contentArray)
+                            }
+                        )
+                    }
+
+                    PromptTurnKind.TOOL_RESULT -> {
+                        emitQueuedToolUsesIfNeeded()
+                        val (textContent, toolResults) = parseXmlToolResults(content)
+                        val resultsList = toolResults ?: emptyList()
+
+                        if (resultsList.isNotEmpty() && openToolUseIds.isNotEmpty()) {
+                            val contentArray = JSONArray()
+                            val validCount = minOf(resultsList.size, openToolUseIds.size)
+
+                            for (index in 0 until validCount) {
+                                val (_, resultContent) = resultsList[index]
+                                contentArray.put(
+                                    JSONObject().apply {
+                                        put("type", "tool_result")
+                                        put("tool_use_id", openToolUseIds[index])
+                                        put("content", resultContent)
+                                    }
+                                )
+                                AppLogger.d(
+                                    "AIService",
+                                    "历史XML→ClaudeToolResult: ID=${openToolUseIds[index]}, content length=${resultContent.length}"
+                                )
+                            }
+
+                            repeat(validCount) {
+                                openToolUseIds.removeAt(0)
+                            }
+
+                            if (resultsList.size > validCount) {
+                                AppLogger.w(
+                                    "AIService",
+                                    "发现多余的tool_result: ${resultsList.size} results vs ${validCount} pending tool_uses"
+                                )
+                            }
+
+                            if (textContent.isNotEmpty()) {
+                                appendContentBlocks(contentArray, buildContentArray(textContent))
+                            }
+
+                            messagesArray.put(
+                                JSONObject().apply {
+                                    put("role", "user")
+                                    put("content", contentArray)
+                                }
+                            )
+                        } else {
+                            val contentArray = JSONArray()
+                            appendCancelledOpenToolUses(contentArray, "tool_result_without_structured_match")
+                            appendContentBlocks(
+                                contentArray,
+                                buildContentArray(
+                                    when {
+                                        textContent.isNotEmpty() -> textContent
+                                        else -> content
+                                    }
+                                )
+                            )
+                            messagesArray.put(
+                                JSONObject().apply {
+                                    put("role", "user")
+                                    put("content", contentArray)
+                                }
+                            )
+                        }
+                    }
                 }
             } else {
-                // 不启用Tool Call API时，保持原样
+                val claudeRole =
+                    when (turn.kind) {
+                        PromptTurnKind.ASSISTANT,
+                        PromptTurnKind.TOOL_CALL -> "assistant"
+                        else -> "user"
+                    }
+                val contentArray = buildContentArray(content)
                 val messageObject = JSONObject()
                 messageObject.put("role", claudeRole)
-                messageObject.put("content", buildContentArray(content))
+                messageObject.put("content", contentArray)
                 messagesArray.put(messageObject)
             }
         }
 
-        return Triple(messagesArray, systemPrompt, tokenCount)
+        flushOpenToolUsesAsCancelled("history_end")
+
+        return ClaudeSerializedHistory(
+            messagesArray = messagesArray,
+            systemBlocks = systemBlocks
+        )
     }
 
-
+    /**
+     * 构建Claude的消息体和计算Token的核心逻辑
+     */
+    private fun buildMessagesAndCountTokens(
+            chatHistory: List<PromptTurn>,
+            preserveThinkInHistory: Boolean,
+            tools: JSONArray? = null
+    ): Triple<JSONArray, JSONArray?, Int> {
+        val serializedHistory = buildSerializedHistory(chatHistory, preserveThinkInHistory)
+        val breakpointsApplied =
+            applyStableCacheBreakpoints(
+                tools = tools,
+                systemBlocks = serializedHistory.systemBlocks,
+                messagesArray = serializedHistory.messagesArray
+            )
+        val toolsJson = tools?.takeIf { it.length() > 0 }?.toString()
+        val comparableHistory =
+            buildComparableHistory(
+                systemBlocks = serializedHistory.systemBlocks,
+                messagesArray = serializedHistory.messagesArray
+            )
+        val tokenCount =
+            tokenCacheManager.calculateInputTokens(
+                comparableHistory,
+                toolsJson
+            )
+        AppLogger.d("AIService", "Claude显式缓存断点已应用: count=$breakpointsApplied")
+        return Triple(
+            serializedHistory.messagesArray,
+            serializedHistory.systemBlocks,
+            tokenCount
+        )
+    }
     override suspend fun calculateInputTokens(
-            message: String,
-            chatHistory: List<Pair<String, String>>,
+            chatHistory: List<PromptTurn>,
             availableTools: List<ToolPrompt>?
     ): Int {
-        // 构建工具定义的JSON字符串
-        val toolsJson = if (enableToolCall && availableTools != null && availableTools.isNotEmpty()) {
-            val tools = buildToolDefinitionsForClaude(availableTools)
-            if (tools.length() > 0) tools.toString() else null
-        } else {
-            null
-        }
-        // 使用缓存管理器进行快速估算
-        return tokenCacheManager.calculateInputTokens(message, chatHistory, toolsJson)
+        val serializedHistory = buildSerializedHistory(chatHistory, preserveThinkInHistory = false)
+        val tools =
+            if (enableToolCall && availableTools != null && availableTools.isNotEmpty()) {
+                buildToolDefinitionsForClaude(availableTools).takeIf { it.length() > 0 }
+            } else {
+                null
+            }
+        applyStableCacheBreakpoints(
+            tools = tools,
+            systemBlocks = serializedHistory.systemBlocks,
+            messagesArray = serializedHistory.messagesArray
+        )
+        val toolsJson = tools?.toString()
+        val comparableHistory =
+            buildComparableHistory(
+                systemBlocks = serializedHistory.systemBlocks,
+                messagesArray = serializedHistory.messagesArray
+            )
+        return tokenCacheManager.calculateInputTokens(comparableHistory, toolsJson)
     }
 
     // 创建Claude API请求体
     private fun createRequestBody(
-            message: String,
-            chatHistory: List<Pair<String, String>>,
+            chatHistory: List<PromptTurn>,
             modelParameters: List<ModelParameter<*>> = emptyList(),
             enableThinking: Boolean,
             stream: Boolean = true,
@@ -704,28 +960,25 @@ class ClaudeProvider(
         }
 
         // 添加 Tool Call 工具定义（如果启用且有可用工具）
-        var toolsJson: String? = null
+        var tools: JSONArray? = null
         if (enableToolCall && availableTools != null && availableTools.isNotEmpty()) {
-            val tools = buildToolDefinitionsForClaude(availableTools)
-            if (tools.length() > 0) {
-                jsonObject.put("tools", tools)
-                toolsJson = tools.toString() // 保存工具定义用于token计算
-                AppLogger.d("AIService", "已添加 ${tools.length()} 个 Claude Tool Definitions")
+            val builtTools = buildToolDefinitionsForClaude(availableTools)
+            if (builtTools.length() > 0) {
+                tools = builtTools
+                jsonObject.put("tools", builtTools)
+                AppLogger.d("AIService", "已添加 ${builtTools.length()} 个 Claude Tool Definitions")
             }
         }
 
-        // 使用TokenCacheManager计算输入token（包含工具定义），并继续使用原有逻辑构建消息体
-        tokenCacheManager.calculateInputTokens(message, chatHistory, toolsJson)
-        val (messagesArray, systemPrompt, _) = buildMessagesAndCountTokens(message, chatHistory, preserveThinkInHistory)
+        val (messagesArray, systemBlocks, _) =
+            buildMessagesAndCountTokens(chatHistory, preserveThinkInHistory, tools)
 
         jsonObject.put("messages", messagesArray)
 
         // Claude对系统消息的处理有所不同，它使用system参数
-        if (systemPrompt != null) {
-            jsonObject.put("system", systemPrompt)
+        if (systemBlocks != null) {
+            jsonObject.put("system", systemBlocks)
         }
-
-        ensurePromptCacheBreakpoint(jsonObject)
 
         // 添加extended thinking支持
         if (enableThinking) {
@@ -912,8 +1165,7 @@ class ClaudeProvider(
 
     override suspend fun sendMessage(
             context: Context,
-            message: String,
-            chatHistory: List<Pair<String, String>>,
+            chatHistory: List<PromptTurn>,
             modelParameters: List<ModelParameter<*>>,
             enableThinking: Boolean,
             stream: Boolean,
@@ -926,7 +1178,7 @@ class ClaudeProvider(
         val eventChannel = MutableSharedStream<TextStreamEvent>(replay = Int.MAX_VALUE)
         val responseStream = stream {
         isManuallyCancelled = false
-        resetTokenCounts()
+        tokenCacheManager.setOutputTokens(0)
 
         val maxRetries = LlmRetryPolicy.MAX_RETRY_ATTEMPTS
         var retryCount = 0
@@ -1025,7 +1277,6 @@ class ClaudeProvider(
                 }
 
                 val requestBody = createRequestBody(
-                    message,
                     chatHistory,
                     modelParameters,
                     enableThinking,
@@ -1498,8 +1749,16 @@ class ClaudeProvider(
             // 通过发送一条短消息来测试完整的连接、认证和API端点。
             // 这比getModelsList更可靠，因为它直接命中了聊天API。
             // 提供一个通用的系统提示，以防止某些需要它的模型出现错误。
-            val testHistory = listOf("system" to "You are a helpful assistant.")
-            val stream = sendMessage(context, "Hi", testHistory, emptyList(), false, onTokensUpdated = { _, _, _ -> }, onNonFatalError = {}, enableRetry = false)
+            val testHistory = listOf("system" to "You are a helpful assistant.").toPromptTurns()
+            val stream = sendMessage(
+                context,
+                testHistory + PromptTurn(kind = PromptTurnKind.USER, content = "Hi"),
+                emptyList(),
+                false,
+                onTokensUpdated = { _, _, _ -> },
+                onNonFatalError = {},
+                enableRetry = false
+            )
 
             // 消耗流以确保连接有效。
             // 对 "Hi" 的响应应该很短，所以这会很快完成。

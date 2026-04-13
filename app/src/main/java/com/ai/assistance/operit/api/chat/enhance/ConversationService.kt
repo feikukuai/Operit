@@ -4,8 +4,9 @@ import android.content.Context
 import com.ai.assistance.operit.util.AppLogger
 import com.ai.assistance.operit.core.chat.hooks.PromptHookContext
 import com.ai.assistance.operit.core.chat.hooks.PromptHookRegistry
-import com.ai.assistance.operit.core.chat.hooks.toPromptMessages
-import com.ai.assistance.operit.core.chat.hooks.toRoleContentPairs
+import com.ai.assistance.operit.core.chat.hooks.PromptTurn
+import com.ai.assistance.operit.core.chat.hooks.PromptTurnKind
+import com.ai.assistance.operit.core.chat.hooks.toPromptTurns
 import com.ai.assistance.operit.core.config.SystemPromptConfig
 import com.ai.assistance.operit.R
 import com.ai.assistance.operit.core.tools.AIToolHandler
@@ -86,7 +87,7 @@ class ConversationService(
             messages: List<Pair<String, String>>,
             multiServiceManager: MultiServiceManager
     ): String {
-        return generateSummary(messages, null, multiServiceManager)
+        return generateSummaryFromPromptTurns(messages.toPromptTurns(), null, multiServiceManager)
     }
 
     /**
@@ -100,12 +101,22 @@ class ConversationService(
             previousSummary: String?,
             multiServiceManager: MultiServiceManager
     ): String {
+        return generateSummaryFromPromptTurns(messages.toPromptTurns(), previousSummary, multiServiceManager)
+    }
+
+    suspend fun generateSummaryFromPromptTurns(
+            messages: List<PromptTurn>,
+            previousSummary: String?,
+            multiServiceManager: MultiServiceManager
+    ): String {
         try {
             val useEnglish = LocaleUtils.getCurrentLanguage(context).lowercase().startsWith("en")
             val systemPrompt = FunctionalPrompts.buildSummarySystemPrompt(previousSummary, useEnglish)
-            val sanitizedMessages = ChatUtils.stripGeminiThoughtSignatureMeta(messages)
+            val sanitizedMessages = ChatUtils.stripGeminiThoughtSignatureMetaTurns(messages)
 
-            val finalMessages = listOf(Pair("system", systemPrompt)) + sanitizedMessages
+            val finalMessages =
+                listOf(PromptTurn(kind = PromptTurnKind.SYSTEM, content = systemPrompt)) +
+                    sanitizedMessages
 
             // Get all model parameters from preferences (with enabled state)
             val modelParameters = multiServiceManager.getModelParametersForFunction(FunctionType.SUMMARY)
@@ -182,8 +193,11 @@ class ConversationService(
             val stream =
                     summaryService.sendMessage(
                             context = context,
-                            message = FunctionalPrompts.summaryUserMessage(useEnglish),
-                            chatHistory = finalMessages,
+                            chatHistory =
+                                finalMessages + PromptTurn(
+                                    kind = PromptTurnKind.USER,
+                                    content = FunctionalPrompts.summaryUserMessage(useEnglish)
+                                ),
                             modelParameters = modelParameters
                     )
 
@@ -246,7 +260,7 @@ class ConversationService(
      * @return 准备好的对话历史列表
      */
     suspend fun prepareConversationHistory(
-            chatHistory: List<Pair<String, String>>,
+            chatHistory: List<PromptTurn>,
             processedInput: String,
             chatId: String?,
             workspacePath: String?,
@@ -270,7 +284,7 @@ class ConversationService(
             dispatchHistoryHooks: (PromptHookContext) -> PromptHookContext = PromptHookRegistry::dispatchPromptHistoryHooks,
             dispatchSystemPromptComposeHooks: (PromptHookContext) -> PromptHookContext = PromptHookRegistry::dispatchSystemPromptComposeHooks,
             dispatchToolPromptComposeHooks: (PromptHookContext) -> PromptHookContext = PromptHookRegistry::dispatchToolPromptComposeHooks
-    ): List<Pair<String, String>> {
+    ): List<PromptTurn> {
         val beforeContext =
             dispatchHistoryHooks(
                 PromptHookContext(
@@ -278,7 +292,7 @@ class ConversationService(
                     chatId = chatId,
                     promptFunctionType = promptFunctionType.name,
                     processedInput = processedInput,
-                    chatHistory = chatHistory.toPromptMessages(),
+                    chatHistory = chatHistory,
                     metadata =
                         mapOf(
                             "workspacePath" to workspacePath,
@@ -300,12 +314,12 @@ class ConversationService(
                         )
                 )
             )
-        val effectiveChatHistory = beforeContext.chatHistory.toRoleContentPairs()
-        val preparedHistory = mutableListOf<Pair<String, String>>()
+        val effectiveChatHistory = beforeContext.chatHistory
+        val preparedHistory = mutableListOf<PromptTurn>()
         var resolvedUseEnglish: Boolean? = null
         conversationMutex.withLock {
             // Add system prompt if not already present
-            if (!effectiveChatHistory.any { it.first == "system" }) {
+            if (!effectiveChatHistory.any { it.kind == PromptTurnKind.SYSTEM }) {
                 val safeProxySenderName = proxySenderName?.takeIf { it.isNotBlank() }
 
                 val preferencesText = if (safeProxySenderName == null) {
@@ -422,16 +436,22 @@ class ConversationService(
                     finalSystemPrompt,
                     aiName
                 )
-                preparedHistory.add(0, Pair("system", finalSystemPromptWithReplacements))
+                preparedHistory.add(
+                    0,
+                    PromptTurn(
+                        kind = PromptTurnKind.SYSTEM,
+                        content = finalSystemPromptWithReplacements
+                    )
+                )
             }
 
             // Process each message in chat history
             effectiveChatHistory.forEachIndexed { index, message ->
-                val role = message.first
-                val content = message.second
+                val kind = message.kind
+                val content = message.content
 
                 // If it's an assistant message, check for tool results
-                if (role == "assistant") {
+                if (kind == PromptTurnKind.ASSISTANT) {
                     val xmlTags = splitXmlTag(content)
                     if (xmlTags.isNotEmpty()) {
                         // Process the message with tool results
@@ -440,10 +460,10 @@ class ConversationService(
                         // Add the message as is
                         preparedHistory.add(message)
                     }
-                } else if (role == "tool") {
-                    preparedHistory.add(Pair(role, normalizeToolResultMarkupForModel(content)))
+                } else if (kind == PromptTurnKind.TOOL_RESULT) {
+                    preparedHistory.add(message.copy(content = normalizeToolResultMarkupForModel(content)))
                 } else {
-                    // Add user or system messages as is
+                    // Add typed turns as is
                     preparedHistory.add(message)
                 }
             }
@@ -453,10 +473,10 @@ class ConversationService(
                 beforeContext.copy(
                     stage = "after_prepare_history",
                     useEnglish = resolvedUseEnglish,
-                    preparedHistory = preparedHistory.toPromptMessages()
+                    preparedHistory = preparedHistory
                 )
             )
-        return afterContext.preparedHistory.toRoleContentPairs()
+        return afterContext.preparedHistory
     }
 
     /**
@@ -469,12 +489,14 @@ class ConversationService(
     }
 
     fun normalizeConversationHistoryForModel(
-        chatHistory: List<Pair<String, String>>
-    ): List<Pair<String, String>> {
-        return chatHistory.map { (role, content) ->
-            when (role) {
-                "assistant", "tool" -> Pair(role, normalizeToolResultMarkupForModel(content))
-                else -> Pair(role, content)
+        chatHistory: List<PromptTurn>
+    ): List<PromptTurn> {
+        return chatHistory.map { turn ->
+            when (turn.kind) {
+                PromptTurnKind.ASSISTANT,
+                PromptTurnKind.TOOL_CALL,
+                PromptTurnKind.TOOL_RESULT -> turn.copy(content = normalizeToolResultMarkupForModel(turn.content))
+                else -> turn
             }
         }
     }
@@ -509,18 +531,23 @@ class ConversationService(
     suspend fun processChatMessageWithTools(
             content: String,
             xmlTags: List<List<String>>,
-            conversationHistory: MutableList<Pair<String, String>>,
+            conversationHistory: MutableList<PromptTurn>,
             messageIndex: Int,
             totalMessages: Int
     ) {
         if (xmlTags.isEmpty()) {
             // 如果没有XML标签，直接添加为AI消息
-            conversationHistory.add(Pair("assistant", content))
+            conversationHistory.add(
+                PromptTurn(
+                    kind = PromptTurnKind.ASSISTANT,
+                    content = content
+                )
+            )
             return
         }
 
         // 按顺序处理标签
-        val segments = mutableListOf<Pair<String, String>>() // 角色, 内容
+        val segments = mutableListOf<PromptTurn>()
 
         for (tag in xmlTags) {
             val tagName = tag[0]
@@ -530,7 +557,7 @@ class ConversationService(
             // 对于text类型（纯文本），直接作为AI消息
             if (tagName == "text") {
                 if (tagContent.isNotBlank()) {
-                    segments.add(Pair("assistant", tagContent))
+                    segments.add(PromptTurn(kind = PromptTurnKind.ASSISTANT, content = tagContent))
                 }
                 continue
             }
@@ -539,51 +566,80 @@ class ConversationService(
             when (normalizedTagName) {
                 "think", "thinking" -> {
                     // 保留完整的think标签（用于DeepSeek推理模式）
-                    segments.add(Pair("assistant", tagContent))
+                    segments.add(PromptTurn(kind = PromptTurnKind.ASSISTANT, content = tagContent))
                 }
                 "status" -> {
                     // 判断status类型
                     if (tagContent.contains("type=\"complete\"") ||
                                     tagContent.contains("type=\"wait_for_user_need\"")
                     ) {
-                        segments.add(Pair("assistant", tagContent))
+                        segments.add(PromptTurn(kind = PromptTurnKind.ASSISTANT, content = tagContent))
                     } else {
-                        segments.add(Pair("user", tagContent))
+                        segments.add(PromptTurn(kind = PromptTurnKind.USER, content = tagContent))
                     }
                 }
                 "tool_result" -> {
-                    segments.add(Pair("user", normalizeToolResultMarkupForModel(tagContent)))
+                    segments.add(
+                        PromptTurn(
+                            kind = PromptTurnKind.TOOL_RESULT,
+                            content = normalizeToolResultMarkupForModel(tagContent)
+                        )
+                    )
+                }
+                "tool" -> {
+                    segments.add(PromptTurn(kind = PromptTurnKind.TOOL_CALL, content = tagContent))
                 }
                 else -> {
-                    segments.add(Pair("assistant", tagContent))
+                    segments.add(PromptTurn(kind = PromptTurnKind.ASSISTANT, content = tagContent))
                 }
             }
         }
 
         // 合并连续的相同角色消息
-        val mergedSegments = mutableListOf<Pair<String, String>>()
-        var currentRole = ""
+        val mergedSegments = mutableListOf<PromptTurn>()
+        var currentKind: PromptTurnKind? = null
         var currentContent = StringBuilder()
+        var currentToolName: String? = null
+        var currentMetadata: Map<String, Any?> = emptyMap()
 
         for (segment in segments) {
-            if (segment.first == currentRole) {
+            val shouldMergeCurrent =
+                segment.kind == currentKind &&
+                    segment.kind !in setOf(PromptTurnKind.TOOL_CALL, PromptTurnKind.TOOL_RESULT)
+            if (shouldMergeCurrent) {
                 // 如果角色与当前角色相同，则合并内容
-                currentContent.append("\n").append(segment.second)
+                currentContent.append("\n").append(segment.content)
             } else {
                 // 角色不同，先保存当前内容（如果有）
-                if (currentContent.isNotEmpty()) {
-                    mergedSegments.add(Pair(currentRole, currentContent.toString().trim()))
+                if (currentContent.isNotEmpty() && currentKind != null) {
+                    mergedSegments.add(
+                        PromptTurn(
+                            kind = currentKind!!,
+                            content = currentContent.toString().trim(),
+                            toolName = currentToolName,
+                            metadata = currentMetadata
+                        )
+                    )
                     currentContent.clear()
                 }
                 // 更新当前角色和内容
-                currentRole = segment.first
-                currentContent.append(segment.second)
+                currentKind = segment.kind
+                currentToolName = segment.toolName
+                currentMetadata = segment.metadata
+                currentContent.append(segment.content)
             }
         }
 
         // 添加最后一条消息
-        if (currentContent.isNotEmpty()) {
-            mergedSegments.add(Pair(currentRole, currentContent.toString().trim()))
+        if (currentContent.isNotEmpty() && currentKind != null) {
+            mergedSegments.add(
+                PromptTurn(
+                    kind = currentKind!!,
+                    content = currentContent.toString().trim(),
+                    toolName = currentToolName,
+                    metadata = currentMetadata
+                )
+            )
         }
 
         // 将合并后的消息添加到对话历史
@@ -897,7 +953,10 @@ ${FunctionalPrompts.translationUserPrompt(targetLanguage, text)}
         """.trim()
         
         val chatHistory = listOf(
-            Pair("system", FunctionalPrompts.translationSystemPrompt())
+            PromptTurn(
+                kind = PromptTurnKind.SYSTEM,
+                content = FunctionalPrompts.translationSystemPrompt()
+            )
         )
         
         val contentBuilder = StringBuilder()
@@ -911,8 +970,7 @@ ${FunctionalPrompts.translationUserPrompt(targetLanguage, text)}
             
             val stream = translationService.sendMessage(
                 context = context,
-                message = translationPrompt,
-                chatHistory = chatHistory,
+                chatHistory = chatHistory + PromptTurn(kind = PromptTurnKind.USER, content = translationPrompt),
                 modelParameters = modelParameters
             )
             
@@ -953,7 +1011,12 @@ ${FunctionalPrompts.translationUserPrompt(targetLanguage, text)}
             )
 
         val chatHistory =
-            listOf(Pair("system", FunctionalPrompts.packageDescriptionSystemPrompt(useEnglish)))
+            listOf(
+                PromptTurn(
+                    kind = PromptTurnKind.SYSTEM,
+                    content = FunctionalPrompts.packageDescriptionSystemPrompt(useEnglish)
+                )
+            )
         
         val contentBuilder = StringBuilder()
         
@@ -966,8 +1029,7 @@ ${FunctionalPrompts.translationUserPrompt(targetLanguage, text)}
             
             val stream = summaryService.sendMessage(
                 context = context,
-                message = descriptionPrompt,
-                chatHistory = chatHistory,
+                chatHistory = chatHistory + PromptTurn(kind = PromptTurnKind.USER, content = descriptionPrompt),
                 modelParameters = modelParameters
             )
             
@@ -1025,8 +1087,7 @@ ${FunctionalPrompts.translationUserPrompt(targetLanguage, text)}
             val result = StringBuilder()
             service.sendMessage(
                 context = context,
-                message = prompt,
-                chatHistory = emptyList(),
+                chatHistory = listOf(PromptTurn(kind = PromptTurnKind.USER, content = prompt)),
                 modelParameters = modelParameters
             ).collect { chunk ->
                 result.append(chunk)
@@ -1071,8 +1132,7 @@ ${FunctionalPrompts.translationUserPrompt(targetLanguage, text)}
             val result = StringBuilder()
             service.sendMessage(
                 context = context,
-                message = prompt,
-                chatHistory = emptyList(),
+                chatHistory = listOf(PromptTurn(kind = PromptTurnKind.USER, content = prompt)),
                 modelParameters = modelParameters
             ).collect { chunk ->
                 result.append(chunk)
@@ -1115,8 +1175,7 @@ ${FunctionalPrompts.translationUserPrompt(targetLanguage, text)}
             val result = StringBuilder()
             service.sendMessage(
                 context = context,
-                message = prompt,
-                chatHistory = emptyList(),
+                chatHistory = listOf(PromptTurn(kind = PromptTurnKind.USER, content = prompt)),
                 modelParameters = modelParameters
             ).collect { chunk ->
                 result.append(chunk)
