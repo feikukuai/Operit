@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Store
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material3.*
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
@@ -88,6 +89,7 @@ private data class PackageManagerSnapshot(
 fun PackageManagerScreen(
     onNavigateToMCPMarket: () -> Unit = {},
     onNavigateToSkillMarket: () -> Unit = {},
+    onNavigateToArtifactMarket: () -> Unit = {},
     onOpenToolPkgPluginConfig: (String, String, String) -> Unit = { _, _, _ -> },
     onNavigateToMCPDetail: ((com.ai.assistance.operit.data.api.GitHubIssue) -> Unit)? = null
 ) {
@@ -210,11 +212,11 @@ fun PackageManagerScreen(
                                             }
 
                                             val errorsBeforeImport = packageManager.getPackageLoadErrors()
-                                            val importMessage = packageManager.importPackageFromExternalStorage(tempFile.absolutePath)
+                                            val importMessage = packageManager.addPackageFileFromExternalStorage(tempFile.absolutePath)
 
                                             val available = packageManager.getTopLevelAvailablePackages(forceRefresh = true)
                                             val allAvailable = packageManager.getAvailablePackages()
-                                            val imported = packageManager.getImportedPackages()
+                                            val imported = packageManager.getEnabledPackageNames()
                                             val errors = packageManager.getPackageLoadErrors()
                                             val errorInfos = packageManager.getPackageLoadErrorInfos()
                                             val newErrors =
@@ -296,7 +298,7 @@ fun PackageManagerScreen(
                 withContext(Dispatchers.IO) {
                     val available = packageManager.getTopLevelAvailablePackages(forceRefresh = true)
                     val allAvailable = packageManager.getAvailablePackages()
-                    val imported = packageManager.getImportedPackages()
+                    val imported = packageManager.getEnabledPackageNames()
                     val errors = packageManager.getPackageLoadErrors()
                     val errorInfos = packageManager.getPackageLoadErrorInfos()
                     PackageManagerSnapshot(
@@ -367,6 +369,22 @@ fun PackageManagerScreen(
                         Icon(
                             imageVector = Icons.Default.Settings,
                             contentDescription = stringResource(R.string.pkg_manage_env_vars)
+                        )
+                    }
+
+                    FloatingActionButton(
+                        onClick = onNavigateToArtifactMarket,
+                        containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                        modifier =
+                            Modifier.shadow(
+                                elevation = 6.dp,
+                                shape = FloatingActionButtonDefaults.shape
+                            )
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Store,
+                            contentDescription = "Artifact Market"
                         )
                     }
 
@@ -526,7 +544,6 @@ fun PackageManagerScreen(
             ) {
                 when (selectedTab) {
                     PackageTab.PACKAGES -> {
-                        // 显示包列表
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
@@ -567,7 +584,6 @@ fun PackageManagerScreen(
                                             sortedEntries.associate { entry -> entry.key to entry.value }
                                     }
 
-                                    // 在Composable上下文中预先获取颜色
                                     val automaticColor = MaterialTheme.colorScheme.primary
                                     val experimentalColor = MaterialTheme.colorScheme.tertiary
                                     val drawColor = MaterialTheme.colorScheme.secondary
@@ -577,7 +593,7 @@ fun PackageManagerScreen(
                                     LazyColumn(
                                         modifier = Modifier.fillMaxSize(),
                                         verticalArrangement = Arrangement.spacedBy(1.dp),
-                                        contentPadding = PaddingValues(bottom = 120.dp) // Add padding to avoid FAB overlap
+                                        contentPadding = PaddingValues(bottom = 120.dp)
                                     ) {
                                         groupedPackages.forEach { (category, packagesInCategory) ->
                                             val categoryColor = when (category) {
@@ -607,7 +623,7 @@ fun PackageManagerScreen(
                                                         packageName
                                                     ),
                                                     categoryTag = if (isFirstInCategory) categoryTagText else null,
-                                                    category = category, // 传递完整的分类信息
+                                                    category = category,
                                                     categoryColor = categoryColor,
                                                     isProminent = category == "ToolPkg",
                                                     onPackageClick = {
@@ -615,7 +631,6 @@ fun PackageManagerScreen(
                                                         showDetails = true
                                                     },
                                                     onToggleImport = { isChecked ->
-                                                        // 立即更新UI显示的导入状态列表，使开关立即响应
                                                         val currentImported =
                                                             visibleImportedPackages.value.toMutableList()
                                                         if (isChecked) {
@@ -631,17 +646,16 @@ fun PackageManagerScreen(
                                                         visibleImportedPackages.value =
                                                             currentImported
 
-                                                        // 后台执行实际的导入/移除操作
                                                         scope.launch {
                                                             try {
                                                                 val updatedImported =
                                                                     withContext(Dispatchers.IO) {
                                                                         if (isChecked) {
-                                                                            packageManager.importPackage(packageName)
+                                                                            packageManager.enablePackage(packageName)
                                                                         } else {
-                                                                            packageManager.removePackage(packageName)
+                                                                            packageManager.disablePackage(packageName)
                                                                         }
-                                                                        packageManager.getImportedPackages()
+                                                                        packageManager.getEnabledPackageNames()
                                                                     }
 
                                                                 importedPackages.value = updatedImported
@@ -651,10 +665,8 @@ fun PackageManagerScreen(
                                                                     if (isChecked) "Failed to import package" else "Failed to remove package",
                                                                     e
                                                                 )
-                                                                // 操作失败时恢复UI显示状态为实际状态
                                                                 visibleImportedPackages.value =
                                                                     importedPackages.value
-                                                                // 只在失败时显示提示
                                                                 snackbarHostState.showSnackbar(
                                                                     message = if (isChecked) context.getString(
                                                                         R.string.package_import_failed
@@ -718,7 +730,7 @@ fun PackageManagerScreen(
                     onDismiss = {
                         showDetails = false
                         scope.launch {
-                            val imported = withContext(Dispatchers.IO) { packageManager.getImportedPackages() }
+                            val imported = withContext(Dispatchers.IO) { packageManager.getEnabledPackageNames() }
                             importedPackages.value = imported
                             visibleImportedPackages.value = imported.toList()
                         }
@@ -736,7 +748,7 @@ fun PackageManagerScreen(
                                 withContext(Dispatchers.IO) {
                                     val available = packageManager.getTopLevelAvailablePackages(forceRefresh = true)
                                     val allAvailable = packageManager.getAvailablePackages()
-                                    val imported = packageManager.getImportedPackages()
+                                    val imported = packageManager.getEnabledPackageNames()
                                     Triple(available, allAvailable, imported)
                                 }
 
@@ -815,7 +827,7 @@ fun PackageManagerScreen(
                                     PackageManagerSnapshot(
                                         availablePackages = packageManager.getTopLevelAvailablePackages(forceRefresh = true),
                                         allAvailablePackages = packageManager.getAvailablePackages(),
-                                        importedPackages = packageManager.getImportedPackages(),
+                                        importedPackages = packageManager.getEnabledPackageNames(),
                                         packageLoadErrors = packageManager.getPackageLoadErrors(),
                                         packageLoadErrorInfos = packageManager.getPackageLoadErrorInfos()
                                     )

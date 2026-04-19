@@ -134,7 +134,7 @@ class CharacterCardToolAccessResolver private constructor(private val context: C
     }
 
     private fun buildGlobalPackageNames(packageManager: PackageManager): LinkedHashSet<String> {
-        return packageManager.getImportedPackages()
+        return packageManager.getEnabledPackageNames()
             .asSequence()
             .map { it.trim() }
             .filter { it.isNotEmpty() }

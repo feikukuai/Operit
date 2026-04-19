@@ -28,10 +28,10 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /**
- * 问题库管理类 - 提供分析对话内容并存储为结构化记忆图谱的功能。
+ * 记忆库管理类 - 提供分析对话内容并存储为结构化记忆图谱的功能。
  */
-object ProblemLibrary {
-    private const val TAG = "ProblemLibrary"
+object MemoryLibrary {
+    private const val TAG = "MemoryLibrary"
     private val coroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var apiPreferences: ApiPreferences? = null
     private val mutex = Mutex()
@@ -54,12 +54,12 @@ object ProblemLibrary {
 
 
     fun initialize(context: Context) {
-        synchronized(ProblemLibrary::class.java) {
+        synchronized(MemoryLibrary::class.java) {
             if (isInitialized) return
-            AppLogger.d(TAG, "正在初始化 ProblemLibrary")
+            AppLogger.d(TAG, "正在初始化 MemoryLibrary")
             apiPreferences = ApiPreferences.getInstance(context.applicationContext)
             isInitialized = true
-            AppLogger.d(TAG, "ProblemLibrary 初始化完成")
+            AppLogger.d(TAG, "MemoryLibrary 初始化完成")
         }
     }
 
@@ -79,7 +79,7 @@ object ProblemLibrary {
         }
     }
 
-    fun saveProblemAsync(
+    fun saveMemoryAsync(
             context: Context,
             toolHandler: AIToolHandler,
             conversationHistory: List<Pair<String, String>>,
@@ -90,7 +90,7 @@ object ProblemLibrary {
 
         coroutineScope.launch {
             try {
-                saveProblem(
+                saveMemory(
                     context,
                     toolHandler,
                     conversationHistory,
@@ -98,7 +98,7 @@ object ProblemLibrary {
                     aiService
                 )
             } catch (e: Exception) {
-                AppLogger.e(TAG, "保存问题记录失败", e)
+                AppLogger.e(TAG, "保存记忆失败", e)
             }
         }
     }
@@ -239,7 +239,7 @@ object ProblemLibrary {
     /**
      * Analyzes conversation and saves it as a structured Memory graph.
      */
-    private suspend fun saveProblem(
+    private suspend fun saveMemory(
             context: Context,
             toolHandler: AIToolHandler,
             conversationHistory: List<Pair<String, String>>,
@@ -271,7 +271,7 @@ object ProblemLibrary {
                 }
 
             if (processedHistory.isEmpty()) {
-                AppLogger.w(TAG, "处理后的会話历史为空，跳过保存问题记录")
+                AppLogger.w(TAG, "处理后的会話历史为空，跳过保存记忆")
                 return@withLock
             }
 
@@ -419,7 +419,7 @@ object ProblemLibrary {
                         memory = Memory(
                             title = entity.title,
                             content = entity.content,
-                            source = "problem_library_analysis",
+                            source = "memory_analysis",
                             folderPath = entity.folderPath ?: analysis.mainProblem.folderPath ?: ""
                         )
                         memoryRepository.saveMemory(memory)
@@ -688,16 +688,16 @@ object ProblemLibrary {
             messageBuilder.appendLine(solution.take(3000))
             messageBuilder.appendLine()
         } else {
-            messageBuilder.appendLine(context.getString(R.string.problem_library_question))
+            messageBuilder.appendLine(context.getString(R.string.memory_analysis_question))
             messageBuilder.appendLine(query)
             messageBuilder.appendLine()
-            messageBuilder.appendLine(context.getString(R.string.problem_library_solution))
+            messageBuilder.appendLine(context.getString(R.string.memory_analysis_solution))
             messageBuilder.appendLine(solution.take(3000))
             messageBuilder.appendLine()
         }
         val recentHistory = conversationHistory.takeLast(10)
         if (recentHistory.isNotEmpty()) {
-            messageBuilder.appendLine(if (useEnglish) "History:" else context.getString(R.string.problem_library_history))
+            messageBuilder.appendLine(if (useEnglish) "History:" else context.getString(R.string.memory_analysis_history))
             recentHistory.forEachIndexed { index, (role, content) ->
                 messageBuilder.appendLine("#${index + 1} $role: ${content.take(4000)}")
             }
@@ -913,7 +913,7 @@ object ProblemLibrary {
     private fun pruneToolResultContent(context: Context, message: String): String {
         return ChatMarkupRegex.pruneToolResultContentPattern.replace(message) { matchResult ->
             val attributes = matchResult.groupValues[1]
-            context.getString(R.string.problem_library_tool_result_pruned, attributes)
+            context.getString(R.string.memory_tool_result_pruned, attributes)
         }
     }
 

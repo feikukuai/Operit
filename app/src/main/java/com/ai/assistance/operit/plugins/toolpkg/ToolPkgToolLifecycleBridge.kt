@@ -34,7 +34,7 @@ internal object ToolPkgToolLifecycleBridge : AIToolHook {
     private var hooks: List<ToolPkgToolLifecycleHookRegistration> = emptyList()
     private val runtimeChangeListener =
         PackageManager.ToolPkgRuntimeChangeListener {
-            syncToolPkgRegistrations(toolPkgPackageManager().getImportedToolPkgContainerRuntimes())
+            syncToolPkgRegistrations(toolPkgPackageManager().getEnabledToolPkgContainerRuntimes())
         }
 
     init {

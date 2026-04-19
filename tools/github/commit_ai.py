@@ -1,6 +1,7 @@
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 import textwrap
@@ -111,7 +112,10 @@ def _extract_commit_subject(resp: dict) -> str:
     except Exception as e:
         raise RuntimeError(f"Unexpected AI response: {e}\n{json.dumps(resp, ensure_ascii=False)[:2000]}")
 
-    subject = (msg or "").strip().splitlines()[0].strip()
+    content = (msg or "").strip()
+    content = re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL | re.IGNORECASE).strip()
+    lines = [line.strip() for line in content.splitlines() if line.strip()]
+    subject = (lines[0] if lines else content).strip()
     subject = subject.strip('"').strip("'")
 
     # Guard: keep it one-line and reasonably short
@@ -150,6 +154,21 @@ def main() -> int:
         "--stage-all",
         action="store_true",
         help="Run git add -A before generating message",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Generate and print the commit message, but do not commit",
+    )
+    parser.add_argument(
+        "--debug-prompt",
+        action="store_true",
+        help="Print the system/user prompts before sending the AI request",
+    )
+    parser.add_argument(
+        "--debug-response",
+        action="store_true",
+        help="Print the raw AI response JSON before extracting the subject",
     )
     parser.add_argument(
         "--extra-zh",
@@ -198,31 +217,75 @@ def main() -> int:
             "Optional: enter extra notes in Chinese (press Enter on an empty line to finish; leave blank to skip):"
         )
 
-    system_prompt = (
-        "You are an expert software engineer writing a git commit subject line. "
-        "You must base the subject on the provided staged change summary (git diff --cached --stat) "
-        "and the staged diff, plus optional author notes. "
-        "Your subject must reflect ALL meaningful staged changes, including small or scattered updates; "
-        "do not ignore secondary changes. "
-        "If the staged changes span multiple areas and a single narrow theme would omit changes, "
-        "choose a broader but accurate subject and optionally use 'and/plus' or a 'misc'/'follow-up' phrasing "
-        "to cover secondary updates while staying concise. "
-        "If the diff content is truncated (contains '[diff truncated]'), avoid overly specific wording and rely more on --stat. "
-        "Never invent changes that are not present in the inputs. "
-        "The output must be a single-line English subject."
-    )
+    system_prompt = textwrap.dedent(
+        """
+        Write one English git commit subject line from the staged --stat, staged diff, and optional author notes.
+
+        Goal:
+        - Make the subject useful to future maintainers reading git history.
+        - Prefer concrete features, behavior changes, or fixes.
+        - Prefer product/feature wording over implementation wording.
+
+        Rules:
+        - Capture all meaningful change themes concisely.
+        - Do not omit an independently meaningful feature or fix just to keep the subject shorter.
+        - Do not choose themes only by changed line count; use distinct file groups from --stat.
+        - Do not let one very large file outweigh a second theme that appears across multiple files.
+        - If the diff is truncated, recover missing themes from --stat.
+        - Mentally group files into feature clusters before writing.
+        - Prefer specific capabilities over broad buckets.
+        - Treat changed user-facing descriptions, option names, strings, and docs in the diff as strong clues for the real feature name.
+        - Use verb phrases, not noun fragments.
+        - Never invent changes.
+
+        Avoid:
+        - generic filler like update, misc, improvements
+        - leading with refactor/internal wording when there is a clearer user-visible change
+        - internal class/function/API names unless there is no better product-level description
+        - broad labels like tools, UI, system, support, handling, integration, or infrastructure when a more specific feature name is visible
+        - subjects so short or vague that a maintainer cannot tell what changed
+
+        Output:
+        - one single-line English subject only
+        - no explanation, no quotes, no markdown
+
+        THINKING PROCESS GUIDELINES:
+        - Before providing your final response, you MUST use a <think> block to outline your thought process. This is for your internal monologue.
+        - In your thoughts, deconstruct the user's request, consider alternatives, anticipate outcomes, and reflect on the best strategy. Formulate a precise action plan. Your plan should be efficient, and you may use tools in parallel or sequentially as appropriate. The tool system will decide and handle execution conflicts automatically.
+        - The user will see your thoughts but cannot reply to them directly. This block is NOT saved in the chat history, so your final answer must be self-contained.
+        - The <think> block must be immediately followed by your final answer or tool call without any newlines.
+        - CRITICAL REMINDER: Even if previous messages in the chat history do not show a <think> block, you MUST include one in your current response. This is a mandatory instruction for this conversation mode.
+        """
+    ).strip()
 
     user_prompt = textwrap.dedent(
         f"""
         Write a single-line English git commit subject for the following staged changes.
 
         Rules:
-        - Output ONLY the subject line.
+        - Your final visible answer must be the subject line.
         - Must be English, even if the author notes are Chinese.
-        - Imperative mood (e.g., 'Fix', 'Add', 'Refactor').
-        - Prefer Conventional Commits if obvious (feat/fix/refactor/chore/docs/test/build), otherwise a normal subject.
+        - Use imperative mood.
+        - Prefer Conventional Commits when obvious, especially feat/fix.
         - No trailing period.
-        - Try to keep <= 250 characters.
+        - Prefer product/feature wording, not implementation wording.
+        - Cover the meaningful changes faithfully; do not drop an important theme just to make the subject shorter.
+        - First group the staged files into feature clusters using path names and repeated areas in --stat.
+        - Then decide what combination of feature clusters best represents the whole commit, not just the biggest file or the first diff hunk.
+        - Prefer repeated feature names across multiple files over a single large follow-up screen or config file.
+        - If multiple themes exist, summarize them naturally instead of dropping one by default.
+        - Do not focus on two details from the same feature cluster while omitting a separate meaningful cluster.
+        - Then look for user-visible clues in the diff such as changed descriptions, option names, parameter names, strings, and docs; prefer those words over code plumbing words.
+        - If a settings/strings screen follows a clearer underlying feature, name the feature, not the follow-up UI.
+        - If a clearly named feature cluster and a generic settings cluster both changed, prefer the clearly named feature cluster.
+        - If there is a user-visible change, do not lead with refactor/internal wording.
+        - Do not use internal API names if a feature-level description is available.
+        - If a more specific capability is visible, do not fall back to broad wording like browser tools.
+        - Use verb phrases, not noun fragments.
+        - Think of the result as a tiny changelog sentence for future maintainers: in one line, say what this commit adds, fixes, or changes so the reader can understand the commit without opening the diff.
+        - Good style sounds like a tiny changelog sentence, for example: 'feat: add workspace renaming and improve history navigation' or 'fix: improve TTS error handling and stabilize SSH output capture'.
+        - Bad style sounds like implementation shorthand, for example: 'feat: enhance tools and refactor bridge'.
+        - Keep it compact but informative; usually 80-140 characters.
 
         Optional author notes (may be Chinese):
         {extra_zh or '[none]'}
@@ -235,6 +298,13 @@ def main() -> int:
         """
     ).strip()
 
+    if args.debug_prompt:
+        print("=== SYSTEM PROMPT ===\n")
+        print(system_prompt)
+        print("\n=== USER PROMPT ===\n")
+        print(user_prompt)
+        print("")
+
     payload = {
         "model": model,
         "temperature": temperature,
@@ -245,11 +315,21 @@ def main() -> int:
     }
 
     resp = _openai_chat_completion(base_url=base_url, api_key=api_key, payload=payload)
+
+    if args.debug_response:
+        print("=== RAW AI RESPONSE ===\n")
+        print(json.dumps(resp, ensure_ascii=False, indent=2))
+        print("")
+
     subject = _extract_commit_subject(resp)
 
     print("Proposed commit message:\n")
     print(subject)
     print("")
+
+    if args.dry_run:
+        print("Dry run; not committing.")
+        return 0
 
     if not args.yes:
         ans = input("Commit with this message? [y/N] ").strip().lower()

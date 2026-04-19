@@ -19,10 +19,12 @@
     <!-- Tool Test Names -->
     <string name="write_small_file_test">Escribir archivo pequeño</string>
     <string name="write_large_file_test">Escribir archivo grande</string>
+    <string name="query_memory_test">Consultar memoria</string>
 
     <!-- Tool Test Descriptions -->
     <string name="write_small_file_test_desc">Escribe un archivo de texto pequeño para validar la escritura básica.</string>
     <string name="write_large_file_test_desc">Escribe un archivo de texto más grande para validar la escritura por bloques.</string>
+    <string name="query_memory_test_desc">Probar la consulta de la biblioteca de memorias.</string>
 
     <!-- 用于NavItem类的标识符 -->
     <string name="shizuku_commands">Concesión de permisos</string>
@@ -241,17 +243,6 @@
     <string name="script_execution_error">Error en la ejecución del script: %1$s</string>
     <string name="missing_parameters">Faltan parámetros necesarios: %1$s</string>
 
-    <!-- Problem Library Screen -->
-    <string name="problem_library">Biblioteca de problemas</string>
-    <string name="search_problems">Buscar problemas</string>
-    <string name="problem_details">Detalles del problema</string>
-    <string name="edit_problem">Editar problema</string>
-    <string name="delete_problem">Eliminar problema</string>
-    <string name="empty_problem_library">La biblioteca de problemas está vacía</string>
-    <string name="problem_summary">Resumen del problema</string>
-    <string name="problem_solution">Solución</string>
-    <string name="problem_tools">Herramientas utilizadas</string>
-    <string name="problem_time">Hora de creación</string>
     <string name="save_changes">Guardar cambios</string>
     <string name="back_to_list">Volver a la lista</string>
 
@@ -698,7 +689,7 @@
     <string name="settings_theme_appearance_desc">Personalizar apariencia de la aplicación, incluye modo oscuro/claro y esquemas de color personalizados</string>
     <string name="settings_customize_theme">Personalizar Tema</string>
     <string name="settings_data_backup">Respaldo y Recuperación de Datos</string>
-    <string name="settings_data_backup_desc">Importar, exportar o eliminar historial de chat y datos de biblioteca de problemas para facilitar respaldo y recuperación</string>
+    <string name="settings_data_backup_desc">Importar, exportar o eliminar historial de chat y datos de la biblioteca de memoria para facilitar respaldo y recuperación</string>
     <string name="settings_manage_backup">Gestionar Respaldo</string>
     
     <string name="settings_section_ai_model">Configuración del Modelo IA</string>
@@ -706,7 +697,7 @@
     <string name="settings_model_parameters_desc">Configurar ajustes de API, nombres de modelo y parámetros, con soporte para gestión de múltiples configuraciones</string>
     <string name="settings_configure_model">Configurar Modelo</string>
     <string name="settings_functional_model">Configuración de Modelo Funcional</string>
-    <string name="settings_functional_model_desc">Configurar modelos especializados y ajustes de API para diferentes funciones (chat, resumen, biblioteca de problemas, etc.)</string>
+    <string name="settings_functional_model_desc">Configurar modelos especializados y ajustes de API para diferentes funciones (chat, resumen, memoria, etc.)</string>
     <string name="settings_configure_function">Configurar Función</string>
     
     <string name="settings_section_display">Visualización y Comportamiento</string>
@@ -946,14 +937,14 @@
     <!-- Function Types -->
     <string name="function_type_chat">Función de Chat</string>
     <string name="function_type_summary">Resumen de Conversación</string>
-    <string name="function_type_problem_library">Gestión de Biblioteca de Problemas</string>
+    <string name="function_type_memory">Gestión de memoria</string>
     <string name="function_type_file_binding">Procesamiento de Vinculación de Archivos</string>
     <string name="function_type_ui_controller">Controlador de UI</string>
     
     <!-- Function Descriptions -->
     <string name="function_desc_chat">Función principal de chat para interacción diaria de conversación con usuarios</string>
-    <string name="function_desc_summary">Generar resúmenes de conversación para rastrear información importante</string>
-    <string name="function_desc_problem_library">Utilizado para análisis y gestión de biblioteca de problemas</string>
+    <string name="function_desc_summary">Comprimir el contexto y generar resúmenes de chat</string>
+    <string name="function_desc_memory">Procesar recuerdos y almacenarlos en la biblioteca de memoria</string>
     <string name="function_desc_file_binding">Procesa la vinculación inteligente y mezcla de contenido de archivos, proporcionando capacidades de procesamiento de código más precisas. Se recomienda usar modelos rápidos y económicos como Gemini Flash, no se recomienda usar DeepSeek R1</string>
     <string name="function_desc_ui_controller">Utilizado para la exploración y operación automáticas de interfaces de UI. El modelo de controlador de UI correspondiente solo se activará cuando el usuario solicite explícitamente usar un «agente» para el control, por ejemplo eligiendo modelos dedicados como autoglm-phone-9b.</string>
     

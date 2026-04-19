@@ -48,7 +48,7 @@ import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 import androidx.compose.runtime.withFrameNanos
 
-private val defaultTables = listOf("chats", "messages", "problem_records")
+private val defaultTables = listOf("chats", "messages")
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable

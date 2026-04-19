@@ -161,7 +161,7 @@ class StandardSoftwareSettingsModifyTools(private val context: Context) {
     fun listSandboxPackages(tool: AITool, packageManager: PackageManager): ToolResult {
         return try {
             val availablePackages = packageManager.getAvailablePackages(forceRefresh = true)
-            val importedSet = packageManager.getImportedPackages().toSet()
+            val enabledSet = packageManager.getEnabledPackageNames().toSet()
             val disabledSet = packageManager.getDisabledPackages().toSet()
             val externalPackagesPath = packageManager.getExternalPackagesPath()
 
@@ -169,15 +169,15 @@ class StandardSoftwareSettingsModifyTools(private val context: Context) {
                 availablePackages.entries
                 .sortedBy { it.key.lowercase() }
                 .map { (packageName, pkg) ->
-                    val imported = importedSet.contains(packageName)
+                    val enabled = enabledSet.contains(packageName)
                     SandboxPackageResultItem(
                         packageName = packageName,
                         displayName = pkg.displayName.resolve(context),
                         description = pkg.description.resolve(context),
                         isBuiltIn = pkg.isBuiltIn,
                         enabledByDefault = pkg.enabledByDefault,
-                        enabled = imported,
-                        imported = imported,
+                        enabled = enabled,
+                        imported = enabled,
                         isDisabledByUser = disabledSet.contains(packageName),
                         toolCount = pkg.tools.size,
                         manageMode = if (pkg.isBuiltIn) "toggle_only" else "file_and_toggle"
@@ -194,8 +194,8 @@ class StandardSoftwareSettingsModifyTools(private val context: Context) {
                         totalCount = availablePackages.size,
                         builtInCount = availablePackages.values.count { it.isBuiltIn },
                         externalCount = availablePackages.values.count { !it.isBuiltIn },
-                        enabledCount = availablePackages.keys.count { importedSet.contains(it) },
-                        disabledCount = availablePackages.keys.count { !importedSet.contains(it) },
+                        enabledCount = availablePackages.keys.count { enabledSet.contains(it) },
+                        disabledCount = availablePackages.keys.count { !enabledSet.contains(it) },
                         packages = packages
                     )
             )
@@ -272,14 +272,14 @@ class StandardSoftwareSettingsModifyTools(private val context: Context) {
             )
         }
 
-        val previousEnabled = packageManager.isPackageImported(packageName)
+        val previousEnabled = packageManager.isPackageEnabled(packageName)
         val operationMessage =
             if (enabled) {
-                packageManager.importPackage(packageName)
+                packageManager.enablePackage(packageName)
             } else {
-                packageManager.removePackage(packageName)
+                packageManager.disablePackage(packageName)
             }
-        val currentEnabled = packageManager.isPackageImported(packageName)
+        val currentEnabled = packageManager.isPackageEnabled(packageName)
         val success = currentEnabled == enabled
 
         return ToolResult(
@@ -443,6 +443,7 @@ class StandardSoftwareSettingsModifyTools(private val context: Context) {
                                 httpMethod = ttsHttpConfig.httpMethod,
                                 requestBody = ttsHttpConfig.requestBody,
                                 contentType = ttsHttpConfig.contentType,
+                                localeTag = ttsHttpConfig.localeTag,
                                 voiceId = ttsHttpConfig.voiceId,
                                 modelName = ttsHttpConfig.modelName,
                                 responsePipeline = ttsHttpConfig.responsePipeline
@@ -619,6 +620,12 @@ class StandardSoftwareSettingsModifyTools(private val context: Context) {
                         } else {
                             currentTtsHttpConfig.contentType
                         },
+                    localeTag =
+                        if (hasField("tts_locale")) {
+                            getParameterValue(tool, "tts_locale").orEmpty().trim()
+                        } else {
+                            currentTtsHttpConfig.localeTag
+                        },
                     voiceId =
                         if (hasField("tts_voice_id")) {
                             getParameterValue(tool, "tts_voice_id").orEmpty().trim()
@@ -665,6 +672,7 @@ class StandardSoftwareSettingsModifyTools(private val context: Context) {
                     "tts_http_method",
                     "tts_request_body",
                     "tts_content_type",
+                    "tts_locale",
                     "tts_voice_id",
                     "tts_model_name",
                     "tts_response_pipeline",

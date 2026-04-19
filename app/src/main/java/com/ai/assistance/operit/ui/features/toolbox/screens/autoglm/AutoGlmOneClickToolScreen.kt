@@ -183,12 +183,12 @@ private fun AutoGlmOneClickScreen(
 
                 // 切换 AutoGLM 工具包
                 try {
-                    val imported = packageManager.getImportedPackages()
-                    if (imported.contains("Automatic_ui_base")) {
-                        packageManager.removePackage("Automatic_ui_base")
+                    val enabledPackageNames = packageManager.getEnabledPackageNames()
+                    if (enabledPackageNames.contains("Automatic_ui_base")) {
+                        packageManager.disablePackage("Automatic_ui_base")
                     }
-                    if (!packageManager.isPackageImported("Automatic_ui_subagent")) {
-                        packageManager.importPackage("Automatic_ui_subagent")
+                    if (!packageManager.isPackageEnabled("Automatic_ui_subagent")) {
+                        packageManager.enablePackage("Automatic_ui_subagent")
                     }
                 } catch (e: Exception) {
                     AppLogger.e("AutoGlmOneClick", "Failed to update packages", e)
@@ -212,12 +212,12 @@ private fun AutoGlmOneClickScreen(
             errorMessage = null
             isConfiguring = true
             try {
-                val imported = packageManager.getImportedPackages()
-                if (!imported.contains("Automatic_ui_base")) {
-                    packageManager.importPackage("Automatic_ui_base")
+                val enabledPackageNames = packageManager.getEnabledPackageNames()
+                if (!enabledPackageNames.contains("Automatic_ui_base")) {
+                    packageManager.enablePackage("Automatic_ui_base")
                 }
-                if (packageManager.isPackageImported("Automatic_ui_subagent")) {
-                    packageManager.removePackage("Automatic_ui_subagent")
+                if (packageManager.isPackageEnabled("Automatic_ui_subagent")) {
+                    packageManager.disablePackage("Automatic_ui_subagent")
                 }
 
                 statusMessage = context.getString(R.string.autoglm_restore_success)

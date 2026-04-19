@@ -2045,6 +2045,7 @@ data class SpeechTtsHttpConfigResultItem(
     val httpMethod: String,
     val requestBody: String,
     val contentType: String,
+    val localeTag: String,
     val voiceId: String,
     val modelName: String,
     val responsePipeline: List<HttpTtsResponsePipelineStep>

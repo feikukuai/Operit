@@ -243,21 +243,21 @@ internal object JsNativeInterfaceDelegates {
 
     fun isPackageImported(packageManager: PackageManager, packageName: String): Boolean {
         return guard(false, "Error checking package imported from JS: $packageName") {
-            normalizeNonBlank(packageName)?.let(packageManager::isPackageImported) ?: false
+            normalizeNonBlank(packageName)?.let(packageManager::isPackageEnabled) ?: false
         }
     }
 
     fun importPackage(packageManager: PackageManager, packageName: String): String {
         return guard("Error: package import failed", "Error importing package from JS: $packageName") {
             val normalized = normalizeNonBlank(packageName) ?: return@guard "Package name is required"
-            packageManager.importPackage(normalized)
+            packageManager.enablePackage(normalized)
         }
     }
 
     fun removePackage(packageManager: PackageManager, packageName: String): String {
         return guard("Error: package removal failed", "Error removing package from JS: $packageName") {
             val normalized = normalizeNonBlank(packageName) ?: return@guard "Package name is required"
-            packageManager.removePackage(normalized)
+            packageManager.disablePackage(normalized)
         }
     }
 
@@ -272,7 +272,7 @@ internal object JsNativeInterfaceDelegates {
         return guard("[]", "Error listing imported packages from JS") {
             Json.encodeToString(
                 ListSerializer(String.serializer()),
-                packageManager.getImportedPackages()
+                packageManager.getEnabledPackageNames()
             )
         }
     }
@@ -293,17 +293,17 @@ internal object JsNativeInterfaceDelegates {
                 return@guard normalizedTool
             }
 
-            val preferImportedBool = !preferImported.equals("false", ignoreCase = true)
+            val preferEnabledBool = !preferImported.equals("false", ignoreCase = true)
             val resolvedPackageName =
                 normalizeNonBlank(packageName)?.let { candidate ->
                     packageManager.findPreferredPackageNameForSubpackageId(
                         candidate,
-                        preferImported = preferImportedBool
+                        preferEnabled = preferEnabledBool
                     ) ?: candidate
                 } ?: normalizeNonBlank(subpackageId)?.let { candidate ->
                     packageManager.findPreferredPackageNameForSubpackageId(
                         candidate,
-                        preferImported = preferImportedBool
+                        preferEnabled = preferEnabledBool
                     ) ?: candidate
                 }.orEmpty()
 
@@ -333,7 +333,7 @@ internal object JsNativeInterfaceDelegates {
                 ?: packageManager.getToolPkgResourceOutputFileName(
                     packageNameOrSubpackageId = target,
                     resourceKey = key,
-                    preferImportedContainer = true
+                    preferEnabledContainer = true
                 )
                 ?: "$key.bin"
             val safeName = fileName.substringAfterLast('/').substringAfterLast('\\').ifBlank { "$key.bin" }
@@ -351,7 +351,7 @@ internal object JsNativeInterfaceDelegates {
                         subpackageId = target,
                         resourceKey = key,
                         destinationFile = outputFile,
-                        preferImportedContainer = true
+                        preferEnabledContainer = true
                     )
             if (copied) outputFile.absolutePath else ""
         }

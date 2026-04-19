@@ -263,7 +263,7 @@ class OperitApplication : Application(), ImageLoaderFactory, WorkConfiguration.P
         applicationScope.launch {
             val dbStartTime = System.currentTimeMillis()
             // 简单访问数据库以触发初始化
-            database.problemDao().getProblemCount()
+            database.openHelper.writableDatabase
             AppLogger.d(TAG, "【启动计时】数据库预加载完成（异步） - ${System.currentTimeMillis() - dbStartTime}ms")
         }
 

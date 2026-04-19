@@ -84,7 +84,9 @@ fun ExternalHttpChatSettingsScreen(onBackPressed: () -> Unit) {
         context.getString(R.string.external_http_chat_token_not_generated)
     }
     val curlToken = bearerToken.ifBlank { "<bearer-token>" }
-    val sampleBaseUrl = accessUrls.firstOrNull() ?: "http://<device-ip>:$savedPort"
+    val sampleBaseUrl = accessUrls.firstOrNull() ?: "http://127.0.0.1:$savedPort"
+    val webEntryUrl = "$sampleBaseUrl/"
+    val webApiBaseUrl = "$sampleBaseUrl/api/"
     val syncCurl = remember(sampleBaseUrl, curlToken) {
         """
 curl -X POST "$sampleBaseUrl/api/external-chat" \
@@ -309,6 +311,40 @@ adb shell am broadcast \
                     else -> stringResource(R.string.external_http_chat_status_stopped)
                 }
                 Text(text = statusText, style = MaterialTheme.typography.bodyLarge)
+            }
+
+            SettingsCard(
+                title = stringResource(R.string.external_http_chat_web_title),
+                subtitle = stringResource(R.string.external_http_chat_web_desc),
+                containerColor = sectionContainerColor,
+                borderColor = cardBorderColor,
+                icon = {
+                    Icon(Icons.Default.Link, contentDescription = null)
+                }
+            ) {
+                SelectionContainer {
+                    Text(
+                        text = webEntryUrl,
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                }
+                Text(
+                    text = stringResource(R.string.external_http_chat_web_note, webApiBaseUrl),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                TextButton(
+                    onClick = {
+                        copyText(
+                            text = webEntryUrl,
+                            label = "external-http-web-url",
+                            successMessage = context.getString(R.string.external_http_chat_web_url_copied)
+                        )
+                    }
+                ) {
+                    Icon(Icons.Default.ContentCopy, contentDescription = null)
+                    Text(stringResource(R.string.external_http_chat_copy_web_url))
+                }
             }
 
             SettingsCard(

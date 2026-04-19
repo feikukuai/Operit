@@ -313,7 +313,7 @@ private fun getFinalToolTestGroups(context: android.content.Context): List<ToolG
             ToolTest("manage_cookies", context.getString(R.string.manage_cookies_test), context.getString(R.string.manage_cookies_test_desc), listOf(ToolParameter("action", "get"), ToolParameter("domain", "google.com"))),
             ToolTest("visit_web", context.getString(R.string.visit_web_test), context.getString(R.string.visit_web_test_desc), listOf(ToolParameter("url", "https://www.baidu.com"))),
             ToolTest("use_package", context.getString(R.string.use_package_test), context.getString(R.string.use_package_test_desc), listOf(ToolParameter("package_name", "non_existent_package"))),
-            ToolTest("query_memory", context.getString(R.string.query_knowledge_test), context.getString(R.string.query_knowledge_test_desc), listOf(ToolParameter("query", "test")))
+            ToolTest("query_memory", context.getString(R.string.query_memory_test), context.getString(R.string.query_memory_test_desc), listOf(ToolParameter("query", "test")))
         )),
         ToolGroup(context.getString(R.string.file_readonly_group), false, false, listOf(
             ToolTest("list_files", context.getString(R.string.list_files_test), context.getString(R.string.list_files_test_desc), listOf(ToolParameter("path", testBaseDir))),

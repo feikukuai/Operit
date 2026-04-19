@@ -4,7 +4,6 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
-import androidx.room.TypeConverters
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.ai.assistance.operit.data.dao.ChatDao
@@ -12,17 +11,13 @@ import com.ai.assistance.operit.data.dao.MessageDao
 import com.ai.assistance.operit.data.model.ChatEntity
 import com.ai.assistance.operit.data.model.MessageEntity
 
-/** 应用数据库，包含问题记录表、聊天表和消息表 */
+/** 应用数据库，包含聊天表和消息表 */
 @Database(
-    entities = [ProblemEntity::class, ChatEntity::class, MessageEntity::class],
-    version = 13,
+    entities = [ChatEntity::class, MessageEntity::class],
+    version = 14,
     exportSchema = false
 )
-@TypeConverters(StringListConverter::class)
 abstract class AppDatabase : RoomDatabase() {
-
-    /** 获取问题记录DAO */
-    abstract fun problemDao(): ProblemDao
 
     /** 获取聊天DAO */
     abstract fun chatDao(): ChatDao
@@ -127,6 +122,13 @@ abstract class AppDatabase : RoomDatabase() {
                         db.execSQL("ALTER TABLE messages ADD COLUMN `waitDurationMs` INTEGER NOT NULL DEFAULT 0")
                     } catch (_: Exception) {
                     }
+                }
+            }
+
+        private val MIGRATION_13_14 =
+            object : Migration(13, 14) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    db.execSQL("DROP TABLE IF EXISTS `problem_records`")
                 }
             }
 
@@ -239,7 +241,8 @@ abstract class AppDatabase : RoomDatabase() {
                                 MIGRATION_9_10,
                                 MIGRATION_10_11,
                                 MIGRATION_11_12,
-                                MIGRATION_12_13
+                                MIGRATION_12_13,
+                                MIGRATION_13_14
                             ) // 添加新的迁移
                             .build()
                     INSTANCE = instance

@@ -1128,6 +1128,7 @@ export interface SpeechTtsHttpConfigResultItem {
     httpMethod: string;
     requestBody: string;
     contentType: string;
+    localeTag: string;
     voiceId: string;
     modelName: string;
     responsePipeline: Array<{

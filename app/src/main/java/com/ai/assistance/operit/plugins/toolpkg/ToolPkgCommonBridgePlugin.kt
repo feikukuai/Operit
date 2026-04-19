@@ -849,7 +849,7 @@ object ToolPkgCommonBridgePlugin : OperitPlugin {
     private val installed = AtomicBoolean(false)
     private val runtimeChangeListener =
         PackageManager.ToolPkgRuntimeChangeListener {
-            syncToolPkgRegistrations(toolPkgPackageManager().getImportedToolPkgContainerRuntimes())
+            syncToolPkgRegistrations(toolPkgPackageManager().getEnabledToolPkgContainerRuntimes())
         }
 
     override fun register() {

@@ -37,7 +37,14 @@ object VoiceServiceFactory {
             val type = prefs.ttsServiceTypeFlow.first()
             
             when (type) {
-                VoiceServiceType.SIMPLE_TTS -> SimpleVoiceProvider(context)
+                VoiceServiceType.SIMPLE_TTS -> {
+                    val httpConfig = prefs.ttsHttpConfigFlow.first()
+                    SimpleVoiceProvider(
+                        context = context,
+                        initialLocaleTag = httpConfig.localeTag,
+                        initialVoiceId = httpConfig.voiceId
+                    )
+                }
                 VoiceServiceType.HTTP_TTS -> {
                     val httpConfig = prefs.ttsHttpConfigFlow.first()
                     HttpVoiceProvider(context).apply {

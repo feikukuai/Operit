@@ -1738,6 +1738,12 @@ object SystemToolPromptsInternal {
                                         required = false
                                     ),
                                     ToolParameterSchema(
+                                        name = "tts_locale",
+                                        type = "string",
+                                        description = "optional, TTS locale tag such as zh-CN or en-US",
+                                        required = false
+                                    ),
+                                    ToolParameterSchema(
                                         name = "tts_voice_id",
                                         type = "string",
                                         description = "optional, TTS voice id",
@@ -2290,7 +2296,7 @@ object SystemToolPromptsInternal {
                                     ToolParameterSchema(
                                         name = "function_type",
                                         type = "string",
-                                        description = "function type enum name (CHAT/SUMMARY/PROBLEM_LIBRARY/UI_CONTROLLER/TRANSLATION/GREP/IMAGE_RECOGNITION/AUDIO_RECOGNITION/VIDEO_RECOGNITION)",
+                                        description = "function type enum name (CHAT/SUMMARY/MEMORY/UI_CONTROLLER/TRANSLATION/GREP/IMAGE_RECOGNITION/AUDIO_RECOGNITION/VIDEO_RECOGNITION)",
                                         required = true
                                     )
                                 )
@@ -2303,7 +2309,7 @@ object SystemToolPromptsInternal {
                                     ToolParameterSchema(
                                         name = "function_type",
                                         type = "string",
-                                        description = "function type enum name (CHAT/SUMMARY/PROBLEM_LIBRARY/UI_CONTROLLER/TRANSLATION/GREP/IMAGE_RECOGNITION/AUDIO_RECOGNITION/VIDEO_RECOGNITION)",
+                                        description = "function type enum name (CHAT/SUMMARY/MEMORY/UI_CONTROLLER/TRANSLATION/GREP/IMAGE_RECOGNITION/AUDIO_RECOGNITION/VIDEO_RECOGNITION)",
                                         required = true
                                     ),
                                     ToolParameterSchema(
@@ -4394,6 +4400,12 @@ object SystemToolPromptsInternal {
                                         required = false
                                     ),
                                     ToolParameterSchema(
+                                        name = "tts_locale",
+                                        type = "string",
+                                        description = "可选，TTS 语言标签，例如 zh-CN 或 en-US",
+                                        required = false
+                                    ),
+                                    ToolParameterSchema(
                                         name = "tts_voice_id",
                                         type = "string",
                                         description = "可选，TTS 音色 ID",
@@ -4946,7 +4958,7 @@ object SystemToolPromptsInternal {
                                     ToolParameterSchema(
                                         name = "function_type",
                                         type = "string",
-                                        description = "功能类型枚举名（CHAT/SUMMARY/PROBLEM_LIBRARY/UI_CONTROLLER/TRANSLATION/GREP/IMAGE_RECOGNITION/AUDIO_RECOGNITION/VIDEO_RECOGNITION）",
+                                        description = "功能类型枚举名（CHAT/SUMMARY/MEMORY/UI_CONTROLLER/TRANSLATION/GREP/IMAGE_RECOGNITION/AUDIO_RECOGNITION/VIDEO_RECOGNITION）",
                                         required = true
                                     )
                                 )
@@ -4959,7 +4971,7 @@ object SystemToolPromptsInternal {
                                     ToolParameterSchema(
                                         name = "function_type",
                                         type = "string",
-                                        description = "功能类型枚举名（CHAT/SUMMARY/PROBLEM_LIBRARY/UI_CONTROLLER/TRANSLATION/GREP/IMAGE_RECOGNITION/AUDIO_RECOGNITION/VIDEO_RECOGNITION）",
+                                        description = "功能类型枚举名（CHAT/SUMMARY/MEMORY/UI_CONTROLLER/TRANSLATION/GREP/IMAGE_RECOGNITION/AUDIO_RECOGNITION/VIDEO_RECOGNITION）",
                                         required = true
                                     ),
                                     ToolParameterSchema(

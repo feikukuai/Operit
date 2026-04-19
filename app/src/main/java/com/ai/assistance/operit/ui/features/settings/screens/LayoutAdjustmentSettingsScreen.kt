@@ -71,6 +71,7 @@ fun LayoutAdjustmentSettingsScreen(
     val chatAreaHorizontalPadding by userPreferences.chatAreaHorizontalPadding.collectAsState(initial = 16f)
     val aiMarkdownLineHeightMultiplier by userPreferences.aiMarkdownLineHeightMultiplier.collectAsState(initial = 1f)
     val aiMarkdownLetterSpacing by userPreferences.aiMarkdownLetterSpacing.collectAsState(initial = 0f)
+    val aiMarkdownParagraphSpacing by userPreferences.aiMarkdownParagraphSpacing.collectAsState(initial = 12f)
 
     val sectionContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.22f)
     val itemBackgroundColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
@@ -153,6 +154,21 @@ fun LayoutAdjustmentSettingsScreen(
                     defaultValue = 0f,
                     unitLabel = "sp",
                     valueRange = -1f..8f,
+                    backgroundColor = itemBackgroundColor
+                )
+
+                CompactEditableFloatSettingItem(
+                    title = stringResource(R.string.global_text_paragraph_spacing),
+                    description = stringResource(R.string.global_text_paragraph_spacing_desc),
+                    currentValue = aiMarkdownParagraphSpacing,
+                    onSave = { newValue ->
+                        scope.launch {
+                            userPreferences.saveAiMarkdownParagraphSpacing(newValue)
+                        }
+                    },
+                    defaultValue = 12f,
+                    unitLabel = "dp",
+                    valueRange = 0f..48f,
                     backgroundColor = itemBackgroundColor
                 )
 

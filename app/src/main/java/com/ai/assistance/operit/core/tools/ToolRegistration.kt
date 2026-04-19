@@ -402,7 +402,7 @@ fun registerAllTools(handler: AIToolHandler, context: Context) {
             }
     )
 
-    // 注册问题库查询工具
+    // 注册记忆库查询工具
     handler.registerTool(
             name = "query_memory",
             descriptionGenerator = { tool ->

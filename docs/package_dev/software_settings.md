@@ -60,7 +60,7 @@ writeEnvironmentVariable(key: string, value?: string): Promise<StringResultData>
 
 可更新字段包括：
 
-- TTS：`tts_service_type`、`tts_url_template`、`tts_api_key`、`tts_headers`、`tts_http_method`、`tts_request_body`、`tts_content_type`、`tts_voice_id`、`tts_model_name`、`tts_response_pipeline`、`tts_cleaner_regexs`、`tts_speech_rate`、`tts_pitch`
+- TTS：`tts_service_type`、`tts_url_template`、`tts_api_key`、`tts_headers`、`tts_http_method`、`tts_request_body`、`tts_content_type`、`tts_locale`、`tts_voice_id`、`tts_model_name`、`tts_response_pipeline`、`tts_cleaner_regexs`、`tts_speech_rate`、`tts_pitch`
 - STT：`stt_service_type`、`stt_endpoint_url`、`stt_api_key`、`stt_model_name`
 
 其中 `tts_response_pipeline` 仅用于 `HTTP_TTS`，值为 JSON 数组字符串。留空或传 `[]` 时保持旧行为，直接把首个响应体当作音频；填写后会按步骤执行响应处理。
@@ -127,9 +127,9 @@ console.log(apiKey.value);
 
 ```ts
 await Tools.SoftwareSettings.setSpeechServicesConfig({
-  tts_service_type: 'OPENAI_TTS',
-  tts_model_name: 'gpt-4o-mini-tts',
-  tts_voice_id: 'alloy'
+  tts_service_type: 'SIMPLE_TTS',
+  tts_locale: 'en-US',
+  tts_voice_id: 'en-us-x-sfg#female_1-local'
 });
 ```
 

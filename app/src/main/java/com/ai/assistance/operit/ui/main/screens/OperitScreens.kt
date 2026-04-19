@@ -35,6 +35,10 @@ import com.ai.assistance.operit.ui.features.packages.screens.MCPMarketScreen
 import com.ai.assistance.operit.ui.features.packages.screens.MCPManageScreen
 import com.ai.assistance.operit.ui.features.packages.screens.MCPPublishScreen
 import com.ai.assistance.operit.ui.features.packages.screens.MCPPluginDetailScreen
+import com.ai.assistance.operit.ui.features.packages.screens.ArtifactDetailScreen
+import com.ai.assistance.operit.ui.features.packages.screens.ArtifactManageScreen
+import com.ai.assistance.operit.ui.features.packages.screens.ArtifactMarketScreen
+import com.ai.assistance.operit.ui.features.packages.screens.ArtifactPublishScreen
 import com.ai.assistance.operit.ui.features.packages.screens.SkillDetailScreen
 import com.ai.assistance.operit.ui.features.packages.screens.SkillMarketScreen
 import com.ai.assistance.operit.ui.features.packages.screens.SkillManageScreen
@@ -185,6 +189,7 @@ sealed class Screen(
             PackageManagerScreen(
                 onNavigateToMCPMarket = { navigateTo(MCPMarket) },
                 onNavigateToSkillMarket = { navigateTo(SkillMarket) },
+                onNavigateToArtifactMarket = { navigateTo(ArtifactMarket) },
                 onOpenToolPkgPluginConfig = { containerPackageName, uiModuleId, title ->
                     navigateTo(
                         ToolPkgPluginConfig(
@@ -217,6 +222,110 @@ sealed class Screen(
                 onNavigateToDetail = { issue ->
                     navigateTo(SkillDetail(issue))
                 }
+            )
+        }
+    }
+
+    data object ArtifactMarket : Screen(parentScreen = Packages, navItem = NavItem.Packages, titleRes = R.string.screen_title_artifact_market) {
+        @Composable
+        override fun Content(
+                navController: NavController,
+                navigateTo: ScreenNavigationHandler,
+                updateNavItem: NavItemChangeHandler,
+                onGoBack: () -> Unit,
+                hasBackgroundImage: Boolean,
+                onLoading: (Boolean) -> Unit,
+                onError: (String) -> Unit,
+                onGestureConsumed: (Boolean) -> Unit
+        ) {
+            ArtifactMarketScreen(
+                onNavigateBack = onGoBack,
+                onNavigateToPublish = { navigateTo(ArtifactPublish) },
+                onNavigateToManage = { navigateTo(ArtifactManage) },
+                onNavigateToDetail = { issue ->
+                    navigateTo(ArtifactDetail(issue))
+                }
+            )
+        }
+    }
+
+    data object ArtifactManage : Screen(parentScreen = ArtifactMarket, navItem = NavItem.Packages, titleRes = R.string.screen_title_artifact_manage) {
+        @Composable
+        override fun Content(
+                navController: NavController,
+                navigateTo: ScreenNavigationHandler,
+                updateNavItem: NavItemChangeHandler,
+                onGoBack: () -> Unit,
+                hasBackgroundImage: Boolean,
+                onLoading: (Boolean) -> Unit,
+                onError: (String) -> Unit,
+                onGestureConsumed: (Boolean) -> Unit
+        ) {
+            ArtifactManageScreen(
+                onNavigateBack = onGoBack,
+                onNavigateToEdit = { issue ->
+                    navigateTo(ArtifactEdit(issue))
+                },
+                onNavigateToPublish = { navigateTo(ArtifactPublish) },
+                onNavigateToDetail = { issue ->
+                    navigateTo(ArtifactDetail(issue))
+                }
+            )
+        }
+    }
+
+    data object ArtifactPublish : Screen(parentScreen = ArtifactMarket, navItem = NavItem.Packages, titleRes = R.string.screen_title_artifact_publish) {
+        @Composable
+        override fun Content(
+                navController: NavController,
+                navigateTo: ScreenNavigationHandler,
+                updateNavItem: NavItemChangeHandler,
+                onGoBack: () -> Unit,
+                hasBackgroundImage: Boolean,
+                onLoading: (Boolean) -> Unit,
+                onError: (String) -> Unit,
+                onGestureConsumed: (Boolean) -> Unit
+        ) {
+            ArtifactPublishScreen(onNavigateBack = onGoBack)
+        }
+    }
+
+    data class ArtifactEdit(val editingIssue: com.ai.assistance.operit.data.api.GitHubIssue) :
+            Screen(parentScreen = ArtifactMarket, navItem = NavItem.Packages, titleRes = R.string.screen_title_artifact_publish) {
+        @Composable
+        override fun Content(
+                navController: NavController,
+                navigateTo: ScreenNavigationHandler,
+                updateNavItem: NavItemChangeHandler,
+                onGoBack: () -> Unit,
+                hasBackgroundImage: Boolean,
+                onLoading: (Boolean) -> Unit,
+                onError: (String) -> Unit,
+                onGestureConsumed: (Boolean) -> Unit
+        ) {
+            ArtifactPublishScreen(
+                onNavigateBack = onGoBack,
+                editingIssue = editingIssue
+            )
+        }
+    }
+
+    data class ArtifactDetail(val issue: com.ai.assistance.operit.data.api.GitHubIssue) :
+            Screen(parentScreen = ArtifactMarket, navItem = NavItem.Packages) {
+        @Composable
+        override fun Content(
+                navController: NavController,
+                navigateTo: ScreenNavigationHandler,
+                updateNavItem: NavItemChangeHandler,
+                onGoBack: () -> Unit,
+                hasBackgroundImage: Boolean,
+                onLoading: (Boolean) -> Unit,
+                onError: (String) -> Unit,
+                onGestureConsumed: (Boolean) -> Unit
+        ) {
+            ArtifactDetailScreen(
+                issue = issue,
+                onNavigateBack = onGoBack
             )
         }
     }

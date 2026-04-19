@@ -70,6 +70,7 @@ private const val MAX_CANVAS_HEIGHT_PX = 250_000f
 private const val MAX_COMPOSE_CONSTRAINT_HEIGHT_PX = 262_000f
 private const val TYPEWRITER_WINDOW_MS = 200
 private const val DEFAULT_CANVAS_LINE_SPACING_MULTIPLIER = 1.3f
+private const val DEFAULT_PARAGRAPH_BREAK_DP = 4f
 
 private const val FALLBACK_MAX_TEXT_CHARS = 20_000
 
@@ -118,6 +119,55 @@ private fun Modifier.drawOnlyWhenVisible(): Modifier {
 /** 扩展函数：去除字符串首尾的所有空白字符 */
 private fun String.trimAll(): String {
     return this.trim { it.isWhitespace() }
+}
+
+private fun CharSequence.trimAllPreservingSpans(): CharSequence {
+    var start = 0
+    var end = length
+
+    while (start < end && this[start].isWhitespace()) {
+        start++
+    }
+
+    while (end > start && this[end - 1].isWhitespace()) {
+        end--
+    }
+
+    return if (start == 0 && end == length) this else subSequence(start, end)
+}
+
+private fun splitPlainTextParagraphs(content: CharSequence): List<CharSequence> {
+    if (content.isEmpty()) return emptyList()
+
+    val rawText = content.toString()
+    val paragraphs = mutableListOf<CharSequence>()
+    var paragraphStart = 0
+    var index = 0
+
+    while (index < rawText.length) {
+        if (rawText[index] != '\n') {
+            index++
+            continue
+        }
+
+        val newlineRunStart = index
+        while (index < rawText.length && rawText[index] == '\n') {
+            index++
+        }
+
+        if (index - newlineRunStart >= 2) {
+            if (newlineRunStart > paragraphStart) {
+                paragraphs += content.subSequence(paragraphStart, newlineRunStart)
+            }
+            paragraphStart = index
+        }
+    }
+
+    if (paragraphStart < content.length) {
+        paragraphs += content.subSequence(paragraphStart, content.length)
+    }
+
+    return paragraphs.filter { it.isNotEmpty() }
 }
 
 /**
@@ -782,11 +832,12 @@ private fun UnifiedCanvasRenderer(
                 availableWidthPx = availableWidthPx,
                 isLastNode = isLastNode,
                 globalLineHeightMultiplier = textLayoutSettings.lineHeightMultiplier,
-                globalLetterSpacingSp = textLayoutSettings.letterSpacingSp
+                globalLetterSpacingSp = textLayoutSettings.letterSpacingSp,
+                globalParagraphSpacingDp = textLayoutSettings.paragraphSpacingDp
             )
         }
 
-        val revealInstruction = layoutResult.instructions.filterIsInstance<DrawInstruction.TextLayout>().firstOrNull()
+        val revealInstruction = layoutResult.instructions.filterIsInstance<DrawInstruction.TextLayout>().singleOrNull()
         val targetLength = revealInstruction?.layout?.text?.length ?: 0
         val revealHasImageSpans =
             (revealInstruction?.text as? Spanned)
@@ -1092,7 +1143,8 @@ private fun calculateLayout(
     disableLayoutCache: Boolean = false,
     typewriterTailAlpha: Float = 1f,
     globalLineHeightMultiplier: Float = 1f,
-    globalLetterSpacingSp: Float = 0f
+    globalLetterSpacingSp: Float = 0f,
+    globalParagraphSpacingDp: Float = 0f
 ): LayoutResult {
     if (availableWidthPx <= 0) return LayoutResult(0f, 0f, emptyList())
 
@@ -1342,53 +1394,74 @@ private fun calculateLayout(
                 normalTypeface,
                 calculateCanvasLetterSpacingEm(bodyMediumSize, globalLetterSpacingSp)
             )
-            
-            val layout = if (node.children.isNotEmpty()) {
-                createSafeInlineStaticLayout(
-                    children = node.children,
-                    fallbackText = content.trimAll(),
-                    textColor = textColor,
-                    primaryColor = primaryColor,
-                    density = density,
-                    fontSize = bodyMediumSize,
-                    textPaint = textPaint,
-                    width = safeAvailableWidthPx,
-                    lineSpacingMultiplier = lineSpacingMultiplier,
-                    contextLabel = "plain-text"
-                )
-            } else {
-                if (disableLayoutCache) {
-                    val trimmed = content.trimAll()
-                    val tail = typewriterTailAlpha.coerceIn(0f, 1f)
-                    if (tail < 0.999f && trimmed.isNotEmpty()) {
-                        val spannable = SpannableStringBuilder(trimmed)
-                        val lastIndex = spannable.length - 1
-                        val fadedColor = textColor.copy(alpha = textColor.alpha * tail)
-                        spannable.setSpan(
-                            ForegroundColorSpan(fadedColor.toArgb()),
-                            lastIndex,
-                            lastIndex + 1,
-                            Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
-                        )
-                        createStaticLayout(spannable, textPaint, safeAvailableWidthPx, lineSpacingMultiplier)
-                    } else {
-                        createStaticLayout(trimmed, textPaint, safeAvailableWidthPx, lineSpacingMultiplier)
+
+            val trimmedContent: CharSequence =
+                if (node.children.isNotEmpty()) {
+                    try {
+                        buildSpannableFromChildren(
+                            children = node.children,
+                            textColor = textColor,
+                            primaryColor = primaryColor,
+                            density = density,
+                            fontSize = bodyMediumSize
+                        ).trimAllPreservingSpans()
+                    } catch (t: Throwable) {
+                        AppLogger.w(TAG, "Inline markdown layout failed in plain-text, fallback to raw text", t)
+                        content.trimAll()
                     }
                 } else {
-                    LayoutCache.getLayout(
-                        content.trimAll(),
-                        textPaint,
-                        safeAvailableWidthPx,
-                        textColor,
-                        normalTypeface,
-                        lineSpacingMultiplier
-                    )
+                    content.trimAll()
+                }
+
+            val paragraphs = splitPlainTextParagraphs(trimmedContent)
+            if (paragraphs.isEmpty()) return LayoutResult(0f, 0f, emptyList())
+
+            val paragraphBreakHeight = with(density) { DEFAULT_PARAGRAPH_BREAK_DP.dp.toPx() }
+            val paragraphSpacingPx = with(density) { globalParagraphSpacingDp.dp.toPx() }
+
+            paragraphs.forEachIndexed { paragraphIndex, paragraph ->
+                val layout =
+                    if (
+                        paragraphs.size == 1 &&
+                            paragraph is String &&
+                            !disableLayoutCache
+                    ) {
+                        LayoutCache.getLayout(
+                            paragraph,
+                            textPaint,
+                            safeAvailableWidthPx,
+                            textColor,
+                            normalTypeface,
+                            lineSpacingMultiplier
+                        )
+                    } else if (paragraphs.size == 1 && disableLayoutCache) {
+                        val tail = typewriterTailAlpha.coerceIn(0f, 1f)
+                        if (tail < 0.999f && paragraph.isNotEmpty()) {
+                            val spannable = SpannableStringBuilder(paragraph)
+                            val lastIndex = spannable.length - 1
+                            val fadedColor = textColor.copy(alpha = textColor.alpha * tail)
+                            spannable.setSpan(
+                                ForegroundColorSpan(fadedColor.toArgb()),
+                                lastIndex,
+                                lastIndex + 1,
+                                Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+                            )
+                            createStaticLayout(spannable, textPaint, safeAvailableWidthPx, lineSpacingMultiplier)
+                        } else {
+                            createStaticLayout(paragraph, textPaint, safeAvailableWidthPx, lineSpacingMultiplier)
+                        }
+                    } else {
+                        createStaticLayout(paragraph, textPaint, safeAvailableWidthPx, lineSpacingMultiplier)
+                    }
+
+                instructions.add(DrawInstruction.TextLayout(layout, 0f, currentY, paragraph))
+                currentY += layout.height
+                maxWidth = maxOf(maxWidth, calculateActualWidth(layout, 0f, safeAvailableWidthPx))
+
+                if (paragraphIndex < paragraphs.lastIndex) {
+                    currentY += paragraphBreakHeight + paragraphSpacingPx
                 }
             }
-
-            instructions.add(DrawInstruction.TextLayout(layout, 0f, currentY, layout.text))
-            currentY += layout.height
-            maxWidth = maxOf(maxWidth, calculateActualWidth(layout, 0f, safeAvailableWidthPx))
             
             // 最后一个节点不添加底部间距
             if (!isLastNode) {

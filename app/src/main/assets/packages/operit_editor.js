@@ -121,7 +121,8 @@
 - 先调用 list_sandbox_packages 获取“内置+外部”包列表与当前 enabled 状态。
 - 再调用 set_sandbox_package_enabled(package_name, enabled) 执行启停。
 5) 制作包文档：
-- https://github.com/AAswordman/Operit/blob/main/docs/SCRIPT_DEV_SKILL.md
+- https://cdn.jsdelivr.net/gh/AAswordman/Operit@main/docs/SCRIPT_DEV_SKILL.md
+- 该地址可直接通过 HTTP GET 请求访问，用于拉取原始 Markdown 文档内容。
 6) 软件内调试烧录：
 - 普通 `.js` 沙盒包优先用 `debug_install_js_package`。
 - `ToolPkg` 优先用 `debug_install_toolpkg`；它会处理目录/manifest/.toolpkg 的打包或安装，并触发 ToolPkg 的刷新链路。
@@ -356,7 +357,8 @@
 - Call list_sandbox_packages first to get built-in + external package list and current enabled state.
 - Then call set_sandbox_package_enabled(package_name, enabled) to apply changes.
 5) Package authoring guide:
-- https://github.com/AAswordman/Operit/blob/main/docs/SCRIPT_DEV_SKILL.md
+- https://cdn.jsdelivr.net/gh/AAswordman/Operit@main/docs/SCRIPT_DEV_SKILL.md
+- This URL can be accessed directly with an HTTP GET request to fetch the raw Markdown document.
 6) In-app debug install:
 - For plain `.js` sandbox packages, prefer `debug_install_js_package`.
 - For `ToolPkg`, prefer `debug_install_toolpkg`; it handles packaging/install flow for folder/manifest/.toolpkg sources and triggers the ToolPkg refresh path.
@@ -815,6 +817,15 @@
           description: {
             zh: "可选，TTS Content-Type"
             en: "Optional TTS content type"
+          }
+          type: string
+          required: false
+        },
+        {
+          name: "tts_locale"
+          description: {
+            zh: "可选，TTS 语言标签，例如 zh-CN 或 en-US"
+            en: "Optional TTS locale tag, for example zh-CN or en-US"
           }
           type: string
           required: false
@@ -2973,6 +2984,9 @@ description: one-line summary of what this skill does
     async function set_speech_services_config(params) {
         try {
             const updates = { ...(params ?? {}) };
+            if (updates.tts_locale !== undefined && updates.tts_locale !== null) {
+                updates.tts_locale = String(updates.tts_locale);
+            }
             if (Array.isArray(updates.tts_response_pipeline)) {
                 updates.tts_response_pipeline = JSON.stringify(updates.tts_response_pipeline);
             }

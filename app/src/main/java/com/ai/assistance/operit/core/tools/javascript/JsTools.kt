@@ -699,6 +699,9 @@ fun getJsToolsDefinition(): String {
                 },
                 setSpeechServicesConfig: (updates = {}) => {
                     const params = { ...(updates || {}) };
+                    if (params.tts_locale !== undefined && params.tts_locale !== null) {
+                        params.tts_locale = String(params.tts_locale);
+                    }
                     if (params.tts_headers !== undefined && params.tts_headers !== null && typeof params.tts_headers === 'object') {
                         params.tts_headers = JSON.stringify(params.tts_headers);
                     }

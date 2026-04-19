@@ -33,6 +33,7 @@ object LocaleUtils {
                     Language(AUTO_LANGUAGE_CODE, "Follow system", "跟随系统"),
                     Language("zh", "Chinese", "中文"),
                     Language("en", "English", "English"),
+                    Language("es", "Spanish", "Español"),
                     Language(
                             PORTUGUESE_BRAZIL_LANGUAGE_CODE,
                             "Portuguese (Brazil)",

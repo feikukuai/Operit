@@ -2334,7 +2334,7 @@ class MemoryRepository(private val context: Context, profileId: String) {
                     title = newTitle,
                     content = newContent,
                     folderPath = normalizeFolderPath(folderPath),
-                    source = "merged_from_problem_library"
+                    source = "merged_from_memory"
                 )
                 memoryBox.put(mergedMemory) // Save to get an ID
 

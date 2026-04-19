@@ -45,6 +45,7 @@ class ExternalChatHttpServer(
 
     private val appContext = context.applicationContext
     private val executor = ExternalChatRequestExecutor(appContext)
+    private val webChatBridge = WebChatHttpBridge(appContext, preferences, serviceScope)
     private val callbackClient = OkHttpClient.Builder()
         .retryOnConnectionFailure(false)
         .build()
@@ -73,6 +74,8 @@ class ExternalChatHttpServer(
             session.method == Method.OPTIONS -> handleOptions(session)
             session.uri == HEALTH_PATH && session.method == Method.GET -> handleHealth(session)
             session.uri == CHAT_PATH && session.method == Method.POST -> handleChat(session)
+            session.uri.startsWith(WEB_API_PREFIX) -> webChatBridge.handleApi(session)
+            !session.uri.startsWith(API_PREFIX) -> webChatBridge.serveStatic(session)
             else -> jsonResponse(
                 Response.Status.NOT_FOUND,
                 ExternalChatResult(
@@ -81,6 +84,14 @@ class ExternalChatHttpServer(
                 )
             ).withCors()
         }
+    }
+
+    override fun useGzipWhenAccepted(response: Response): Boolean {
+        val mimeType = response.mimeType?.lowercase()
+        if (mimeType?.startsWith("text/event-stream") == true) {
+            return false
+        }
+        return super.useGzipWhenAccepted(response)
     }
 
     private fun handleOptions(session: IHTTPSession): Response {
@@ -521,7 +532,7 @@ class ExternalChatHttpServer(
 
     private fun Response.withCors(): Response {
         addHeader("Access-Control-Allow-Origin", "*")
-        addHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        addHeader("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS")
         addHeader("Access-Control-Allow-Headers", "Authorization, Content-Type, Accept")
         addHeader("Access-Control-Max-Age", "3600")
         return this
@@ -530,8 +541,10 @@ class ExternalChatHttpServer(
     companion object {
         private const val TAG = "ExternalChatHttpServer"
         private const val LISTEN_HOST = "0.0.0.0"
+        private const val API_PREFIX = "/api"
         private const val CHAT_PATH = "/api/external-chat"
         private const val HEALTH_PATH = "/api/health"
+        private const val WEB_API_PREFIX = "/api/web/"
         private const val JSON_MIME_TYPE = "application/json; charset=utf-8"
         private const val SSE_MIME_TYPE = "text/event-stream; charset=utf-8"
         private const val SSE_PIPE_BUFFER_SIZE = 64 * 1024

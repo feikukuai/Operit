@@ -48,7 +48,7 @@ import org.hjson.JsonValue
  *
  * Package Lifecycle:
  * 1. Available Packages: All packages in assets (both JS and HJSON format)
- * 2. Imported Packages: Packages that user has imported (but not necessarily using)
+ * 2. Enabled Packages: Packages that user has enabled for availability (but not necessarily using)
  * 3. Used Packages: Packages that are loaded and registered with AI in current session
  */
 class PackageManager
@@ -59,7 +59,7 @@ private constructor(private val context: Context, private val aiToolHandler: AIT
         private const val PACKAGES_DIR = "packages" // Directory for packages
         private const val ASSETS_PACKAGES_DIR = "packages" // Directory in assets for packages
         private const val PACKAGE_PREFS = "com.ai.assistance.operit.core.tools.PackageManager"
-        private const val IMPORTED_PACKAGES_KEY = "imported_packages"
+        private const val ENABLED_PACKAGES_KEY = "imported_packages"
         private const val DISABLED_PACKAGES_KEY = "disabled_packages"
         private const val ACTIVE_PACKAGES_KEY = "active_packages"
         private const val TOOLPKG_SUBPACKAGE_STATES_KEY = "toolpkg_subpackage_states"
@@ -132,6 +132,17 @@ private constructor(private val context: Context, private val aiToolHandler: AIT
         val isExternalSource: Boolean
     )
 
+    data class PublishablePackageSource(
+        val packageName: String,
+        val displayName: String,
+        val description: String,
+        val sourcePath: String,
+        val sourceFileName: String,
+        val fileExtension: String,
+        val isToolPkg: Boolean,
+        val inferredVersion: String? = null
+    )
+
     private data class PackageScanSnapshot(
         val packageLoadErrors: Map<String, String>,
         val availablePackages: Map<String, ToolPackage>,
@@ -166,9 +177,9 @@ private constructor(private val context: Context, private val aiToolHandler: AIT
     private var initializationFuture: CompletableFuture<Unit>? = null
     private val initializationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     @Volatile
-    private var importedPackagesCache: List<String> = emptyList()
+    private var enabledPackageNamesCache: List<String> = emptyList()
     @Volatile
-    private var importedPackageSetCache: Set<String> = emptySet()
+    private var enabledPackageNameSetCache: Set<String> = emptySet()
     @Volatile
     private var toolPkgSubpackageStatesCache: Map<String, Boolean> = emptyMap()
     @Volatile
@@ -204,10 +215,10 @@ private constructor(private val context: Context, private val aiToolHandler: AIT
         }
     }
 
-    private fun persistImportedPackagesToPrefs(importedPackages: List<String>) {
+    private fun persistEnabledPackageNamesToPrefs(enabledPackageNames: List<String>) {
         val prefs = context.getSharedPreferences(PACKAGE_PREFS, Context.MODE_PRIVATE)
-        val updatedJson = Json.encodeToString(importedPackages)
-        prefs.edit().putString(IMPORTED_PACKAGES_KEY, updatedJson).apply()
+        val updatedJson = Json.encodeToString(enabledPackageNames)
+        prefs.edit().putString(ENABLED_PACKAGES_KEY, updatedJson).apply()
     }
 
     private fun persistToolPkgSubpackageStatesToPrefs(states: Map<String, Boolean>) {
@@ -216,15 +227,15 @@ private constructor(private val context: Context, private val aiToolHandler: AIT
         prefs.edit().putString(TOOLPKG_SUBPACKAGE_STATES_KEY, updatedJson).apply()
     }
 
-    private fun decodeImportedPackagesFromPrefs(): List<String> {
+    private fun decodeEnabledPackageNamesFromPrefs(): List<String> {
         val prefs = context.getSharedPreferences(PACKAGE_PREFS, Context.MODE_PRIVATE)
-        val packagesJson = prefs.getString(IMPORTED_PACKAGES_KEY, "[]")
+        val packagesJson = prefs.getString(ENABLED_PACKAGES_KEY, "[]")
         return try {
             val jsonConfig = Json { ignoreUnknownKeys = true }
             val rawPackages = jsonConfig.decodeFromString<List<String>>(packagesJson ?: "[]")
-            normalizeImportedPackageNames(rawPackages)
+            normalizeEnabledPackageNames(rawPackages)
         } catch (e: Exception) {
-            AppLogger.e(TAG, "Error decoding imported packages", e)
+            AppLogger.e(TAG, "Error decoding enabled package names", e)
             emptyList()
         }
     }
@@ -241,13 +252,13 @@ private constructor(private val context: Context, private val aiToolHandler: AIT
         }
     }
 
-    private fun buildImportedToolPkgContainerRuntimes(
-        importedPackages: List<String>
+    private fun buildEnabledToolPkgContainerRuntimes(
+        enabledPackageNames: List<String>
     ): List<ToolPkgContainerRuntime> {
-        val importedSet = importedPackages.toSet()
+        val enabledSet = enabledPackageNames.toSet()
         return toolPkgContainers.values
             .asSequence()
-            .filter { runtime -> importedSet.contains(runtime.packageName) }
+            .filter { runtime -> enabledSet.contains(runtime.packageName) }
             .sortedBy(ToolPkgContainerRuntime::packageName)
             .toList()
     }
@@ -267,16 +278,16 @@ private constructor(private val context: Context, private val aiToolHandler: AIT
 
     private fun refreshToolPkgRuntimeState(
         persistIfChanged: Boolean,
-        importedPackagesOverride: List<String>? = null,
+        enabledPackageNamesOverride: List<String>? = null,
         subpackageStatesOverride: Map<String, Boolean>? = null
     ) {
         synchronized(initLock) {
-            val normalizedImportedPackages =
-                normalizeImportedPackageNames(importedPackagesOverride ?: decodeImportedPackagesFromPrefs())
-            val cleanedImportedPackages =
-                normalizedImportedPackages.filter { packageName -> availablePackages.containsKey(packageName) }
-            if (persistIfChanged && cleanedImportedPackages != normalizedImportedPackages) {
-                persistImportedPackagesToPrefs(cleanedImportedPackages)
+            val normalizedEnabledPackageNames =
+                normalizeEnabledPackageNames(enabledPackageNamesOverride ?: decodeEnabledPackageNamesFromPrefs())
+            val cleanedEnabledPackageNames =
+                normalizedEnabledPackageNames.filter { packageName -> availablePackages.containsKey(packageName) }
+            if (persistIfChanged && cleanedEnabledPackageNames != normalizedEnabledPackageNames) {
+                persistEnabledPackageNamesToPrefs(cleanedEnabledPackageNames)
             }
 
             val normalizedStates =
@@ -289,8 +300,8 @@ private constructor(private val context: Context, private val aiToolHandler: AIT
                 persistToolPkgSubpackageStatesToPrefs(cleanedStates)
             }
 
-            importedPackagesCache = cleanedImportedPackages
-            importedPackageSetCache = cleanedImportedPackages.toSet()
+            enabledPackageNamesCache = cleanedEnabledPackageNames
+            enabledPackageNameSetCache = cleanedEnabledPackageNames.toSet()
             toolPkgSubpackageStatesCache = cleanedStates
             runtimeCachesReady = true
         }
@@ -355,20 +366,20 @@ private constructor(private val context: Context, private val aiToolHandler: AIT
         toolPkgRuntimeChangeListeners.remove(listener)
     }
 
-    internal fun getImportedPackageSetInternal(): Set<String> {
+    internal fun getEnabledPackageNameSetInternal(): Set<String> {
         ensureInitialized()
         if (runtimeCachesReady) {
-            return importedPackageSetCache
+            return enabledPackageNameSetCache
         }
-        return getImportedPackagesInternal().toSet()
+        return getEnabledPackageNamesInternal().toSet()
     }
 
-    internal fun getImportedToolPkgContainerRuntimes(): List<ToolPkgContainerRuntime> {
+    internal fun getEnabledToolPkgContainerRuntimes(): List<ToolPkgContainerRuntime> {
         ensureInitialized()
         if (runtimeCachesReady) {
-            return buildImportedToolPkgContainerRuntimes(importedPackagesCache)
+            return buildEnabledToolPkgContainerRuntimes(enabledPackageNamesCache)
         }
-        return buildImportedToolPkgContainerRuntimes(getImportedPackagesInternal())
+        return buildEnabledToolPkgContainerRuntimes(getEnabledPackageNamesInternal())
     }
 
     fun cancelToolPkgExecutionsForChat(
@@ -558,7 +569,7 @@ private constructor(private val context: Context, private val aiToolHandler: AIT
         return resolveToolPkgSubpackageRuntime(trimmed)?.packageName ?: trimmed
     }
 
-    private fun normalizeImportedPackageNames(packageNames: List<String>): List<String> {
+    private fun normalizeEnabledPackageNames(packageNames: List<String>): List<String> {
         val normalized = LinkedHashSet<String>()
         packageNames.forEach { original ->
             val canonical = normalizePackageName(original)
@@ -710,22 +721,22 @@ private constructor(private val context: Context, private val aiToolHandler: AIT
 
     private fun reconcileToolPkgCaches() {
         synchronized(toolPkgCacheLock) {
-            val importedPackages = getImportedPackagesInternal().toSet()
+            val enabledPackageNames = getEnabledPackageNamesInternal().toSet()
             val availableContainerNames = toolPkgContainers.keys.toSet()
-            val importedContainerNames = linkedSetOf<String>().apply {
+            val enabledContainerNames = linkedSetOf<String>().apply {
                 toolPkgContainers.keys.forEach { containerName ->
-                    if (importedPackages.contains(containerName)) {
+                    if (enabledPackageNames.contains(containerName)) {
                         add(containerName)
                     }
                 }
                 toolPkgSubpackageByPackageName.values.forEach { subpackage ->
-                    if (importedPackages.contains(subpackage.packageName)) {
+                    if (enabledPackageNames.contains(subpackage.packageName)) {
                         add(subpackage.containerPackageName)
                     }
                 }
             }
 
-            val expectedCacheDirNames = importedContainerNames.map(::toolPkgCacheDirName).toSet()
+            val expectedCacheDirNames = enabledContainerNames.map(::toolPkgCacheDirName).toSet()
             toolPkgCacheRootDir.listFiles()?.forEach { child ->
                 if (!expectedCacheDirNames.contains(child.name)) {
                     if (!child.deleteRecursively()) {
@@ -734,13 +745,13 @@ private constructor(private val context: Context, private val aiToolHandler: AIT
                 }
             }
 
-            importedContainerNames.forEach { containerName ->
+            enabledContainerNames.forEach { containerName ->
                 val runtime = toolPkgContainers[containerName] ?: return@forEach
                 ensureToolPkgCache(runtime)
             }
 
             availableContainerNames
-                .filterNot { importedContainerNames.contains(it) }
+                .filterNot { enabledContainerNames.contains(it) }
                 .forEach(::deleteToolPkgCacheDir)
         }
     }
@@ -973,6 +984,54 @@ private constructor(private val context: Context, private val aiToolHandler: AIT
         return packages.filterKeys { !toolPkgSubpackageByPackageName.containsKey(it) }
     }
 
+    fun getPublishablePackageSources(): List<PublishablePackageSource> {
+        ensureInitialized()
+
+        return getTopLevelAvailablePackages()
+            .entries
+            .asSequence()
+            .filter { (_, toolPackage) -> !toolPackage.isBuiltIn }
+            .mapNotNull { (packageName, toolPackage) ->
+                val isToolPkg = isToolPkgContainer(packageName)
+                val sourcePath =
+                    if (isToolPkg) {
+                        toolPkgContainers[packageName]
+                            ?.takeIf { it.sourceType == ToolPkgSourceType.EXTERNAL }
+                            ?.sourcePath
+                    } else {
+                        findPackageFile(packageName)?.absolutePath
+                    }
+                        ?: return@mapNotNull null
+
+                val sourceFile = File(sourcePath)
+                if (!sourceFile.exists() || !sourceFile.isFile) {
+                    return@mapNotNull null
+                }
+
+                PublishablePackageSource(
+                    packageName = packageName,
+                    displayName =
+                        toolPackage.displayName.resolve(context).ifBlank { packageName },
+                    description = toolPackage.description.resolve(context),
+                    sourcePath = sourceFile.absolutePath,
+                    sourceFileName = sourceFile.name,
+                    fileExtension = sourceFile.extension.lowercase(),
+                    isToolPkg = isToolPkg,
+                    inferredVersion =
+                        if (isToolPkg) {
+                            toolPkgContainers[packageName]?.version?.takeIf { it.isNotBlank() }
+                        } else {
+                            null
+                        }
+                )
+            }
+            .sortedWith(
+                compareBy<PublishablePackageSource> { it.isToolPkg }
+                    .thenBy { it.displayName.lowercase() }
+            )
+            .toList()
+    }
+
     fun getToolPkgContainerDetails(
         packageName: String,
         resolveContext: Context? = null
@@ -993,22 +1052,22 @@ private constructor(private val context: Context, private val aiToolHandler: AIT
 
     fun findPreferredPackageNameForSubpackageId(
         subpackageId: String,
-        preferImported: Boolean = true
+        preferEnabled: Boolean = true
     ): String? {
-        return toolPkgFacade.findPreferredPackageNameForSubpackageId(subpackageId, preferImported)
+        return toolPkgFacade.findPreferredPackageNameForSubpackageId(subpackageId, preferEnabled)
     }
 
     fun copyToolPkgResourceToFileBySubpackageId(
         subpackageId: String,
         resourceKey: String,
         destinationFile: File,
-        preferImportedContainer: Boolean = true
+        preferEnabledContainer: Boolean = true
     ): Boolean {
         return toolPkgFacade.copyToolPkgResourceToFileBySubpackageId(
             subpackageId = subpackageId,
             resourceKey = resourceKey,
             destinationFile = destinationFile,
-            preferImportedContainer = preferImportedContainer
+            preferEnabledContainer = preferEnabledContainer
         )
     }
 
@@ -1027,24 +1086,24 @@ private constructor(private val context: Context, private val aiToolHandler: AIT
     fun getToolPkgResourceOutputFileName(
         packageNameOrSubpackageId: String,
         resourceKey: String,
-        preferImportedContainer: Boolean = true
+        preferEnabledContainer: Boolean = true
     ): String? {
         return toolPkgFacade.getToolPkgResourceOutputFileName(
             packageNameOrSubpackageId = packageNameOrSubpackageId,
             resourceKey = resourceKey,
-            preferImportedContainer = preferImportedContainer
+            preferEnabledContainer = preferEnabledContainer
         )
     }
 
     fun getToolPkgComposeDslScriptBySubpackageId(
         subpackageId: String,
         uiModuleId: String? = null,
-        preferImportedContainer: Boolean = true
+        preferEnabledContainer: Boolean = true
     ): String? {
         return toolPkgFacade.getToolPkgComposeDslScriptBySubpackageId(
             subpackageId = subpackageId,
             uiModuleId = uiModuleId,
-            preferImportedContainer = preferImportedContainer
+            preferEnabledContainer = preferEnabledContainer
         )
     }
 
@@ -1063,8 +1122,8 @@ private constructor(private val context: Context, private val aiToolHandler: AIT
         ensureInitialized()
         val normalizedContainerPackageName = normalizePackageName(containerPackageName)
         val runtime = toolPkgContainers[normalizedContainerPackageName] ?: return null
-        val importedSet = getImportedPackageSetInternal()
-        if (!importedSet.contains(runtime.packageName)) {
+        val enabledSet = getEnabledPackageNameSetInternal()
+        if (!enabledSet.contains(runtime.packageName)) {
             return null
         }
         if (runtime.mainEntry.isBlank()) {
@@ -1131,23 +1190,23 @@ private constructor(private val context: Context, private val aiToolHandler: AIT
     fun readToolPkgTextResource(
         packageNameOrSubpackageId: String,
         resourcePath: String,
-        preferImportedContainer: Boolean = true
+        preferEnabledContainer: Boolean = true
     ): String? {
         return toolPkgFacade.readToolPkgTextResource(
             packageNameOrSubpackageId = packageNameOrSubpackageId,
             resourcePath = resourcePath,
-            preferImportedContainer = preferImportedContainer
+            preferEnabledContainer = preferEnabledContainer
         )
     }
 
     /**
-     * Automatically imports built-in packages that are marked as enabled by default.
+     * Automatically enables built-in packages that are marked as enabled by default.
      * This ensures that essential or commonly used packages are available without
      * manual user intervention. It also respects a user's choice to disable a
      * default package.
      */
     private fun initializeDefaultPackages() {
-        val importedPackages = getImportedPackagesInternal().toMutableSet()
+        val enabledPackageNames = getEnabledPackageNamesInternal().toMutableSet()
         val disabledPackages = getDisabledPackagesInternal().toSet()
         var packagesChanged = false
 
@@ -1159,9 +1218,9 @@ private constructor(private val context: Context, private val aiToolHandler: AIT
                     !toolPkgSubpackageByPackageName.containsKey(toolPackage.name) &&
                     !disabledPackages.contains(toolPackage.name)
                 ) {
-                    if (importedPackages.add(toolPackage.name)) {
+                    if (enabledPackageNames.add(toolPackage.name)) {
                         packagesChanged = true
-                        AppLogger.d(TAG, "Auto-importing default package: ${toolPackage.name}")
+                        AppLogger.d(TAG, "Auto-enabling default package: ${toolPackage.name}")
                     }
                 }
             }
@@ -1169,9 +1228,9 @@ private constructor(private val context: Context, private val aiToolHandler: AIT
 
         if (packagesChanged) {
             val prefs = context.getSharedPreferences(PACKAGE_PREFS, Context.MODE_PRIVATE)
-            val updatedJson = Json.encodeToString(importedPackages.toList())
-            prefs.edit().putString(IMPORTED_PACKAGES_KEY, updatedJson).apply()
-            AppLogger.d(TAG, "Updated imported packages with default packages.")
+            val updatedJson = Json.encodeToString(enabledPackageNames.toList())
+            prefs.edit().putString(ENABLED_PACKAGES_KEY, updatedJson).apply()
+            AppLogger.d(TAG, "Updated enabled package names with default packages.")
         }
     }
 
@@ -1777,7 +1836,7 @@ private constructor(private val context: Context, private val aiToolHandler: AIT
      * Imports a package from external storage path.
      * Supports legacy JS/TS/HJSON files and .toolpkg containers.
      */
-    fun importPackageFromExternalStorage(filePath: String): String {
+    fun addPackageFileFromExternalStorage(filePath: String): String {
         try {
             ensureInitialized()
 
@@ -2051,7 +2110,7 @@ private constructor(private val context: Context, private val aiToolHandler: AIT
             saveToolPkgSubpackageStates(updatedStates)
         }
 
-        val importMessage = importPackage(normalizedContainerPackageName)
+        val enableMessage = enablePackage(normalizedContainerPackageName)
 
         destroyDefaultToolPkgExecutionEngine(normalizedContainerPackageName)
 
@@ -2068,7 +2127,7 @@ private constructor(private val context: Context, private val aiToolHandler: AIT
             if (!toolPkgSubpackageByPackageName.containsKey(packageName)) {
                 return@forEach
             }
-            if (!isPackageImported(packageName)) {
+            if (!isPackageEnabled(packageName)) {
                 return@forEach
             }
 
@@ -2083,7 +2142,7 @@ private constructor(private val context: Context, private val aiToolHandler: AIT
         val enabledSubpackages =
             runtime.subpackages
                 .map(ToolPkgSubpackageRuntime::packageName)
-                .filter(::isPackageImported)
+                .filter(::isPackageEnabled)
 
         return buildString {
             append("Successfully installed debug toolpkg: ")
@@ -2091,7 +2150,7 @@ private constructor(private val context: Context, private val aiToolHandler: AIT
             append("\nSource file: ")
             append(targetCanonicalPath)
             append("\n")
-            append(importMessage)
+            append(enableMessage)
             append("\nEnabled subpackages: ")
             append(if (enabledSubpackages.isEmpty()) "(none)" else enabledSubpackages.joinToString(", "))
             if (removedDuplicateArchives.isNotEmpty()) {
@@ -2110,10 +2169,10 @@ private constructor(private val context: Context, private val aiToolHandler: AIT
     }
 
     /**
-     * Import a package by name, adding it to the user's imported packages list.
+     * Enable a package by name, adding it to the user's enabled package list.
      * For toolpkg containers this may also activate default-enabled subpackages.
      */
-    fun importPackage(packageName: String): String {
+    fun enablePackage(packageName: String): String {
         ensureInitialized()
         val normalizedPackageName = normalizePackageName(packageName)
 
@@ -2121,13 +2180,13 @@ private constructor(private val context: Context, private val aiToolHandler: AIT
             return "Package not found in available packages: $normalizedPackageName"
         }
 
-        val importedPackages = LinkedHashSet(getImportedPackages())
+        val enabledPackageNames = LinkedHashSet(getEnabledPackageNames())
         val subpackageStates = getToolPkgSubpackageStatesInternal().toMutableMap()
 
         val containerRuntime = toolPkgContainers[normalizedPackageName]
         if (containerRuntime != null) {
-            val containerAlreadyImported = importedPackages.contains(normalizedPackageName)
-            importedPackages.add(normalizedPackageName)
+            val containerAlreadyEnabled = enabledPackageNames.contains(normalizedPackageName)
+            enabledPackageNames.add(normalizedPackageName)
 
             containerRuntime.subpackages.forEach { subpackage ->
                 val shouldEnable =
@@ -2135,19 +2194,19 @@ private constructor(private val context: Context, private val aiToolHandler: AIT
                 subpackageStates.putIfAbsent(subpackage.packageName, shouldEnable)
 
                 if (shouldEnable) {
-                    importedPackages.add(subpackage.packageName)
+                    enabledPackageNames.add(subpackage.packageName)
                 } else {
-                    importedPackages.remove(subpackage.packageName)
+                    enabledPackageNames.remove(subpackage.packageName)
                 }
             }
 
-            saveImportedPackages(importedPackages.toList())
+            saveEnabledPackageNames(enabledPackageNames.toList())
             saveToolPkgSubpackageStates(subpackageStates)
             removeFromDisabledPackages(normalizedPackageName)
             ensureToolPkgCache(containerRuntime)
 
             val message =
-                if (containerAlreadyImported) {
+                if (containerAlreadyEnabled) {
                     "ToolPkg container '$normalizedPackageName' is already enabled"
                 } else {
                     "Successfully enabled toolpkg container: $normalizedPackageName"
@@ -2158,11 +2217,11 @@ private constructor(private val context: Context, private val aiToolHandler: AIT
 
         val subpackageRuntime = toolPkgSubpackageByPackageName[normalizedPackageName]
         if (subpackageRuntime != null) {
-            importedPackages.add(subpackageRuntime.containerPackageName)
-            importedPackages.add(normalizedPackageName)
+            enabledPackageNames.add(subpackageRuntime.containerPackageName)
+            enabledPackageNames.add(normalizedPackageName)
             subpackageStates[normalizedPackageName] = true
 
-            saveImportedPackages(importedPackages.toList())
+            saveEnabledPackageNames(enabledPackageNames.toList())
             saveToolPkgSubpackageStates(subpackageStates)
             removeFromDisabledPackages(subpackageRuntime.containerPackageName)
             toolPkgContainers[subpackageRuntime.containerPackageName]?.let { runtime ->
@@ -2174,22 +2233,22 @@ private constructor(private val context: Context, private val aiToolHandler: AIT
             return message
         }
 
-        if (importedPackages.contains(normalizedPackageName)) {
-            return "Package '$normalizedPackageName' is already imported"
+        if (enabledPackageNames.contains(normalizedPackageName)) {
+            return "Package '$normalizedPackageName' is already enabled"
         }
 
-        importedPackages.add(normalizedPackageName)
-        saveImportedPackages(importedPackages.toList())
+        enabledPackageNames.add(normalizedPackageName)
+        saveEnabledPackageNames(enabledPackageNames.toList())
         removeFromDisabledPackages(normalizedPackageName)
 
-        AppLogger.d(TAG, "Successfully imported package: $normalizedPackageName")
-        return "Successfully imported package: $normalizedPackageName"
+        AppLogger.d(TAG, "Successfully enabled package: $normalizedPackageName")
+        return "Successfully enabled package: $normalizedPackageName"
     }
 
     /**
      * Activates and loads a package for use in the current AI session This loads the full package
      * data and registers its tools with AIToolHandler
-     * @param packageName The name of the imported package to use
+     * @param packageName The name of the enabled package to use
      * @return Package description and tools for AI prompt enhancement, or error message
      */
     fun usePackage(packageName: String): String {
@@ -2201,15 +2260,15 @@ private constructor(private val context: Context, private val aiToolHandler: AIT
             return "ToolPkg container '$normalizedPackageName' is not a package and cannot be activated."
         }
 
-        // First check if packageName is a standard imported package (priority)
-        val importedPackages = getImportedPackages()
+        // First check if packageName is a standard enabled package (priority)
+        val enabledPackageNames = getEnabledPackageNames()
         val subpackageRuntime = toolPkgSubpackageByPackageName[normalizedPackageName]
         if (subpackageRuntime != null &&
-            !importedPackages.contains(subpackageRuntime.containerPackageName)
+            !enabledPackageNames.contains(subpackageRuntime.containerPackageName)
         ) {
             return "ToolPkg container '${subpackageRuntime.containerPackageName}' is not enabled. Package '$normalizedPackageName' is inactive."
         }
-        if (importedPackages.contains(normalizedPackageName)) {
+        if (enabledPackageNames.contains(normalizedPackageName)) {
             // Load the full package data for a standard package
             val toolPackage =
                 getPackageTools(normalizedPackageName)
@@ -2546,34 +2605,34 @@ private constructor(private val context: Context, private val aiToolHandler: AIT
     }
 
     /**
-     * Get a list of all imported packages
-     * @return A list of imported package names
+     * Get a list of all enabled packages
+     * @return A list of enabled package names
      */
-    fun getImportedPackages(): List<String> {
+    fun getEnabledPackageNames(): List<String> {
         ensureInitialized()
         if (runtimeCachesReady) {
-            return importedPackagesCache
+            return enabledPackageNamesCache
         }
-        return getImportedPackagesInternal()
+        return getEnabledPackageNamesInternal()
     }
 
-    private fun getImportedPackagesInternal(): List<String> {
+    private fun getEnabledPackageNamesInternal(): List<String> {
         if (runtimeCachesReady) {
-            return importedPackagesCache
+            return enabledPackageNamesCache
         }
-        val normalizedPackages = decodeImportedPackagesFromPrefs()
-        return if (!isInitialized) normalizedPackages else cleanupNonExistentPackages(normalizedPackages)
+        val normalizedPackages = decodeEnabledPackageNamesFromPrefs()
+        return if (!isInitialized) normalizedPackages else cleanupMissingEnabledPackages(normalizedPackages)
     }
 
     /**
-     * 清理导入列表中不存在的包。
-     * 自动移除那些已经被删除但仍然在导入列表中的包。
+     * 清理启用列表中不存在的包。
+     * 自动移除那些已经被删除但仍然在启用列表中的包。
      */
-    private fun cleanupNonExistentPackages(currentPackages: List<String>): List<String> {
+    private fun cleanupMissingEnabledPackages(currentPackages: List<String>): List<String> {
         // Serialize cleanup with package reload to avoid transient map states
-        // (e.g. during forceRefresh) causing accidental removal of valid imports.
+        // (e.g. during forceRefresh) causing accidental removal of valid enabled packages.
         synchronized(initLock) {
-            val normalizedPackages = normalizeImportedPackageNames(currentPackages)
+            val normalizedPackages = normalizeEnabledPackageNames(currentPackages)
             val cleanedPackages = normalizedPackages.filter { packageName ->
                 availablePackages.containsKey(packageName)
             }
@@ -2582,10 +2641,10 @@ private constructor(private val context: Context, private val aiToolHandler: AIT
                 val removed = currentPackages.filter { !cleanedPackages.contains(it) }
                 AppLogger.d(
                     TAG,
-                    "Found ${removed.size} non-existent packages in imported list: $removed"
+                    "Found ${removed.size} non-existent packages in enabled list: $removed"
                 )
-                saveImportedPackages(cleanedPackages)
-                AppLogger.d(TAG, "Cleaned up imported packages list. Removed: $removed")
+                saveEnabledPackageNames(cleanedPackages)
+                AppLogger.d(TAG, "Cleaned up enabled package list. Removed: $removed")
             }
 
             val states = getToolPkgSubpackageStatesInternal()
@@ -2630,13 +2689,13 @@ private constructor(private val context: Context, private val aiToolHandler: AIT
         prefs.edit().putString(DISABLED_PACKAGES_KEY, updatedJson).apply()
     }
 
-    internal fun saveImportedPackages(importedPackages: List<String>) {
-        val normalizedPackages = normalizeImportedPackageNames(importedPackages)
-        persistImportedPackagesToPrefs(normalizedPackages)
+    internal fun saveEnabledPackageNames(enabledPackageNames: List<String>) {
+        val normalizedPackages = normalizeEnabledPackageNames(enabledPackageNames)
+        persistEnabledPackageNamesToPrefs(normalizedPackages)
         if (isInitialized || runtimeCachesReady) {
             refreshToolPkgRuntimeState(
                 persistIfChanged = false,
-                importedPackagesOverride = normalizedPackages
+                enabledPackageNamesOverride = normalizedPackages
             )
         }
     }
@@ -2713,30 +2772,30 @@ private constructor(private val context: Context, private val aiToolHandler: AIT
         return selectToolPackageState(toolPackage)
     }
 
-    /** Checks if a package is imported */
-    fun isPackageImported(packageName: String): Boolean {
+    /** Checks if a package is enabled */
+    fun isPackageEnabled(packageName: String): Boolean {
         ensureInitialized()
         val normalizedPackageName = normalizePackageName(packageName)
-        val importedPackageSet = getImportedPackageSetInternal()
-        if (!importedPackageSet.contains(normalizedPackageName)) {
+        val enabledPackageSet = getEnabledPackageNameSetInternal()
+        if (!enabledPackageSet.contains(normalizedPackageName)) {
             return false
         }
         val subpackageRuntime = toolPkgSubpackageByPackageName[normalizedPackageName]
         if (subpackageRuntime != null) {
-            return importedPackageSet.contains(subpackageRuntime.containerPackageName)
+            return enabledPackageSet.contains(subpackageRuntime.containerPackageName)
         }
         return true
     }
 
     /**
-     * Remove an imported package.
-     * For toolpkg containers this also disables/removes all internal subpackages.
+     * Disable an enabled package.
+     * For toolpkg containers this also disables all internal subpackages.
      */
-    fun removePackage(packageName: String): String {
+    fun disablePackage(packageName: String): String {
         ensureInitialized()
         val normalizedPackageName = normalizePackageName(packageName)
 
-        val currentPackages = LinkedHashSet(getImportedPackages())
+        val currentPackages = LinkedHashSet(getEnabledPackageNames())
         val subpackageStates = getToolPkgSubpackageStatesInternal().toMutableMap()
         var packageWasRemoved = false
 
@@ -2750,7 +2809,7 @@ private constructor(private val context: Context, private val aiToolHandler: AIT
                 unregisterPackageTools(subpackage.packageName)
             }
 
-            saveImportedPackages(currentPackages.toList())
+            saveEnabledPackageNames(currentPackages.toList())
             saveToolPkgSubpackageStates(subpackageStates)
             addToDisabledIfDefaultEnabled(normalizedPackageName)
             deleteToolPkgCacheDir(normalizedPackageName)
@@ -2768,13 +2827,13 @@ private constructor(private val context: Context, private val aiToolHandler: AIT
             subpackageStates[normalizedPackageName] = false
             unregisterPackageTools(normalizedPackageName)
 
-            saveImportedPackages(currentPackages.toList())
+            saveEnabledPackageNames(currentPackages.toList())
             saveToolPkgSubpackageStates(subpackageStates)
 
             return if (packageWasRemoved) {
-                "Successfully removed package: $normalizedPackageName"
+                "Successfully disabled toolpkg subpackage: $normalizedPackageName"
             } else {
-                "Package not found in imported list: $normalizedPackageName"
+                "ToolPkg subpackage is already disabled: $normalizedPackageName"
             }
         }
 
@@ -2783,12 +2842,12 @@ private constructor(private val context: Context, private val aiToolHandler: AIT
         addToDisabledIfDefaultEnabled(normalizedPackageName)
 
         return if (packageWasRemoved) {
-            saveImportedPackages(currentPackages.toList())
-            AppLogger.d(TAG, "Removed package from imported list: $normalizedPackageName")
-            "Successfully removed package: $normalizedPackageName"
+            saveEnabledPackageNames(currentPackages.toList())
+            AppLogger.d(TAG, "Disabled package: $normalizedPackageName")
+            "Successfully disabled package: $normalizedPackageName"
         } else {
-            AppLogger.d(TAG, "Package not found in imported list: $normalizedPackageName")
-            "Package not found in imported list: $normalizedPackageName"
+            AppLogger.d(TAG, "Package is already disabled: $normalizedPackageName")
+            "Package is already disabled: $normalizedPackageName"
         }
     }
 
@@ -2895,7 +2954,7 @@ private constructor(private val context: Context, private val aiToolHandler: AIT
 
         if (toolPkgSubpackageByPackageName.containsKey(normalizedPackageName)) {
             // Subpackage is part of a toolpkg archive; only remove enable state.
-            removePackage(normalizedPackageName)
+            disablePackage(normalizedPackageName)
             return true
         }
 
@@ -2906,7 +2965,7 @@ private constructor(private val context: Context, private val aiToolHandler: AIT
                 TAG,
                 "Package file not found for deletion: $normalizedPackageName. It might be already deleted or never existed."
             )
-            removePackage(normalizedPackageName)
+            disablePackage(normalizedPackageName)
             removeFromCachesAfterDelete(normalizedPackageName)
             return true
         }
@@ -2917,7 +2976,7 @@ private constructor(private val context: Context, private val aiToolHandler: AIT
 
         if (fileDeleted) {
             AppLogger.d(TAG, "Successfully deleted package file: ${packageFile.absolutePath}")
-            removePackage(normalizedPackageName)
+            disablePackage(normalizedPackageName)
             removeFromCachesAfterDelete(normalizedPackageName)
             AppLogger.d(TAG, "Package '$normalizedPackageName' fully deleted.")
             return true
@@ -3023,14 +3082,14 @@ private constructor(private val context: Context, private val aiToolHandler: AIT
     }
 
     /**
-     * 获取所有已导入包的提示词分类列表
+     * 获取所有已启用包的提示词分类列表
      *
-     * @return 已导入包的 PackageToolPromptCategory 列表
+     * @return 已启用包的 PackageToolPromptCategory 列表
      */
-    fun getImportedPackagesPromptCategories(): List<PackageToolPromptCategory> {
+    fun getEnabledPackagesPromptCategories(): List<PackageToolPromptCategory> {
         ensureInitialized()
-        val importedPackageNames = getImportedPackages()
-        return importedPackageNames.mapNotNull { packageName ->
+        val enabledPackageNames = getEnabledPackageNames()
+        return enabledPackageNames.mapNotNull { packageName ->
             getPackageTools(packageName)
                 ?.takeIf { it.tools.isNotEmpty() }
                 ?.let { toolPackage ->

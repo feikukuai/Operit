@@ -34,6 +34,7 @@ export namespace SoftwareSettings {
         tts_http_method?: 'GET' | 'POST' | string;
         tts_request_body?: string;
         tts_content_type?: string;
+        tts_locale?: string;
         tts_voice_id?: string;
         tts_model_name?: string;
         tts_response_pipeline?: string | Array<{

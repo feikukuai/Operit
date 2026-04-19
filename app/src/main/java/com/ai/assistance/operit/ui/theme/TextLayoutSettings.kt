@@ -14,10 +14,12 @@ import com.ai.assistance.operit.data.preferences.UserPreferencesManager
  *
  * - lineHeightMultiplier：额外行距倍率，1f 为默认值
  * - letterSpacingSp：额外字距，单位 sp
+ * - paragraphSpacingDp：段落之间额外增加的间距，单位 dp
  */
 data class AiMarkdownTextLayoutSettings(
     val lineHeightMultiplier: Float = 1f,
-    val letterSpacingSp: Float = 0f
+    val letterSpacingSp: Float = 0f,
+    val paragraphSpacingDp: Float = 12f
 )
 
 val LocalAiMarkdownTextLayoutSettings = compositionLocalOf {
@@ -30,11 +32,13 @@ fun ProvideAiMarkdownTextLayoutSettings(content: @Composable () -> Unit) {
     val preferencesManager = remember { UserPreferencesManager.getInstance(context) }
     val lineHeightMultiplier by preferencesManager.aiMarkdownLineHeightMultiplier.collectAsState(initial = 1f)
     val letterSpacing by preferencesManager.aiMarkdownLetterSpacing.collectAsState(initial = 0f)
+    val paragraphSpacing by preferencesManager.aiMarkdownParagraphSpacing.collectAsState(initial = 12f)
 
-    val settings = remember(lineHeightMultiplier, letterSpacing) {
+    val settings = remember(lineHeightMultiplier, letterSpacing, paragraphSpacing) {
         AiMarkdownTextLayoutSettings(
             lineHeightMultiplier = lineHeightMultiplier,
-            letterSpacingSp = letterSpacing
+            letterSpacingSp = letterSpacing,
+            paragraphSpacingDp = paragraphSpacing
         )
     }
 

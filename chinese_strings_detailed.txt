@@ -59,7 +59,7 @@ FILE: app\src\main\java\com\ai\assistance\operit\ui\features\token\preferences\U
   L111:24 (2 chars) "探索"
   L112:23 (2 chars) "创建"
 
-FILE: app\src\main\java\com\ai\assistance\operit\api\chat\library\ProblemLibrary.kt
+FILE: app\src\main\java\com\ai\assistance\operit\api\chat\library\MemoryLibrary.kt
   remaining=9 total=57 excluded_logs=48 excluded_long=0
   L601:24 (50 chars) "(?s)问题\\s*[：:]\\s*(.+?)(?:\\n\\s*解决方案\\s*[：:]|\\z)"
   L621:52 (5 chars) "历史记录:"

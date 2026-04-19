@@ -23,7 +23,11 @@ import kotlinx.coroutines.withContext
  *
  * 此实现利用Android的TextToSpeech API进行文本转语音
  */
-class SimpleVoiceProvider(private val context: Context) : VoiceService {
+class SimpleVoiceProvider(
+    private val context: Context,
+    initialLocaleTag: String = "",
+    initialVoiceId: String = ""
+) : VoiceService {
     companion object {
         private const val TAG = "SimpleVoiceProvider"
     }
@@ -47,7 +51,8 @@ class SimpleVoiceProvider(private val context: Context) : VoiceService {
     // 当前语音参数
     private var currentRate: Float = 1.0f
     private var currentPitch: Float = 1.0f
-    private var currentVoiceId: String? = null
+    private var currentVoiceId: String? = initialVoiceId.takeIf { it.isNotBlank() }
+    private var currentLocaleTag: String = initialLocaleTag.trim()
 
     /** 初始化TTS引擎 */
     override suspend fun initialize(): Boolean =
@@ -63,57 +68,43 @@ class SimpleVoiceProvider(private val context: Context) : VoiceService {
                     tts =
                             TextToSpeech(context) { status ->
                                 if (status == TextToSpeech.SUCCESS) {
-                                    // 设置默认语言
-                                    val locale = Locale.getDefault()
-                                    val result = tts?.setLanguage(locale)
+                                    // 设置默认语速和音调
+                                    tts?.setSpeechRate(currentRate)
+                                    tts?.setPitch(currentPitch)
 
-                                    if (result == TextToSpeech.LANG_MISSING_DATA ||
-                                                    result == TextToSpeech.LANG_NOT_SUPPORTED
-                                    ) {
-                                        AppLogger.e(TAG, "语言不支持: $locale")
-                                        _isInitialized.value = false
-                                        continuation.resumeWith(Result.failure(
-                                            TtsException(context.getString(R.string.accessibility_tts_locale_not_supported, locale))
-                                        ))
-                                    } else {
-                                        // 设置默认语速和音调
-                                        tts?.setSpeechRate(currentRate)
-                                        tts?.setPitch(currentPitch)
-
-                                        // 设置进度监听器
-                                        tts?.setOnUtteranceProgressListener(
-                                                object : UtteranceProgressListener() {
-                                                    override fun onStart(utteranceId: String) {
-                                                        _isSpeaking.value = true
-                                                    }
-
-                                                    override fun onDone(utteranceId: String) {
-                                                        _isSpeaking.value = false
-                                                    }
-
-                                                    @Deprecated("Deprecated in Java")
-                                                    override fun onError(utteranceId: String) {
-                                                        _isSpeaking.value = false
-                                                    }
-
-                                                    // 在API 23以上的设备，需要实现此方法
-                                                    override fun onError(
-                                                            utteranceId: String,
-                                                            errorCode: Int
-                                                    ) {
-                                                        super.onError(utteranceId, errorCode)
-                                                        _isSpeaking.value = false
-                                                        AppLogger.e(
-                                                                TAG,
-                                                                "TTS错误: utteranceId=$utteranceId, errorCode=$errorCode"
-                                                        )
-                                                    }
+                                    // 设置进度监听器
+                                    tts?.setOnUtteranceProgressListener(
+                                            object : UtteranceProgressListener() {
+                                                override fun onStart(utteranceId: String) {
+                                                    _isSpeaking.value = true
                                                 }
-                                        )
 
-                                        _isInitialized.value = true
-                                        continuation.resume(true)
-                                    }
+                                                override fun onDone(utteranceId: String) {
+                                                    _isSpeaking.value = false
+                                                }
+
+                                                @Deprecated("Deprecated in Java")
+                                                override fun onError(utteranceId: String) {
+                                                    _isSpeaking.value = false
+                                                }
+
+                                                // 在API 23以上的设备，需要实现此方法
+                                                override fun onError(
+                                                        utteranceId: String,
+                                                        errorCode: Int
+                                                ) {
+                                                    super.onError(utteranceId, errorCode)
+                                                    _isSpeaking.value = false
+                                                    AppLogger.e(
+                                                            TAG,
+                                                            "TTS错误: utteranceId=$utteranceId, errorCode=$errorCode"
+                                                    )
+                                                }
+                                            }
+                                    )
+
+                                    _isInitialized.value = true
+                                    continuation.resume(true)
                                 } else {
                                     AppLogger.e(TAG, "TTS初始化失败: $status")
                                     _isInitialized.value = false
@@ -151,6 +142,8 @@ class SimpleVoiceProvider(private val context: Context) : VoiceService {
 
                 return@withContext suspendCancellableCoroutine { continuation ->
                     tts?.let { textToSpeech ->
+                        ensureVoiceAndLocaleReady(textToSpeech)
+
                         // 设置语速和音调
                         if (currentRate != effectiveRate) {
                             textToSpeech.setSpeechRate(effectiveRate)
@@ -294,7 +287,7 @@ class SimpleVoiceProvider(private val context: Context) : VoiceService {
                                         VoiceService.Voice(
                                                 id = voice.name,
                                                 name = voice.name,
-                                                locale = voice.locale.toString(),
+                                                locale = voice.locale.toLanguageTag(),
                                                 gender = gender
                                         )
                                 )
@@ -331,6 +324,7 @@ class SimpleVoiceProvider(private val context: Context) : VoiceService {
                                 val result = textToSpeech.setVoice(voice) == TextToSpeech.SUCCESS
                                 if (result) {
                                     currentVoiceId = voiceId
+                                    currentLocaleTag = voice.locale.toLanguageTag()
                                 }
                                 return@withContext result
                             } else {
@@ -346,4 +340,73 @@ class SimpleVoiceProvider(private val context: Context) : VoiceService {
 
                 return@withContext false
             }
+
+    private fun ensureVoiceAndLocaleReady(textToSpeech: TextToSpeech) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP && !currentVoiceId.isNullOrBlank()) {
+            val voices = textToSpeech.voices
+            val selectedVoice = voices?.firstOrNull { it.name == currentVoiceId }
+            if (selectedVoice != null) {
+                val result = textToSpeech.setVoice(selectedVoice)
+                if (result == TextToSpeech.SUCCESS) {
+                    currentLocaleTag = selectedVoice.locale.toLanguageTag()
+                    return
+                }
+            }
+        }
+
+        val requestedTag = currentLocaleTag.ifBlank { Locale.getDefault().toLanguageTag() }
+        val targetLocale = resolveBestLocale(textToSpeech, requestedTag)
+        if (targetLocale == null) {
+            throw TtsException(
+                context.getString(R.string.accessibility_tts_locale_not_supported, requestedTag)
+            )
+        }
+
+        val result = textToSpeech.setLanguage(targetLocale)
+        if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
+            throw TtsException(
+                context.getString(R.string.accessibility_tts_locale_not_supported, requestedTag)
+            )
+        }
+
+        currentLocaleTag = targetLocale.toLanguageTag()
+    }
+
+    private fun resolveBestLocale(textToSpeech: TextToSpeech, requestedTag: String): Locale? {
+        val normalizedTag = requestedTag.trim().replace('_', '-')
+        if (normalizedTag.isBlank()) {
+            return Locale.getDefault()
+        }
+
+        val requestedLocale = Locale.forLanguageTag(normalizedTag)
+        val availableLocales = linkedSetOf<Locale>()
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            textToSpeech.voices
+                ?.mapNotNull { it.locale }
+                ?.forEach { availableLocales.add(it) }
+        }
+
+        textToSpeech.availableLanguages
+            ?.forEach { availableLocales.add(it) }
+
+        availableLocales.firstOrNull { it.toLanguageTag().equals(normalizedTag, ignoreCase = true) }?.let {
+            return it
+        }
+
+        val requestedLanguage = requestedLocale.language
+        if (requestedLanguage.isNotBlank()) {
+            availableLocales.firstOrNull {
+                it.language.equals(requestedLanguage, ignoreCase = true)
+            }?.let {
+                return it
+            }
+        }
+
+        return if (textToSpeech.isLanguageAvailable(requestedLocale) >= TextToSpeech.LANG_AVAILABLE) {
+            requestedLocale
+        } else {
+            null
+        }
+    }
 }

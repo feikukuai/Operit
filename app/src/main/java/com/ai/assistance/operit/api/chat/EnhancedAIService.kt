@@ -420,7 +420,7 @@ class EnhancedAIService private constructor(private val context: Context) {
     private var lastReplyContent: String? = null
 
     init {
-        com.ai.assistance.operit.api.chat.library.ProblemLibrary.initialize(context)
+        com.ai.assistance.operit.api.chat.library.MemoryLibrary.initialize(context)
         initScope.launch {
             runCatching {
                 ensureInitialized()
@@ -1815,14 +1815,14 @@ class EnhancedAIService private constructor(private val context: Context) {
         }
 
         if (enableMemoryQuery) {
-            // 保存问题记录到库
+            // 保存会话记忆到记忆库
             toolProcessingScope.launch {
-                com.ai.assistance.operit.api.chat.library.ProblemLibrary.saveProblemAsync(
+                com.ai.assistance.operit.api.chat.library.MemoryLibrary.saveMemoryAsync(
                         this@EnhancedAIService.context,
                         toolHandler,
                         context.conversationHistory.toRoleContentPairs(),
                         content,
-                        multiServiceManager.getServiceForFunction(FunctionType.PROBLEM_LIBRARY)
+                        multiServiceManager.getServiceForFunction(FunctionType.MEMORY)
                 )
             }
         }
@@ -2827,12 +2827,12 @@ class EnhancedAIService private constructor(private val context: Context) {
         AppLogger.d(TAG, "手动触发记忆更新...")
         withContext(Dispatchers.IO) {
             try {
-                com.ai.assistance.operit.api.chat.library.ProblemLibrary.saveProblemAsync(
+                com.ai.assistance.operit.api.chat.library.MemoryLibrary.saveMemoryAsync(
                     context,
                     toolHandler,
                     conversationHistory,
                     lastContent,
-                    multiServiceManager.getServiceForFunction(FunctionType.PROBLEM_LIBRARY)
+                    multiServiceManager.getServiceForFunction(FunctionType.MEMORY)
                 )
                 AppLogger.d(TAG, "手动记忆更新成功")
             } catch (e: Exception) {

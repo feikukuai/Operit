@@ -875,7 +875,7 @@ private fun buildCharacterCardPackageToolAccessOptions(
     useEnglish: Boolean
 ): List<CharacterCardToolAccessOption> {
     val preferredLanguage = if (useEnglish) "en" else "zh"
-    return packageManager.getImportedPackages()
+    return packageManager.getEnabledPackageNames()
         .asSequence()
         .map { it.trim() }
         .filter { it.isNotEmpty() }

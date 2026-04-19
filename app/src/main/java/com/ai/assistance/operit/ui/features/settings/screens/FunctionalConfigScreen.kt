@@ -623,7 +623,7 @@ fun FunctionConfigCard(
                                                     ).collect { chunk -> buffer.append(chunk) }
                                                     buffer.toString()
                                                 }
-                                                FunctionType.PROBLEM_LIBRARY -> {
+                                                FunctionType.MEMORY -> {
                                                     val existingMemoriesPrompt =
                                                         FunctionalPrompts.knowledgeGraphNoExistingMemoriesMessage(useEnglish)
                                                     val existingFoldersPrompt =
@@ -637,7 +637,7 @@ fun FunctionConfigCard(
                                                             useEnglish = useEnglish
                                                         )
                                                     val userPrompt =
-                                                        context.getString(R.string.functional_config_test_problem_library_prompt)
+                                                        context.getString(R.string.functional_config_test_memory_prompt)
                                                     val parameters =
                                                         modelConfigManager.getModelParametersForConfig(configWithSelectedModel.id)
                                                     val buffer = StringBuilder()
@@ -917,7 +917,7 @@ fun getFunctionDisplayName(functionType: FunctionType): String {
     return when (functionType) {
         FunctionType.CHAT -> stringResource(id = R.string.function_type_chat)
         FunctionType.SUMMARY -> stringResource(id = R.string.function_type_summary)
-        FunctionType.PROBLEM_LIBRARY -> stringResource(id = R.string.function_type_problem_library)
+        FunctionType.MEMORY -> stringResource(id = R.string.function_type_memory)
         FunctionType.UI_CONTROLLER -> stringResource(id = R.string.function_type_ui_controller)
         FunctionType.TRANSLATION -> stringResource(id = R.string.function_type_translation)
         FunctionType.GREP -> stringResource(id = R.string.function_type_grep)
@@ -934,7 +934,7 @@ fun getFunctionDescription(functionType: FunctionType): String {
     return  when (functionType) {
         FunctionType.CHAT -> stringResource(id = R.string.function_desc_chat)
         FunctionType.SUMMARY -> stringResource(id = R.string.function_desc_summary)
-        FunctionType.PROBLEM_LIBRARY -> stringResource(id = R.string.function_desc_problem_library)
+        FunctionType.MEMORY -> stringResource(id = R.string.function_desc_memory)
         FunctionType.UI_CONTROLLER -> stringResource(id = R.string.function_desc_ui_controller)
         FunctionType.TRANSLATION -> stringResource(id = R.string.function_desc_translation)
         FunctionType.GREP -> stringResource(id = R.string.function_desc_grep)

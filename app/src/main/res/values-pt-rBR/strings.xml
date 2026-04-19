@@ -201,8 +201,8 @@
     <string name="workflow_edit_dialog_title">Editar fluxo de trabalho</string>
     <string name="workflow_enabled_label">Habilitar fluxo de trabalho</string>
     <string name="workflow_disabled">Desabilitado</string>
-    <string name="problem_library_question">pergunta:</string>
-    <string name="problem_library_solution">Solução:</string>
+    <string name="memory_analysis_question">pergunta:</string>
+    <string name="memory_analysis_solution">Solução:</string>
     <string name="url_tab_chat">bater papo</string>
     <string name="url_tab_projects">projeto</string>
     <string name="url_tab_artifacts">artefato</string>
@@ -763,7 +763,7 @@
     <string name="settings_global_display">exibição e comportamento</string>
     <string name="settings_global_display_subtitle">Gerencie opções globais, como estilos de exibição, comportamentos de automação e capturas de tela</string>
     <string name="settings_data_backup">Backup e recuperação de dados</string>
-    <string name="settings_data_backup_desc">Importe, exporte ou exclua histórico de bate-papo e questione dados bancários para fazer backup e restaurar facilmente informações importantes</string>
+    <string name="settings_data_backup_desc">Importe, exporte ou exclua histórico de bate-papo e dados da biblioteca de memória para fazer backup e restaurar facilmente informações importantes</string>
     <string name="settings_manage_backup">Gerenciar backups</string>
     <string name="settings_chat_history_management">Gerenciamento de histórico de bate-papo</string>
     <string name="settings_chat_history_management_subtitle">Visualize estatísticas e organize em lotes, importe e exporte registros de bate-papo</string>
@@ -775,7 +775,7 @@
     <string name="settings_model_parameters_desc">Defina configurações de API, nomes de modelos e parâmetros e ofereça suporte ao gerenciamento de múltiplas configurações</string>
     <string name="settings_configure_model">Configurar modelo</string>
     <string name="settings_functional_model">Configuração do modelo funcional</string>
-    <string name="settings_functional_model_desc">Configure modelos dedicados e configurações de API para diferentes funções (como diálogo, resumo, banco de perguntas, etc.)</string>
+    <string name="settings_functional_model_desc">Configure modelos dedicados e configurações de API para diferentes funções (como diálogo, resumo e memória, etc.)</string>
     <string name="settings_configure_function">Função de configuração</string>
     <string name="settings_section_context_summary">Contexto e Resumo</string>
     <string name="settings_enable_summary">Ativar resumo da conversa</string>
@@ -800,6 +800,7 @@
     <string name="settings_tool_permissions_desc">Configure o nível de permissão da ferramenta assistente de IA, que pode ser configurada para permitir, solicitar ou proibir automaticamente</string>
     <string name="settings_configure_permissions">Configurar permissões de ferramenta</string>
     <string name="settings_section_usage">estatísticas de uso</string>
+    <string name="settings_section_external_calls">Chamadas externas</string>
     <string name="settings_token_statistics">Estatísticas de token</string>
     <string name="settings_total_tokens_breakdown">Entrada: %1$d (cache: %2$d) / Saída: %3$d</string>
     <string name="settings_cached_tokens">(Cache: %1$d)</string>
@@ -925,16 +926,6 @@
     <string name="script_execution_success">Script executado com sucesso</string>
     <string name="script_execution_error">Erro de execução de script: %1$s</string>
     <string name="missing_parameters">Parâmetro obrigatório ausente: %1$s</string>
-    <string name="problem_library">banco de perguntas</string>
-    <string name="search_problems">Perguntas de pesquisa</string>
-    <string name="problem_details">Detalhes do problema</string>
-    <string name="edit_problem">Editar pergunta</string>
-    <string name="delete_problem">excluir pergunta</string>
-    <string name="empty_problem_library">O banco de perguntas está vazio</string>
-    <string name="problem_summary">Resumo do problema</string>
-    <string name="problem_solution">solução</string>
-    <string name="problem_tools">Usar ferramentas</string>
-    <string name="problem_time">hora de criação</string>
     <string name="save_changes">Salvar alterações</string>
     <string name="back_to_list">Voltar à lista</string>
     <string name="language_settings">Configurações de idioma</string>
@@ -2508,7 +2499,7 @@ Agora é possível usar o modo AutoGLM na interface de diálogo.</string>
     <string name="functional_config_warning_video_unsupported">Aviso: "Suporte à análise de vídeo" não está habilitado para o modelo atualmente selecionado e a compreensão do vídeo pode não estar disponível. Altere o modelo que suporta entrada de vídeo/imagem e ative "O modelo suporta análise de vídeo".</string>
     <string name="function_type_chat">Função de conversa</string>
     <string name="function_type_summary">Resumo da conversa</string>
-    <string name="function_type_problem_library">Questione a gestão do banco</string>
+    <string name="function_type_memory">Gerenciamento de memória</string>
     <string name="function_type_file_binding">Processamento de vinculação de arquivo</string>
     <string name="function_type_ui_controller">Controlador de IU</string>
     <string name="function_type_translation">Função de tradução</string>
@@ -2518,8 +2509,8 @@ Agora é possível usar o modo AutoGLM na interface de diálogo.</string>
     <string name="function_type_audio_recognition">reconhecimento de áudio</string>
     <string name="function_type_video_recognition">reconhecimento de vídeo</string>
     <string name="function_desc_chat">Função de diálogo principal, usada para interação diária de diálogo com os usuários</string>
-    <string name="function_desc_summary">Gere resumos de conversas para facilitar o rastreamento de informações importantes</string>
-    <string name="function_desc_problem_library">Para análise e gerenciamento de bancos de questões</string>
+    <string name="function_desc_summary">Compactar o contexto e gerar resumos de chat</string>
+    <string name="function_desc_memory">Processar memórias e armazená-las na biblioteca de memória</string>
     <string name="function_desc_file_binding">Lide com vinculação e mistura inteligentes de conteúdo de arquivo para fornecer recursos de processamento de código mais precisos. Recomenda-se usar modelos rápidos e baratos como Gemini Flash, DeepSeek R1 não é recomendado</string>
     <string name="function_desc_ui_controller">Usado para passagem e operação automática da interface UI. O modelo de controlador de UI correspondente só será habilitado quando o usuário solicitar explicitamente o uso do controle "inteligente". Por exemplo, modelos especiais como o autoglm podem ser selecionados.</string>
     <string name="function_desc_translation">Fornece função de tradução multilíngue e suporta conversão de idioma de conteúdo de texto. Recomenda-se usar um modelo que suporte vários idiomas.</string>
@@ -2558,7 +2549,7 @@ Agora é possível usar o modo AutoGLM na interface de diálogo.</string>
     <string name="manage_cookies_test">Gerenciar cookies</string>
     <string name="visit_web_test">Visite a página da web</string>
     <string name="use_package_test">Usar pacote</string>
-    <string name="query_knowledge_test">Consultar banco de perguntas</string>
+    <string name="query_memory_test">Consultar biblioteca de memórias</string>
     <string name="list_files_test">Listar arquivos</string>
     <string name="file_exists_test">O arquivo existe?</string>
     <string name="ocr_read_test">Leitura de OCR</string>
@@ -2593,7 +2584,7 @@ Agora é possível usar o modo AutoGLM na interface de diálogo.</string>
     <string name="manage_cookies_test_desc">Obtenha o cookie do google.com</string>
     <string name="visit_web_test_desc">Visite o Baidu e extraia conteúdo</string>
     <string name="use_package_test_desc">Teste a ativação de um pacote inexistente</string>
-    <string name="query_knowledge_test_desc">Banco de perguntas de consulta de teste</string>
+    <string name="query_memory_test_desc">Testar consulta à biblioteca de memórias</string>
     <string name="list_files_test_desc">Listar arquivos no diretório de teste</string>
     <string name="file_exists_test_desc">Verifique se o arquivo de teste existe</string>
     <string name="ocr_read_test_desc">Ler o conteúdo da imagem de teste</string>
@@ -3864,8 +3855,6 @@ Agora é possível usar o modo AutoGLM na interface de diálogo.</string>
     <string name="mcp_publish_body_table_row_platform">| Plataforma de lançamento | Operar Mercado MCP |</string>
     <string name="mcp_publish_body_table_row_parser_version">| Versão de análise | 1,0 |</string>
     <string name="mcp_publish_body_table_row_publish_time">| Tempo de lançamento | %1$s |</string>
-    <string name="mcp_publish_body_table_row_status_pending">| Estado | ⏳ Revisão pendente |</string>
-    <string name="mcp_publish_body_footer_note">*🤖 Este Issue é gerado automaticamente pela Operit e aguarda aprovação do administrador*</string>
     <string name="mcp_plugin_detail_title">Detalhes do plug-in</string>
     <string name="mcp_plugin_author">Autor: %1$s</string>
     <string name="mcp_plugin_shared_by">Compartilhado por: %1$s</string>
@@ -5089,7 +5078,6 @@ Agora é possível usar o modo AutoGLM na interface de diálogo.</string>
     <string name="skill_publish_body_table_row_platform">| Plataforma de publicação | Mercado de habilidades Operit |</string>
     <string name="skill_publish_body_table_row_parser_version">| Versão de análise | 1,0 |</string>
     <string name="skill_publish_body_table_row_publish_time">| Tempo de lançamento | %1$s |</string>
-    <string name="skill_publish_body_table_row_status_pending">| Estado | ⏳ Revisão pendente |</string>
     <string name="model_param_max_tokens">Número máximo de tokens gerados</string>
     <string name="model_param_max_tokens_desc">Controle o número máximo de tokens gerados pela IA de cada vez</string>
     <string name="model_param_temperature">temperatura</string>
@@ -5276,7 +5264,7 @@ Agora é possível usar o modo AutoGLM na interface de diálogo.</string>
     <string name="functional_config_test_grep_display_path">&lt;Teste&gt;</string>
     <string name="functional_config_test_grep_candidates_digest">#1 [arquivo: exemplo.txt]\nOlá, mundo\n#2 [arquivo: main.kt]\nfun main() {}</string>
     <string name="functional_config_test_ui_controller_prompt">Estado atual da UI: [Button(label="OK",bounds="[0,0][100,50]")]\nMeta da tarefa: Clique em OK. \nHistórico de execução: []</string>
-    <string name="functional_config_test_problem_library_prompt">Conteúdo da conversa:\nUsuário: Problema no teste de conexão. \nAssistente: Resposta do teste de conexão.</string>
+    <string name="functional_config_test_memory_prompt">Conteúdo da conversa:\nUsuário: Problema no teste de conexão. \nAssistente: Resposta do teste de conexão.</string>
     <string name="tool_permission_instruction_title">Instruções de uso</string>
     <string name="tool_permission_instruction_content">1. As "Permissões padrão globais" acima controlam o comportamento padrão de todas as ferramentas. \n2. As ferramentas adicionadas em cada grupo abaixo definem “regras de exceção” para a ferramenta, que substituirão o padrão global. \n3. Clique novamente na ferramenta do mesmo grupo ou desmarque-a na caixa de diálogo de seleção para remover a configuração de exceção da ferramenta e deixá-la seguir o padrão global novamente.</string>
     <string name="token_price_description">Defina o preço em RMB para cada solicitação de API</string>
@@ -5860,8 +5848,8 @@ Agora é possível usar o modo AutoGLM na interface de diálogo.</string>
     <string name="plan_complexity_specific_analysis">Análise detalhada</string>
     <string name="plan_complexity_how_to_implement">Como conseguir</string>
     <string name="plan_complexity_implementation_plan">Plano de implementação</string>
-    <string name="problem_library_history">História:</string>
-    <string name="problem_library_tool_result_pruned">&lt;tool_result %1$s&gt;[...Resultado da ferramenta omitido...]&lt;/tool_result&gt;</string>
+    <string name="memory_analysis_history">História:</string>
+    <string name="memory_tool_result_pruned">&lt;tool_result %1$s&gt;[...Resultado da ferramenta omitido...]&lt;/tool_result&gt;</string>
     <string name="profile_birth_year">ano de nascimento</string>
     <string name="profile_gender">gênero</string>
     <string name="profile_personality">Traços de caráter</string>
@@ -6019,13 +6007,6 @@ Agora é possível usar o modo AutoGLM na interface de diálogo.</string>
     <string name="service_turn_on_wake">Ative o despertar</string>
     <string name="service_exit">desistir</string>
     <string name="service_stop">parar</string>
-    <string name="problem_library_no_legacy_found">Nenhum registro legado relevante encontrado</string>
-    <string name="problem_library_query_error">Ocorreu um erro ao consultar o banco de perguntas legado: %1$s</string>
-    <string name="problem_library_found_records">Foram encontrados registros legados relacionados a %1$d:</string>
-    <string name="problem_library_summary">Resumo: %1$s</string>
-    <string name="problem_library_query">Pergunta: %1$s</string>
-    <string name="problem_library_using_tool">Ferramentas usadas: %1$s</string>
-    <string name="problem_library_time">Hora: %1$s</string>
     <string name="export_created_time">Hora de criação: %1$s</string>
     <string name="export_updated_time">Hora da atualização: %1$s</string>
     <string name="export_group">Grupo: %1$s</string>
@@ -6229,9 +6210,6 @@ Agora é possível usar o modo AutoGLM na interface de diálogo.</string>
     <string name="pathfinder_start_equals_target">O estado inicial é o estado alvo</string>
     <string name="pathfinder_found_path">Encontre o caminho usando o algoritmo %1$s</string>
     <string name="pathfinder_cannot_find_path">Não foi possível encontrar um caminho de estado válido de \'%1$s\' para \'%2$s\'</string>
-    <string name="problem_library_question_format">Problema: %1$s\n\nSolução: %2$s</string>
-    <string name="problem_library_question_label">pergunta:</string>
-    <string name="problem_library_solution_label">Solução:</string>
     <string name="shizuku_start_service_intro">Para iniciar o serviço Shizuku:\n</string>
     <string name="shizuku_step1_ensure_installed">1. Certifique-se de que o aplicativo Shizuku esteja instalado\n</string>
     <string name="shizuku_step2_adb_command">2. Use o comando ADB para iniciar o Shizuku:\n</string>

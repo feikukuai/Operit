@@ -718,9 +718,17 @@ fun ModelPromptsSettingsScreen(
             scope.launch {
                 val isNew = group.id.isBlank()
                 if (isNew) {
-                    characterGroupCardManager.createCharacterGroupCard(group)
+                    val newGroupId = characterGroupCardManager.createCharacterGroupCard(group)
+                    userPreferencesManager.saveCustomChatTitleForCharacterGroup(
+                        newGroupId,
+                        group.name.ifEmpty { null }
+                    )
                 } else {
                     characterGroupCardManager.updateCharacterGroupCard(group)
+                    userPreferencesManager.saveCustomChatTitleForCharacterGroup(
+                        group.id,
+                        group.name.ifEmpty { null }
+                    )
                 }
                 showAddGroupCardDialog = false
                 showEditGroupCardDialog = false
@@ -734,7 +742,13 @@ fun ModelPromptsSettingsScreen(
     fun duplicateGroupCard(group: CharacterGroupCard) {
         scope.launch {
             val duplicatedName = group.name + context.getString(R.string.card_copy_suffix)
-            characterGroupCardManager.duplicateCharacterGroupCard(group.id, duplicatedName)
+            val newGroupId = characterGroupCardManager.duplicateCharacterGroupCard(group.id, duplicatedName)
+            if (!newGroupId.isNullOrBlank()) {
+                userPreferencesManager.saveCustomChatTitleForCharacterGroup(
+                    newGroupId,
+                    duplicatedName.ifEmpty { null }
+                )
+            }
             showDuplicateSuccessMessage = true
             refreshTrigger++
         }

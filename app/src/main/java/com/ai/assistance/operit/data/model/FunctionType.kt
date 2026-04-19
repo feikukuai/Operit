@@ -4,7 +4,7 @@ package com.ai.assistance.operit.data.model
 enum class FunctionType {
     CHAT, // 常规对话
     SUMMARY, // 对话总结
-    PROBLEM_LIBRARY, // 问题库处理
+    MEMORY, // 记忆库处理
     UI_CONTROLLER, // UI自动化控制
     TRANSLATION, // 翻译功能
     GREP, // Grep上下文检索/代码搜索规划

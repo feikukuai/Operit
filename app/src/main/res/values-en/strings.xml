@@ -231,7 +231,7 @@
     <string name="workflow_enabled_label">Enable workflow</string>
     <string name="workflow_disabled">Disabled</string>
 
-    <string name="problem_library_question">Question:</string>
+    <string name="memory_analysis_question">Question:</string>
     <string name="url_tab_chat">Chat</string>
     <string name="url_tab_projects">Projects</string>
     <string name="url_tab_artifacts">Artifacts</string>
@@ -874,7 +874,7 @@
     <string name="settings_global_display">Display &amp; Behavior</string>
     <string name="settings_global_display_subtitle">Manage global options for display style, automation behavior, and screenshots</string>
     <string name="settings_data_backup">Data Backup and Recovery</string>
-    <string name="settings_data_backup_desc">Import, export, or delete chat history and problem library data for easy backup and recovery of important information</string>
+    <string name="settings_data_backup_desc">Import, export, or delete chat history and memory library data for easy backup and recovery of important information</string>
     <string name="settings_chat_history_management">Chat History Management</string>
     <string name="settings_chat_history_management_subtitle">View stats and batch organize your conversations</string>
     <string name="settings_manage_backup">Manage Backup</string>
@@ -888,7 +888,7 @@
     <string name="settings_model_parameters_desc">Configure API settings, model names and parameters, with support for multiple configuration management</string>
     <string name="settings_configure_model">Configure Model</string>
     <string name="settings_functional_model">Functional Model Configuration</string>
-    <string name="settings_functional_model_desc">Configure specialized models and API settings for different functions (such as chat, summarization, problem library, etc.)</string>
+    <string name="settings_functional_model_desc">Configure specialized models and API settings for different functions (such as chat, summarization, memory, etc.)</string>
     <string name="settings_configure_function">Configure Function</string>
     
     <string name="settings_section_context_summary">Context and Summary</string>
@@ -918,6 +918,7 @@
     <string name="settings_configure_permissions">Configure Permissions</string>
     
     <string name="settings_section_usage">Usage Statistics</string>
+    <string name="settings_section_external_calls">External Calls</string>
     <string name="settings_token_statistics">Token Statistics</string>
     <string name="settings_total_tokens_breakdown">Input: %1$d (Cached: %2$d) / Output: %3$d</string>
     <string name="settings_cached_tokens">(Cached: %1$d)</string>
@@ -1054,17 +1055,6 @@
     <string name="script_execution_error">Script execution error: %1$s</string>
     <string name="missing_parameters">Missing required parameters: %1$s</string>
     
-    <!-- Problem Library Screen -->
-    <string name="problem_library">Problem Library</string>
-    <string name="search_problems">Search Problems</string>
-    <string name="problem_details">Problem Details</string>
-    <string name="edit_problem">Edit Problem</string>
-    <string name="delete_problem">Delete Problem</string>
-    <string name="empty_problem_library">Problem library is empty</string>
-    <string name="problem_summary">Problem Summary</string>
-    <string name="problem_solution">Solution</string>
-    <string name="problem_tools">Tools Used</string>
-    <string name="problem_time">Creation Time</string>
     <string name="save_changes">Save Changes</string>
     <string name="back_to_list">Back to List</string>
     
@@ -1743,7 +1733,7 @@
     <string name="settings_external_http_chat">External HTTP Calls</string>
     <string name="settings_external_http_chat_subtitle">HTTP chat API listening on 0.0.0.0, port, and Bearer token</string>
     <string name="external_http_chat_enable">Enable External HTTP Service</string>
-    <string name="external_http_chat_enable_desc">Starts the external HTTP chat API and binds it to 0.0.0.0 so any reachable network interface can receive requests</string>
+    <string name="external_http_chat_enable_desc">Starts the external HTTP service and binds it to 0.0.0.0. The same port serves both the HTTP API and the browser-accessible web chat UI</string>
     <string name="external_http_chat_port">Listen Port</string>
     <string name="external_http_chat_port_desc">Default is 8094. The service listens on 0.0.0.0:PORT. Saving restarts the service when it is enabled</string>
     <string name="external_http_chat_save_port">Save Port</string>
@@ -1760,6 +1750,11 @@
     <string name="external_http_chat_status_running">Running and listening on 0.0.0.0:%1$d</string>
     <string name="external_http_chat_status_stopped">Service is not running</string>
     <string name="external_http_chat_status_error">Service error: %1$s</string>
+    <string name="external_http_chat_web_title">Web Chat Entry</string>
+    <string name="external_http_chat_web_desc">The same port serves both the web chat UI and the HTTP API. Open the address below in a browser, then enter the Bearer Token above on first access.</string>
+    <string name="external_http_chat_web_note">The web UI uses the root path /. The HTTP API still lives under %1$s</string>
+    <string name="external_http_chat_copy_web_url">Copy Web URL</string>
+    <string name="external_http_chat_web_url_copied">Web URL copied</string>
     <string name="external_http_chat_access_urls">Detected LAN Addresses</string>
     <string name="external_http_chat_bind_hint">The service listens on 0.0.0.0:%1$d, which means it accepts requests on all network interfaces. The addresses below are only the detected LAN IPv4 addresses for copying.</string>
     <string name="external_http_chat_no_lan_ip">No usable LAN IPv4 address was detected. The service still listens on 0.0.0.0, so confirm connectivity or use another reachable address</string>
@@ -2504,6 +2499,15 @@
     
     <!-- TTS Service Types -->
     <string name="speech_services_tts_type_simple">System TTS (Simple)</string>
+    <string name="speech_services_simple_tts_settings">System TTS Settings</string>
+    <string name="speech_services_simple_tts_desc">Choose a specific language and voice for system TTS to avoid devices failing on the default locale.</string>
+    <string name="speech_services_simple_tts_locale">Language</string>
+    <string name="speech_services_simple_tts_locale_follow_system">Follow system language</string>
+    <string name="speech_services_simple_tts_voice">System voice</string>
+    <string name="speech_services_simple_tts_voice_default">Use system default voice</string>
+    <string name="speech_services_simple_tts_voice_select">Select system voice</string>
+    <string name="speech_services_simple_tts_voice_clear">Clear system voice</string>
+    <string name="speech_services_simple_tts_loading">Loading system TTS voices…</string>
     <string name="speech_services_tts_type_http">HTTP API (Remote)</string>
     <string name="speech_services_tts_type_siliconflow">SiliconFlow TTS</string>
     <string name="speech_services_tts_type_minimax">MiniMax TTS</string>
@@ -2743,7 +2747,7 @@
     <!-- Function Types -->
     <string name="function_type_chat">Chat Function</string>
     <string name="function_type_summary">Conversation Summary</string>
-    <string name="function_type_problem_library">Problem Library Management</string>
+    <string name="function_type_memory">Memory Management</string>
     <string name="function_type_file_binding">File Binding Processing</string>
     <string name="function_type_ui_controller">UI Controller</string>
     <string name="function_type_grep">Grep Retrieval</string>
@@ -2751,8 +2755,8 @@
 
     <!-- Function Descriptions -->
     <string name="function_desc_chat">Main chat function for daily conversation interaction with users</string>
-    <string name="function_desc_summary">Generate conversation summaries for tracking important information</string>
-    <string name="function_desc_problem_library">Used for problem library analysis and management</string>
+    <string name="function_desc_summary">Compress context and generate chat summaries</string>
+    <string name="function_desc_memory">Process memories and store them in the memory library</string>
     <string name="function_desc_file_binding">Process intelligent binding and mixing of file content, providing more precise code processing capabilities. Recommend using fast, inexpensive models like Gemini Flash, not recommended to use DeepSeek R1</string>
     <string name="function_desc_ui_controller">Used for automatic traversal and operation of UI interfaces. The corresponding UI controller model is only activated when the user explicitly requests to use an "agent" for control, for example by choosing dedicated models such as autoglm-phone-9b.</string>
     <string name="function_desc_grep">Used for grep_context planning and result filtering (multi-round grep_code)</string>
@@ -2797,7 +2801,6 @@
     <string name="manage_cookies_test">Manage Cookies</string>
     <string name="visit_web_test">Visit Web</string>
     <string name="use_package_test">Use Package</string>
-    <string name="query_knowledge_test">Query Knowledge</string>
     <string name="list_files_test">List Files</string>
     <string name="file_exists_test">File Exists</string>
     <string name="ocr_read_test">OCR Read</string>
@@ -2834,7 +2837,6 @@
     <string name="manage_cookies_test_desc">Get google.com cookies</string>
     <string name="visit_web_test_desc">Visit Baidu and extract content</string>
     <string name="use_package_test_desc">Test activating a non-existent package</string>
-    <string name="query_knowledge_test_desc">Test querying memory library</string>
     <string name="list_files_test_desc">List files in test directory</string>
     <string name="file_exists_test_desc">Check if test file exists</string>
     <string name="ocr_read_test_desc">Read test image content</string>
@@ -2979,7 +2981,7 @@
     <string name="functional_config_test_grep_display_path">&lt;test&gt;</string>
     <string name="functional_config_test_grep_candidates_digest">#1 [file: example.txt]\nHello world\n#2 [file: main.kt]\nfun main() {}</string>
     <string name="functional_config_test_ui_controller_prompt">Current UI State: [Button(label="OK", bounds="[0,0][100,50]")]\nTask Goal: Tap OK.\nExecution History: []</string>
-    <string name="functional_config_test_problem_library_prompt">Conversation:\nUser: Connection test question.\nAssistant: Connection test answer.</string>
+    <string name="functional_config_test_memory_prompt">Conversation:\nUser: Connection test question.\nAssistant: Connection test answer.</string>
     <string name="tool_permission_instruction_title">Instructions</string>
     <string name="tool_permission_instruction_content">1. The \"Global Default Permission\" above controls the default behavior of all tools.\n2. Tools added to each group below set \"exception rules\" for that tool, which override the global default.\n3. Click the same tool in a group again, or uncheck it in the selection dialog to remove the tool\'s exception configuration and make it follow the global default again.</string>
     <string name="token_price_description">Set the RMB price per API request</string>
@@ -3392,10 +3394,12 @@
     <string name="global_text_line_height_multiplier_desc">Adjust the line-height multiplier for AI reply Markdown content</string>
     <string name="global_text_letter_spacing">AI Markdown Letter Spacing</string>
     <string name="global_text_letter_spacing_desc">Adjust the letter spacing for AI reply Markdown content</string>
+    <string name="global_text_paragraph_spacing">AI Markdown Paragraph Spacing</string>
+    <string name="global_text_paragraph_spacing_desc">Adjust the extra spacing added between AI reply Markdown paragraphs</string>
     <string name="layout_adjustment_preview_title">AI Markdown Preview</string>
-    <string name="layout_adjustment_preview_desc">The example below reflects the currently saved AI Markdown line spacing and letter spacing.</string>
+    <string name="layout_adjustment_preview_desc">The example below reflects the currently saved AI Markdown line spacing, letter spacing, and paragraph spacing. The gaps between the first three paragraphs directly show paragraph spacing changes.</string>
     <string name="layout_adjustment_preview_plain_text">This is a plain text preview. You can observe the spacing between letters and the density between lines.</string>
-    <string name="layout_adjustment_preview_markdown">This is the first AI reply Markdown paragraph preview, used to observe the current line spacing and letter spacing.\n\nThis is the second AI reply Markdown paragraph preview, used to continue observing the overall layout of multiple paragraphs and lists.\n\n- AI Markdown list item one\n- AI Markdown list item two</string>
+    <string name="layout_adjustment_preview_markdown">Paragraph one: use this to observe body line spacing and letter spacing.\n\nParagraph two: this paragraph is here specifically so you can judge paragraph spacing.\n\nParagraph three: when you adjust paragraph spacing, the gap above this line should change immediately.\n\n- AI Markdown list item one\n- AI Markdown list item two</string>
     <string name="current_value">Current Value</string>
     <string name="closer_to_edge">Closer to Edge</string>
     <string name="farther_from_edge">Farther from Edge</string>
@@ -4262,6 +4266,8 @@
     <string name="confirm_delete_action">Confirm Delete</string>
     <string name="published">Published</string>
     <string name="removed">Removed</string>
+    <string name="market_review_approved">Approved</string>
+    <string name="market_review_pending">Pending Review</string>
     <string name="remove">Remove</string>
     <string name="republish">Republish</string>
     
@@ -4382,8 +4388,6 @@
     <string name="mcp_publish_body_table_row_platform">| Platform | Operit MCP Market |</string>
     <string name="mcp_publish_body_table_row_parser_version">| Parser Version | 1.0 |</string>
     <string name="mcp_publish_body_table_row_publish_time">| Published at | %1$s |</string>
-    <string name="mcp_publish_body_table_row_status_pending">| Status | ⏳ Pending Review |</string>
-    <string name="mcp_publish_body_footer_note">*🤖 This Issue was generated automatically by Operit and is awaiting admin approval*</string>
     
     <!-- MCP Plugin Detail Screen -->
     <string name="mcp_plugin_detail_title">Plugin Details</string>
@@ -4993,7 +4997,7 @@
     <string name="backup_room_db_backup_type_manual">Manual</string>
     <string name="backup_room_db_max_backup_count">Max backups to keep</string>
     <string name="backup_room_db_max_backup_count_desc">When exceeded, older backups will be deleted automatically (range 1-100)</string>
-    <string name="backup_room_db_low_level_desc">This is a low-level full database backup (Room/SQLite), typically including chat history, messages, and the problem library. Restoring will overwrite the current database; it is recommended to back up first.</string>
+    <string name="backup_room_db_low_level_desc">This is a low-level full database backup (Room/SQLite), typically including chat history and messages. Restoring will overwrite the current database; it is recommended to back up first.</string>
     <string name="backup_room_db_restore_confirm_title">Confirm database restore</string>
     <string name="backup_room_db_restore_confirm_message">This will overwrite the current database with the following backup:\n%1$s\n\nThis action cannot be undone. It is recommended to perform a backup before restoring.</string>
     <string name="backup_room_db_restore_confirm_action">Confirm restore</string>
@@ -5772,7 +5776,6 @@
     <string name="skill_publish_body_table_row_platform">| Platform | Operit Skill Market |</string>
     <string name="skill_publish_body_table_row_parser_version">| Parser version | 1.0 |</string>
     <string name="skill_publish_body_table_row_publish_time">| Publish time | %1$s |</string>
-    <string name="skill_publish_body_table_row_status_pending">| Status | ⏳ Pending Review |</string>
 
     <string name="model_param_max_tokens">Max tokens</string>
     <string name="model_param_max_tokens_desc">Controls the maximum number of tokens the AI can generate per response</string>
@@ -6491,9 +6494,11 @@
     <string name="plan_complexity_implementation_plan">Implementation plan</string>
 
     <!-- Problem Library -->
-    <string name="problem_library_solution">Solution:</string>
-    <string name="problem_library_history">History:</string>
-    <string name="problem_library_tool_result_pruned">&lt;tool_result %1$s&gt;[...Tool result omitted...]&lt;/tool_result&gt;</string>
+    <string name="memory_analysis_solution">Solution:</string>
+    <string name="memory_analysis_history">History:</string>
+    <string name="memory_tool_result_pruned">&lt;tool_result %1$s&gt;[...Tool result omitted...]&lt;/tool_result&gt;</string>
+    <string name="query_memory_test">Query Memory</string>
+    <string name="query_memory_test_desc">Test querying the memory library</string>
 
     <!-- User Profile Preferences -->
     <string name="profile_birth_year">Birth year</string>
@@ -6666,15 +6671,6 @@
     <string name="service_turn_on_wake">Turn on wake</string>
     <string name="service_exit">Exit</string>
     <string name="service_stop">Stop</string>
-
-    <!-- ProblemLibraryTool (新增) -->
-    <string name="problem_library_no_legacy_found">No related Legacy records found</string>
-    <string name="problem_library_query_error">Error querying Legacy problem library: %1$s</string>
-    <string name="problem_library_found_records">Found %1$d related Legacy records:</string>
-    <string name="problem_library_summary">Summary: %1$s</string>
-    <string name="problem_library_query">Question: %1$s</string>
-    <string name="problem_library_using_tool">Using tool: %1$s</string>
-    <string name="problem_library_time">Time: %1$s</string>
 
     <!-- TextExporter (新增) -->
     <string name="export_created_time">Created time: %1$s</string>
@@ -6957,11 +6953,6 @@
     <string name="pathfinder_start_equals_target">Start state is target state</string>
     <string name="pathfinder_found_path">Found path using %1$s algorithm</string>
     <string name="pathfinder_cannot_find_path">Cannot find valid state path from \'%1$s\' to \'%2$s\'</string>
-
-    <!-- ProblemLibraryTool -->
-    <string name="problem_library_question_format">Question: %1$s\n\nSolution: %2$s</string>
-    <string name="problem_library_question_label">Question:</string>
-    <string name="problem_library_solution_label">Solution:</string>
 
     <!-- ShizukuAuthorizer -->
     <string name="shizuku_start_service_intro">To start Shizuku service:\n</string>

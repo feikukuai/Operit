@@ -127,7 +127,7 @@ object ToolboxPlugin : OperitPlugin {
             val context = OperitApplication.instance.applicationContext
             val packageManager = PackageManager.getInstance(context, AIToolHandler.getInstance(context))
             ToolPkgAppLifecycleHookPlugin.syncToolPkgRegistrations(
-                packageManager.getImportedToolPkgContainerRuntimes()
+                packageManager.getEnabledToolPkgContainerRuntimes()
             )
         }
 

@@ -282,6 +282,8 @@ class UserPreferencesManager private constructor(private val context: Context) {
             floatPreferencesKey("global_text_line_height_multiplier")
         private val AI_MARKDOWN_LETTER_SPACING =
             floatPreferencesKey("global_text_letter_spacing")
+        private val AI_MARKDOWN_PARAGRAPH_SPACING =
+            floatPreferencesKey("ai_markdown_paragraph_spacing")
 
         // 最近使用颜色
         private val RECENT_COLORS = stringPreferencesKey("recent_colors")
@@ -937,6 +939,11 @@ class UserPreferencesManager private constructor(private val context: Context) {
             preferences[AI_MARKDOWN_LETTER_SPACING] ?: 0f
         }
 
+    val aiMarkdownParagraphSpacing: Flow<Float> =
+        context.userPreferencesDataStore.data.map { preferences ->
+            preferences[AI_MARKDOWN_PARAGRAPH_SPACING] ?: 12f
+        }
+
     // 获取最近使用颜色
     val recentColorsFlow: Flow<List<Int>> =
         context.userPreferencesDataStore.data.map { preferences ->
@@ -997,6 +1004,12 @@ class UserPreferencesManager private constructor(private val context: Context) {
         }
     }
 
+    suspend fun saveAiMarkdownParagraphSpacing(value: Float) {
+        context.userPreferencesDataStore.edit { preferences ->
+            preferences[AI_MARKDOWN_PARAGRAPH_SPACING] = value
+        }
+    }
+
     // 重置布局设置
     suspend fun resetLayoutSettings() {
         context.userPreferencesDataStore.edit { preferences ->
@@ -1004,6 +1017,7 @@ class UserPreferencesManager private constructor(private val context: Context) {
             preferences.remove(CHAT_AREA_HORIZONTAL_PADDING)
             preferences.remove(AI_MARKDOWN_LINE_HEIGHT_MULTIPLIER)
             preferences.remove(AI_MARKDOWN_LETTER_SPACING)
+            preferences.remove(AI_MARKDOWN_PARAGRAPH_SPACING)
         }
     }
 
@@ -1058,6 +1072,26 @@ class UserPreferencesManager private constructor(private val context: Context) {
     suspend fun saveCustomChatTitleForCharacterCard(characterCardId: String, title: String?) {
         context.userPreferencesDataStore.edit { preferences ->
             val prefix = getCharacterCardThemePrefix(characterCardId)
+            val key = stringPreferencesKey("${prefix}${KEY_CUSTOM_CHAT_TITLE.name}")
+            if (!title.isNullOrEmpty()) {
+                preferences[key] = title
+            } else {
+                preferences.remove(key)
+            }
+        }
+    }
+
+    fun getCustomChatTitleForCharacterGroupFlow(characterGroupId: String): Flow<String?> {
+        return context.userPreferencesDataStore.data.map { preferences ->
+            val prefix = getCharacterGroupThemePrefix(characterGroupId)
+            val key = stringPreferencesKey("${prefix}${KEY_CUSTOM_CHAT_TITLE.name}")
+            preferences[key]
+        }
+    }
+
+    suspend fun saveCustomChatTitleForCharacterGroup(characterGroupId: String, title: String?) {
+        context.userPreferencesDataStore.edit { preferences ->
+            val prefix = getCharacterGroupThemePrefix(characterGroupId)
             val key = stringPreferencesKey("${prefix}${KEY_CUSTOM_CHAT_TITLE.name}")
             if (!title.isNullOrEmpty()) {
                 preferences[key] = title
@@ -1927,5 +1961,127 @@ class UserPreferencesManager private constructor(private val context: Context) {
 
     suspend fun hasCharacterGroupTheme(characterGroupId: String): Boolean {
         return hasThemeByPrefix(getCharacterGroupThemePrefix(characterGroupId))
+    }
+
+    suspend fun resolveThemePreferenceSnapshot(
+        characterCardId: String? = null,
+        characterGroupId: String? = null
+    ): ThemePreferenceSnapshot {
+        val normalizedGroupId = characterGroupId?.trim()?.takeIf { it.isNotBlank() }
+        val normalizedCardId = characterCardId?.trim()?.takeIf { it.isNotBlank() }
+
+        val sourcePrefix = when {
+            normalizedGroupId != null && hasCharacterGroupTheme(normalizedGroupId) ->
+                "character_group" to getCharacterGroupThemePrefix(normalizedGroupId)
+
+            normalizedCardId != null && hasCharacterCardTheme(normalizedCardId) ->
+                "character_card" to getCharacterCardThemePrefix(normalizedCardId)
+
+            else -> "global" to null
+        }
+
+        val source = sourcePrefix.first
+        val prefix = sourcePrefix.second
+        val sourceId = when (source) {
+            "character_group" -> normalizedGroupId
+            "character_card" -> normalizedCardId
+            else -> null
+        }
+        val preferences = context.userPreferencesDataStore.data.first()
+
+        fun stringValue(key: Preferences.Key<String>, defaultValue: String? = null): String? {
+            val resolvedKey = if (prefix != null) {
+                stringPreferencesKey("${prefix}${key.name}")
+            } else {
+                key
+            }
+            return preferences[resolvedKey] ?: defaultValue
+        }
+
+        fun booleanValue(key: Preferences.Key<Boolean>, defaultValue: Boolean): Boolean {
+            val resolvedKey = if (prefix != null) {
+                booleanPreferencesKey("${prefix}${key.name}")
+            } else {
+                key
+            }
+            return preferences[resolvedKey] ?: defaultValue
+        }
+
+        fun intValue(key: Preferences.Key<Int>): Int? {
+            val resolvedKey = if (prefix != null) {
+                intPreferencesKey("${prefix}${key.name}")
+            } else {
+                key
+            }
+            return preferences[resolvedKey]
+        }
+
+        fun floatValue(key: Preferences.Key<Float>, defaultValue: Float): Float {
+            val resolvedKey = if (prefix != null) {
+                floatPreferencesKey("${prefix}${key.name}")
+            } else {
+                key
+            }
+            return preferences[resolvedKey] ?: defaultValue
+        }
+
+        return ThemePreferenceSnapshot(
+            source = source,
+            sourceId = sourceId,
+            themeMode = stringValue(THEME_MODE, THEME_MODE_LIGHT) ?: THEME_MODE_LIGHT,
+            useSystemTheme = booleanValue(USE_SYSTEM_THEME, true),
+            useCustomColors = booleanValue(USE_CUSTOM_COLORS, false),
+            customPrimaryColor = intValue(CUSTOM_PRIMARY_COLOR),
+            customSecondaryColor = intValue(CUSTOM_SECONDARY_COLOR),
+            onColorMode = stringValue(KEY_ON_COLOR_MODE, ON_COLOR_MODE_AUTO) ?: ON_COLOR_MODE_AUTO,
+            useBackgroundImage = booleanValue(USE_BACKGROUND_IMAGE, false),
+            backgroundImageUri = stringValue(BACKGROUND_IMAGE_URI),
+            backgroundMediaType = stringValue(BACKGROUND_MEDIA_TYPE, MEDIA_TYPE_IMAGE)
+                ?: MEDIA_TYPE_IMAGE,
+            backgroundImageOpacity = floatValue(BACKGROUND_IMAGE_OPACITY, 0.3f),
+            chatHeaderTransparent = booleanValue(CHAT_HEADER_TRANSPARENT, false),
+            chatHeaderOverlayMode = booleanValue(CHAT_HEADER_OVERLAY_MODE, false),
+            chatInputTransparent = booleanValue(CHAT_INPUT_TRANSPARENT, false),
+            chatInputFloating = booleanValue(CHAT_INPUT_FLOATING, false),
+            chatInputLiquidGlass = booleanValue(CHAT_INPUT_LIQUID_GLASS, false),
+            chatInputWaterGlass = booleanValue(CHAT_INPUT_WATER_GLASS, false),
+            chatStyle = stringValue(CHAT_STYLE, CHAT_STYLE_CURSOR) ?: CHAT_STYLE_CURSOR,
+            inputStyle = stringValue(INPUT_STYLE, INPUT_STYLE_AGENT) ?: INPUT_STYLE_AGENT,
+            bubbleShowAvatar = booleanValue(BUBBLE_SHOW_AVATAR, true),
+            bubbleWideLayoutEnabled = booleanValue(BUBBLE_WIDE_LAYOUT_ENABLED, false),
+            cursorUserBubbleFollowTheme = booleanValue(CURSOR_USER_BUBBLE_FOLLOW_THEME, true),
+            cursorUserBubbleColor = intValue(CURSOR_USER_BUBBLE_COLOR),
+            bubbleUserBubbleColor = intValue(BUBBLE_USER_BUBBLE_COLOR),
+            bubbleAiBubbleColor = intValue(BUBBLE_AI_BUBBLE_COLOR),
+            bubbleUserTextColor = intValue(BUBBLE_USER_TEXT_COLOR),
+            bubbleAiTextColor = intValue(BUBBLE_AI_TEXT_COLOR),
+            bubbleUserUseImage = booleanValue(BUBBLE_USER_USE_IMAGE, false),
+            bubbleAiUseImage = booleanValue(BUBBLE_AI_USE_IMAGE, false),
+            bubbleUserImageUri = stringValue(BUBBLE_USER_IMAGE_URI),
+            bubbleAiImageUri = stringValue(BUBBLE_AI_IMAGE_URI),
+            bubbleImageRenderMode =
+                stringValue(
+                    BUBBLE_IMAGE_RENDER_MODE,
+                    BUBBLE_IMAGE_RENDER_MODE_TILED_NINE_SLICE
+                ) ?: BUBBLE_IMAGE_RENDER_MODE_TILED_NINE_SLICE,
+            bubbleUserRoundedCornersEnabled =
+                booleanValue(BUBBLE_USER_ROUNDED_CORNERS_ENABLED, true),
+            bubbleAiRoundedCornersEnabled =
+                booleanValue(BUBBLE_AI_ROUNDED_CORNERS_ENABLED, true),
+            bubbleUserContentPaddingLeft = floatValue(BUBBLE_USER_CONTENT_PADDING_LEFT, 12f),
+            bubbleUserContentPaddingRight = floatValue(BUBBLE_USER_CONTENT_PADDING_RIGHT, 12f),
+            bubbleAiContentPaddingLeft = floatValue(BUBBLE_AI_CONTENT_PADDING_LEFT, 12f),
+            bubbleAiContentPaddingRight = floatValue(BUBBLE_AI_CONTENT_PADDING_RIGHT, 12f),
+            customUserAvatarUri = stringValue(KEY_CUSTOM_USER_AVATAR_URI),
+            customAiAvatarUri = stringValue(KEY_CUSTOM_AI_AVATAR_URI),
+            avatarShape = stringValue(KEY_AVATAR_SHAPE, AVATAR_SHAPE_CIRCLE) ?: AVATAR_SHAPE_CIRCLE,
+            fontType = stringValue(FONT_TYPE, FONT_TYPE_SYSTEM) ?: FONT_TYPE_SYSTEM,
+            systemFontName = stringValue(SYSTEM_FONT_NAME),
+            customFontPath = stringValue(CUSTOM_FONT_PATH),
+            fontScale = floatValue(FONT_SCALE, 1.0f),
+            showThinkingProcess = booleanValue(KEY_SHOW_THINKING_PROCESS, true),
+            showStatusTags = booleanValue(KEY_SHOW_STATUS_TAGS, true),
+            showInputProcessingStatus = booleanValue(KEY_SHOW_INPUT_PROCESSING_STATUS, true)
+        )
     }
 }

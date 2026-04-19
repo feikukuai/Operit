@@ -217,8 +217,8 @@
     <string name="workflow_enabled_label">启用工作流</string>
     <string name="workflow_disabled">已禁用</string>
 
-    <string name="problem_library_question">问题：</string>
-    <string name="problem_library_solution">解决方案：</string>
+    <string name="memory_analysis_question">问题：</string>
+    <string name="memory_analysis_solution">解决方案：</string>
     <string name="url_tab_chat">聊天</string>
     <string name="url_tab_projects">项目</string>
     <string name="url_tab_artifacts">工件</string>
@@ -836,7 +836,7 @@
     <string name="settings_global_display">显示与行为</string>
     <string name="settings_global_display_subtitle">管理显示样式、自动化行为与截图等全局选项</string>
     <string name="settings_data_backup">数据备份与恢复</string>
-    <string name="settings_data_backup_desc">导入、导出或删除聊天记录和问题库数据，方便备份和恢复重要信息</string>
+    <string name="settings_data_backup_desc">导入、导出或删除聊天记录和记忆库数据，方便备份和恢复重要信息</string>
     <string name="settings_manage_backup">管理备份</string>
     <string name="settings_chat_history_management">聊天记录管理</string>
     <string name="settings_chat_history_management_subtitle">查看统计并批量整理、导入导出聊天记录</string>
@@ -850,7 +850,7 @@
     <string name="settings_model_parameters_desc">配置API设置、模型名称与参数，支持多配置管理</string>
     <string name="settings_configure_model">配置模型</string>
     <string name="settings_functional_model">功能模型配置</string>
-    <string name="settings_functional_model_desc">为不同功能（如对话、总结、问题库等）配置专用的模型与API设置</string>
+    <string name="settings_functional_model_desc">为不同功能（如对话、总结、记忆库等）配置专用的模型与API设置</string>
     <string name="settings_configure_function">配置功能</string>
     
     <string name="settings_section_context_summary">上下文与总结</string>
@@ -880,6 +880,7 @@
     <string name="settings_configure_permissions">配置工具权限</string>
     
     <string name="settings_section_usage">使用统计</string>
+    <string name="settings_section_external_calls">外部调用</string>
     <string name="settings_token_statistics">Token统计</string>
     <string name="settings_total_tokens_breakdown">输入: %1$d (缓存: %2$d) / 输出: %3$d</string>
     <string name="settings_cached_tokens">(缓存: %1$d)</string>
@@ -1016,17 +1017,6 @@
     <string name="script_execution_error">脚本执行错误: %1$s</string>
     <string name="missing_parameters">缺少必要参数: %1$s</string>
     
-    <!-- Problem Library Screen -->
-    <string name="problem_library">问题库</string>
-    <string name="search_problems">搜索问题</string>
-    <string name="problem_details">问题详情</string>
-    <string name="edit_problem">编辑问题</string>
-    <string name="delete_problem">删除问题</string>
-    <string name="empty_problem_library">问题库为空</string>
-    <string name="problem_summary">问题摘要</string>
-    <string name="problem_solution">解决方案</string>
-    <string name="problem_tools">使用工具</string>
-    <string name="problem_time">创建时间</string>
     <string name="save_changes">保存更改</string>
     <string name="back_to_list">返回列表</string>
     
@@ -2528,6 +2518,15 @@
     
     <!-- TTS Service Types -->
     <string name="speech_services_tts_type_simple">系统 TTS (简单)</string>
+    <string name="speech_services_simple_tts_settings">系统 TTS 设置</string>
+    <string name="speech_services_simple_tts_desc">可为系统 TTS 选择具体语言和音色，避免部分设备默认语言不被当前引擎支持。</string>
+    <string name="speech_services_simple_tts_locale">语言</string>
+    <string name="speech_services_simple_tts_locale_follow_system">跟随系统语言</string>
+    <string name="speech_services_simple_tts_voice">系统音色</string>
+    <string name="speech_services_simple_tts_voice_default">使用系统默认音色</string>
+    <string name="speech_services_simple_tts_voice_select">选择系统音色</string>
+    <string name="speech_services_simple_tts_voice_clear">清除系统音色</string>
+    <string name="speech_services_simple_tts_loading">正在读取系统 TTS 音色…</string>
     <string name="speech_services_tts_type_http">HTTP API (远程)</string>
     <string name="speech_services_tts_type_siliconflow">硅基流动 TTS</string>
     <string name="speech_services_tts_type_minimax">MiniMax TTS</string>
@@ -2777,8 +2776,8 @@
     <string name="functional_config_warning_audio_unsupported">警告：当前所选模型未启用“支持音频解析”，音频识别/转写可能不可用。请更换支持音频输入/转写的模型并开启“模型支持音频解析”。</string>
     <string name="functional_config_warning_video_unsupported">警告：当前所选模型未启用“支持视频解析”，视频理解可能不可用。请更换支持视频/图像输入的模型并开启“模型支持视频解析”。</string>
     <string name="function_type_chat">对话功能</string>
-    <string name="function_type_summary">对话总结</string>
-    <string name="function_type_problem_library">问题库管理</string>
+    <string name="function_type_summary">上下文总结</string>
+    <string name="function_type_memory">记忆更新</string>
     <string name="function_type_file_binding">文件绑定处理</string>
     <string name="function_type_ui_controller">UI控制器</string>
     <string name="function_type_translation">翻译功能</string>
@@ -2790,8 +2789,8 @@
     
     <!-- Function Descriptions -->
     <string name="function_desc_chat">主要的对话功能，用于与用户进行日常对话交互</string>
-    <string name="function_desc_summary">生成对话总结，方便追踪重要信息</string>
-    <string name="function_desc_problem_library">用于问题库的分析和管理</string>
+    <string name="function_desc_summary">压缩上下文，生成聊天摘要</string>
+    <string name="function_desc_memory">处理记忆并存放到记忆库</string>
     <string name="function_desc_file_binding">处理文件内容的智能绑定与混合，提供更精确的代码处理能力。建议使用快速的廉价模型如Gemini Flash，不建议使用DeepSeek R1</string>
     <string name="function_desc_ui_controller">用于UI界面的自动遍历与操作，对应的 UI 控制器模型仅在用户明确要求使用“智能体”控制时才会启用，例如可选择 autoglm 等专用模型。</string>
     <string name="function_desc_translation">提供多语言翻译功能，支持文本内容的语言转换。建议使用支持多语言的模型。</string>
@@ -2838,7 +2837,7 @@
     <string name="manage_cookies_test">管理Cookie</string>
     <string name="visit_web_test">访问网页</string>
     <string name="use_package_test">使用包</string>
-    <string name="query_knowledge_test">查询问题库</string>
+    <string name="query_memory_test">查询记忆库</string>
     <string name="list_files_test">列出文件</string>
     <string name="file_exists_test">文件是否存在</string>
     <string name="ocr_read_test">OCR读取</string>
@@ -2875,7 +2874,7 @@
     <string name="manage_cookies_test_desc">获取google.com的Cookie</string>
     <string name="visit_web_test_desc">访问Baidu并提取内容</string>
     <string name="use_package_test_desc">测试激活一个不存在的包</string>
-    <string name="query_knowledge_test_desc">测试查询问题库</string>
+    <string name="query_memory_test_desc">测试查询记忆库</string>
     <string name="list_files_test_desc">列出测试目录的文件</string>
     <string name="file_exists_test_desc">检查测试文件是否存在</string>
     <string name="ocr_read_test_desc">读取测试图片内容</string>
@@ -3263,10 +3262,12 @@
     <string name="global_text_line_height_multiplier_desc">调整 AI 回复中 Markdown 正文的行距倍率</string>
     <string name="global_text_letter_spacing">AI Markdown 字距</string>
     <string name="global_text_letter_spacing_desc">调整 AI 回复中 Markdown 正文的字间距</string>
+    <string name="global_text_paragraph_spacing">AI Markdown 段间距</string>
+    <string name="global_text_paragraph_spacing_desc">调整 AI 回复中 Markdown 段落之间额外增加的间距</string>
     <string name="layout_adjustment_preview_title">AI Markdown 预览</string>
-    <string name="layout_adjustment_preview_desc">下方示例会展示当前已保存的 AI Markdown 行距与字距效果。</string>
+    <string name="layout_adjustment_preview_desc">下方示例会展示当前已保存的 AI Markdown 行距、字距与段间距效果。前三段之间的留白会直接反映段间距设置。</string>
     <string name="layout_adjustment_preview_plain_text">这是一段普通文本预览。你可以观察字与字之间的距离，以及每一行之间的疏密变化。</string>
-    <string name="layout_adjustment_preview_markdown">这是 AI 回复中的第一段 Markdown 预览，用来观察当前行距与字距。\n\n这是 AI 回复中的第二段 Markdown 预览，用来继续观察多段文本与列表的整体排版。\n\n- AI Markdown 列表项一\n- AI Markdown 列表项二</string>
+    <string name="layout_adjustment_preview_markdown">第一段预览：用来观察正文行距与字距。\n\n第二段预览：这一段专门用来观察段落之间的留白。\n\n第三段预览：如果你调整了段间距，这里和上一段之间的距离会立即变化。\n\n- AI Markdown 列表项一\n- AI Markdown 列表项二</string>
     <string name="current_value">当前值</string>
     <string name="closer_to_edge">靠近边缘</string>
     <string name="farther_from_edge">远离边缘</string>
@@ -4061,18 +4062,28 @@
     <!-- MCP市场界面 -->
     <string name="login_github_to_manage_mcp_plugins">登录 GitHub 以发布和管理您的 MCP 插件</string>
     <string name="login_github_for_skill_market">登录 GitHub 以获得更好的 Skill 市场体验</string>
+    <string name="login_github_to_manage_scripts">登录 GitHub 以发布和管理您的脚本</string>
+    <string name="login_github_to_manage_packages">登录 GitHub 以发布和管理您的工具包</string>
     <string name="browse">浏览</string>
     <string name="my_tab">我的</string>
     <string name="user_avatar">用户头像</string>
     <string name="clear_search">清空搜索</string>
     <string name="available_mcp_plugins">可用的 MCP 插件</string>
     <string name="available_skills_market">可用的 Skill</string>
+    <string name="available_scripts_market">可用的脚本</string>
+    <string name="available_packages_market">可用的工具包</string>
     <string name="no_matching_plugins_found">未找到匹配的插件</string>
     <string name="no_matching_skills_found">未找到匹配的 Skill</string>
+    <string name="no_matching_scripts_found">未找到匹配的脚本</string>
+    <string name="no_matching_packages_found">未找到匹配的工具包</string>
     <string name="skill_market_search_placeholder">搜索 Skill 名称、描述、作者...</string>
+    <string name="script_market_search_placeholder">搜索脚本名称、描述、作者...</string>
+    <string name="package_market_search_placeholder">搜索工具包名称、描述、作者...</string>
     <string name="skill_repo_url_not_found">未找到仓库地址</string>
     <string name="skill_repo_url_not_found_cannot_install">未找到仓库地址，无法安装</string>
     <string name="no_available_mcp_plugins">暂无可用的 MCP 插件</string>
+    <string name="no_scripts_available">暂无可用的脚本</string>
+    <string name="no_market_packages_available">暂无可用的工具包</string>
     <string name="refresh_or_try_later">刷新或稍后再试</string>
     <string name="recommended_feature">推荐功能</string>
     <string name="premium_mcp_plugins_coming_soon">即将推出精选的优质 MCP 插件</string>
@@ -4081,8 +4092,12 @@
     <string name="login_to_view_manage_mcp_plugins">登录后可以查看和管理您发布的 MCP 插件</string>
     <string name="publish_new_plugin">发布新插件</string>
     <string name="publish_new_skill">发布新 Skill</string>
+    <string name="publish_new_script">发布新脚本</string>
+    <string name="publish_new_package">发布新工具包</string>
     <string name="manage_my_plugins">管理我的插件</string>
     <string name="manage_my_skills">管理我的 Skill</string>
+    <string name="manage_my_scripts">管理我的脚本</string>
+    <string name="manage_my_packages">管理我的工具包</string>
     <string name="logout">退出登录</string>
     <string name="author_avatar">作者头像</string>
     <string name="sharer_avatar">分享者头像</string>
@@ -4131,13 +4146,21 @@
     <!-- MCP管理界面 -->
     <string name="need_login_github_manage_plugins">需要登录 GitHub 才能管理您发布的插件</string>
     <string name="need_login_github_manage_skills">需要登录 GitHub 才能管理您发布的 Skill</string>
+    <string name="need_login_github_manage_scripts">需要登录 GitHub 才能管理您发布的脚本</string>
+    <string name="need_login_github_manage_packages">需要登录 GitHub 才能管理您发布的工具包</string>
     <string name="no_published_plugins_yet">还没有发布任何插件</string>
     <string name="click_button_publish_first_mcp_plugin">点击上方按钮发布您的第一个 MCP 插件</string>
     <string name="no_published_skills_yet">还没有发布任何 Skill</string>
     <string name="click_button_publish_first_skill">点击上方按钮发布您的第一个 Skill</string>
+    <string name="no_published_scripts_yet">还没有发布任何脚本</string>
+    <string name="click_button_publish_first_script">点击上方按钮发布您的第一个脚本</string>
+    <string name="no_published_packages_yet">还没有发布任何工具包</string>
+    <string name="click_button_publish_first_package">点击上方按钮发布您的第一个工具包</string>
     <string name="confirm_delete_action">确定删除</string>
     <string name="published">已发布</string>
     <string name="removed">已移除</string>
+    <string name="market_review_approved">已通过</string>
+    <string name="market_review_pending">待审核</string>
     <string name="remove">移除</string>
     <string name="republish">重新发布</string>
 
@@ -4159,6 +4182,77 @@
     <string name="refresh_or_try_again_later">刷新或稍后再试</string>
     <string name="recommended_features">推荐功能</string>
     <string name="after_logging_in_you_can_view_and_manage_your_mcp_plugins">登录后可以查看和管理您发布的 MCP 插件</string>
+    <string name="after_logging_in_you_can_view_and_manage_your_scripts">登录后可以查看和管理您发布的脚本</string>
+    <string name="after_logging_in_you_can_view_and_manage_your_packages">登录后可以查看和管理您发布的工具包</string>
+    <string name="after_logging_in_you_can_view_and_manage_your_artifacts">登录后可以查看和管理您发布的脚本和工具包</string>
+    <string name="login_github_to_manage_artifacts">登录 GitHub 后即可管理和发布脚本/工具包</string>
+    <string name="need_login_github_manage_artifacts">需要登录 GitHub 才能管理您发布的脚本和工具包</string>
+    <string name="available_artifacts_market">可用的脚本和工具包</string>
+    <string name="artifact_market_search_placeholder">搜索名称、描述、作者...</string>
+    <string name="no_matching_artifacts_found">未找到匹配的条目</string>
+    <string name="no_artifacts_available">暂无可用的脚本或工具包</string>
+    <string name="publish_new_artifact">发布新条目</string>
+    <string name="manage_my_artifacts">管理我的条目</string>
+    <string name="loading_your_artifacts">正在加载您的发布内容...</string>
+    <string name="no_published_artifacts_yet">还没有发布任何脚本或工具包</string>
+    <string name="click_button_publish_first_artifact">点击上方按钮发布您的第一个脚本或工具包</string>
+    <string name="confirm_remove_artifact_from_market">确定要从市场移除条目「%1$s」吗？此操作会关闭对应的 Issue，但不会删除您的发布仓库。</string>
+    <string name="screen_title_artifact_market">脚本与工具包市场</string>
+    <string name="screen_title_artifact_manage">管理脚本与工具包</string>
+    <string name="screen_title_artifact_publish">发布脚本或工具包</string>
+    <string name="artifact_publish_info_description">条目会先上传到您自己的 OperitForge 发布仓库，再根据类型自动登记到脚本市场或工具包市场。请确认内容、版本和兼容范围准确无误。</string>
+    <string name="artifact_edit_info_description">您正在编辑已发布条目的信息。更新后会覆盖市场仓库中对应 Issue 的元数据。</string>
+    <string name="need_login_before_publish_artifact">发布前需要先登录 GitHub。</string>
+    <string name="local_artifact_entry">本地条目</string>
+    <string name="publish_target_script_market">将自动发布到脚本市场</string>
+    <string name="publish_target_package_market">将自动发布到工具包市场</string>
+    <string name="display_name_label">显示名称</string>
+    <string name="description_label">描述</string>
+    <string name="version_label">版本</string>
+    <string name="version_colon">版本: %1$s</string>
+    <string name="artifact_type_colon">类型: %1$s</string>
+    <string name="supported_app_versions_colon">最低版本: %1$s，最高版本: %2$s</string>
+    <string name="min_supported_app_version">支持的最低软件版本</string>
+    <string name="max_supported_app_version">支持的最高软件版本</string>
+    <string name="supported_version_input_hint">请输入 `1.10.0` 这样的版本号，可留空</string>
+    <string name="publish_failed_title">发布失败</string>
+    <string name="retry_market_registration">重试市场登记</string>
+    <string name="update_to_market">更新到市场</string>
+    <string name="create_operit_forge_title">创建 OperitForge？</string>
+    <string name="create_operit_forge_message">这是你第一次直连发布。Operit 需要先在你的 GitHub 账号下创建公开仓库 `OperitForge`。</string>
+    <string name="confirm_create_public_forge_title">确认创建公开仓库</string>
+    <string name="confirm_create_public_forge_message">请再次确认，现在创建公开仓库 `OperitForge`。后续发布都会复用这个仓库。</string>
+    <string name="create_and_publish">创建并发布</string>
+    <string name="artifact_type_script">脚本</string>
+    <string name="artifact_type_package">工具包</string>
+    <string name="supported_app_versions">支持的软件版本</string>
+    <string name="supported_app_versions_short">适配 %1$s</string>
+    <string name="unsupported_artifact_version_title">当前软件版本可能不兼容</string>
+    <string name="unsupported_artifact_version_message">「%1$s」声明支持的软件版本为 %3$s，当前软件版本是 %2$s。继续下载仍可能失败或不可用。</string>
+    <string name="continue_download_anyway">仍然继续下载</string>
+    <string name="publisher_colon">发布者: %1$s</string>
+    <string name="market_registrar_colon">登记者 %1$s</string>
+    <string name="downloaded_already">已下载</string>
+    <string name="downloading">下载中</string>
+    <string name="download_script">下载脚本</string>
+    <string name="download_package">下载工具包</string>
+    <string name="open_asset">打开资源</string>
+    <string name="metadata_title">元数据</string>
+    <string name="type_label">类型</string>
+    <string name="current_app_version_label">当前软件版本</string>
+    <string name="asset_file_label">资源文件</string>
+    <string name="forge_repo_label">Forge 仓库</string>
+    <string name="release_tag_label">Release Tag</string>
+    <string name="sha256_label">SHA-256</string>
+    <string name="updated_at_label">更新时间</string>
+    <string name="source_file_label">源文件</string>
+    <string name="reactions_title">反应</string>
+    <string name="comments_with_count">评论 (%1$d)</string>
+    <string name="no_comments_yet">还没有评论</string>
+    <string name="be_first_comment_here">来留下第一条反馈吧。</string>
+    <string name="comment_label">评论</string>
+    <string name="publish_action">发布</string>
+    <string name="invalid_artifact_metadata">该市场条目的元数据无效，无法展示详情。</string>
     <string name="get_mcp">获取MCP</string>
     <string name="plugin_name_description">只允许英文字母、数字和下划线，此名称将作为插件ID使用</string>
     <string name="choose_mcp_community_to_get_plugins">选择以下优质MCP社区获取插件：</string>
@@ -4166,6 +4260,8 @@
     <string name="loading_your_plugins">正在加载您的插件...</string>
     <string name="confirm_remove_plugin_from_market">确定要从市场移除插件「%1$s」吗？此操作会关闭对应的 Issue，但不会删除您的代码仓库。</string>
     <string name="confirm_remove_skill_from_market">确定要从市场移除 Skill「%1$s」吗？此操作会关闭对应的 Issue，但不会删除您的代码仓库。</string>
+    <string name="confirm_remove_script_from_market">确定要从市场移除脚本「%1$s」吗？此操作会关闭对应的 Issue，但不会删除您的发布仓库。</string>
+    <string name="confirm_remove_package_from_market">确定要从市场移除工具包「%1$s」吗？此操作会关闭对应的 Issue，但不会删除您的发布仓库。</string>
 
     <!-- MCPPublishScreen 额外字符串 -->
     <string name="edit_plugin_info_description">您正在编辑已发布的插件信息。修改后的信息将更新到市场仓库的对应 Issue 中。</string>
@@ -4181,6 +4277,20 @@
     <string name="confirm_skill_git_import_deployment">我已确认该 Skill 可以通过软件的 Git 仓库导入方式正常安装并使用</string>
     <string name="skill_publish_success_message">您的 Skill 已成功发布到市场，等待审核通过后即可被其他用户发现和使用。</string>
     <string name="skill_update_success_message">您的 Skill 信息已成功更新。</string>
+    <string name="script_publish_info_description">脚本会先上传到您自己的 OperitForge 发布仓库，再将元数据登记到 OperitScriptMarket。请确认脚本内容、版本和描述准确无误。</string>
+    <string name="script_edit_info_description">您正在编辑已发布脚本的信息。更新后会覆盖市场仓库中对应 Issue 的元数据。</string>
+    <string name="package_publish_info_description">工具包会先上传到您自己的 OperitForge 发布仓库，再将元数据登记到 OperitPackageMarket。请确认工具包内容、版本和描述准确无误。</string>
+    <string name="package_edit_info_description">您正在编辑已发布工具包的信息。更新后会覆盖市场仓库中对应 Issue 的元数据。</string>
+    <string name="script_publish_success_message">您的脚本已成功发布到市场。</string>
+    <string name="script_update_success_message">您的脚本信息已成功更新。</string>
+    <string name="package_publish_success_message">您的工具包已成功发布到市场。</string>
+    <string name="package_update_success_message">您的工具包信息已成功更新。</string>
+    <string name="screen_title_script_market">脚本市场</string>
+    <string name="screen_title_script_manage">管理脚本</string>
+    <string name="screen_title_script_publish">发布脚本</string>
+    <string name="screen_title_package_market">工具包市场</string>
+    <string name="screen_title_package_manage">管理工具包</string>
+    <string name="screen_title_package_publish">发布工具包</string>
     
     <string name="install_command_example">例如：pnpm install xxx@xxxx</string>
     <string name="install_command_optional_description">如果无填写则使用软件自动识别项目结构。建议为空。</string>
@@ -4268,8 +4378,6 @@
     <string name="mcp_publish_body_table_row_platform">| 发布平台 | Operit MCP 市场 |</string>
     <string name="mcp_publish_body_table_row_parser_version">| 解析版本 | 1.0 |</string>
     <string name="mcp_publish_body_table_row_publish_time">| 发布时间 | %1$s |</string>
-    <string name="mcp_publish_body_table_row_status_pending">| 状态 | ⏳ Pending Review |</string>
-    <string name="mcp_publish_body_footer_note">*🤖 此Issue由 Operit 自动生成，等待管理员审核通过*</string>
 
     <!-- MCP Plugin Detail Screen -->
     <string name="mcp_plugin_detail_title">插件详情</string>
@@ -4344,7 +4452,7 @@
     <string name="settings_summary_title">总结设置</string>
     <string name="settings_context_summary_subtitle">管理上下文、总结与历史媒体保留设置</string>
     <string name="external_http_chat_enable">启用外部 HTTP 服务</string>
-    <string name="external_http_chat_enable_desc">开启后会启动外部 HTTP 聊天接口，实际监听 0.0.0.0，供能访问到该设备的客户端调用</string>
+    <string name="external_http_chat_enable_desc">开启后会启动外部 HTTP 服务，实际监听 0.0.0.0；同一端口既提供 HTTP API，也提供可直接访问的网页聊天界面</string>
     <string name="external_http_chat_port">监听端口</string>
     <string name="external_http_chat_port_desc">默认 8094。服务会监听 0.0.0.0:端口；保存后会在启用状态下自动重启服务</string>
     <string name="external_http_chat_save_port">保存端口</string>
@@ -4361,6 +4469,11 @@
     <string name="external_http_chat_status_running">服务运行中，监听 0.0.0.0:%1$d</string>
     <string name="external_http_chat_status_stopped">服务未运行</string>
     <string name="external_http_chat_status_error">服务异常：%1$s</string>
+    <string name="external_http_chat_web_title">网页聊天入口</string>
+    <string name="external_http_chat_web_desc">同一端口同时提供网页聊天界面和 HTTP API。浏览器直接打开下方地址，首次进入时输入上面的 Bearer Token 即可。</string>
+    <string name="external_http_chat_web_note">网页入口使用根路径 /；HTTP API 仍然走 %1$s</string>
+    <string name="external_http_chat_copy_web_url">复制网页地址</string>
+    <string name="external_http_chat_web_url_copied">网页地址已复制</string>
     <string name="external_http_chat_access_urls">当前检测到的局域网地址</string>
     <string name="external_http_chat_bind_hint">服务实际监听 0.0.0.0:%1$d，表示会接收设备所有网络接口上的请求。下方仅列出当前检测到的局域网 IPv4，方便复制。</string>
     <string name="external_http_chat_no_lan_ip">暂未检测到可用的局域网 IPv4 地址；这不影响服务监听 0.0.0.0，请确认设备已联网或改用其他可达地址</string>
@@ -4999,7 +5112,7 @@
     <string name="backup_room_db_backup_type_manual">手动</string>
     <string name="backup_room_db_max_backup_count">最大保留备份数</string>
     <string name="backup_room_db_max_backup_count_desc">超过此数量时，会自动删除更旧的备份文件（范围 1-100）</string>
-    <string name="backup_room_db_low_level_desc">这是更底层的整库备份（Room/SQLite），通常包含聊天记录、消息、问题库等结构化数据。恢复会覆盖当前数据库，建议先备份。</string>
+    <string name="backup_room_db_low_level_desc">这是更底层的整库备份（Room/SQLite），通常包含聊天记录、消息等结构化数据。恢复会覆盖当前数据库，建议先备份。</string>
     <string name="backup_room_db_restore_confirm_title">确认恢复数据库</string>
     <string name="backup_room_db_restore_confirm_message">将使用以下备份文件覆盖当前数据库：\n%1$s\n\n此操作不可撤销。建议先执行一次备份再恢复。</string>
     <string name="backup_room_db_restore_confirm_action">确认恢复</string>
@@ -5288,7 +5401,7 @@
     <string name="toolreg_close_terminal_session_desc">关闭终端会话: %1$s</string>
     <string name="toolreg_input_in_terminal_session_desc">向终端会话「%1$s」写入输入（control=%2$s）</string>
     <string name="toolreg_get_terminal_session_screen_desc">获取终端会话「%1$s」当前屏幕内容（单屏）</string>
-    <string name="toolreg_query_memory_desc">查询问题库: %1$s</string>
+    <string name="toolreg_query_memory_desc">查询记忆库: %1$s</string>
     <string name="toolreg_get_memory_by_title_desc">根据标题获取记忆: %1$s</string>
 
     <string name="toolreg_user_pref_birth_date">生日</string>
@@ -5655,7 +5768,6 @@
     <string name="skill_publish_body_table_row_platform">| 发布平台 | Operit Skill 市场 |</string>
     <string name="skill_publish_body_table_row_parser_version">| 解析版本 | 1.0 |</string>
     <string name="skill_publish_body_table_row_publish_time">| 发布时间 | %1$s |</string>
-    <string name="skill_publish_body_table_row_status_pending">| 状态 | ⏳ Pending Review |</string>
 
     <string name="model_param_max_tokens">最大生成Token数</string>
     <string name="model_param_max_tokens_desc">控制AI每次最多生成的Token数量</string>
@@ -5886,7 +5998,7 @@
     <string name="functional_config_test_grep_display_path">&lt;测试&gt;</string>
     <string name="functional_config_test_grep_candidates_digest">#1 [file: example.txt]\n你好世界\n#2 [file: main.kt]\nfun main() {}</string>
     <string name="functional_config_test_ui_controller_prompt">当前 UI 状态: [Button(label="确定", bounds="[0,0][100,50]")]\n任务目标: 点击确定。\n执行历史: []</string>
-    <string name="functional_config_test_problem_library_prompt">对话内容:\n用户: 连接测试问题。\n助手: 连接测试回答。</string>
+    <string name="functional_config_test_memory_prompt">对话内容:\n用户: 连接测试问题。\n助手: 连接测试回答。</string>
     <string name="tool_permission_instruction_title">使用说明</string>
     <string name="tool_permission_instruction_content">1. 上面的\"全局默认权限\"控制所有工具的默认行为。\n2. 下面每个分组中添加的工具，是对该工具设置\"例外规则\"，会覆盖全局默认。\n3. 再次点击同一分组中的工具，或在选择对话框中取消勾选，即可移除该工具的例外配置，让它重新跟随全局默认。</string>
     <string name="token_price_description">设置每次API请求的人民币价格</string>
@@ -6527,8 +6639,8 @@
     <string name="plan_complexity_implementation_plan">实施方案</string>
 
     <!-- Problem Library -->
-    <string name="problem_library_history">历史记录:</string>
-    <string name="problem_library_tool_result_pruned">&lt;tool_result %1$s&gt;[...工具结果已省略...]&lt;/tool_result&gt;</string>
+    <string name="memory_analysis_history">历史记录:</string>
+    <string name="memory_tool_result_pruned">&lt;tool_result %1$s&gt;[...工具结果已省略...]&lt;/tool_result&gt;</string>
 
     <!-- User Profile Preferences -->
     <string name="profile_birth_year">出生年份</string>
@@ -6702,15 +6814,6 @@
     <string name="service_turn_on_wake">开启唤醒</string>
     <string name="service_exit">退出</string>
     <string name="service_stop">停止</string>
-
-    <!-- ProblemLibraryTool (新增) -->
-    <string name="problem_library_no_legacy_found">未找到相关 Legacy 记录</string>
-    <string name="problem_library_query_error">查询 Legacy 问题库时出错: %1$s</string>
-    <string name="problem_library_found_records">找到 %1$d 条相关 Legacy 记录:</string>
-    <string name="problem_library_summary">摘要: %1$s</string>
-    <string name="problem_library_query">问题: %1$s</string>
-    <string name="problem_library_using_tool">使用工具: %1$s</string>
-    <string name="problem_library_time">时间: %1$s</string>
 
     <!-- TextExporter (新增) -->
     <string name="export_created_time">创建时间: %1$s</string>
@@ -6993,11 +7096,6 @@
     <string name="pathfinder_start_equals_target">起始状态即为目标状态</string>
     <string name="pathfinder_found_path">使用%1$s算法找到路径</string>
     <string name="pathfinder_cannot_find_path">无法找到从 \'%1$s\' 到 \'%2$s\' 的有效状态路径</string>
-
-    <!-- ProblemLibraryTool -->
-    <string name="problem_library_question_format">问题: %1$s\n\n解决方案: %2$s</string>
-    <string name="problem_library_question_label">问题:</string>
-    <string name="problem_library_solution_label">解决方案:</string>
 
     <!-- ShizukuAuthorizer -->
     <string name="shizuku_start_service_intro">要启动Shizuku服务：\n</string>

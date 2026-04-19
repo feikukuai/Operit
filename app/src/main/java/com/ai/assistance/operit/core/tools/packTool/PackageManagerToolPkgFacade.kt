@@ -70,9 +70,9 @@ internal class PackageManagerToolPkgFacade(
         packageManager.ensureInitialized()
         val normalizedPackageName = packageManager.normalizePackageName(packageName)
         val container = packageManager.toolPkgContainersInternal[normalizedPackageName] ?: return null
-        val importedSet = packageManager.getImportedPackageSetInternal()
+        val enabledSet = packageManager.getEnabledPackageNameSetInternal()
         val localizationContext = resolveContext ?: packageManager.contextInternal
-        val containerEnabled = importedSet.contains(container.packageName)
+        val containerEnabled = enabledSet.contains(container.packageName)
         val toolboxUiModules =
             if (containerEnabled) {
                 buildToolPkgToolboxUiModules(
@@ -93,7 +93,7 @@ internal class PackageManagerToolPkgFacade(
                     description = subpackage.description.resolve(localizationContext),
                     enabledByDefault = subpackage.enabledByDefault,
                     toolCount = subpackage.toolCount,
-                    enabled = containerEnabled && importedSet.contains(subpackage.packageName)
+                    enabled = containerEnabled && enabledSet.contains(subpackage.packageName)
                 )
             }
 
@@ -115,11 +115,11 @@ internal class PackageManagerToolPkgFacade(
         resolveContext: Context? = null
     ): List<PackageManager.ToolPkgToolboxUiModule> {
         packageManager.ensureInitialized()
-        val importedSet = packageManager.getImportedPackageSetInternal()
+        val enabledSet = packageManager.getEnabledPackageNameSetInternal()
         val localizationContext = resolveContext ?: packageManager.contextInternal
 
         val result = packageManager.toolPkgContainersInternal.values
-            .filter { container -> importedSet.contains(container.packageName) }
+            .filter { container -> enabledSet.contains(container.packageName) }
             .flatMap { container ->
                 buildToolPkgToolboxUiModules(
                     container = container,
@@ -145,43 +145,43 @@ internal class PackageManagerToolPkgFacade(
             return false
         }
 
-        val importedPackages = LinkedHashSet(packageManager.getImportedPackages())
+        val enabledPackageNames = LinkedHashSet(packageManager.getEnabledPackageNames())
         val subpackageStates = packageManager.getToolPkgSubpackageStatesInternal().toMutableMap()
-        val containerEnabled = importedPackages.contains(subpackageRuntime.containerPackageName)
+        val containerEnabled = enabledPackageNames.contains(subpackageRuntime.containerPackageName)
 
         subpackageStates[normalizedPackageName] = enabled
 
         if (containerEnabled && enabled) {
-            importedPackages.add(normalizedPackageName)
+            enabledPackageNames.add(normalizedPackageName)
         } else {
-            importedPackages.remove(normalizedPackageName)
+            enabledPackageNames.remove(normalizedPackageName)
             packageManager.unregisterPackageTools(normalizedPackageName)
         }
 
-        packageManager.saveImportedPackages(importedPackages.toList())
+        packageManager.saveEnabledPackageNames(enabledPackageNames.toList())
         packageManager.saveToolPkgSubpackageStates(subpackageStates)
 
         val stateSaved = packageManager.getToolPkgSubpackageStatesInternal()[normalizedPackageName] == enabled
         val importedMatches =
             if (containerEnabled) {
-                packageManager.getImportedPackages().contains(normalizedPackageName) == enabled
+                packageManager.getEnabledPackageNames().contains(normalizedPackageName) == enabled
             } else {
-                !packageManager.getImportedPackages().contains(normalizedPackageName)
+                !packageManager.getEnabledPackageNames().contains(normalizedPackageName)
             }
         return stateSaved && importedMatches
     }
 
     fun findPreferredPackageNameForSubpackageId(
         subpackageId: String,
-        preferImported: Boolean = true
+        preferEnabled: Boolean = true
     ): String? {
         packageManager.ensureInitialized()
         if (subpackageId.isBlank()) return null
 
         val directRuntime = packageManager.resolveToolPkgSubpackageRuntimeInternal(subpackageId)
         if (directRuntime != null) {
-            if (preferImported) {
-                if (packageManager.isPackageImported(directRuntime.packageName)) {
+            if (preferEnabled) {
+                if (packageManager.isPackageEnabled(directRuntime.packageName)) {
                     return directRuntime.packageName
                 }
             }
@@ -197,10 +197,10 @@ internal class PackageManagerToolPkgFacade(
             return null
         }
 
-        if (preferImported) {
-            val importedCandidate = candidates.firstOrNull { packageManager.isPackageImported(it.packageName) }
-            if (importedCandidate != null) {
-                return importedCandidate.packageName
+        if (preferEnabled) {
+            val enabledCandidate = candidates.firstOrNull { packageManager.isPackageEnabled(it.packageName) }
+            if (enabledCandidate != null) {
+                return enabledCandidate.packageName
             }
         }
 
@@ -211,7 +211,7 @@ internal class PackageManagerToolPkgFacade(
         subpackageId: String,
         resourceKey: String,
         destinationFile: File,
-        preferImportedContainer: Boolean = true
+        preferEnabledContainer: Boolean = true
     ): Boolean {
         packageManager.ensureInitialized()
         if (subpackageId.isBlank() || resourceKey.isBlank()) {
@@ -233,15 +233,15 @@ internal class PackageManagerToolPkgFacade(
         }
 
         val candidateContainers =
-            if (preferImportedContainer) {
-                val imported = packageManager.getImportedPackageSetInternal()
-                val importedContainers =
+            if (preferEnabledContainer) {
+                val enabledSet = packageManager.getEnabledPackageNameSetInternal()
+                val enabledContainers =
                     subpackages
                         .map { it.containerPackageName }
                         .distinct()
-                        .filter { imported.contains(it) }
-                if (importedContainers.isNotEmpty()) {
-                    importedContainers
+                        .filter { enabledSet.contains(it) }
+                if (enabledContainers.isNotEmpty()) {
+                    enabledContainers
                 } else {
                     subpackages.map { it.containerPackageName }.distinct()
                 }
@@ -266,8 +266,8 @@ internal class PackageManagerToolPkgFacade(
         packageManager.ensureInitialized()
         val normalizedContainerPackageName = packageManager.normalizePackageName(containerPackageName)
         val runtime = packageManager.toolPkgContainersInternal[normalizedContainerPackageName] ?: return false
-        val importedSet = packageManager.getImportedPackageSetInternal()
-        if (!importedSet.contains(runtime.packageName)) {
+        val enabledSet = packageManager.getEnabledPackageNameSetInternal()
+        if (!enabledSet.contains(runtime.packageName)) {
             return false
         }
         val resource =
@@ -286,7 +286,7 @@ internal class PackageManagerToolPkgFacade(
     fun getToolPkgResourceOutputFileName(
         packageNameOrSubpackageId: String,
         resourceKey: String,
-        preferImportedContainer: Boolean = true
+        preferEnabledContainer: Boolean = true
     ): String? {
         packageManager.ensureInitialized()
         val target = packageNameOrSubpackageId.trim()
@@ -330,15 +330,15 @@ internal class PackageManagerToolPkgFacade(
         }
 
         val candidateContainers =
-            if (preferImportedContainer) {
-                val imported = packageManager.getImportedPackageSetInternal()
-                val importedContainers =
+            if (preferEnabledContainer) {
+                val enabledSet = packageManager.getEnabledPackageNameSetInternal()
+                val enabledContainers =
                     subpackages
                         .map { it.containerPackageName }
                         .distinct()
-                        .filter { imported.contains(it) }
-                if (importedContainers.isNotEmpty()) {
-                    importedContainers
+                        .filter { enabledSet.contains(it) }
+                if (enabledContainers.isNotEmpty()) {
+                    enabledContainers
                 } else {
                     subpackages.map { it.containerPackageName }.distinct()
                 }
@@ -356,7 +356,7 @@ internal class PackageManagerToolPkgFacade(
     fun getToolPkgComposeDslScriptBySubpackageId(
         subpackageId: String,
         uiModuleId: String? = null,
-        preferImportedContainer: Boolean = true
+        preferEnabledContainer: Boolean = true
     ): String? {
         packageManager.ensureInitialized()
         if (subpackageId.isBlank()) {
@@ -378,12 +378,12 @@ internal class PackageManagerToolPkgFacade(
         }
 
         val candidateContainers =
-            if (preferImportedContainer) {
-                val imported = packageManager.getImportedPackageSetInternal()
+            if (preferEnabledContainer) {
+                val enabledSet = packageManager.getEnabledPackageNameSetInternal()
                 subpackages
                     .map { it.containerPackageName }
                     .distinct()
-                    .filter { imported.contains(it) }
+                    .filter { enabledSet.contains(it) }
             } else {
                 subpackages.map { it.containerPackageName }.distinct()
             }
@@ -405,8 +405,8 @@ internal class PackageManagerToolPkgFacade(
         packageManager.ensureInitialized()
         val normalizedContainerPackageName = packageManager.normalizePackageName(containerPackageName)
         val runtime = packageManager.toolPkgContainersInternal[normalizedContainerPackageName] ?: return null
-        val importedSet = packageManager.getImportedPackageSetInternal()
-        if (!importedSet.contains(runtime.packageName)) {
+        val enabledSet = packageManager.getEnabledPackageNameSetInternal()
+        if (!enabledSet.contains(runtime.packageName)) {
             return null
         }
 
@@ -446,8 +446,8 @@ internal class PackageManagerToolPkgFacade(
         packageManager.ensureInitialized()
         val normalizedContainerPackageName = packageManager.normalizePackageName(containerPackageName)
         val runtime = packageManager.toolPkgContainersInternal[normalizedContainerPackageName] ?: return null
-        val importedSet = packageManager.getImportedPackageSetInternal()
-        if (!importedSet.contains(runtime.packageName)) {
+        val enabledSet = packageManager.getEnabledPackageNameSetInternal()
+        if (!enabledSet.contains(runtime.packageName)) {
             return null
         }
 
@@ -601,7 +601,7 @@ internal class PackageManagerToolPkgFacade(
     fun readToolPkgTextResource(
         packageNameOrSubpackageId: String,
         resourcePath: String,
-        preferImportedContainer: Boolean = true
+        preferEnabledContainer: Boolean = true
     ): String? {
         packageManager.ensureInitialized()
         val target = packageNameOrSubpackageId.trim()
@@ -617,8 +617,8 @@ internal class PackageManagerToolPkgFacade(
 
         val containerRuntime = packageManager.toolPkgContainersInternal[target]
         if (containerRuntime != null) {
-            val importedSet = packageManager.getImportedPackageSetInternal()
-            if (!importedSet.contains(containerRuntime.packageName)) {
+            val enabledSet = packageManager.getEnabledPackageNameSetInternal()
+            if (!enabledSet.contains(containerRuntime.packageName)) {
                 return null
             }
             return packageManager.readToolPkgResourceBytes(containerRuntime, normalizedPath)
@@ -629,8 +629,8 @@ internal class PackageManagerToolPkgFacade(
         if (directSubpackageRuntime != null) {
             val directContainer = packageManager.toolPkgContainersInternal[directSubpackageRuntime.containerPackageName]
             if (directContainer != null) {
-                val importedSet = packageManager.getImportedPackageSetInternal()
-                if (!importedSet.contains(directContainer.packageName)) {
+                val enabledSet = packageManager.getEnabledPackageNameSetInternal()
+                if (!enabledSet.contains(directContainer.packageName)) {
                     return null
                 }
                 return packageManager.readToolPkgResourceBytes(directContainer, normalizedPath)
@@ -647,12 +647,12 @@ internal class PackageManagerToolPkgFacade(
         }
 
         val candidateContainers =
-            if (preferImportedContainer) {
-                val imported = packageManager.getImportedPackageSetInternal()
+            if (preferEnabledContainer) {
+                val enabledSet = packageManager.getEnabledPackageNameSetInternal()
                 subpackages
                     .map { it.containerPackageName }
                     .distinct()
-                    .filter { imported.contains(it) }
+                    .filter { enabledSet.contains(it) }
             } else {
                 subpackages.map { it.containerPackageName }.distinct()
             }

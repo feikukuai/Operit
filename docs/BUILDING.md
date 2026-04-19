@@ -20,19 +20,30 @@
 
 ## **1. 第一步：安装系统基础依赖**
 
-首先，我们需要更新包管理器并安装编译所需的关键基础软件：**Git** 和 **JDK 17**。  
+首先，我们需要更新包管理器并安装编译所需的关键基础软件：**Git**、**JDK 17**、**Node.js**、**npm** 和 **Python 3**。  
 ```bash 
 # 更新软件包列表  
 sudo apt update
 
-# 安装必要的工具和 JDK 17  
-sudo apt install -y git wget unzip openjdk-17-jdk
+# 安装必要的工具、JDK 17、Node.js、npm 和 Python 3
+sudo apt install -y git wget unzip openjdk-17-jdk nodejs npm python3
 
-安装完成后，请验证 Java 版本是否正确：  
+# 安装 pnpm（sync_example_packages.py 预构建 examples 时会用到）
+sudo npm install -g pnpm
+
+# 安装完成后，请验证 Java 版本是否正确
 java -version  
 # 预期输出应包含 "OpenJDK Runtime Environment (build 17..." 或类似信息
+
+# 建议同时确认 Node.js、npm、pnpm 和 Python 3 可用
+node -v
+npm -v
+pnpm -v
+python3 --version
 ``` 
 **注意：** 项目官方要求 **JDK 17**。为确保最大兼容性，强烈建议优先安装和使用 JDK 17。
+
+**补充说明：** 项目中的 `web-chat` 使用 React + Vite 构建；`sync_example_packages.py` 会预构建 `examples/` 下的脚本包并打包 `.toolpkg`。因此除了 Android 环境外，还需要准备好 Node.js、npm、pnpm 和 Python 3。如果后续执行前端构建时提示 Node.js 版本过低，请升级到较新的 Node.js LTS 版本后再继续。
 
 ## **2. 第二步：安装 Android 命令行工具**
 
@@ -203,17 +214,40 @@ git checkout docs/add-building-guide
 # 将上面的示例分支名替换为你自己创建的分支名
 ```
 
-4. **为 Gradle 包装器添加可执行权限:**
+4. **安装项目根目录的脚本依赖:**
+```bash
+npm install
+```
+这一步会安装 `sync_example_packages.py` 预构建示例脚本包时需要用到的 `typescript`、`esbuild` 等依赖。
+
+5. **安装 web-chat 的前端依赖:**
+```bash
+npm --prefix web-chat install
+```
+
+6. **先构建 web-chat 并同步到 Android assets (关键步骤！):**
+```bash
+npm run build:webchat
+```
+该命令会先执行 `web-chat` 的 React/Vite 构建，再把生成的静态文件同步到 `app/src/main/assets/web-chat`。如果你修改了 `web-chat/src` 下的代码，重新编译 APK 前也需要重新执行一次这一步。
+
+7. **打包 ToolPkg 并同步示例包到应用 assets (关键步骤！):**
+```bash
+python3 ./sync_example_packages.py
+```
+该命令会按 `packages_whitelist.txt` 预构建 `examples/` 下的脚本包，并将包含 `manifest.json` 或 `manifest.hjson` 的目录打包成 `.toolpkg`，最终输出到 `app/src/main/assets/packages/`。如果你修改了 `examples/` 下的脚本包代码，重新编译 APK 前也需要重新执行一次这一步。
+
+8. **为 Gradle 包装器添加可执行权限:**
 ```bash
 chmod +x ./gradlew
 ```
 
-4. 运行 assembleDebug 命令进行编译:  
+9. 运行 assembleDebug 命令进行编译:  
 首次编译会下载大量依赖，请耐心等待。  
 ```bash
 ./gradlew assembleDebug
 ```
-5. 查找 APK 文件:  
+10. 查找 APK 文件:  
 编译成功后，生成的 APK 文件位于项目目录下的以下路径：  
 app/build/outputs/apk/debug/app-debug.apk
 
@@ -224,5 +258,8 @@ app/build/outputs/apk/debug/app-debug.apk
 | sdkmanager: command not found | 环境变量未正确设置或生效。请检查 **~/.bashrc** 文件内容，并执行 source ~/.bashrc。 |
 | Could not determine Java version... | **JAVA_HOME** 环境变量不正确，或安装了错误的 JDK 版本。请确保已安装 **JDK 17** 并指向正确的路径。 |
 | NDK not found. | 确保已在 **第四步** 中使用 sdkmanager 安装了项目所需的 **ndk;25.1.8937393** 版本。 |
+| pnpm: command not found | 尚未安装 `pnpm`。请先执行 `sudo npm install -g pnpm`，再重新运行 `python3 ./sync_example_packages.py`。 |
+| Missing web-chat/dist. Run `npm --prefix web-chat run build` first. | 尚未构建 `web-chat` 或构建失败。请先执行 `npm --prefix web-chat install`，再在项目根目录执行 `npm run build:webchat`。 |
+| ERROR: prebuild step failed | `sync_example_packages.py` 在预构建 `examples/` 时失败。请先确认已在项目根目录执行 `npm install`，并检查 `pnpm -v`、`python3 --version` 是否可用。 |
 | You have not accepted the license agreements... | 你跳过了或未成功执行接受许可的步骤。请返回 **第四步** 执行 `yes |
 

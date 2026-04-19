@@ -80,6 +80,7 @@ import com.ai.assistance.operit.ui.components.CustomScaffold
 import com.ai.assistance.operit.api.voice.SiliconFlowVoiceProvider
 import com.ai.assistance.operit.api.voice.OpenAIRealtimeVoiceProvider
 import com.ai.assistance.operit.api.voice.OpenAIVoiceProvider
+import com.ai.assistance.operit.api.voice.SimpleVoiceProvider
 import com.ai.assistance.operit.api.voice.VoiceListFetcher
 import com.ai.assistance.operit.api.voice.VoiceService
 import com.ai.assistance.operit.api.chat.llmprovider.ModelListFetcher
@@ -110,6 +111,7 @@ fun SpeechServicesSettingsScreen(
     var ttsHttpMethodInput by remember(httpConfig) { mutableStateOf(httpConfig.httpMethod) }
     var ttsRequestBodyInput by remember(httpConfig) { mutableStateOf(httpConfig.requestBody) }
     var ttsContentTypeInput by remember(httpConfig) { mutableStateOf(httpConfig.contentType) }
+    var ttsLocaleTagInput by remember(httpConfig) { mutableStateOf(httpConfig.localeTag) }
     var ttsVoiceIdInput by remember(httpConfig) { mutableStateOf(httpConfig.voiceId) }
     var ttsModelNameInput by remember(httpConfig) { mutableStateOf(httpConfig.modelName) }
     var ttsResponsePipelineInput by remember(httpConfig) {
@@ -122,6 +124,11 @@ fun SpeechServicesSettingsScreen(
     var httpMethodDropdownExpanded by remember { mutableStateOf(false) }
     val ttsCleanerRegexsState = remember { mutableStateListOf<String>() }
     val hasHttpTtsJsonError = ttsHeadersJsonError != null || ttsResponsePipelineJsonError != null
+    var simpleTtsVoices by remember { mutableStateOf<List<VoiceService.Voice>>(emptyList()) }
+    var simpleTtsVoicesLoading by remember { mutableStateOf(false) }
+    var simpleTtsVoicesError by remember { mutableStateOf<String?>(null) }
+    var simpleTtsLocaleExpanded by remember { mutableStateOf(false) }
+    var simpleTtsShowVoiceDialog by remember { mutableStateOf(false) }
 
     // --- State for STT Settings ---
     val sttServiceType by prefs.sttServiceTypeFlow.collectAsState(initial = SpeechServiceFactory.SpeechServiceType.SHERPA_NCNN)
@@ -148,6 +155,7 @@ fun SpeechServicesSettingsScreen(
             ttsHttpMethodInput != httpConfig.httpMethod ||
             ttsRequestBodyInput != httpConfig.requestBody ||
             ttsContentTypeInput != httpConfig.contentType ||
+            ttsLocaleTagInput != httpConfig.localeTag ||
             ttsVoiceIdInput != httpConfig.voiceId ||
             ttsModelNameInput != httpConfig.modelName ||
             ttsResponsePipelineInput != HttpTtsResponsePipelineStep.encodeList(httpConfig.responsePipeline) ||
@@ -167,6 +175,7 @@ fun SpeechServicesSettingsScreen(
         ttsHttpMethodInput,
         ttsRequestBodyInput,
         ttsContentTypeInput,
+        ttsLocaleTagInput,
         ttsVoiceIdInput,
         ttsModelNameInput,
         ttsResponsePipelineInput,
@@ -218,6 +227,7 @@ fun SpeechServicesSettingsScreen(
             httpMethod = ttsHttpMethodInput,
             requestBody = ttsRequestBodyInput,
             contentType = ttsContentTypeInput,
+            localeTag = ttsLocaleTagInput,
             voiceId = ttsVoiceIdInput,
             modelName = ttsModelNameInput,
             responsePipeline = responsePipeline
@@ -247,6 +257,46 @@ fun SpeechServicesSettingsScreen(
             SpeechServiceFactory.resetInstance()
         } catch (_: Exception) {
             // Keep UI editable; auto-save retries on next change.
+        }
+    }
+
+    LaunchedEffect(ttsServiceTypeInput) {
+        if (ttsServiceTypeInput != VoiceServiceFactory.VoiceServiceType.SIMPLE_TTS) return@LaunchedEffect
+        simpleTtsVoicesLoading = true
+        simpleTtsVoicesError = null
+        var provider: SimpleVoiceProvider? = null
+        try {
+            provider = SimpleVoiceProvider(
+                context = context.applicationContext,
+                initialLocaleTag = ttsLocaleTagInput,
+                initialVoiceId = ttsVoiceIdInput
+            )
+            simpleTtsVoices = provider.getAvailableVoices()
+        } catch (e: Exception) {
+            simpleTtsVoices = emptyList()
+            simpleTtsVoicesError = e.message
+        } finally {
+            provider?.shutdown()
+            simpleTtsVoicesLoading = false
+        }
+    }
+
+    val simpleTtsLocaleOptions = remember(simpleTtsVoices) {
+        simpleTtsVoices
+            .map { it.locale.trim() }
+            .filter { it.isNotBlank() }
+            .distinct()
+            .sorted()
+    }
+    val simpleTtsSelectedVoice = remember(simpleTtsVoices, ttsVoiceIdInput) {
+        simpleTtsVoices.firstOrNull { it.id == ttsVoiceIdInput }
+    }
+    val simpleTtsFilteredVoices = remember(simpleTtsVoices, ttsLocaleTagInput) {
+        if (ttsLocaleTagInput.isBlank()) {
+            simpleTtsVoices
+        } else {
+            simpleTtsVoices.filter { it.locale.equals(ttsLocaleTagInput, ignoreCase = true) }
+                .ifEmpty { simpleTtsVoices }
         }
     }
 
@@ -391,6 +441,127 @@ fun SpeechServicesSettingsScreen(
                         )
 
                         Spacer(modifier = Modifier.height(16.dp))
+
+                        AnimatedVisibility(visible = ttsServiceTypeInput == VoiceServiceFactory.VoiceServiceType.SIMPLE_TTS) {
+                            Column {
+                                Text(
+                                    text = stringResource(R.string.speech_services_simple_tts_settings),
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Medium
+                                )
+
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                                Text(
+                                    text = stringResource(R.string.speech_services_simple_tts_desc),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+
+                                Spacer(modifier = Modifier.height(12.dp))
+
+                                ExposedDropdownMenuBox(
+                                    expanded = simpleTtsLocaleExpanded,
+                                    onExpandedChange = { simpleTtsLocaleExpanded = it }
+                                ) {
+                                    OutlinedTextField(
+                                        value = if (ttsLocaleTagInput.isBlank()) {
+                                            stringResource(R.string.speech_services_simple_tts_locale_follow_system)
+                                        } else {
+                                            ttsLocaleTagInput
+                                        },
+                                        onValueChange = {},
+                                        readOnly = true,
+                                        label = { Text(stringResource(R.string.speech_services_simple_tts_locale)) },
+                                        trailingIcon = {
+                                            Icon(
+                                                Icons.Default.ArrowDropDown,
+                                                contentDescription = stringResource(R.string.speech_services_dropdown_expand)
+                                            )
+                                        },
+                                        modifier = Modifier.menuAnchor().fillMaxWidth()
+                                    )
+                                    ExposedDropdownMenu(
+                                        expanded = simpleTtsLocaleExpanded,
+                                        onDismissRequest = { simpleTtsLocaleExpanded = false }
+                                    ) {
+                                        DropdownMenuItem(
+                                            text = { Text(stringResource(R.string.speech_services_simple_tts_locale_follow_system)) },
+                                            onClick = {
+                                                ttsLocaleTagInput = ""
+                                                simpleTtsLocaleExpanded = false
+                                            }
+                                        )
+                                        simpleTtsLocaleOptions.forEach { localeTag ->
+                                            DropdownMenuItem(
+                                                text = { Text(localeTag) },
+                                                onClick = {
+                                                    ttsLocaleTagInput = localeTag
+                                                    if (simpleTtsSelectedVoice?.locale?.equals(localeTag, ignoreCase = true) != true) {
+                                                        ttsVoiceIdInput = ""
+                                                    }
+                                                    simpleTtsLocaleExpanded = false
+                                                }
+                                            )
+                                        }
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.height(12.dp))
+
+                                OutlinedTextField(
+                                    value = simpleTtsSelectedVoice?.let { "${it.name} (${it.locale})" }
+                                        ?: stringResource(R.string.speech_services_simple_tts_voice_default),
+                                    onValueChange = {},
+                                    readOnly = true,
+                                    label = { Text(stringResource(R.string.speech_services_simple_tts_voice)) },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    trailingIcon = {
+                                        Row {
+                                            if (ttsVoiceIdInput.isNotBlank()) {
+                                                IconButton(onClick = { ttsVoiceIdInput = "" }) {
+                                                    Icon(
+                                                        imageVector = Icons.Default.Clear,
+                                                        contentDescription = stringResource(R.string.speech_services_simple_tts_voice_clear)
+                                                    )
+                                                }
+                                            }
+                                            IconButton(onClick = { simpleTtsShowVoiceDialog = true }) {
+                                                Icon(
+                                                    imageVector = Icons.AutoMirrored.Filled.FormatListBulleted,
+                                                    contentDescription = stringResource(R.string.speech_services_simple_tts_voice_select)
+                                                )
+                                            }
+                                        }
+                                    }
+                                )
+
+                                if (simpleTtsVoicesLoading) {
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(16.dp),
+                                            strokeWidth = 2.dp
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = stringResource(R.string.speech_services_simple_tts_loading),
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+
+                                simpleTtsVoicesError?.let { msg ->
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Text(
+                                        text = msg,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.error
+                                    )
+                                }
+                            }
+                        }
 
                         // TTS Cleaner Regex List
                         Text(
@@ -1734,6 +1905,51 @@ fun SpeechServicesSettingsScreen(
                 Spacer(modifier = Modifier.height(32.dp))
             }
         }
+    }
+
+    if (simpleTtsShowVoiceDialog) {
+        AlertDialog(
+            onDismissRequest = { simpleTtsShowVoiceDialog = false },
+            title = { Text(stringResource(R.string.speech_services_simple_tts_voice_select)) },
+            text = {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 360.dp)
+                ) {
+                    item {
+                        TextButton(
+                            onClick = {
+                                ttsVoiceIdInput = ""
+                                simpleTtsShowVoiceDialog = false
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(stringResource(R.string.speech_services_simple_tts_voice_default))
+                        }
+                    }
+                    items(simpleTtsFilteredVoices) { voice ->
+                        TextButton(
+                            onClick = {
+                                ttsVoiceIdInput = voice.id
+                                if (ttsLocaleTagInput.isBlank()) {
+                                    ttsLocaleTagInput = voice.locale
+                                }
+                                simpleTtsShowVoiceDialog = false
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("${voice.name} (${voice.locale})")
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { simpleTtsShowVoiceDialog = false }) {
+                    Text(stringResource(android.R.string.cancel))
+                }
+            }
+        )
     }
 }
 

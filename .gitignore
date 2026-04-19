@@ -59,3 +59,7 @@ operit-pc-agent.zip
 # generated toolpkg bundles
 *.toolpkg
 .venv
+
+# generated React web-chat build outputs
+web-chat/dist/
+app/src/main/assets/web-chat/

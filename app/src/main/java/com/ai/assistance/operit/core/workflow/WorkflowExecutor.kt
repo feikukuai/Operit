@@ -1008,8 +1008,8 @@ class WorkflowExecutor(private val context: Context) {
 
             val packageManager = toolHandler.getOrCreatePackageManager()
             runCatching {
-                if (!packageManager.isPackageImported(packageName)) {
-                    packageManager.importPackage(packageName)
+                if (!packageManager.isPackageEnabled(packageName)) {
+                    packageManager.enablePackage(packageName)
                 }
                 packageManager.usePackage(packageName)
             }

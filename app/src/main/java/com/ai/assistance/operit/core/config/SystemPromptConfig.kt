@@ -366,7 +366,7 @@ AVAILABLE_TOOLS_SECTION""".trimIndent()
           allowedMcpServerNames: Set<String>? = null,
           dispatchToolPromptComposeHooks: (PromptHookContext) -> PromptHookContext = PromptHookRegistry::dispatchToolPromptComposeHooks
   ): String {
-    val importedPackages = packageManager.getImportedPackages()
+    val enabledPackages = packageManager.getEnabledPackageNames()
     val packageSystemVisible = enableTools && (toolVisibility["use_package"] ?: true)
     val mcpServers = packageManager.getAvailableServerPackages().filterKeys { serverName ->
         allowedMcpServerNames?.contains(serverName) ?: true
@@ -385,7 +385,7 @@ AVAILABLE_TOOLS_SECTION""".trimIndent()
     val packagesSection = StringBuilder()
 
     // Filter out imported packages that no longer exist in availablePackages
-    val validImportedPackages = importedPackages.filter { packageName ->
+    val validEnabledPackages = enabledPackages.filter { packageName ->
         packageManager.getPackageTools(packageName) != null &&
             !packageManager.isToolPkgContainer(packageName) &&
             (allowedPackageNames?.contains(packageName) ?: true)
@@ -393,13 +393,13 @@ AVAILABLE_TOOLS_SECTION""".trimIndent()
 
     // Check if any packages (JS, MCP, or Skills) are available
     val hasPackages = packageSystemVisible &&
-        (validImportedPackages.isNotEmpty() || mcpServers.isNotEmpty() || skillPackages.isNotEmpty())
+        (validEnabledPackages.isNotEmpty() || mcpServers.isNotEmpty() || skillPackages.isNotEmpty())
 
     if (hasPackages) {
       packagesSection.appendLine("Available packages:")
 
       // List imported JS packages (only those that still exist)
-      for (packageName in validImportedPackages) {
+      for (packageName in validEnabledPackages) {
         val packageTools = packageManager.getPackageTools(packageName)
         if (packageTools != null) {
           val preferredLanguage = if (useEnglish) "en" else "zh"

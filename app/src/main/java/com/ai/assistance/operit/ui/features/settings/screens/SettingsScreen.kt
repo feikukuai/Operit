@@ -268,13 +268,6 @@ fun SettingsScreen(
                         )
 
                         CompactSettingsItem(
-                                title = stringResource(id = R.string.settings_external_http_chat),
-                                subtitle = stringResource(id = R.string.settings_external_http_chat_subtitle),
-                                icon = Icons.Default.SettingsEthernet,
-                                onClick = navigateToExternalHttpChatSettings
-                        )
-                        
-                        CompactSettingsItem(
                                 title = stringResource(id = R.string.settings_data_backup),
                                 subtitle = stringResource(id = R.string.settings_data_backup_desc),
                                 icon = Icons.Default.CloudUpload,
@@ -293,6 +286,20 @@ fun SettingsScreen(
                                 subtitle = stringResource(id = R.string.settings_token_usage_subtitle),
                                 icon = Icons.Default.Analytics,
                                 onClick = navigateToTokenUsageStatistics
+                        )
+                }
+
+                // ======= 外部调用 =======
+                SettingsSection(
+                        title = stringResource(id = R.string.settings_section_external_calls),
+                        icon = Icons.Default.SettingsEthernet,
+                        containerColor = cardContainerColor
+                ) {
+                        CompactSettingsItem(
+                                title = stringResource(id = R.string.settings_external_http_chat),
+                                subtitle = stringResource(id = R.string.settings_external_http_chat_subtitle),
+                                icon = Icons.Default.SettingsEthernet,
+                                onClick = navigateToExternalHttpChatSettings
                         )
                 }
 
