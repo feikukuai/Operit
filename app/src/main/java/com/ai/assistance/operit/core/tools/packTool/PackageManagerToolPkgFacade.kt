@@ -102,6 +102,7 @@ internal class PackageManagerToolPkgFacade(
             displayName = container.displayName.resolve(localizationContext),
             description = container.description.resolve(localizationContext),
             version = container.version,
+            author = container.author,
             resourceCount = container.resources.size,
             uiModuleCount = container.uiModules.size,
             toolboxUiModules = toolboxUiModules,

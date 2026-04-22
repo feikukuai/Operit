@@ -34,7 +34,8 @@ data class MessageEntity(
         val cachedInputTokens: Int = 0,
         val sentAt: Long = 0L,
         val outputDurationMs: Long = 0L,
-        val waitDurationMs: Long = 0L
+        val waitDurationMs: Long = 0L,
+        val displayMode: String = ChatMessageDisplayMode.NORMAL.name
 ) {
     /** 转换为ChatMessage对象（供UI层使用） */
     fun toChatMessage(): ChatMessage {
@@ -51,7 +52,10 @@ data class MessageEntity(
             cachedInputTokens = cachedInputTokens,
             sentAt = sentAt,
             outputDurationMs = outputDurationMs,
-            waitDurationMs = waitDurationMs
+            waitDurationMs = waitDurationMs,
+            displayMode =
+                runCatching { ChatMessageDisplayMode.valueOf(displayMode) }
+                    .getOrDefault(ChatMessageDisplayMode.NORMAL)
         )
     }
 
@@ -79,7 +83,8 @@ data class MessageEntity(
                     cachedInputTokens = message.cachedInputTokens,
                     sentAt = message.sentAt,
                     outputDurationMs = message.outputDurationMs,
-                    waitDurationMs = message.waitDurationMs
+                    waitDurationMs = message.waitDurationMs,
+                    displayMode = message.displayMode.name
             )
         }
     }

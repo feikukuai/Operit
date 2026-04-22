@@ -255,6 +255,11 @@ object ApiProviderConfigs {
         return !isLoopbackEndpoint(apiEndpoint)
     }
 
+    fun requiresApiKey(providerTypeId: String, apiEndpoint: String = ""): Boolean {
+        val providerType = ApiProviderType.fromProviderTypeId(providerTypeId) ?: return !isLoopbackEndpoint(apiEndpoint)
+        return requiresApiKey(providerType, apiEndpoint)
+    }
+
     fun isDefaultModelName(modelName: String): Boolean {
         return configs.values.any { it.defaultModelName == modelName }
     }
@@ -263,7 +268,7 @@ object ApiProviderConfigs {
         return configs.values.any { it.defaultApiEndpoint == endpoint }
     }
 
-    private fun isLoopbackEndpoint(apiEndpoint: String): Boolean {
+    fun isLoopbackEndpoint(apiEndpoint: String): Boolean {
         if (apiEndpoint.isBlank()) {
             return false
         }

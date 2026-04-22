@@ -85,6 +85,11 @@ internal object ToolPkgMainRegistrationScriptParser {
                     registrations = captured.promptEstimateFinalizeHooks,
                     registryName = TOOLPKG_REGISTRATION_PROMPT_ESTIMATE_FINALIZE_HOOK
                 )
+            val aiProviders =
+                parseRegisteredAiProviders(
+                    registrations = captured.aiProviders,
+                    registryName = TOOLPKG_REGISTRATION_AI_PROVIDER
+                )
             ToolPkgMainRegistration(
                 toolboxUiModules = uiModules,
                 appLifecycleHooks = appLifecycleHooks,
@@ -98,7 +103,8 @@ internal object ToolPkgMainRegistrationScriptParser {
                 systemPromptComposeHooks = systemPromptComposeHooks,
                 toolPromptComposeHooks = toolPromptComposeHooks,
                 promptFinalizeHooks = promptFinalizeHooks,
-                promptEstimateFinalizeHooks = promptEstimateFinalizeHooks
+                promptEstimateFinalizeHooks = promptEstimateFinalizeHooks,
+                aiProviders = aiProviders
             )
         } catch (e: Exception) {
             AppLogger.e(TAG, "Failed to parse toolpkg main registration: $toolPkgId", e)
@@ -268,6 +274,72 @@ internal object ToolPkgMainRegistrationScriptParser {
             )
         }
         return hooks
+    }
+
+    private fun parseRegisteredAiProviders(
+        registrations: List<String>,
+        registryName: String
+    ): List<ToolPkgRegisteredAiProvider> {
+        val providers = mutableListOf<ToolPkgRegisteredAiProvider>()
+        registrations.forEachIndexed { index, raw ->
+            val item =
+                try {
+                    JSONObject(raw)
+                } catch (e: Exception) {
+                    throw IllegalArgumentException(
+                        "$registryName payload[$index] must be a JSON object",
+                        e
+                    )
+                }
+            val id = item.optString("id").trim()
+            val displayName = item.optString("displayName").trim()
+            val description = item.optString("description").trim()
+
+            if (id.isBlank()) {
+                throw IllegalArgumentException("$registryName[$index].id is required")
+            }
+
+            fun parseHandler(fieldName: String): ToolPkgRegisteredAiProviderHandler {
+                val rawHandler = item.opt(fieldName)
+                val handlerObject =
+                    when (rawHandler) {
+                        is JSONObject -> rawHandler
+                        null, JSONObject.NULL ->
+                            throw IllegalArgumentException(
+                                "$registryName[$index].$fieldName is required"
+                            )
+                        else ->
+                            throw IllegalArgumentException(
+                                "$registryName[$index].$fieldName must be an object"
+                            )
+                    }
+                val functionName = handlerObject.optString("function").trim()
+                val functionSource =
+                    handlerObject.optString("function_source").trim().ifBlank { null }
+                if (functionName.isBlank()) {
+                    throw IllegalArgumentException(
+                        "$registryName[$index].$fieldName.function is required"
+                    )
+                }
+                return ToolPkgRegisteredAiProviderHandler(
+                    function = functionName,
+                    functionSource = functionSource
+                )
+            }
+
+            providers.add(
+                ToolPkgRegisteredAiProvider(
+                    id = id,
+                    displayName = displayName.ifBlank { id },
+                    description = description,
+                    listModelsHandler = parseHandler("listModels"),
+                    sendMessageHandler = parseHandler("sendMessage"),
+                    testConnectionHandler = parseHandler("testConnection"),
+                    calculateInputTokensHandler = parseHandler("calculateInputTokens")
+                )
+            )
+        }
+        return providers
     }
 
     private fun parseLocalizedText(raw: Any?, fallback: String): LocalizedText {

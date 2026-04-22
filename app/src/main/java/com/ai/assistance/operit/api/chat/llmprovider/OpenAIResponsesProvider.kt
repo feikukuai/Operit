@@ -1,9 +1,17 @@
 package com.ai.assistance.operit.api.chat.llmprovider
 
+import android.content.Context
+import com.ai.assistance.operit.core.chat.hooks.PromptTurn
 import com.ai.assistance.operit.data.model.ApiProviderType
+import com.ai.assistance.operit.data.model.ModelParameter
+import com.ai.assistance.operit.data.model.ToolPrompt
+import com.ai.assistance.operit.data.preferences.ApiPreferences
 import com.ai.assistance.operit.util.AppLogger
 import java.security.MessageDigest
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
 import okhttp3.OkHttpClient
+import okhttp3.RequestBody
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -32,6 +40,46 @@ class OpenAIResponsesProvider(
 ) {
     override val useResponsesApi: Boolean = true
 
+    override fun createRequestBody(
+        context: Context,
+        chatHistory: List<PromptTurn>,
+        modelParameters: List<ModelParameter<*>>,
+        enableThinking: Boolean,
+        stream: Boolean,
+        availableTools: List<ToolPrompt>?,
+        preserveThinkInHistory: Boolean
+    ): RequestBody {
+        val baseRequestBodyJson = super.createRequestBodyInternal(
+            context,
+            chatHistory,
+            modelParameters,
+            stream,
+            availableTools,
+            preserveThinkInHistory
+        )
+        val jsonObject = JSONObject(baseRequestBodyJson)
+
+        applyResponsesReasoningEffort(
+            context = context,
+            requestJson = jsonObject,
+            enableThinking = enableThinking
+        )
+
+        val logJson = JSONObject(jsonObject.toString())
+        if (logJson.has("tools")) {
+            val toolsArray = logJson.getJSONArray("tools")
+            logJson.put("tools", "[${toolsArray.length()} tools omitted for brevity]")
+        }
+        val sanitizedLogJson = sanitizeImageDataForLogging(logJson)
+        logLargeString(
+            "OpenAIResponsesProvider",
+            sanitizedLogJson.toString(4),
+            "Final Responses request body: "
+        )
+
+        return createJsonRequestBody(jsonObject.toString())
+    }
+
     override fun customizeFinalRequestObject(
         requestObject: JSONObject,
         messagesArray: JSONArray,
@@ -48,6 +96,70 @@ class OpenAIResponsesProvider(
         val promptCacheKey = buildPromptCacheKey(messagesArray, toolsJson) ?: return
         requestObject.put("prompt_cache_key", promptCacheKey)
         AppLogger.d("AIService", "Responses API自动附加prompt_cache_key: $promptCacheKey")
+    }
+
+    private fun applyResponsesReasoningEffort(
+        context: Context,
+        requestJson: JSONObject,
+        enableThinking: Boolean
+    ) {
+        if (!enableThinking) {
+            return
+        }
+
+        val reasoningObject = requestJson.optJSONObject("reasoning")
+        val existingEffort =
+            reasoningObject?.optString("effort", "")?.trim()?.takeIf { it.isNotEmpty() }
+
+        when {
+            reasoningObject == null && requestJson.has("reasoning") && !requestJson.isNull("reasoning") -> {
+                AppLogger.w(
+                    "OpenAIResponsesProvider",
+                    "Skipping Responses reasoning adaptation because reasoning is not an object"
+                )
+                return
+            }
+
+            existingEffort != null -> {
+                AppLogger.d(
+                    "OpenAIResponsesProvider",
+                    "Preserving caller-supplied Responses reasoning.effort=$existingEffort"
+                )
+                return
+            }
+        }
+
+        val effort = resolveResponsesReasoningEffort(context) ?: return
+        val finalReasoningObject = reasoningObject ?: JSONObject()
+        finalReasoningObject.put("effort", effort)
+        requestJson.put("reasoning", finalReasoningObject)
+        AppLogger.d(
+            "OpenAIResponsesProvider",
+            "Responses reasoning enabled via reasoning.effort=$effort"
+        )
+    }
+
+    private fun resolveResponsesReasoningEffort(context: Context): String? {
+        val qualityLevel = runCatching {
+            runBlocking {
+                ApiPreferences.getInstance(context).thinkingQualityLevelFlow.first()
+            }
+        }.getOrElse {
+            AppLogger.w(
+                "OpenAIResponsesProvider",
+                "Failed to read thinking quality level, falling back to auto reasoning",
+                it
+            )
+            return null
+        }
+
+        return when (qualityLevel.coerceIn(1, 4)) {
+            1 -> "low"
+            2 -> "medium"
+            3 -> "high"
+            4 -> "xhigh"
+            else -> null
+        }
     }
 
     private fun shouldAttachPromptCacheKey(): Boolean {

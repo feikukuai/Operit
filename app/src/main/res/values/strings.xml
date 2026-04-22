@@ -960,6 +960,9 @@
     <string name="preferences_guide_title">为了更好地为您服务，请完成以下设置</string>
     <string name="preference_lock">锁定用户偏好</string>
     <string name="preference_lock_desc">锁定后将无法修改用户偏好信息</string>
+    <string name="tag_count_lock">锁定数量</string>
+    <string name="tag_count_limit">最多可选数量</string>
+    <string name="tag_count_locked_status">已选择 %1$d / 上限 %2$d</string>
     
     <!-- Package Manager Screen -->
     <string name="packages">包管理</string>
@@ -1536,6 +1539,8 @@
 
     <!-- Context Menu -->
     <string name="copy_message">复制消息</string>
+    <string name="chat_hidden_user_message_placeholder">自动触发用户消息（内容已隐藏）</string>
+    <string name="chat_hidden_user_message_badge">自动触发</string>
     <string name="info">信息</string>
     <string name="read_message">朗读消息</string>
     <string name="auto_read_message">自动朗读</string>
@@ -4998,7 +5003,7 @@
     <string name="show_message_token_stats_description">在 AI 消息底部显示简洁的 token 上下行与缓存信息</string>
     <string name="show_message_timing_stats">显示消息耗时简报</string>
     <string name="show_message_timing_stats_description">在 AI 消息底部显示首包与生成耗时</string>
-    <string name="chat_message_token_stats_compact">token: %1$d(cache: %2$d) ↑ %3$d ↓ %4$d</string>
+    <string name="chat_message_token_stats_compact">token: %1$d ↑ %3$d (cache: %2$d) ↓ %4$d</string>
     <string name="chat_message_timing_stats_compact">time: %1$s (首 %2$s 生成 %3$s)</string>
     <string name="global_user_name">全局用户名字</string>
     <string name="system_display_settings">系统显示设置</string>
@@ -5013,6 +5018,10 @@
     <string name="keep_screen_on_description">保持屏幕常亮，防止在对话时自动锁屏</string>
     <string name="enable_navigation_animation">新版导航动画</string>
     <string name="enable_navigation_animation_description">开启后，同时启用手机侧边栏与页面切换的增强动画效果。关闭后使用简洁的导航过渡。</string>
+    <string name="software_identity_title">软件标识</string>
+    <string name="software_identity_description">更改侧边栏顶部显示的软件标识。</string>
+    <string name="software_identity_option_operit">Operit AI</string>
+    <string name="software_identity_option_lingshu">灵枢 AI</string>
     <string name="app_icon_switch_title">软件图标</string>
     <string name="app_icon_switch_description">切换桌面显示的应用图标（部分桌面可能会延迟刷新）。</string>
     <string name="app_icon_option_default">默认图标</string>

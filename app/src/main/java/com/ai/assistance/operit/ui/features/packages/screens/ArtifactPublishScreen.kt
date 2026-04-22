@@ -1,9 +1,7 @@
 package com.ai.assistance.operit.ui.features.packages.screens
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -22,8 +20,10 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -54,6 +54,7 @@ import com.ai.assistance.operit.ui.features.packages.market.PublishProgressStage
 import com.ai.assistance.operit.ui.features.packages.screens.artifact.viewmodel.ArtifactMarketViewModel
 import com.ai.assistance.operit.ui.features.packages.utils.ArtifactIssueParser
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ArtifactPublishScreen(
     onNavigateBack: () -> Unit,
@@ -143,14 +144,26 @@ fun ArtifactPublishScreen(
             }
         }
 
-        Box {
+        ExposedDropdownMenuBox(
+            expanded = selectorExpanded,
+            onExpandedChange = {
+                if (artifacts.isNotEmpty()) {
+                    selectorExpanded = !selectorExpanded
+                }
+            }
+        ) {
             OutlinedTextField(
                 value = selectedArtifact?.displayName.orEmpty(),
                 onValueChange = {},
                 label = { Text(stringResource(R.string.local_artifact_entry)) },
-                modifier = Modifier.fillMaxWidth().clickable(enabled = artifacts.isNotEmpty()) { selectorExpanded = true },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .menuAnchor(),
                 readOnly = true,
                 enabled = artifacts.isNotEmpty(),
+                trailingIcon = {
+                    ExposedDropdownMenuDefaults.TrailingIcon(expanded = selectorExpanded)
+                },
                 supportingText = {
                     if (selectedType != null) {
                         Text(
@@ -159,7 +172,10 @@ fun ArtifactPublishScreen(
                     }
                 }
             )
-            DropdownMenu(expanded = selectorExpanded, onDismissRequest = { selectorExpanded = false }) {
+            ExposedDropdownMenu(
+                expanded = selectorExpanded,
+                onDismissRequest = { selectorExpanded = false }
+            ) {
                 artifacts.forEach { artifact ->
                     DropdownMenuItem(
                         text = {

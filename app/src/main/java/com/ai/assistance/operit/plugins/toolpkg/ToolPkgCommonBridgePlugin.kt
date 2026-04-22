@@ -861,6 +861,7 @@ object ToolPkgCommonBridgePlugin : OperitPlugin {
         InputMenuTogglePluginRegistry.register(ToolPkgInputMenuToggleBridgePlugin)
         ToolPkgPromptHookBridge.register()
         ToolPkgToolLifecycleBridge.register()
+        ToolPkgAiProviderRegistry.register()
 
         val manager = toolPkgPackageManager()
         manager.addToolPkgRuntimeChangeListener(runtimeChangeListener)

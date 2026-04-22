@@ -45,6 +45,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import com.ai.assistance.operit.R
 import com.ai.assistance.operit.api.chat.llmprovider.EndpointCompleter
 import com.ai.assistance.operit.api.chat.EnhancedAIService
+import com.ai.assistance.operit.api.chat.llmprovider.AIServiceFactory
 import com.ai.assistance.operit.api.chat.llmprovider.LlamaProvider
 import com.ai.assistance.operit.api.chat.llmprovider.ModelListFetcher
 import com.ai.assistance.operit.data.collects.ApiProviderConfigs
@@ -53,6 +54,7 @@ import com.ai.assistance.operit.data.model.ModelConfigData
 import com.ai.assistance.operit.data.model.ModelOption
 import com.ai.assistance.operit.data.preferences.ApiPreferences
 import com.ai.assistance.operit.data.preferences.ModelConfigManager
+import com.ai.assistance.operit.plugins.toolpkg.ToolPkgAiProviderRegistry
 import com.ai.assistance.operit.ui.features.settings.DebouncedModelConfigAutoSaveEffect
 import com.ai.assistance.operit.ui.features.settings.ModelConfigSaveCoordinator
 import com.ai.assistance.operit.ui.features.settings.RegisterModelConfigSaveAction
@@ -67,6 +69,11 @@ import kotlinx.coroutines.sync.withLock
 val TAG = "ModelApiSettings"
 
 private val modelApiSettingsSaveMutex = Mutex()
+
+private data class ProviderSelectionOption(
+    val id: String,
+    val displayName: String
+)
 
 @Composable
 @SuppressLint("MissingPermission")
@@ -83,12 +90,13 @@ fun ModelApiSettingsSection(
     // 区域告警可见性
     var showRegionWarning by remember { mutableStateOf(false) }
 
-    // 获取每个提供商的默认模型名称
-    fun getDefaultModelName(providerType: ApiProviderType): String {
+    fun getDefaultModelName(providerTypeId: String): String {
+        val providerType = ApiProviderType.fromProviderTypeId(providerTypeId) ?: return ""
         return ApiProviderConfigs.getDefaultModelName(providerType)
     }
 
-    fun getEndpointOptions(providerType: ApiProviderType): List<Pair<String, String>>? {
+    fun getEndpointOptions(providerTypeId: String): List<Pair<String, String>>? {
+        val providerType = ApiProviderType.fromProviderTypeId(providerTypeId) ?: return null
         return ApiProviderConfigs.getEndpointOptions(providerType)
             ?.map { it.endpoint to it.label }
     }
@@ -102,8 +110,9 @@ fun ModelApiSettingsSection(
     var apiEndpointInput by remember(config.id) { mutableStateOf(config.apiEndpoint) }
     var apiKeyInput by remember(config.id) { mutableStateOf(config.apiKey) }
     var modelNameInput by remember(config.id) { mutableStateOf(config.modelName) }
-    var selectedApiProvider by remember(config.id) { mutableStateOf(config.apiProviderType) }
+    var selectedProviderTypeId by remember(config.id) { mutableStateOf(config.apiProviderTypeId) }
     var hasInitializedProviderEndpointSync by remember(config.id) { mutableStateOf(false) }
+    val selectedApiProvider = ApiProviderType.fromProviderTypeId(selectedProviderTypeId)
 
     // MNN特定配置状态
     var mnnForwardTypeInput by remember(config.id) { mutableStateOf(config.mnnForwardType) }
@@ -131,6 +140,7 @@ fun ModelApiSettingsSection(
         val apiEndpoint: String,
         val apiKey: String,
         val modelName: String,
+        val providerTypeId: String,
         val provider: ApiProviderType,
         val mnnForwardType: Int,
         val mnnThreadCount: Int,
@@ -154,6 +164,7 @@ fun ModelApiSettingsSection(
                     apiEndpoint = state.apiEndpoint,
                     modelName = state.modelName,
                     apiProviderType = state.provider,
+                    apiProviderTypeId = state.providerTypeId,
                     mnnForwardType = state.mnnForwardType,
                     mnnThreadCount = state.mnnThreadCount,
                     llamaThreadCount = state.llamaThreadCount,
@@ -178,7 +189,8 @@ fun ModelApiSettingsSection(
             apiEndpoint = apiEndpointInput,
             apiKey = apiKeyInput,
             modelName = modelNameInput,
-            provider = selectedApiProvider,
+            providerTypeId = selectedProviderTypeId,
+            provider = selectedApiProvider ?: ApiProviderType.OTHER,
             mnnForwardType = mnnForwardTypeInput,
             mnnThreadCount = mnnThreadCountInput.toIntOrNull() ?: 4,
             llamaThreadCount = llamaThreadCountInput.toIntOrNull()?.coerceAtLeast(1) ?: 4,
@@ -244,7 +256,7 @@ fun ModelApiSettingsSection(
             return
         }
 
-        val moonshotDefaultModel = getDefaultModelName(ApiProviderType.MOONSHOT)
+        val moonshotDefaultModel = getDefaultModelName(ApiProviderType.MOONSHOT.name)
         val isKimiCodeEndpoint = endpoint.contains("api.kimi.com/coding/v1", ignoreCase = true)
 
         if (isKimiCodeEndpoint) {
@@ -257,13 +269,21 @@ fun ModelApiSettingsSection(
     }
 
     // 当API提供商改变时更新端点
-    LaunchedEffect(selectedApiProvider) {
+    LaunchedEffect(selectedProviderTypeId) {
         AppLogger.d("ModelApiSettingsSection", "API提供商改变")
-        if (selectedApiProvider == ApiProviderType.OPENAI || selectedApiProvider == ApiProviderType.OPENAI_RESPONSES || selectedApiProvider == ApiProviderType.OPENAI_RESPONSES_GENERIC || selectedApiProvider == ApiProviderType.OPENAI_GENERIC || selectedApiProvider == ApiProviderType.GOOGLE
-            || selectedApiProvider == ApiProviderType.GEMINI_GENERIC
-            || selectedApiProvider == ApiProviderType.ANTHROPIC || selectedApiProvider == ApiProviderType.ANTHROPIC_GENERIC || selectedApiProvider == ApiProviderType.MISTRAL
-            || selectedApiProvider == ApiProviderType.NVIDIA
-            || selectedApiProvider == ApiProviderType.NOUS_PORTAL) {
+        if (
+            selectedApiProvider == ApiProviderType.OPENAI ||
+                selectedApiProvider == ApiProviderType.OPENAI_RESPONSES ||
+                selectedApiProvider == ApiProviderType.OPENAI_RESPONSES_GENERIC ||
+                selectedApiProvider == ApiProviderType.OPENAI_GENERIC ||
+                selectedApiProvider == ApiProviderType.GOOGLE ||
+                selectedApiProvider == ApiProviderType.GEMINI_GENERIC ||
+                selectedApiProvider == ApiProviderType.ANTHROPIC ||
+                selectedApiProvider == ApiProviderType.ANTHROPIC_GENERIC ||
+                selectedApiProvider == ApiProviderType.MISTRAL ||
+                selectedApiProvider == ApiProviderType.NVIDIA ||
+                selectedApiProvider == ApiProviderType.NOUS_PORTAL
+        ) {
             val inChina = LocationUtils.isDeviceInMainlandChina(context)
             showRegionWarning = inChina
             if (inChina) {
@@ -285,12 +305,17 @@ fun ModelApiSettingsSection(
 
         // 非通用供应商（有强制端点的）切换时，强制重置为该供应商默认端点，避免从“其他供应商”等通用配置带入自定义值
         val isGenericProviderForEndpoint =
-            selectedApiProvider == ApiProviderType.OPENAI_RESPONSES_GENERIC ||
-            selectedApiProvider == ApiProviderType.OPENAI_GENERIC ||
-            selectedApiProvider == ApiProviderType.OTHER ||
-            selectedApiProvider == ApiProviderType.GEMINI_GENERIC ||
-            selectedApiProvider == ApiProviderType.ANTHROPIC_GENERIC ||
-            selectedApiProvider == ApiProviderType.OLLAMA
+            selectedApiProvider == null ||
+                selectedApiProvider == ApiProviderType.OPENAI_RESPONSES_GENERIC ||
+                selectedApiProvider == ApiProviderType.OPENAI_GENERIC ||
+                selectedApiProvider == ApiProviderType.OTHER ||
+                selectedApiProvider == ApiProviderType.GEMINI_GENERIC ||
+                selectedApiProvider == ApiProviderType.ANTHROPIC_GENERIC ||
+                selectedApiProvider == ApiProviderType.OLLAMA
+
+        if (selectedApiProvider == null) {
+            return@LaunchedEffect
+        }
 
         if (isGenericProviderForEndpoint) {
             // 通用供应商仍保留原逻辑：只有在为空或当前就是某个默认端点时才写入默认值
@@ -312,7 +337,51 @@ fun ModelApiSettingsSection(
     // 检查是否使用默认API密钥（仅用于UI显示）
     val isUsingDefaultApiKey = apiKeyInput == ApiPreferences.DEFAULT_API_KEY
     val providerRequiresApiKey =
-        ApiProviderConfigs.requiresApiKey(selectedApiProvider, apiEndpointInput)
+        ApiProviderConfigs.requiresApiKey(selectedProviderTypeId, apiEndpointInput)
+    val isMnnProvider = selectedApiProvider == ApiProviderType.MNN
+    val isLlamaProvider = selectedApiProvider == ApiProviderType.LLAMA_CPP
+    val isToolPkgProvider = selectedApiProvider == null
+    val endpointOptions = getEndpointOptions(selectedProviderTypeId)
+
+    suspend fun fetchAvailableModels(): Result<List<ModelOption>> {
+        return when {
+            isMnnProvider -> ModelListFetcher.getMnnLocalModels(context)
+            isLlamaProvider -> ModelListFetcher.getLlamaLocalModels(context)
+            isToolPkgProvider -> runCatching {
+                val service =
+                    AIServiceFactory.createService(
+                        config =
+                            config.copy(
+                                apiKey = apiKeyInput,
+                                apiEndpoint = apiEndpointInput,
+                                modelName = modelNameInput,
+                                apiProviderType = ApiProviderType.OTHER,
+                                apiProviderTypeId = selectedProviderTypeId,
+                                enableDirectImageProcessing = enableDirectImageProcessingInput,
+                                enableDirectAudioProcessing = enableDirectAudioProcessingInput,
+                                enableDirectVideoProcessing = enableDirectVideoProcessingInput,
+                                enableGoogleSearch = enableGoogleSearchInput,
+                                enableToolCall = enableToolCallInput
+                            ),
+                        modelConfigManager = configManager,
+                        context = context
+                    )
+                try {
+                    service.getModelsList(context).getOrThrow()
+                } finally {
+                    service.release()
+                }
+            }
+
+            else ->
+                ModelListFetcher.getModelsList(
+                    context,
+                    apiKeyInput,
+                    apiEndpointInput,
+                    selectedApiProvider ?: ApiProviderType.OPENAI_GENERIC
+                )
+        }
+    }
     // 移除了强制锁定模型名称的逻辑，允许用户自由修改
 
     Card(
@@ -337,7 +406,7 @@ fun ModelApiSettingsSection(
             SettingsSelectorRow(
                     title = stringResource(R.string.api_provider),
                     subtitle = stringResource(R.string.select_api_provider),
-                    value = getProviderDisplayName(selectedApiProvider, context),
+                    value = getProviderDisplayName(selectedProviderTypeId, context),
                     onClick = { showApiProviderDialog = true }
             )
 
@@ -345,15 +414,15 @@ fun ModelApiSettingsSection(
                 ApiProviderDialog(
                         onDismissRequest = { showApiProviderDialog = false },
                         onProviderSelected = { provider ->
-                            selectedApiProvider = provider
+                            selectedProviderTypeId = provider.id
 
                             // 对有默认模型名的供应商，视为“有强制内容”：切换时总是重置为该供应商默认模型名
-                            val hasForcedModelName = getDefaultModelName(provider).isNotEmpty()
+                            val hasForcedModelName = getDefaultModelName(provider.id).isNotEmpty()
                             if (hasForcedModelName) {
-                                modelNameInput = getDefaultModelName(provider)
+                                modelNameInput = getDefaultModelName(provider.id)
                             } else if (modelNameInput.isEmpty() || isDefaultModelName(modelNameInput)) {
                                 // 通用/无默认模型名的供应商仍沿用旧逻辑
-                                modelNameInput = getDefaultModelName(provider)
+                                modelNameInput = getDefaultModelName(provider.id)
                             }
 
                             showApiProviderDialog = false
@@ -367,16 +436,13 @@ fun ModelApiSettingsSection(
 
             // 允许自定义端点的供应商（通用类 + Ollama）
             val isGenericProvider =
+                isToolPkgProvider ||
                 selectedApiProvider == ApiProviderType.OPENAI_RESPONSES_GENERIC ||
                 selectedApiProvider == ApiProviderType.OPENAI_GENERIC ||
                 selectedApiProvider == ApiProviderType.OTHER ||
                 selectedApiProvider == ApiProviderType.GEMINI_GENERIC ||
                 selectedApiProvider == ApiProviderType.ANTHROPIC_GENERIC ||
                 selectedApiProvider == ApiProviderType.OLLAMA
-
-            val isMnnProvider = selectedApiProvider == ApiProviderType.MNN
-            val isLlamaProvider = selectedApiProvider == ApiProviderType.LLAMA_CPP
-            val endpointOptions = getEndpointOptions(selectedApiProvider)
             if (isMnnProvider) {
                 MnnSettingsBlock(
                         mnnForwardTypeInput = mnnForwardTypeInput,
@@ -485,7 +551,10 @@ fun ModelApiSettingsSection(
                 )
                 }
 
-            val completedEndpoint = EndpointCompleter.completeEndpoint(apiEndpointInput, selectedApiProvider)
+            val completedEndpoint =
+                selectedApiProvider?.let {
+                    EndpointCompleter.completeEndpoint(apiEndpointInput, it)
+                } ?: apiEndpointInput
             if (completedEndpoint != apiEndpointInput) {
                 Text(
                     text = stringResource(R.string.actual_request_url, completedEndpoint),
@@ -531,66 +600,17 @@ fun ModelApiSettingsSection(
                     },
                         value = modelNameInput,
                         onValueChange = {
-                        if (!isMnnProvider && !isLlamaProvider && !isUsingDefaultApiKey) {
+                        if (!isMnnProvider && !isLlamaProvider && (!isUsingDefaultApiKey || isToolPkgProvider)) {
                                 modelNameInput = it.replace("\n", "").replace("\r", "")
                             }
                         },
-                    enabled = if (isMnnProvider || isLlamaProvider) false else !isUsingDefaultApiKey,
+                    enabled = if (isMnnProvider || isLlamaProvider) false else (!isUsingDefaultApiKey || isToolPkgProvider),
                     trailingContent = {
                 IconButton(
                         onClick = {
-                                    if (isMnnProvider || isLlamaProvider) {
-                                        AppLogger.d(TAG, "获取本地模型列表")
-                                        val gettingModelsText =
-                                                context.getString(R.string.getting_models_list)
-                                        val modelsListSuccessText =
-                                                context.getString(R.string.models_list_success)
-                                        showNotification(gettingModelsText)
-
-                                        scope.launch {
-                                            isLoadingModels = true
-                                            modelLoadError = null
-
-                                            try {
-                                                val result = if (isMnnProvider) {
-                                                    ModelListFetcher.getMnnLocalModels(context)
-                                                } else {
-                                                    ModelListFetcher.getLlamaLocalModels(context)
-                                                }
-                                                if (result.isSuccess) {
-                                                    val models = result.getOrThrow()
-                                                    AppLogger.d(TAG, "本地模型列表获取成功，共 ${models.size} 个模型")
-                                                    modelsList = models
-                                                    showModelsDialog = true
-                                                    showNotification(modelsListSuccessText.format(models.size))
-                                                } else {
-                                                    val errorMsg =
-                                                            result.exceptionOrNull()?.message
-                                                                    ?: context.getString(R.string.unknown_error)
-                                                    AppLogger.e(TAG, "本地模型列表获取失败: $errorMsg")
-                                                    modelLoadError =
-                                                            context.getString(
-                                                                    R.string.get_models_list_failed,
-                                                                    errorMsg
-                                                            )
-                                                    showNotification(modelLoadError!!)
-                                                }
-                                            } catch (e: Exception) {
-                                                AppLogger.e(TAG, "获取本地模型列表发生异常", e)
-                                                modelLoadError =
-                                                        context.getString(
-                                                                R.string.get_models_list_failed,
-                                                                e.message ?: ""
-                                                        )
-                                                showNotification(modelLoadError!!)
-                                            } finally {
-                                                isLoadingModels = false
-                                            }
-                                        }
-                                    } else {
                             AppLogger.d(
                                     TAG,
-                                    "模型列表按钮被点击 - API端点: $apiEndpointInput, API类型: ${selectedApiProvider.name}"
+                                    "模型列表按钮被点击 - API端点: $apiEndpointInput, API类型: $selectedProviderTypeId"
                             )
                             val gettingModelsText = context.getString(R.string.getting_models_list)
                             val unknownErrorText = context.getString(R.string.unknown_error)
@@ -598,30 +618,30 @@ fun ModelApiSettingsSection(
                             val defaultConfigNoModelsText = context.getString(R.string.default_config_no_models_list)
                             val fillEndpointKeyText = context.getString(R.string.fill_endpoint_and_key)
                             val modelsListSuccessText = context.getString(R.string.models_list_success)
-                            val refreshModelsFailedText = context.getString(R.string.refresh_models_failed)
                             
                             showNotification(gettingModelsText)
 
                             scope.launch {
-                                if (apiEndpointInput.isNotBlank() &&
+                                val canRequestModels =
+                                    isToolPkgProvider ||
+                                        isMnnProvider ||
+                                        isLlamaProvider ||
+                                        (
+                                            apiEndpointInput.isNotBlank() &&
                                                 !isUsingDefaultApiKey &&
                                                 (!providerRequiresApiKey || apiKeyInput.isNotBlank())
-                                ) {
+                                        )
+
+                                if (canRequestModels) {
                                     isLoadingModels = true
                                     modelLoadError = null
                                     AppLogger.d(
                                             TAG,
-                                            "开始获取模型列表: 端点=$apiEndpointInput, API类型=${selectedApiProvider.name}"
+                                            "开始获取模型列表: 端点=$apiEndpointInput, API类型=$selectedProviderTypeId"
                                     )
 
                                     try {
-                                        val result =
-                                                ModelListFetcher.getModelsList(
-                                                        context,
-                                                        apiKeyInput,
-                                                        apiEndpointInput,
-                                                        selectedApiProvider
-                                                )
+                                        val result = fetchAvailableModels()
                                         if (result.isSuccess) {
                                             val models = result.getOrThrow()
                                             AppLogger.d(TAG, "模型列表获取成功，共 ${models.size} 个模型")
@@ -643,13 +663,12 @@ fun ModelApiSettingsSection(
                                         isLoadingModels = false
                                         AppLogger.d(TAG, "模型列表获取流程完成")
                                     }
-                                } else if (isUsingDefaultApiKey) {
+                                } else if (!isToolPkgProvider && isUsingDefaultApiKey) {
                                     AppLogger.d(TAG, "使用默认配置，不获取模型列表")
                                     showNotification(defaultConfigNoModelsText)
                                 } else {
                                     AppLogger.d(TAG, "API端点或密钥为空")
                                     showNotification(fillEndpointKeyText)
-                                }
                                 }
                             }
                         },
@@ -658,7 +677,7 @@ fun ModelApiSettingsSection(
                                 IconButtonDefaults.iconButtonColors(
                                         contentColor = MaterialTheme.colorScheme.primary
                                 ),
-                                enabled = if (isMnnProvider || isLlamaProvider) true else !isUsingDefaultApiKey
+                                enabled = if (isMnnProvider || isLlamaProvider) true else (!isUsingDefaultApiKey || isToolPkgProvider)
                 ) {
                     if (isLoadingModels) {
                         CircularProgressIndicator(
@@ -670,7 +689,7 @@ fun ModelApiSettingsSection(
                                 imageVector = Icons.AutoMirrored.Filled.FormatListBulleted,
                                 contentDescription = stringResource(R.string.get_models_list),
                                 tint =
-                                                if (!isMnnProvider && !isLlamaProvider && isUsingDefaultApiKey)
+                                                if (!isMnnProvider && !isLlamaProvider && isUsingDefaultApiKey && !isToolPkgProvider)
                                                         MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
                                                 else MaterialTheme.colorScheme.primary
                                 )
@@ -762,19 +781,19 @@ fun ModelApiSettingsSection(
                         FilledIconButton(
                                 onClick = {
                                     scope.launch {
-                                        if (apiEndpointInput.isNotBlank() &&
+                                        val canRequestModels =
+                                            isToolPkgProvider ||
+                                                isMnnProvider ||
+                                                isLlamaProvider ||
+                                                (
+                                                    apiEndpointInput.isNotBlank() &&
                                                         !isUsingDefaultApiKey &&
                                                         (!providerRequiresApiKey || apiKeyInput.isNotBlank())
-                                        ) {
+                                                )
+                                        if (canRequestModels) {
                                             isLoadingModels = true
                                             try {
-                                                val result =
-                                                        ModelListFetcher.getModelsList(
-                                                                context,
-                                                                apiKeyInput,
-                                                                apiEndpointInput,
-                                                                selectedApiProvider
-                                                        )
+                                                val result = fetchAvailableModels()
                                                 if (result.isSuccess) {
                                                     modelsList = result.getOrThrow()
                                                 } else {
@@ -1007,7 +1026,7 @@ fun ModelApiSettingsSection(
     }
 }
 
-private fun getProviderDisplayName(provider: ApiProviderType, context: android.content.Context): String {
+private fun getBuiltInProviderDisplayName(provider: ApiProviderType, context: android.content.Context): String {
     return when (provider) {
         ApiProviderType.OPENAI -> context.getString(R.string.provider_openai)
         ApiProviderType.OPENAI_RESPONSES -> context.getString(R.string.provider_openai_responses)
@@ -1041,6 +1060,32 @@ private fun getProviderDisplayName(provider: ApiProviderType, context: android.c
         ApiProviderType.NOVITA -> context.getString(R.string.provider_novita)
         ApiProviderType.OTHER -> context.getString(R.string.provider_other)
     }
+}
+
+private fun getProviderDisplayName(providerTypeId: String, context: android.content.Context): String {
+    val builtInProvider = ApiProviderType.fromProviderTypeId(providerTypeId)
+    if (builtInProvider != null) {
+        return getBuiltInProviderDisplayName(builtInProvider, context)
+    }
+    return ToolPkgAiProviderRegistry.get(providerTypeId)?.displayName ?: providerTypeId
+}
+
+private fun getProviderSelectionOptions(context: android.content.Context): List<ProviderSelectionOption> {
+    val builtInProviders =
+        ApiProviderType.values().map { provider ->
+            ProviderSelectionOption(
+                id = provider.name,
+                displayName = getBuiltInProviderDisplayName(provider, context)
+            )
+        }
+    val toolPkgProviders =
+        ToolPkgAiProviderRegistry.list().map { provider ->
+            ProviderSelectionOption(
+                id = provider.providerId,
+                displayName = provider.displayName
+            )
+        }
+    return builtInProviders + toolPkgProviders
 }
 
 
@@ -1493,18 +1538,19 @@ private fun forwardTypeName(type: Int): String {
 @Composable
 private fun ApiProviderDialog(
         onDismissRequest: () -> Unit,
-        onProviderSelected: (ApiProviderType) -> Unit
+        onProviderSelected: (ProviderSelectionOption) -> Unit
 ) {
-    val providers = ApiProviderType.values()
     val context = LocalContext.current
+    val providers = remember { getProviderSelectionOptions(context) }
     var searchQuery by remember { mutableStateOf("") }
     
     val filteredProviders = remember(searchQuery) {
         if (searchQuery.isEmpty()) {
-            providers.toList()
+            providers
         } else {
             providers.filter { provider ->
-                getProviderDisplayName(provider, context).contains(searchQuery, ignoreCase = true)
+                provider.displayName.contains(searchQuery, ignoreCase = true) ||
+                    provider.id.contains(searchQuery, ignoreCase = true)
             }
         }
     }
@@ -1580,13 +1626,13 @@ private fun ApiProviderDialog(
                                         modifier = Modifier
                                                 .size(32.dp)
                                                 .background(
-                                                        getProviderColor(provider),
+                                                        getProviderColor(provider.id),
                                                         CircleShape
                                                 ),
                                         contentAlignment = Alignment.Center
                                 ) {
                                     Text(
-                                            text = getProviderDisplayName(provider, context).first().toString(),
+                                            text = provider.displayName.firstOrNull()?.toString() ?: "?",
                                             color = MaterialTheme.colorScheme.onPrimary,
                                             style = MaterialTheme.typography.bodyLarge,
                                             fontWeight = FontWeight.Bold
@@ -1596,7 +1642,7 @@ private fun ApiProviderDialog(
                                 Spacer(modifier = Modifier.width(16.dp))
                                 
                                 Text(
-                                        text = getProviderDisplayName(provider, context),
+                                        text = provider.displayName,
                                         style = MaterialTheme.typography.bodyLarge
                                 )
                             }
@@ -1620,7 +1666,19 @@ private fun ApiProviderDialog(
 
 // 为不同提供商生成不同的颜色
 @Composable
-private fun getProviderColor(provider: ApiProviderType): androidx.compose.ui.graphics.Color {
+private fun getProviderColor(providerTypeId: String): androidx.compose.ui.graphics.Color {
+    val provider = ApiProviderType.fromProviderTypeId(providerTypeId)
+    if (provider == null) {
+        val palette = listOf(
+            MaterialTheme.colorScheme.primary,
+            MaterialTheme.colorScheme.secondary,
+            MaterialTheme.colorScheme.tertiary,
+            MaterialTheme.colorScheme.primaryContainer,
+            MaterialTheme.colorScheme.secondaryContainer
+        )
+        val paletteIndex = kotlin.math.abs(providerTypeId.lowercase().hashCode()) % palette.size
+        return palette[paletteIndex]
+    }
     return when (provider) {
         ApiProviderType.OPENAI -> MaterialTheme.colorScheme.primary
         ApiProviderType.OPENAI_RESPONSES -> MaterialTheme.colorScheme.primary.copy(alpha = 0.92f)

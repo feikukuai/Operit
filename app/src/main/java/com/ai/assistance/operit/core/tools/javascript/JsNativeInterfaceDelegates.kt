@@ -34,6 +34,8 @@ import javax.crypto.spec.SecretKeySpec
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.encodeToString
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.flow.collect
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
@@ -585,6 +587,85 @@ internal object JsNativeInterfaceDelegates {
                 sendToolResult(callbackId, resultJson, !result.success)
             } catch (e: Exception) {
                 AppLogger.e(TAG, "[Async] Error in async tool execution: ${e.message}", e)
+                sendToolResult(
+                    callbackId,
+                    buildToolErrorJson("Error: ${e.message}"),
+                    true
+                )
+            }
+        }.start()
+    }
+
+    fun callToolAsyncStreaming(
+        toolHandler: AIToolHandler,
+        callbackId: String,
+        intermediateCallbackId: String,
+        toolType: String,
+        toolName: String,
+        paramsJson: String,
+        binaryDataRegistry: ConcurrentHashMap<String, ByteArray>,
+        binaryHandlePrefix: String,
+        binaryDataThreshold: Int,
+        sendToolResult: (callbackId: String, result: String, isError: Boolean) -> Unit,
+        sendIntermediateResult: (callbackId: String, result: String, isError: Boolean) -> Unit
+    ) {
+        val parsed =
+            try {
+                parseToolCall(toolType, toolName, paramsJson)
+            } catch (e: Exception) {
+                AppLogger.e(TAG, "[AsyncStream] Error preparing tool call: ${e.message}", e)
+                sendToolResult(
+                    callbackId,
+                    buildToolErrorJson("Error: ${e.message ?: "Unknown error"}"),
+                    true
+                )
+                return
+            }
+
+        AppLogger.d(
+            TAG,
+            "[AsyncStream] JavaScript tool call: ${parsed.fullToolName} with params: ${parsed.params}, callbackId: $callbackId, intermediateCallbackId: $intermediateCallbackId"
+        )
+
+        Thread {
+            try {
+                var pendingFinalResult: ToolResult? = null
+                runBlocking {
+                    toolHandler.executeToolAndStream(parsed.aiTool).collect { result ->
+                        val previous = pendingFinalResult
+                        pendingFinalResult = result
+                        if (previous != null) {
+                            val intermediateJson =
+                                serializeToolExecutionResult(
+                                    result = previous,
+                                    binaryDataRegistry = binaryDataRegistry,
+                                    binaryHandlePrefix = binaryHandlePrefix,
+                                    binaryDataThreshold = binaryDataThreshold
+                                )
+                            sendIntermediateResult(intermediateCallbackId, intermediateJson, !previous.success)
+                        }
+                    }
+                }
+
+                val finalResult =
+                    pendingFinalResult
+                        ?: ToolResult(
+                            toolName = parsed.fullToolName,
+                            success = false,
+                            result = StringResultData(""),
+                            error = "Tool did not produce a result"
+                        )
+
+                val finalJson =
+                    serializeToolExecutionResult(
+                        result = finalResult,
+                        binaryDataRegistry = binaryDataRegistry,
+                        binaryHandlePrefix = binaryHandlePrefix,
+                        binaryDataThreshold = binaryDataThreshold
+                    )
+                sendToolResult(callbackId, finalJson, !finalResult.success)
+            } catch (e: Exception) {
+                AppLogger.e(TAG, "[AsyncStream] Error in async streaming tool execution: ${e.message}", e)
                 sendToolResult(
                     callbackId,
                     buildToolErrorJson("Error: ${e.message}"),

@@ -158,6 +158,13 @@ fun PackageDetailsDialog(
             shape = RoundedCornerShape(16.dp),
             color = MaterialTheme.colorScheme.surface
         ) {
+            val resolvedAuthors =
+                metaPackage
+                    ?.author
+                    ?.map(String::trim)
+                    ?.filter(String::isNotBlank)
+                    .orEmpty()
+
             Column(modifier = Modifier.fillMaxWidth().padding(20.dp)) {
                 // 紧凑的标题栏
                 Row(
@@ -177,6 +184,13 @@ fun PackageDetailsDialog(
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold
                         )
+                        if (resolvedAuthors.isNotEmpty()) {
+                            Text(
+                                text = "作者：${resolvedAuthors.joinToString(", ")}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                         Text(
                             text = "ID: $packageName",
                             style = MaterialTheme.typography.bodySmall,

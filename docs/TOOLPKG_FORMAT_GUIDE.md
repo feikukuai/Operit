@@ -70,6 +70,7 @@ windows_control.toolpkg (ZIP 压缩包)
   "schema_version": 1,
   "toolpkg_id": "com.operit.windows_bundle",
   "version": "0.2.0",
+  "author": ["Operit Team", "Alice"],
   "main": "main.js",
   "display_name": {
     "zh": "Windows 工具包",
@@ -113,6 +114,7 @@ windows_control.toolpkg (ZIP 压缩包)
 | `schema_version` | number | 是 | 清单架构版本，当前为 `1` |
 | `toolpkg_id` | string | 是 | 包的唯一标识符，建议使用反向域名格式（如 `com.operit.windows_bundle`） |
 | `version` | string | 否 | 包的版本号，建议使用语义化版本（如 `0.2.0`） |
+| `author` | string \| string[] | 否 | 作者信息，支持单个作者字符串或作者字符串数组 |
 | `main` | string | 是 | ToolPkg 主入口脚本路径（相对于 ZIP 根目录），用于执行注册函数 |
 | `display_name` | LocalizedText | 否 | 包的显示名称，支持多语言 |
 | `description` | LocalizedText | 否 | 包的描述信息，支持多语言 |

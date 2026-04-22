@@ -51,8 +51,12 @@ import androidx.compose.ui.unit.sp
 import com.ai.assistance.operit.R
 import com.ai.assistance.operit.core.tools.AIToolHandler
 import com.ai.assistance.operit.core.tools.packTool.PackageManager
+import com.ai.assistance.operit.core.tools.system.AndroidPermissionLevel
 import com.ai.assistance.operit.core.tools.system.ShizukuAuthorizer
+import com.ai.assistance.operit.core.tools.system.action.ActionListenerFactory
 import com.ai.assistance.operit.data.preferences.DisplayPreferencesManager
+import com.ai.assistance.operit.data.preferences.UserPreferencesManager
+import com.ai.assistance.operit.data.preferences.androidPermissionPreferences
 import com.ai.assistance.operit.data.repository.WorkflowRepository
 import com.ai.assistance.operit.ui.common.NavItem
 import com.ai.assistance.operit.ui.main.NavGroup
@@ -67,6 +71,53 @@ import kotlinx.coroutines.withContext
 private data class SidebarPermissionStatus(
         val badgeTextResId: Int
 )
+
+private suspend fun resolveSidebarPermissionStatus(
+        context: android.content.Context,
+        preferredPermissionLevel: AndroidPermissionLevel?
+): SidebarPermissionStatus {
+        return when (preferredPermissionLevel) {
+                null,
+                AndroidPermissionLevel.STANDARD ->
+                        SidebarPermissionStatus(
+                                badgeTextResId = R.string.sidebar_status_normal
+                        )
+                AndroidPermissionLevel.DEBUGGER ->
+                        when {
+                                !ShizukuAuthorizer.isShizukuInstalled(context) ->
+                                        SidebarPermissionStatus(
+                                                badgeTextResId = R.string.status_not_installed
+                                        )
+                                !ShizukuAuthorizer.isShizukuServiceRunning() ->
+                                        SidebarPermissionStatus(
+                                                badgeTextResId = R.string.status_not_running
+                                        )
+                                ShizukuAuthorizer.hasShizukuPermission() ->
+                                        SidebarPermissionStatus(
+                                                badgeTextResId = R.string.sidebar_status_normal
+                                        )
+                                else ->
+                                        SidebarPermissionStatus(
+                                                badgeTextResId = R.string.unauthorized
+                                        )
+                        }
+                AndroidPermissionLevel.ACCESSIBILITY,
+                AndroidPermissionLevel.ADMIN,
+                AndroidPermissionLevel.ROOT -> {
+                        val permissionStatus =
+                                ActionListenerFactory.getListener(context, preferredPermissionLevel)
+                                        .hasPermission()
+                        SidebarPermissionStatus(
+                                badgeTextResId =
+                                        if (permissionStatus.granted) {
+                                                R.string.sidebar_status_normal
+                                        } else {
+                                                R.string.unauthorized
+                                        }
+                        )
+                }
+        }
+}
 
 /** Content for the expanded navigation drawer */
 @Composable
@@ -84,7 +135,20 @@ fun DrawerContent(
 ) {
         val context = LocalContext.current
         val displayPreferencesManager = remember(context) { DisplayPreferencesManager.getInstance(context) }
+        val userPreferencesManager = remember(context) { UserPreferencesManager.getInstance(context) }
         val enableNewSidebar by displayPreferencesManager.enableNewSidebar.collectAsState(initial = true)
+        val softwareIdentity by
+                userPreferencesManager.softwareIdentity.collectAsState(
+                        initial = UserPreferencesManager.SOFTWARE_IDENTITY_OPERIT
+                )
+        val preferredPermissionLevel by
+                androidPermissionPreferences.preferredPermissionLevelFlow.collectAsState(initial = null)
+        val drawerBrandName =
+                if (softwareIdentity == UserPreferencesManager.SOFTWARE_IDENTITY_LINGSHU) {
+                        context.getString(R.string.software_identity_option_lingshu)
+                } else {
+                        context.getString(R.string.software_identity_option_operit)
+                }
         val bottomInset =
                 WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
         val resolvedTopContentPadding =
@@ -118,35 +182,18 @@ fun DrawerContent(
                 produceState(
                         initialValue =
                                 SidebarPermissionStatus(
-                                        badgeTextResId = R.string.status_not_installed
+                                        badgeTextResId = R.string.sidebar_status_normal
                                 ),
                         currentScreen,
-                        enableNewSidebar
+                        enableNewSidebar,
+                        preferredPermissionLevel
                 ) {
                         value =
                                 withContext(Dispatchers.IO) {
-                                        when {
-                                                !ShizukuAuthorizer.isShizukuInstalled(context) ->
-                                                        SidebarPermissionStatus(
-                                                                badgeTextResId =
-                                                                        R.string.status_not_installed
-                                                        )
-                                                !ShizukuAuthorizer.isShizukuServiceRunning() ->
-                                                        SidebarPermissionStatus(
-                                                                badgeTextResId =
-                                                                        R.string.status_not_running
-                                                        )
-                                                ShizukuAuthorizer.hasShizukuPermission() ->
-                                                        SidebarPermissionStatus(
-                                                                badgeTextResId =
-                                                                        R.string.sidebar_status_normal
-                                                        )
-                                                else ->
-                                                        SidebarPermissionStatus(
-                                                                badgeTextResId =
-                                                                        R.string.unauthorized
-                                                        )
-                                        }
+                                        resolveSidebarPermissionStatus(
+                                                context = context,
+                                                preferredPermissionLevel = preferredPermissionLevel
+                                        )
                                 }
                 }
         val oldModeNavGroups = navGroups
@@ -185,6 +232,7 @@ fun DrawerContent(
                         DrawerTopContent(
                                 navGroups = oldModeNavGroups,
                                 selectedItem = selectedItem,
+                                brandName = drawerBrandName,
                                 isNetworkAvailable = isNetworkAvailable,
                                 networkType = networkType,
                                 appearance = appearance,
@@ -209,6 +257,7 @@ fun DrawerContent(
                 ) {
                         NewSidebarTopContent(
                                 selectedItem = selectedItem,
+                                brandName = drawerBrandName,
                                 isNetworkAvailable = isNetworkAvailable,
                                 networkType = networkType,
                                 appearance = appearance,
@@ -353,6 +402,7 @@ fun CollapsedDrawerContent(
 private fun DrawerTopContent(
         navGroups: List<NavGroup>,
         selectedItem: NavItem,
+        brandName: String,
         isNetworkAvailable: Boolean,
         networkType: String,
         appearance: NavigationDrawerAppearance,
@@ -360,7 +410,7 @@ private fun DrawerTopContent(
 ) {
         Spacer(modifier = Modifier.height(54.dp))
         Text(
-                text = stringResource(id = R.string.app_name),
+                text = brandName,
                 style = MaterialTheme.typography.headlineMedium,
                 color = appearance.titleColor,
                 fontWeight = FontWeight.Bold,
@@ -413,6 +463,7 @@ private fun DrawerTopContent(
 @Composable
 private fun NewSidebarTopContent(
         selectedItem: NavItem,
+        brandName: String,
         isNetworkAvailable: Boolean,
         networkType: String,
         appearance: NavigationDrawerAppearance,
@@ -425,6 +476,7 @@ private fun NewSidebarTopContent(
         Spacer(modifier = Modifier.height(24.dp))
 
         SidebarInfoCard(
+                brandName = brandName,
                 isNetworkAvailable = isNetworkAvailable,
                 networkType = networkType,
                 appearance = appearance
@@ -492,6 +544,7 @@ private fun NewSidebarTopContent(
 
 @Composable
 private fun SidebarInfoCard(
+        brandName: String,
         isNetworkAvailable: Boolean,
         networkType: String,
         appearance: NavigationDrawerAppearance
@@ -500,7 +553,7 @@ private fun SidebarInfoCard(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 6.dp)
         ) {
                 Text(
-                        text = stringResource(id = R.string.app_name),
+                        text = brandName,
                         style = MaterialTheme.typography.titleLarge.copy(
                                 letterSpacing = 0.5.sp
                         ),

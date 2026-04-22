@@ -30,7 +30,23 @@ interface HttpRequest {
     bodyType?: 'text' | 'json' | 'form' | 'multipart';
     formParams?: Record<string, string>;
     multipartParams?: Array<{ name: string; value: string; contentType?: string }>;
-    execute(): Promise<OkHttpResponse>;
+    execute(options?: OkHttpExecuteOptions): Promise<OkHttpResponse>;
+}
+
+interface HttpStreamEvent {
+    type: 'response_started' | 'chunk';
+    url: string;
+    statusCode?: number;
+    statusMessage?: string;
+    headers?: Record<string, string>;
+    contentType?: string;
+    chunk?: string;
+    chunkIndex?: number;
+    receivedBytes?: number;
+}
+
+interface OkHttpExecuteOptions {
+    onIntermediateResult?: (event: HttpStreamEvent) => void;
 }
 
 /**
@@ -145,7 +161,7 @@ declare class OkHttpClient {
     /**
      * Execute an HTTP request
      */
-    execute(request: HttpRequest): Promise<OkHttpResponse>;
+    execute(request: HttpRequest, options?: OkHttpExecuteOptions): Promise<OkHttpResponse>;
 
     /**
      * Shorthand method for GET requests
@@ -166,6 +182,8 @@ declare class OkHttpClient {
      * Shorthand method for DELETE requests
      */
     delete(url: string, headers?: Record<string, string>): Promise<OkHttpResponse>;
+
+    streamExecute(request: HttpRequest, onIntermediateResult: (event: HttpStreamEvent) => void): Promise<OkHttpResponse>;
 
     /**
      * Create a new client builder

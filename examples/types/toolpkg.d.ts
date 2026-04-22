@@ -337,6 +337,130 @@ export namespace ToolPkg {
     export interface PromptEstimateFinalizeHookEvent
         extends HookEventBase<PromptFinalizeEventName, PromptHookEventPayload> {}
 
+    export interface AiProviderConfig extends JsonObject {
+        id: string;
+        name: string;
+        apiProviderType: string;
+        apiProviderTypeId: string;
+        apiKey: string;
+        apiEndpoint: string;
+        modelName: string;
+        customHeaders: JsonObject;
+        customParameters: JsonValue[];
+        enableDirectImageProcessing: boolean;
+        enableDirectAudioProcessing: boolean;
+        enableDirectVideoProcessing: boolean;
+        enableGoogleSearch: boolean;
+        enableToolCall: boolean;
+        requestLimitPerMinute: number;
+        maxConcurrentRequests: number;
+        locale?: string;
+    }
+
+    export interface AiProviderBaseEventPayload extends JsonObject {
+        providerId: string;
+        providerDisplayName?: string;
+        providerDescription?: string;
+        config: AiProviderConfig;
+    }
+
+    export interface AiProviderListModelsEvent
+        extends HookEventBase<"toolpkg_ai_provider_list_models", AiProviderBaseEventPayload> {}
+
+    export interface AiProviderSendMessageEventPayload extends AiProviderBaseEventPayload {
+        chatHistory: PromptTurn[];
+        modelParameters?: JsonObject[];
+        availableTools?: JsonObject[];
+        enableThinking?: boolean;
+        stream?: boolean;
+        preserveThinkInHistory?: boolean;
+        enableRetry?: boolean;
+    }
+
+    export interface AiProviderSendMessageEvent
+        extends HookEventBase<"toolpkg_ai_provider_send_message", AiProviderSendMessageEventPayload> {}
+
+    export interface AiProviderTestConnectionEvent
+        extends HookEventBase<"toolpkg_ai_provider_test_connection", AiProviderBaseEventPayload> {}
+
+    export interface AiProviderCalculateInputTokensEventPayload extends AiProviderBaseEventPayload {
+        chatHistory: PromptTurn[];
+        availableTools?: JsonObject[];
+    }
+
+    export interface AiProviderCalculateInputTokensEvent
+        extends HookEventBase<
+            "toolpkg_ai_provider_calculate_input_tokens",
+            AiProviderCalculateInputTokensEventPayload
+        > {}
+
+    export interface AiProviderModelOption extends JsonObject {
+        id: string;
+        name: string;
+    }
+
+    export interface AiProviderUsage extends JsonObject {
+        input?: number;
+        cachedInput?: number;
+        output?: number;
+    }
+
+    export interface AiProviderListModelsResult extends JsonObject {
+        models: AiProviderModelOption[];
+    }
+
+    export interface AiProviderSendMessageResult extends JsonObject {
+        text: string;
+        usage?: AiProviderUsage;
+    }
+
+    export interface AiProviderTestConnectionResult extends JsonObject {
+        success: boolean;
+        message?: string;
+        error?: string;
+    }
+
+    export interface AiProviderCalculateInputTokensResult extends JsonObject {
+        tokens: number;
+    }
+
+    export type AiProviderListModelsReturn =
+        | AiProviderListModelsResult
+        | Promise<AiProviderListModelsResult>;
+
+    export type AiProviderSendMessageReturn =
+        | AiProviderSendMessageResult
+        | Promise<AiProviderSendMessageResult>;
+
+    export type AiProviderTestConnectionReturn =
+        | AiProviderTestConnectionResult
+        | Promise<AiProviderTestConnectionResult>;
+
+    export type AiProviderCalculateInputTokensReturn =
+        | AiProviderCalculateInputTokensResult
+        | Promise<AiProviderCalculateInputTokensResult>;
+
+    export type AiProviderListModelsHandler =
+        (event: AiProviderListModelsEvent) => AiProviderListModelsReturn;
+
+    export type AiProviderSendMessageHandler =
+        (event: AiProviderSendMessageEvent) => AiProviderSendMessageReturn;
+
+    export type AiProviderTestConnectionHandler =
+        (event: AiProviderTestConnectionEvent) => AiProviderTestConnectionReturn;
+
+    export type AiProviderCalculateInputTokensHandler =
+        (event: AiProviderCalculateInputTokensEvent) => AiProviderCalculateInputTokensReturn;
+
+    export interface AiProviderHandlerRegistration {
+        function: (
+            | AiProviderListModelsHandler
+            | AiProviderSendMessageHandler
+            | AiProviderTestConnectionHandler
+            | AiProviderCalculateInputTokensHandler
+        );
+    }
+
     export interface ToolboxUiModuleRegistration {
         id: string;
         runtime?: string;
@@ -407,6 +531,16 @@ export namespace ToolPkg {
         function: PromptEstimateFinalizeHookHandler;
     }
 
+    export interface AiProviderRegistration {
+        id: string;
+        displayName?: string;
+        description?: string;
+        listModels: { function: AiProviderListModelsHandler };
+        sendMessage: { function: AiProviderSendMessageHandler };
+        testConnection: { function: AiProviderTestConnectionHandler };
+        calculateInputTokens: { function: AiProviderCalculateInputTokensHandler };
+    }
+
     export interface Registry {
         registerToolboxUiModule(definition: ToolboxUiModuleRegistration): void;
         registerAppLifecycleHook(definition: AppLifecycleHookRegistration): void;
@@ -421,6 +555,7 @@ export namespace ToolPkg {
         registerToolPromptComposeHook(definition: ToolPromptComposeHookRegistration): void;
         registerPromptFinalizeHook(definition: PromptFinalizeHookRegistration): void;
         registerPromptEstimateFinalizeHook(definition: PromptEstimateFinalizeHookRegistration): void;
+        registerAiProvider(definition: AiProviderRegistration): void;
         readResource(key: string, outputFileName?: string, internal?: boolean): Promise<string>;
     }
 }
@@ -451,6 +586,8 @@ declare global {
     function registerToolPkgPromptFinalizeHook(definition: ToolPkg.PromptFinalizeHookRegistration): void;
 
     function registerToolPkgPromptEstimateFinalizeHook(definition: ToolPkg.PromptEstimateFinalizeHookRegistration): void;
+
+    function registerToolPkgAiProvider(definition: ToolPkg.AiProviderRegistration): void;
 
     const ToolPkg: ToolPkg.Registry;
 }

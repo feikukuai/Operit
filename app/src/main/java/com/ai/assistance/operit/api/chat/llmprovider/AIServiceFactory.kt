@@ -6,6 +6,7 @@ import com.ai.assistance.operit.util.AppLogger
 import com.ai.assistance.operit.data.model.ApiProviderType
 import com.ai.assistance.operit.data.model.ModelConfigData
 import com.ai.assistance.operit.data.preferences.ModelConfigManager
+import com.ai.assistance.operit.plugins.toolpkg.ToolPkgAiProviderRegistry
 import java.util.concurrent.TimeUnit
 import okhttp3.ConnectionPool
 import okhttp3.OkHttpClient
@@ -88,8 +89,21 @@ object AIServiceFactory {
         modelConfigManager: ModelConfigManager,
         context: Context
     ): AIService {
+        val providerTypeId = config.apiProviderTypeId.trim()
+        ToolPkgAiProviderRegistry.get(providerTypeId)?.let { provider ->
+            return ToolPkgJsAiProviderService(
+                config = config,
+                provider = provider
+            )
+        }
+
         val httpClient = SharedHttpClient.instance
         val customHeaders = parseCustomHeaders(config.customHeaders)
+        val providerType =
+            ApiProviderType.fromProviderTypeId(providerTypeId)
+                ?: throw IllegalArgumentException(
+                    "AI provider type not found or not enabled: $providerTypeId"
+                )
 
         // 根据配置决定使用单个API Key还是多API Key轮询
         val apiKeyProvider = if (config.useMultipleApiKeys) {
@@ -106,7 +120,7 @@ object AIServiceFactory {
         // Tool Call支持标志
         val enableToolCall = config.enableToolCall
         
-        return when (config.apiProviderType) {
+        return when (providerType) {
             // OpenAI格式，支持原生和兼容OpenAI API的服务
             ApiProviderType.OPENAI,
             ApiProviderType.OPENAI_GENERIC ->
@@ -116,7 +130,7 @@ object AIServiceFactory {
                     modelName = config.modelName,
                     client = httpClient,
                     customHeaders = customHeaders,
-                    providerType = config.apiProviderType,
+                    providerType = providerType,
                     supportsVision = supportsVision,
                     supportsAudio = supportsAudio,
                     supportsVideo = supportsVideo,
@@ -131,7 +145,7 @@ object AIServiceFactory {
                     modelName = config.modelName,
                     client = httpClient,
                     customHeaders = customHeaders,
-                    responsesProviderType = config.apiProviderType,
+                    responsesProviderType = providerType,
                     supportsVision = supportsVision,
                     supportsAudio = supportsAudio,
                     supportsVideo = supportsVideo,
@@ -140,11 +154,30 @@ object AIServiceFactory {
 
             // Claude格式，支持Anthropic Claude系列
             ApiProviderType.ANTHROPIC,
-            ApiProviderType.ANTHROPIC_GENERIC -> ClaudeProvider(config.apiEndpoint, apiKeyProvider, config.modelName, httpClient, customHeaders, config.apiProviderType, enableToolCall)
+            ApiProviderType.ANTHROPIC_GENERIC ->
+                ClaudeProvider(
+                    config.apiEndpoint,
+                    apiKeyProvider,
+                    config.modelName,
+                    httpClient,
+                    customHeaders,
+                    providerType,
+                    enableToolCall
+                )
 
             // Gemini格式，支持Google Gemini系列及通用Gemini端点
             ApiProviderType.GOOGLE,
-            ApiProviderType.GEMINI_GENERIC -> GeminiProvider(config.apiEndpoint, apiKeyProvider, config.modelName, httpClient, customHeaders, config.apiProviderType, config.enableGoogleSearch, enableToolCall)
+            ApiProviderType.GEMINI_GENERIC ->
+                GeminiProvider(
+                    config.apiEndpoint,
+                    apiKeyProvider,
+                    config.modelName,
+                    httpClient,
+                    customHeaders,
+                    providerType,
+                    config.enableGoogleSearch,
+                    enableToolCall
+                )
 
             // LM Studio使用OpenAI兼容格式
             ApiProviderType.LMSTUDIO ->
@@ -154,7 +187,7 @@ object AIServiceFactory {
                     modelName = config.modelName,
                     client = httpClient,
                     customHeaders = customHeaders,
-                    providerType = config.apiProviderType,
+                    providerType = providerType,
                     supportsVision = supportsVision,
                     supportsAudio = supportsAudio,
                     supportsVideo = supportsVideo,
@@ -169,7 +202,7 @@ object AIServiceFactory {
                     modelName = config.modelName,
                     client = httpClient,
                     customHeaders = customHeaders,
-                    providerType = config.apiProviderType,
+                    providerType = providerType,
                     supportsVision = supportsVision,
                     supportsAudio = supportsAudio,
                     supportsVideo = supportsVideo,
@@ -177,26 +210,28 @@ object AIServiceFactory {
                 )
 
             // MNN本地推理引擎
-            ApiProviderType.MNN -> MNNProvider(
-                context = context,
-                modelName = config.modelName,  // 使用modelName而不是mnnModelPath
-                forwardType = config.mnnForwardType,
-                threadCount = config.mnnThreadCount,
-                providerType = config.apiProviderType,
-                enableToolCall = enableToolCall,
-                supportsVision = supportsVision,
-                supportsAudio = supportsAudio,
-                supportsVideo = supportsVideo
-            )
+            ApiProviderType.MNN ->
+                MNNProvider(
+                    context = context,
+                    modelName = config.modelName,
+                    forwardType = config.mnnForwardType,
+                    threadCount = config.mnnThreadCount,
+                    providerType = providerType,
+                    enableToolCall = enableToolCall,
+                    supportsVision = supportsVision,
+                    supportsAudio = supportsAudio,
+                    supportsVideo = supportsVideo
+                )
 
             // llama.cpp 本地推理引擎
-            ApiProviderType.LLAMA_CPP -> LlamaProvider(
-                context = context,
-                modelName = config.modelName,
-                sessionConfig = buildAndroidLlamaSessionConfig(config),
-                providerType = config.apiProviderType,
-                enableToolCall = enableToolCall
-            )
+            ApiProviderType.LLAMA_CPP ->
+                LlamaProvider(
+                    context = context,
+                    modelName = config.modelName,
+                    sessionConfig = buildAndroidLlamaSessionConfig(config),
+                    providerType = providerType,
+                    enableToolCall = enableToolCall
+                )
 
             // 阿里云（通义千问）使用专用的QwenProvider
             ApiProviderType.ALIYUN ->
@@ -206,7 +241,7 @@ object AIServiceFactory {
                     modelName = config.modelName,
                     client = httpClient,
                     customHeaders = customHeaders,
-                    providerType = config.apiProviderType,
+                    providerType = providerType,
                     supportsVision = supportsVision,
                     supportsAudio = supportsAudio,
                     supportsVideo = supportsVideo,
@@ -214,59 +249,29 @@ object AIServiceFactory {
                 )
 
             // 其他中文服务商，当前使用OpenAI Provider (大多数兼容OpenAI格式)
-            // 后续可根据需要实现专用Provider
-            ApiProviderType.BAIDU ->
+            ApiProviderType.BAIDU,
+            ApiProviderType.XUNFEI,
+            ApiProviderType.ZHIPU,
+            ApiProviderType.BAICHUAN,
+            ApiProviderType.IFLOW,
+            ApiProviderType.INFINIAI,
+            ApiProviderType.ALIPAY_BAILING,
+            ApiProviderType.PPINFRA,
+            ApiProviderType.NOVITA,
+            ApiProviderType.OTHER ->
                 OpenAIProvider(
                     apiEndpoint = config.apiEndpoint,
                     apiKeyProvider = apiKeyProvider,
                     modelName = config.modelName,
                     client = httpClient,
                     customHeaders = customHeaders,
-                    providerType = config.apiProviderType,
+                    providerType = providerType,
                     supportsVision = supportsVision,
                     supportsAudio = supportsAudio,
                     supportsVideo = supportsVideo,
                     enableToolCall = enableToolCall
                 )
-            ApiProviderType.XUNFEI ->
-                OpenAIProvider(
-                    apiEndpoint = config.apiEndpoint,
-                    apiKeyProvider = apiKeyProvider,
-                    modelName = config.modelName,
-                    client = httpClient,
-                    customHeaders = customHeaders,
-                    providerType = config.apiProviderType,
-                    supportsVision = supportsVision,
-                    supportsAudio = supportsAudio,
-                    supportsVideo = supportsVideo,
-                    enableToolCall = enableToolCall
-                )
-            ApiProviderType.ZHIPU ->
-                OpenAIProvider(
-                    apiEndpoint = config.apiEndpoint,
-                    apiKeyProvider = apiKeyProvider,
-                    modelName = config.modelName,
-                    client = httpClient,
-                    customHeaders = customHeaders,
-                    providerType = config.apiProviderType,
-                    supportsVision = supportsVision,
-                    supportsAudio = supportsAudio,
-                    supportsVideo = supportsVideo,
-                    enableToolCall = enableToolCall
-                )
-            ApiProviderType.BAICHUAN ->
-                OpenAIProvider(
-                    apiEndpoint = config.apiEndpoint,
-                    apiKeyProvider = apiKeyProvider,
-                    modelName = config.modelName,
-                    client = httpClient,
-                    customHeaders = customHeaders,
-                    providerType = config.apiProviderType,
-                    supportsVision = supportsVision,
-                    supportsAudio = supportsAudio,
-                    supportsVideo = supportsVideo,
-                    enableToolCall = enableToolCall
-                )
+
             ApiProviderType.MOONSHOT ->
                 KimiProvider(
                     apiEndpoint = config.apiEndpoint,
@@ -274,14 +279,12 @@ object AIServiceFactory {
                     modelName = config.modelName,
                     client = httpClient,
                     customHeaders = customHeaders,
-                    providerType = config.apiProviderType,
+                    providerType = providerType,
                     supportsVision = supportsVision,
                     supportsAudio = supportsAudio,
                     supportsVideo = supportsVideo,
                     enableToolCall = enableToolCall
                 )
-
-            // DeepSeek使用专用Provider（支持推理模式）
             ApiProviderType.DEEPSEEK ->
                 DeepseekProvider(
                     apiEndpoint = config.apiEndpoint,
@@ -289,7 +292,7 @@ object AIServiceFactory {
                     modelName = config.modelName,
                     client = httpClient,
                     customHeaders = customHeaders,
-                    providerType = config.apiProviderType,
+                    providerType = providerType,
                     supportsVision = supportsVision,
                     supportsAudio = supportsAudio,
                     supportsVideo = supportsVideo,
@@ -302,7 +305,7 @@ object AIServiceFactory {
                     modelName = config.modelName,
                     client = httpClient,
                     customHeaders = customHeaders,
-                    providerType = config.apiProviderType,
+                    providerType = providerType,
                     supportsVision = supportsVision,
                     supportsAudio = supportsAudio,
                     supportsVideo = supportsVideo,
@@ -315,20 +318,7 @@ object AIServiceFactory {
                     modelName = config.modelName,
                     client = httpClient,
                     customHeaders = customHeaders,
-                    providerType = config.apiProviderType,
-                    supportsVision = supportsVision,
-                    supportsAudio = supportsAudio,
-                    supportsVideo = supportsVideo,
-                    enableToolCall = enableToolCall
-                )
-            ApiProviderType.IFLOW ->
-                OpenAIProvider(
-                    apiEndpoint = config.apiEndpoint,
-                    apiKeyProvider = apiKeyProvider,
-                    modelName = config.modelName,
-                    client = httpClient,
-                    customHeaders = customHeaders,
-                    providerType = config.apiProviderType,
+                    providerType = providerType,
                     supportsVision = supportsVision,
                     supportsAudio = supportsAudio,
                     supportsVideo = supportsVideo,
@@ -341,7 +331,7 @@ object AIServiceFactory {
                     modelName = config.modelName,
                     client = httpClient,
                     customHeaders = customHeaders,
-                    providerType = config.apiProviderType,
+                    providerType = providerType,
                     supportsVision = supportsVision,
                     supportsAudio = supportsAudio,
                     supportsVideo = supportsVideo,
@@ -354,33 +344,7 @@ object AIServiceFactory {
                     modelName = config.modelName,
                     client = httpClient,
                     customHeaders = customHeaders,
-                    providerType = config.apiProviderType,
-                    supportsVision = supportsVision,
-                    supportsAudio = supportsAudio,
-                    supportsVideo = supportsVideo,
-                    enableToolCall = enableToolCall
-                )
-            ApiProviderType.INFINIAI ->
-                OpenAIProvider(
-                    apiEndpoint = config.apiEndpoint,
-                    apiKeyProvider = apiKeyProvider,
-                    modelName = config.modelName,
-                    client = httpClient,
-                    customHeaders = customHeaders,
-                    providerType = config.apiProviderType,
-                    supportsVision = supportsVision,
-                    supportsAudio = supportsAudio,
-                    supportsVideo = supportsVideo,
-                    enableToolCall = enableToolCall
-                )
-            ApiProviderType.ALIPAY_BAILING ->
-                OpenAIProvider(
-                    apiEndpoint = config.apiEndpoint,
-                    apiKeyProvider = apiKeyProvider,
-                    modelName = config.modelName,
-                    client = httpClient,
-                    customHeaders = customHeaders,
-                    providerType = config.apiProviderType,
+                    providerType = providerType,
                     supportsVision = supportsVision,
                     supportsAudio = supportsAudio,
                     supportsVideo = supportsVideo,
@@ -393,7 +357,7 @@ object AIServiceFactory {
                     modelName = config.modelName,
                     client = httpClient,
                     customHeaders = customHeaders,
-                    providerType = config.apiProviderType,
+                    providerType = providerType,
                     supportsVision = supportsVision,
                     supportsAudio = supportsAudio,
                     supportsVideo = supportsVideo,
@@ -406,46 +370,7 @@ object AIServiceFactory {
                     modelName = config.modelName,
                     client = httpClient,
                     customHeaders = customHeaders,
-                    providerType = config.apiProviderType,
-                    supportsVision = supportsVision,
-                    supportsAudio = supportsAudio,
-                    supportsVideo = supportsVideo,
-                    enableToolCall = enableToolCall
-                )
-            ApiProviderType.PPINFRA ->
-                OpenAIProvider(
-                    apiEndpoint = config.apiEndpoint,
-                    apiKeyProvider = apiKeyProvider,
-                    modelName = config.modelName,
-                    client = httpClient,
-                    customHeaders = customHeaders,
-                    providerType = config.apiProviderType,
-                    supportsVision = supportsVision,
-                    supportsAudio = supportsAudio,
-                    supportsVideo = supportsVideo,
-                    enableToolCall = enableToolCall
-                )
-            ApiProviderType.NOVITA ->
-                OpenAIProvider(
-                    apiEndpoint = config.apiEndpoint,
-                    apiKeyProvider = apiKeyProvider,
-                    modelName = config.modelName,
-                    client = httpClient,
-                    customHeaders = customHeaders,
-                    providerType = config.apiProviderType,
-                    supportsVision = supportsVision,
-                    supportsAudio = supportsAudio,
-                    supportsVideo = supportsVideo,
-                    enableToolCall = enableToolCall
-                )
-            ApiProviderType.OTHER ->
-                OpenAIProvider(
-                    apiEndpoint = config.apiEndpoint,
-                    apiKeyProvider = apiKeyProvider,
-                    modelName = config.modelName,
-                    client = httpClient,
-                    customHeaders = customHeaders,
-                    providerType = config.apiProviderType,
+                    providerType = providerType,
                     supportsVision = supportsVision,
                     supportsAudio = supportsAudio,
                     supportsVideo = supportsVideo,

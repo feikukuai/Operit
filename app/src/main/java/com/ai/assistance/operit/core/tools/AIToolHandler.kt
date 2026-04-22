@@ -16,7 +16,9 @@ import com.ai.assistance.operit.util.stream.stream
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
 
@@ -356,6 +358,54 @@ class AIToolHandler private constructor(private val context: Context) {
             val result = executor.invoke(tool)
             notifyToolExecutionResult(tool, result)
             result
+        } catch (e: Exception) {
+            notifyToolExecutionError(tool, e)
+            throw e
+        } finally {
+            notifyToolExecutionFinished(tool)
+        }
+    }
+
+    /** Executes a tool and preserves intermediate streaming results when supported by the executor. */
+    fun executeToolAndStream(tool: AITool): Flow<ToolResult> = flow {
+        notifyToolCallRequested(tool)
+        val executor = getToolExecutorOrActivate(tool.name)
+
+        if (executor == null) {
+            val notFoundResult =
+                ToolResult(
+                    toolName = tool.name,
+                    success = false,
+                    result = StringResultData(""),
+                    error = "Tool not found: ${tool.name}"
+                )
+            notifyToolExecutionResult(tool, notFoundResult)
+            notifyToolExecutionFinished(tool)
+            emit(notFoundResult)
+            return@flow
+        }
+
+        val validationResult = executor.validateParameters(tool)
+        if (!validationResult.valid) {
+            val validationFailedResult =
+                ToolResult(
+                    toolName = tool.name,
+                    success = false,
+                    result = StringResultData(""),
+                    error = validationResult.errorMessage
+                )
+            notifyToolExecutionResult(tool, validationFailedResult)
+            notifyToolExecutionFinished(tool)
+            emit(validationFailedResult)
+            return@flow
+        }
+
+        notifyToolExecutionStarted(tool)
+        try {
+            executor.invokeAndStream(tool).collect { result ->
+                notifyToolExecutionResult(tool, result)
+                emit(result)
+            }
         } catch (e: Exception) {
             notifyToolExecutionError(tool, e)
             throw e

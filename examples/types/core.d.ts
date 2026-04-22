@@ -19,6 +19,11 @@ export interface ToolConfig {
     type?: string;
     name: string;
     params?: ToolParams;
+    onIntermediateResult?: (value: unknown) => void;
+}
+
+export interface ToolCallOptions<TIntermediate = unknown> {
+    onIntermediateResult?: (value: TIntermediate) => void;
 }
 
 /**
@@ -71,6 +76,8 @@ export type ToolReturnType<T extends string> = T extends keyof import('./tool-ty
 export declare function toolCall<T extends string>(toolType: string, toolName: T, toolParams?: ToolParams): Promise<ToolReturnType<T>>;
 export declare function toolCall<T extends string>(toolName: T, toolParams?: ToolParams): Promise<ToolReturnType<T>>;
 export declare function toolCall<T extends string>(config: ToolConfig & { name: T }): Promise<ToolReturnType<T>>;
+export declare function toolCall<T extends string, TIntermediate = unknown>(toolType: string, toolName: T, toolParams: ToolParams | undefined, options: ToolCallOptions<TIntermediate>): Promise<ToolReturnType<T>>;
+export declare function toolCall<T extends string, TIntermediate = unknown>(toolName: T, toolParams: ToolParams | undefined, options: ToolCallOptions<TIntermediate>): Promise<ToolReturnType<T>>;
 export declare function toolCall(toolName: string): Promise<any>;
 
 /**
@@ -101,6 +108,7 @@ export namespace NativeInterface {
      * The callback will receive a ToolResult object
      */
     function callToolAsync(callbackId: string, toolType: string, toolName: string, paramsJson: string): void;
+    function callToolAsyncStreaming(callbackId: string, intermediateCallbackId: string, toolType: string, toolName: string, paramsJson: string): void;
 
     /**
      * Set the result of script execution

@@ -15,6 +15,8 @@ import com.ai.assistance.operit.data.model.CharacterCard
 import com.ai.assistance.operit.data.model.FunctionType
 import com.ai.assistance.operit.data.model.PromptFunctionType
 import com.ai.assistance.operit.data.model.ChatMessage
+import com.ai.assistance.operit.data.model.ChatMessageDisplayMode
+import com.ai.assistance.operit.data.model.ChatTurnOptions
 import com.ai.assistance.operit.data.model.InputProcessingState
 import com.ai.assistance.operit.data.model.CharacterCardChatModelBindingMode
 import com.ai.assistance.operit.data.model.ActivePrompt
@@ -276,7 +278,8 @@ class MessageCoordinationDelegate(
         messageTextOverride: String? = null,
         proxySenderNameOverride: String? = null,
         chatModelConfigIdOverride: String? = null,
-        chatModelIndexOverride: Int? = null
+        chatModelIndexOverride: Int? = null,
+        turnOptions: ChatTurnOptions = ChatTurnOptions()
     ) {
         // 仅在没有指定 chatId 的情况下，才需要确保有当前对话
         if (chatIdOverride.isNullOrBlank() && chatHistoryDelegate.currentChatId.value == null) {
@@ -313,7 +316,8 @@ class MessageCoordinationDelegate(
                     messageTextOverride = messageTextOverride,
                     proxySenderNameOverride = proxySenderNameOverride,
                     chatModelConfigIdOverride = chatModelConfigIdOverride,
-                    chatModelIndexOverride = chatModelIndexOverride
+                    chatModelIndexOverride = chatModelIndexOverride,
+                    turnOptions = turnOptions
                 )
             }
         } else {
@@ -325,7 +329,8 @@ class MessageCoordinationDelegate(
                 messageTextOverride = messageTextOverride,
                 proxySenderNameOverride = proxySenderNameOverride,
                 chatModelConfigIdOverride = chatModelConfigIdOverride,
-                chatModelIndexOverride = chatModelIndexOverride
+                chatModelIndexOverride = chatModelIndexOverride,
+                turnOptions = turnOptions
             )
         }
     }
@@ -449,7 +454,8 @@ class MessageCoordinationDelegate(
         forceDisableSummary: Boolean = false,
         enableGroupOrchestration: Boolean = true,
         isGroupOrchestrationTurn: Boolean = false,
-        groupParticipantNamesText: String? = null
+        groupParticipantNamesText: String? = null,
+        turnOptions: ChatTurnOptions = ChatTurnOptions()
     ) {
         // 如果不是自动续写，更新当前的 promptFunctionType
         if (!isAutoContinuation) {
@@ -467,6 +473,7 @@ class MessageCoordinationDelegate(
             cancelPendingAutoContinuation(chatId, restoreIdleIfPendingState = false)
         }
         if (
+            turnOptions.persistTurn &&
             enableGroupOrchestration &&
             shouldRunGroupOrchestration(
                 promptFunctionType = promptFunctionType,
@@ -481,7 +488,11 @@ class MessageCoordinationDelegate(
         ) {
             coroutineScope.launch {
                 val handled = runCatching {
-                    orchestrateGroupConversation(chatId = chatId, promptFunctionType = promptFunctionType)
+                    orchestrateGroupConversation(
+                        chatId = chatId,
+                        promptFunctionType = promptFunctionType,
+                        turnOptions = turnOptions
+                    )
                 }.getOrElse { throwable ->
                     AppLogger.e(TAG, "群组编排失败，回退普通发送", throwable)
                     false
@@ -500,7 +511,8 @@ class MessageCoordinationDelegate(
                         chatModelIndexOverride = chatModelIndexOverride,
                         suppressUserMessageInHistory = suppressUserMessageInHistory,
                         forceDisableSummary = forceDisableSummary,
-                        enableGroupOrchestration = false
+                        enableGroupOrchestration = false,
+                        turnOptions = turnOptions
                     )
                 }
             }
@@ -553,7 +565,7 @@ class MessageCoordinationDelegate(
         var tokenUsageThresholdForSend = apiConfigDelegate.summaryTokenThreshold.value.toDouble()
 
         // 如果不是续写，检查是否需要总结
-        if (!isBackgroundSend && !isContinuation && !skipSummaryCheck) {
+        if (turnOptions.persistTurn && !isBackgroundSend && !isContinuation && !skipSummaryCheck) {
             val currentMessages = chatHistoryDelegate.chatHistory.value
             val currentTokens = tokenStatsDelegate.currentWindowSizeFlow.value
             val maxTokens = (apiConfigDelegate.contextLength.value * 1024).toInt()
@@ -626,7 +638,8 @@ class MessageCoordinationDelegate(
             chatModelIndexOverride = resolvedChatModelIndexOverride,
             suppressUserMessageInHistory = suppressUserMessageInHistory,
             isGroupOrchestrationTurn = isGroupOrchestrationTurn,
-            groupParticipantNamesText = groupParticipantNamesText
+            groupParticipantNamesText = groupParticipantNamesText,
+            turnOptions = turnOptions
         )
 
         // 只有在非续写（即用户主动发送）时才清空附件和UI状态
@@ -662,7 +675,8 @@ class MessageCoordinationDelegate(
 
     private suspend fun orchestrateGroupConversation(
         chatId: String,
-        promptFunctionType: PromptFunctionType
+        promptFunctionType: PromptFunctionType,
+        turnOptions: ChatTurnOptions
     ): Boolean {
         val group = resolveTargetGroupForChat(chatId) ?: return false
 
@@ -743,7 +757,13 @@ class MessageCoordinationDelegate(
         val userMessage = ChatMessage(
             sender = "user",
             content = finalUserMessageContent,
-            roleName = context.getString(R.string.message_role_user)
+            roleName = context.getString(R.string.message_role_user),
+            displayMode =
+                if (turnOptions.hideUserMessage) {
+                    ChatMessageDisplayMode.HIDDEN_PLACEHOLDER
+                } else {
+                    ChatMessageDisplayMode.NORMAL
+                }
         )
         chatHistoryDelegate.addMessageToChat(userMessage, chatId)
 
@@ -849,7 +869,8 @@ class MessageCoordinationDelegate(
                     forceDisableSummary = true,
                     enableGroupOrchestration = false,
                     isGroupOrchestrationTurn = true,
-                    groupParticipantNamesText = groupParticipantNamesText
+                    groupParticipantNamesText = groupParticipantNamesText,
+                    turnOptions = turnOptions
                 )
                 userMessageInsertedForCurrentUserTurn = true
 

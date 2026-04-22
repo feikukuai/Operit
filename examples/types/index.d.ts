@@ -231,12 +231,19 @@ declare global {
         type?: string;
         name: string;
         params?: ToolParams;
+        onIntermediateResult?: (value: unknown) => void;
+    }
+
+    interface ToolCallOptions<TIntermediate = unknown> {
+        onIntermediateResult?: (value: TIntermediate) => void;
     }
 
     // Tool call functions
     function toolCall<T extends string>(toolType: string, toolName: T, toolParams?: ToolParams): Promise<ToolReturnType<T>>;
     function toolCall<T extends string>(toolName: T, toolParams?: ToolParams): Promise<ToolReturnType<T>>;
     function toolCall<T extends string>(config: ToolConfig & { name: T }): Promise<ToolReturnType<T>>;
+    function toolCall<T extends string, TIntermediate = unknown>(toolType: string, toolName: T, toolParams: ToolParams | undefined, options: ToolCallOptions<TIntermediate>): Promise<ToolReturnType<T>>;
+    function toolCall<T extends string, TIntermediate = unknown>(toolName: T, toolParams: ToolParams | undefined, options: ToolCallOptions<TIntermediate>): Promise<ToolReturnType<T>>;
     function toolCall(toolName: string): Promise<any>;
 
     // Complete function

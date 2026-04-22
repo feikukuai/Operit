@@ -32,7 +32,6 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.ScreenshotMonitor
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material.icons.automirrored.filled.Reply
-import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -63,8 +62,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import com.ai.assistance.operit.R
 import com.ai.assistance.operit.data.model.ChatMessage
+import com.ai.assistance.operit.data.model.ChatMessageDisplayMode
 import com.ai.assistance.operit.ui.features.chat.components.attachments.AttachmentViewerDialog
 import com.ai.assistance.operit.ui.features.chat.components.attachments.ChatAttachment
+import com.ai.assistance.operit.ui.features.chat.components.style.common.HiddenUserMessagePlaceholderContent
 import com.ai.assistance.operit.api.chat.llmprovider.MediaLinkParser
 import com.ai.assistance.operit.ui.theme.isLiquidGlassSupported
 import com.ai.assistance.operit.ui.theme.isWaterGlassSupported
@@ -96,6 +97,9 @@ fun UserMessageComposable(
     val clipboardManager = LocalClipboardManager.current
     val haptic = LocalHapticFeedback.current
     val scope = rememberCoroutineScope()
+    val isHiddenPlaceholder =
+        message.sender == "user" &&
+            message.displayMode == ChatMessageDisplayMode.HIDDEN_PLACEHOLDER
 
     // 添加状态控制内容预览
     val showContentPreview = remember { mutableStateOf(false) }
@@ -106,27 +110,36 @@ fun UserMessageComposable(
     val selectedImageBitmap = remember { mutableStateOf<Bitmap?>(null) }
 
     // Parse message content to separate text and attachments
-    val parseResult = remember(message.content) { parseMessageContent(context, message.content) }
+    val parseResult =
+        remember(message.content, isHiddenPlaceholder) {
+            if (isHiddenPlaceholder) {
+                MessageParseResult(processedText = "", trailingAttachments = emptyList())
+            } else {
+                parseMessageContent(context, message.content)
+            }
+        }
     val textContent = parseResult.processedText
     val trailingAttachments = parseResult.trailingAttachments
     val replyInfo = parseResult.replyInfo
     val imageLinks = parseResult.imageLinks
-    val proxySenderName = parseResult.proxySenderName
+    val proxySenderName = if (isHiddenPlaceholder) null else parseResult.proxySenderName
     val isProxySender = !proxySenderName.isNullOrBlank()
-    val effectiveBackgroundColor = if (isProxySender) {
-        MaterialTheme.colorScheme.secondaryContainer
-    } else {
-        backgroundColor
-    }
-    val effectiveTextColor = if (isProxySender) {
-        MaterialTheme.colorScheme.onSecondaryContainer
-    } else {
-        textColor
-    }
+    val effectiveBackgroundColor =
+        when {
+            isHiddenPlaceholder -> Color.Transparent
+            isProxySender -> MaterialTheme.colorScheme.secondaryContainer
+            else -> backgroundColor
+        }
+    val effectiveTextColor =
+        when {
+            isHiddenPlaceholder -> textColor
+            isProxySender -> MaterialTheme.colorScheme.onSecondaryContainer
+            else -> textColor
+        }
 
     Column(modifier = Modifier
         .fillMaxWidth()
-        .padding(horizontal = 16.dp, vertical = 4.dp)) {
+        .padding(horizontal = 16.dp, vertical = if (isHiddenPlaceholder) 0.dp else 4.dp)) {
         // Display reply info above attachments if present
         replyInfo?.let { reply ->
             Surface(
@@ -220,14 +233,21 @@ fun UserMessageComposable(
             }
         }
 
-        val waterGlassEnabled = enableWaterGlass && isWaterGlassSupported()
-        val liquidGlassEnabled = !waterGlassEnabled && enableLiquidGlass && isLiquidGlassSupported()
+        val waterGlassEnabled = !isHiddenPlaceholder && enableWaterGlass && isWaterGlassSupported()
+        val liquidGlassEnabled =
+            !isHiddenPlaceholder && !waterGlassEnabled && enableLiquidGlass && isLiquidGlassSupported()
 
         // Message bubble
         Card(
             modifier =
             Modifier
-                .fillMaxWidth()
+                .then(
+                    if (isHiddenPlaceholder) {
+                        Modifier.widthIn(max = 320.dp)
+                    } else {
+                        Modifier.fillMaxWidth()
+                    }
+                )
                 .waterGlass(
                     enabled = waterGlassEnabled,
                     shape = RoundedCornerShape(8.dp),
@@ -258,25 +278,37 @@ fun UserMessageComposable(
         ) {
             Column(modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp)) {
-                // 用户消息标题
-                Text(
-                    text = if (!proxySenderName.isNullOrBlank()) {
-                        "Prompt by $proxySenderName"
-                    } else {
-                        "Prompt"
-                    },
-                    style = MaterialTheme.typography.labelSmall,
-                    color = effectiveTextColor.copy(alpha = 0.7f),
-                    modifier = Modifier.padding(bottom = 8.dp)
-                )
+                .padding(
+                    start = 16.dp,
+                    top = if (isHiddenPlaceholder) 0.dp else 16.dp,
+                    end = 16.dp,
+                    bottom = if (isHiddenPlaceholder) 0.dp else 16.dp,
+                )) {
+                if (isHiddenPlaceholder) {
+                    HiddenUserMessagePlaceholderContent(
+                        titleColor = effectiveTextColor,
+                        subtitleColor = effectiveTextColor.copy(alpha = 0.72f),
+                    )
+                } else {
+                    // 用户消息标题
+                    Text(
+                        text = if (!proxySenderName.isNullOrBlank()) {
+                            "Prompt by $proxySenderName"
+                        } else {
+                            "Prompt"
+                        },
+                        style = MaterialTheme.typography.labelSmall,
+                        color = effectiveTextColor.copy(alpha = 0.7f),
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
 
-                // Display main text content with inline attachments
-                Text(
-                    text = textContent,
-                    color = effectiveTextColor,
-                    style = MaterialTheme.typography.bodyMedium
-                )
+                    // Display main text content with inline attachments
+                    Text(
+                        text = textContent,
+                        color = effectiveTextColor,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
             }
         }
     }

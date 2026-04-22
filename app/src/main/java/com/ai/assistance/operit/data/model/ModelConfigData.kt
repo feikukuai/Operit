@@ -35,7 +35,19 @@ enum class ApiProviderType {
         LLAMA_CPP, // llama.cpp 本地推理引擎
         PPINFRA, // 派欧云
         NOVITA, // Novita AI
-        OTHER // 其他提供商（自定义端点）
+        OTHER; // 其他提供商（自定义端点）
+
+        companion object {
+                fun fromProviderTypeId(providerTypeId: String): ApiProviderType? {
+                        val normalized = providerTypeId.trim()
+                        if (normalized.isEmpty()) {
+                                return null
+                        }
+                        return values().firstOrNull {
+                                it.name.equals(normalized, ignoreCase = true)
+                        }
+                }
+        }
 }
 
 object ModelConfigDefaults {
@@ -59,6 +71,7 @@ data class ModelConfigData(
         val apiEndpoint: String = "",
         val modelName: String = "",
         val apiProviderType: ApiProviderType = ApiProviderType.DEEPSEEK,
+        val apiProviderTypeId: String = apiProviderType.name,
 
         // 多API Key支持
         val useMultipleApiKeys: Boolean = false, // 是否启用多API Key模式

@@ -55,6 +55,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.ai.assistance.operit.R
 import com.ai.assistance.operit.data.model.ChatMessage
+import com.ai.assistance.operit.data.model.ChatMessageDisplayMode
 import com.ai.assistance.operit.ui.features.chat.components.lazy.LazyListState as ChatLazyListState
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
@@ -408,6 +409,7 @@ private fun ChatMessageLocatorDialog(
     val initialIndex = (currentMessageIndex - 2).coerceAtLeast(0)
     val listState = rememberLazyListState(initialFirstVisibleItemIndex = initialIndex)
     var searchQuery by remember { mutableStateOf("") }
+    val hiddenPlaceholderText = stringResource(R.string.chat_hidden_user_message_placeholder)
     val normalizedSearchQuery = normalizeMessageSearchText(searchQuery)
     val locatorEntries =
         chatHistory.mapIndexed { index, message ->
@@ -418,7 +420,9 @@ private fun ChatMessageLocatorDialog(
             locatorEntries
         } else {
             locatorEntries.filter { entry ->
-                normalizeMessageSearchText(entry.message.content).contains(
+                normalizeMessageSearchText(
+                    visibleLocatorContent(entry.message, hiddenPlaceholderText)
+                ).contains(
                     normalizedSearchQuery,
                     ignoreCase = true,
                 )
@@ -426,7 +430,8 @@ private fun ChatMessageLocatorDialog(
         }
     val maxMessageLength =
         remember(chatHistory) {
-            chatHistory.maxOfOrNull { messageContentLength(it) }?.coerceAtLeast(1) ?: 1
+            chatHistory.maxOfOrNull { messageContentLength(it, hiddenPlaceholderText) }
+                ?.coerceAtLeast(1) ?: 1
         }
 
     LaunchedEffect(normalizedSearchQuery, filteredEntries.size, currentMessageIndex) {
@@ -575,6 +580,7 @@ private fun ChatMessageLocatorRow(
     searchQuery: String,
     onClick: () -> Unit,
 ) {
+    val hiddenPlaceholderText = stringResource(R.string.chat_hidden_user_message_placeholder)
     val isDarkSurface = MaterialTheme.colorScheme.surface.luminance() < 0.5f
     val (fillColor, rawPreviewTextColor, fillAlpha) =
         if (isDarkSurface) {
@@ -668,8 +674,13 @@ private fun ChatMessageLocatorRow(
         } else {
             MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.22f)
         }
-    val messageLength = messageContentLength(message)
-    val previewText = buildMessagePreview(message = message, searchQuery = searchQuery)
+    val messageLength = messageContentLength(message, hiddenPlaceholderText)
+    val previewText =
+        buildMessagePreview(
+            message = message,
+            hiddenPlaceholderText = hiddenPlaceholderText,
+            searchQuery = searchQuery,
+        )
 
     Surface(
         modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
@@ -787,7 +798,21 @@ private fun senderLabelRes(sender: String): Int =
         else -> R.string.chat_sender_other
     }
 
-private fun messageContentLength(message: ChatMessage): Int = message.content.length.coerceAtLeast(1)
+private fun visibleLocatorContent(message: ChatMessage, hiddenPlaceholderText: String): String {
+    return if (
+        message.sender == "user" &&
+        message.displayMode == ChatMessageDisplayMode.HIDDEN_PLACEHOLDER
+    ) {
+        hiddenPlaceholderText
+    } else {
+        message.content
+    }
+}
+
+private fun messageContentLength(
+    message: ChatMessage,
+    hiddenPlaceholderText: String,
+): Int = visibleLocatorContent(message, hiddenPlaceholderText).length.coerceAtLeast(1)
 
 private fun messageBarFraction(messageLength: Int, maxMessageLength: Int): Float {
     if (maxMessageLength <= 0) {
@@ -798,9 +823,10 @@ private fun messageBarFraction(messageLength: Int, maxMessageLength: Int): Float
 
 private fun buildMessagePreview(
     message: ChatMessage,
+    hiddenPlaceholderText: String,
     searchQuery: String = "",
 ): String {
-    val content = normalizeMessageSearchText(message.content)
+    val content = normalizeMessageSearchText(visibleLocatorContent(message, hiddenPlaceholderText))
     if (content.isEmpty()) {
         return message.sender
     }

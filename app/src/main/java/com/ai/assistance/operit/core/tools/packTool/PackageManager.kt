@@ -108,6 +108,7 @@ private constructor(private val context: Context, private val aiToolHandler: AIT
         val displayName: String,
         val description: String,
         val version: String,
+        val author: List<String>,
         val resourceCount: Int,
         val uiModuleCount: Int,
         val toolboxUiModules: List<ToolPkgToolboxUiModule>,
@@ -136,6 +137,7 @@ private constructor(private val context: Context, private val aiToolHandler: AIT
         val packageName: String,
         val displayName: String,
         val description: String,
+        val author: List<String>,
         val sourcePath: String,
         val sourceFileName: String,
         val fileExtension: String,
@@ -1013,6 +1015,11 @@ private constructor(private val context: Context, private val aiToolHandler: AIT
                     displayName =
                         toolPackage.displayName.resolve(context).ifBlank { packageName },
                     description = toolPackage.description.resolve(context),
+                    author = if (isToolPkg) {
+                        toolPkgContainers[packageName]?.author ?: toolPackage.author
+                    } else {
+                        toolPackage.author
+                    },
                     sourcePath = sourceFile.absolutePath,
                     sourceFileName = sourceFile.name,
                     fileExtension = sourceFile.extension.lowercase(),

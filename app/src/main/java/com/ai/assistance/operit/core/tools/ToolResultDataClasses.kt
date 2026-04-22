@@ -578,6 +578,28 @@ data class HttpResponseData(
     }
 }
 
+@Serializable
+data class HttpStreamEventData(
+        val type: String,
+        val url: String,
+        val statusCode: Int? = null,
+        val statusMessage: String? = null,
+        val headers: Map<String, String> = emptyMap(),
+        val contentType: String? = null,
+        val chunk: String? = null,
+        val chunkIndex: Int? = null,
+        val receivedBytes: Long? = null
+) : ToolResultData() {
+    override fun toString(): String {
+        return when (type) {
+            "chunk" -> chunk.orEmpty()
+            "response_started" ->
+                "HTTP stream started: ${statusCode ?: "?"} ${statusMessage.orEmpty()}".trim()
+            else -> "HTTP stream event: $type"
+        }
+    }
+}
+
 /** 系统设置数据 */
 @Serializable
 data class SystemSettingData(val namespace: String, val setting: String, val value: String) :
@@ -2119,6 +2141,7 @@ data class ModelConfigResultItem(
     val id: String,
     val name: String,
     val apiProviderType: String,
+    val apiProviderTypeId: String,
     val apiEndpoint: String,
     val modelName: String,
     val modelList: List<String>,

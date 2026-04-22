@@ -289,6 +289,7 @@ METADATA
         "en": "Bilibili Assistant"
     },
     "description": "高级B站智能助手，通过UI自动化技术实现B站应用交互...",
+    "author": ["Operit Team"],
     "category": "UI_AUTOMATION",
     "env": ["BILIBILI_SESSDATA"],
     "tools": [
@@ -314,6 +315,7 @@ METADATA
 -   `name`: 脚本的唯一标识符。
 -   `display_name`: （可选，推荐）用于界面显示的名称。不会影响脚本 ID；脚本 ID 仍由 `name` 决定。支持字符串或多语言对象（见 3.1.2）。
 -   `description`: 对脚本功能的详细描述。
+-   `author`: （可选）作者信息，支持单个字符串或字符串数组。
 -   `category`: （可选）脚本分类，用于在工具列表中分组和检索。未填写或为空时，系统会自动归类为 `Other`（见 3.1.3）。
 -   `env`: （可选）字符串数组，声明该脚本/包运行时依赖的环境变量名称，例如各类 API Key。应用会根据这里列出的键在“环境配置”界面中展示对应的输入项，并在激活包前校验这些变量是否已经配置。
 -   `tools`: 一个数组，定义了该脚本暴露给外部调用的所有工具（函数）。

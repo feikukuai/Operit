@@ -1174,6 +1174,11 @@ class JsEngine(private val context: Context) {
             toolPkgRegistrationSession.appendPromptEstimateFinalizeHook(specJson)
         }
 
+        @JavascriptInterface
+        fun registerToolPkgAiProvider(specJson: String) {
+            toolPkgRegistrationSession.appendAiProvider(specJson)
+        }
+
         private fun bridgeClassLoader(): ClassLoader = getJavaBridgeClassLoader()
 
         private fun exposeJavaObject(target: Any, failureLabel: String): String {
@@ -1502,6 +1507,33 @@ class JsEngine(private val context: Context) {
                 binaryHandlePrefix = BINARY_HANDLE_PREFIX,
                 binaryDataThreshold = BINARY_DATA_THRESHOLD,
                 sendToolResult = { callback, result, isError ->
+                    sendToolResult(callback, result, isError)
+                }
+            )
+        }
+
+        @JavascriptInterface
+        fun callToolAsyncStreaming(
+                callbackId: String,
+                intermediateCallbackId: String,
+                toolType: String,
+                toolName: String,
+                paramsJson: String
+        ) {
+            JsNativeInterfaceDelegates.callToolAsyncStreaming(
+                toolHandler = toolHandler,
+                callbackId = callbackId,
+                intermediateCallbackId = intermediateCallbackId,
+                toolType = toolType,
+                toolName = toolName,
+                paramsJson = paramsJson,
+                binaryDataRegistry = binaryDataRegistry,
+                binaryHandlePrefix = BINARY_HANDLE_PREFIX,
+                binaryDataThreshold = BINARY_DATA_THRESHOLD,
+                sendToolResult = { callback, result, isError ->
+                    sendToolResult(callback, result, isError)
+                },
+                sendIntermediateResult = { callback, result, isError ->
                     sendToolResult(callback, result, isError)
                 }
             )

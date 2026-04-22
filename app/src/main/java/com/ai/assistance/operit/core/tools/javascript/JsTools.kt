@@ -1074,11 +1074,14 @@ fun getJsToolsDefinition(): String {
                     return toolCall("get_chat_messages", params);
                 },
                 // 发送消息给AI
-                sendMessage: (message, chatId, roleCardId, senderName) => {
+                sendMessage: (message, chatId, roleCardId, senderName, options = {}) => {
                     const params = { message };
                     if (chatId) params.chat_id = chatId;
                     if (roleCardId) params.role_card_id = roleCardId;
                     if (senderName) params.sender_name = senderName;
+                    if (options.persist_turn !== undefined) params.persist_turn = options.persist_turn;
+                    if (options.notify_reply !== undefined) params.notify_reply = options.notify_reply;
+                    if (options.hide_user_message !== undefined) params.hide_user_message = options.hide_user_message;
                     return toolCall("send_message_to_ai", params);
                 },
                 sendMessageAdvanced: (params = {}) => {

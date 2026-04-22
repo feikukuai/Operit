@@ -751,6 +751,7 @@ class EnhancedAIService private constructor(private val context: Context) {
         groupParticipantNamesText: String? = null,
         proxySenderName: String? = null,
         onToolInvocation: (suspend (String) -> Unit)? = null,
+        notifyReplyOverride: Boolean? = null,
         chatModelConfigIdOverride: String? = null,
         chatModelIndexOverride: Int? = null,
         stream: Boolean = true
@@ -1086,6 +1087,7 @@ class EnhancedAIService private constructor(private val context: Context) {
                                 roleCardId,
                                 chatId,
                                 onToolInvocation,
+                                notifyReplyOverride,
                                 chatModelConfigIdOverride,
                                 chatModelIndexOverride,
                                 stream,
@@ -1504,6 +1506,7 @@ class EnhancedAIService private constructor(private val context: Context) {
             roleCardId: String? = null,
             chatId: String? = null,
             onToolInvocation: (suspend (String) -> Unit)? = null,
+            notifyReplyOverride: Boolean? = null,
             chatModelConfigIdOverride: String? = null,
             chatModelIndexOverride: Int? = null,
             stream: Boolean = true,
@@ -1529,7 +1532,8 @@ class EnhancedAIService private constructor(private val context: Context) {
                     context = context,
                     content = content,
                     isSubTask = isSubTask,
-                    chatId = chatId
+                    chatId = chatId,
+                    notifyReplyOverride = notifyReplyOverride
                 )
                 return
             }
@@ -1576,6 +1580,7 @@ class EnhancedAIService private constructor(private val context: Context) {
                         roleCardId = roleCardId,
                         chatId = chatId,
                         onToolInvocation = onToolInvocation,
+                        notifyReplyOverride = notifyReplyOverride,
                         chatModelConfigIdOverride = chatModelConfigIdOverride,
                         chatModelIndexOverride = chatModelIndexOverride,
                         stream = stream,
@@ -1623,7 +1628,8 @@ class EnhancedAIService private constructor(private val context: Context) {
                     isSubTask = isSubTask,
                     chatId = chatId,
                     characterName = characterName,
-                    avatarUri = avatarUri
+                    avatarUri = avatarUri,
+                    notifyReplyOverride = notifyReplyOverride
                 )
                 return
             }
@@ -1682,6 +1688,7 @@ class EnhancedAIService private constructor(private val context: Context) {
                         roleCardId = roleCardId,
                         chatId = chatId,
                         onToolInvocation = onToolInvocation,
+                        notifyReplyOverride = notifyReplyOverride,
                         chatModelConfigIdOverride = chatModelConfigIdOverride,
                         chatModelIndexOverride = chatModelIndexOverride,
                         stream = stream,
@@ -1751,6 +1758,7 @@ class EnhancedAIService private constructor(private val context: Context) {
                         roleCardId,
                         chatId,
                         onToolInvocation,
+                        notifyReplyOverride,
                         chatModelConfigIdOverride,
                         chatModelIndexOverride,
                         stream = stream,
@@ -1774,7 +1782,8 @@ class EnhancedAIService private constructor(private val context: Context) {
                 isSubTask = isSubTask,
                 chatId = chatId,
                 characterName = characterName,
-                avatarUri = avatarUri
+                avatarUri = avatarUri,
+                notifyReplyOverride = notifyReplyOverride
             )
             logMessageTiming(
                 stage = "enhanced.processStreamCompletion.complete",
@@ -1798,7 +1807,8 @@ class EnhancedAIService private constructor(private val context: Context) {
         isSubTask: Boolean,
         chatId: String? = null,
         characterName: String? = null,
-        avatarUri: String? = null
+        avatarUri: String? = null,
+        notifyReplyOverride: Boolean? = null
     ) {
         // Mark conversation as complete
         context.isConversationActive.set(false)
@@ -1811,8 +1821,8 @@ class EnhancedAIService private constructor(private val context: Context) {
 
         // Ensure input processing state is updated to completed
         if (!isSubTask) {
-        withContext(Dispatchers.Main) {
-            _inputProcessingState.value = InputProcessingState.Completed
+            withContext(Dispatchers.Main) {
+                _inputProcessingState.value = InputProcessingState.Completed
             }
         }
 
@@ -1837,8 +1847,8 @@ class EnhancedAIService private constructor(private val context: Context) {
         }
 
         if (!isSubTask) {
-        notifyReplyCompleted(chatId, characterName, avatarUri)
-        stopAiService(characterName, avatarUri)
+            notifyReplyCompleted(chatId, characterName, avatarUri, notifyReplyOverride)
+            stopAiService(characterName, avatarUri)
         }
     }
 
@@ -1849,7 +1859,8 @@ class EnhancedAIService private constructor(private val context: Context) {
         isSubTask: Boolean,
         chatId: String? = null,
         characterName: String? = null,
-        avatarUri: String? = null
+        avatarUri: String? = null,
+        notifyReplyOverride: Boolean? = null
     ) {
         // Mark conversation as complete
         context.isConversationActive.set(false)
@@ -1862,15 +1873,15 @@ class EnhancedAIService private constructor(private val context: Context) {
 
         // Ensure input processing state is updated to completed
         if (!isSubTask) {
-        withContext(Dispatchers.Main) {
-            _inputProcessingState.value = InputProcessingState.Completed
+            withContext(Dispatchers.Main) {
+                _inputProcessingState.value = InputProcessingState.Completed
             }
         }
 
         AppLogger.d(TAG, "Wait for user need - skipping problem library analysis")
         if (!isSubTask) {
-        notifyReplyCompleted(chatId, characterName, avatarUri)
-        stopAiService(characterName, avatarUri)
+            notifyReplyCompleted(chatId, characterName, avatarUri, notifyReplyOverride)
+            stopAiService(characterName, avatarUri)
         }
     }
 
@@ -1892,6 +1903,7 @@ class EnhancedAIService private constructor(private val context: Context) {
         roleCardId: String? = null,
         chatId: String? = null,
         onToolInvocation: (suspend (String) -> Unit)? = null,
+        notifyReplyOverride: Boolean? = null,
         chatModelConfigIdOverride: String? = null,
         chatModelIndexOverride: Int? = null,
         stream: Boolean = true,
@@ -1928,7 +1940,7 @@ class EnhancedAIService private constructor(private val context: Context) {
                 processToolResults(
                     allToolResults, context, functionType, collector, enableThinking,
                     enableMemoryQuery, onNonFatalError, onTokenLimitExceeded, maxTokens, tokenUsageThreshold, isSubTask,
-                    characterName, avatarUri, roleCardId, chatId, onToolInvocation,
+                    characterName, avatarUri, roleCardId, chatId, onToolInvocation, notifyReplyOverride,
                     chatModelConfigIdOverride, chatModelIndexOverride, stream, enableGroupOrchestrationHint
                 )
             } else if (!toolResultOverrideMessage.isNullOrEmpty()) {
@@ -1950,6 +1962,7 @@ class EnhancedAIService private constructor(private val context: Context) {
                     roleCardId = roleCardId,
                     chatId = chatId,
                     onToolInvocation = onToolInvocation,
+                    notifyReplyOverride = notifyReplyOverride,
                     chatModelConfigIdOverride = chatModelConfigIdOverride,
                     chatModelIndexOverride = chatModelIndexOverride,
                     stream = stream,
@@ -1994,6 +2007,7 @@ class EnhancedAIService private constructor(private val context: Context) {
             roleCardId: String? = null,
             chatId: String? = null,
             onToolInvocation: (suspend (String) -> Unit)? = null,
+            notifyReplyOverride: Boolean? = null,
             chatModelConfigIdOverride: String? = null,
             chatModelIndexOverride: Int? = null,
             stream: Boolean = true,
@@ -2254,6 +2268,7 @@ class EnhancedAIService private constructor(private val context: Context) {
                     roleCardId,
                     chatId,
                     onToolInvocation,
+                    notifyReplyOverride,
                     chatModelConfigIdOverride,
                     chatModelIndexOverride,
                     stream,
@@ -2729,14 +2744,16 @@ class EnhancedAIService private constructor(private val context: Context) {
     private fun notifyReplyCompleted(
         chatId: String?,
         characterName: String? = null,
-        avatarUri: String? = null
+        avatarUri: String? = null,
+        notifyReplyOverride: Boolean? = null
     ) {
         AIForegroundService.notifyReplyCompleted(
             context = context,
             chatId = chatId,
             characterName = characterName,
             rawReplyContent = lastReplyContent,
-            avatarUri = avatarUri
+            avatarUri = avatarUri,
+            notifyReplyOverride = notifyReplyOverride
         )
     }
 

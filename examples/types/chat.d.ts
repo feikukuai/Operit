@@ -24,6 +24,12 @@ import {
  * Provides methods for managing chat conversations
  */
 export namespace Chat {
+    interface SendMessageOptions {
+        persist_turn?: boolean;
+        notify_reply?: boolean;
+        hide_user_message?: boolean;
+    }
+
     interface SendMessageAdvancedParams {
         message: string;
         chatId?: string;
@@ -38,6 +44,9 @@ export namespace Chat {
         tokenUsageThreshold: number;
         customSystemPromptTemplate?: string;
         isSubTask?: boolean;
+        persist_turn?: boolean;
+        notify_reply?: boolean;
+        hide_user_message?: boolean;
         stream?: boolean;
     }
 
@@ -110,9 +119,16 @@ export namespace Chat {
      * @param chatId - Optional chat ID to send the message to (defaults to current chat)
      * @param roleCardId - Optional role card ID to use for this send
      * @param senderName - Optional display name when AI sends as user
+     * @param options - Optional per-turn controls for persistence, notification, and hidden user-message display
      * @returns Promise resolving to the message send result
      */
-    function sendMessage(message: string, chatId?: string, roleCardId?: string, senderName?: string): Promise<MessageSendResultData>;
+    function sendMessage(
+        message: string,
+        chatId?: string,
+        roleCardId?: string,
+        senderName?: string,
+        options?: SendMessageOptions
+    ): Promise<MessageSendResultData>;
 
     /**
      * Send a message to AI with advanced controls.

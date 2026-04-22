@@ -62,7 +62,8 @@ class MessageProcessingDelegate(
         private val saveCurrentChat: () -> Unit,
         private val showErrorMessage: (String) -> Unit,
         private val updateChatTitle: (chatId: String, title: String) -> Unit,
-        private val onTurnComplete: (chatId: String?, service: EnhancedAIService, nextWindowSize: Int?) -> Unit,
+        private val onTurnComplete:
+            (chatId: String?, service: EnhancedAIService, nextWindowSize: Int?, turnOptions: ChatTurnOptions) -> Unit,
         private val onTokenLimitExceeded: suspend (
             chatId: String?,
             roleCardId: String?,
@@ -122,6 +123,7 @@ class MessageProcessingDelegate(
         var responseStream: SharedStream<String>? = null,
         var streamCollectionJob: Job? = null,
         var stateCollectionJob: Job? = null,
+        var currentTurnOptions: ChatTurnOptions = ChatTurnOptions(),
         val isLoading: MutableStateFlow<Boolean> = MutableStateFlow(false)
     )
 
@@ -301,6 +303,7 @@ class MessageProcessingDelegate(
 
     private suspend fun cancelMessageInternal(chatId: String, keepPartialResponse: Boolean) {
         val chatRuntime = runtimeFor(chatId)
+        val currentTurnOptions = chatRuntime.currentTurnOptions
         val jobsToCancel =
             linkedSetOf<Job>().apply {
                 chatRuntime.sendJob?.let { add(it) }
@@ -329,10 +332,13 @@ class MessageProcessingDelegate(
 
         chatRuntime.responseStream = null
         chatRuntime.isLoading.value = false
+        chatRuntime.currentTurnOptions = ChatTurnOptions()
         updateGlobalLoadingState()
         setChatInputProcessingState(chatId, EnhancedInputProcessingState.Idle)
 
-        withContext(Dispatchers.IO) { saveCurrentChat() }
+        if (currentTurnOptions.persistTurn) {
+            withContext(Dispatchers.IO) { saveCurrentChat() }
+        }
     }
 
     fun cancelMessage(chatId: String) {
@@ -413,7 +419,8 @@ class MessageProcessingDelegate(
             chatModelIndexOverride: Int? = null,
             suppressUserMessageInHistory: Boolean = false,
             isGroupOrchestrationTurn: Boolean = false,
-            groupParticipantNamesText: String? = null
+            groupParticipantNamesText: String? = null,
+            turnOptions: ChatTurnOptions = ChatTurnOptions()
     ) {
         val rawMessageText = messageTextOverride ?: _userMessage.value.text
         // 群组编排模式下，允许空消息（后续成员不需要用户消息）
@@ -441,15 +448,18 @@ class MessageProcessingDelegate(
         }
         resetCurrentTurnToolInvocationCount(chatId)
         chatRuntime.isLoading.value = true
+        chatRuntime.currentTurnOptions = turnOptions
         updateGlobalLoadingState()
         setChatInputProcessingState(chatId, EnhancedInputProcessingState.Processing(context.getString(R.string.message_processing)))
 
         val sendJob =
             coroutineScope.launch(Dispatchers.IO) {
             val sendUserMessageStartTime = messageTimingNow()
+            val effectivePersistTurn = turnOptions.persistTurn
+            val effectiveHideUserMessage = effectivePersistTurn && turnOptions.hideUserMessage
             // 检查这是否是聊天中的第一条用户消息（忽略AI的开场白）
             val isFirstMessage = getChatHistory(chatId).none { it.sender == "user" }
-            if (isFirstMessage && chatId != null) {
+            if (effectivePersistTurn && isFirstMessage && chatId != null) {
                 val newTitle =
                     when {
                         originalMessageText.isNotBlank() -> originalMessageText
@@ -501,6 +511,7 @@ class MessageProcessingDelegate(
             // 自动继续且原本消息为空时，不添加到聊天历史（虽然会发送"继续"给AI）
             // 群组编排模式下，空消息也不添加到聊天历史
             val shouldAddUserMessageToChat =
+                effectivePersistTurn &&
                 !suppressUserMessageInHistory &&
                 !(isAutoContinuation &&
                         originalMessageText.isBlank() &&
@@ -512,7 +523,13 @@ class MessageProcessingDelegate(
             var userMessage = ChatMessage(
                 sender = "user",
                 content = finalMessageContent,
-                roleName = context.getString(R.string.message_role_user) // 用户消息的角色名固定为"用户"
+                roleName = context.getString(R.string.message_role_user), // 用户消息的角色名固定为"用户"
+                displayMode =
+                    if (effectiveHideUserMessage) {
+                        ChatMessageDisplayMode.HIDDEN_PLACEHOLDER
+                    } else {
+                        ChatMessageDisplayMode.NORMAL
+                    }
             )
 
             val toolHandler = AIToolHandler.getInstance(context)
@@ -684,8 +701,10 @@ class MessageProcessingDelegate(
 
                 // 关闭总结时仍保留真实 limits，避免下游插件收到 0/Infinity 这类无效 JSON 值。
                 val effectiveMaxTokens = maxTokens
-                val effectiveTokenUsageThreshold = if (enableSummary) tokenUsageThreshold else Double.MAX_VALUE
-                val effectiveOnTokenLimitExceeded = if (enableSummary) {
+                val effectiveEnableSummary = enableSummary && effectivePersistTurn
+                val effectiveTokenUsageThreshold =
+                    if (effectiveEnableSummary) tokenUsageThreshold else Double.MAX_VALUE
+                val effectiveOnTokenLimitExceeded = if (effectiveEnableSummary) {
                     suspend {
                         onTokenLimitExceeded(
                             activeChatId,
@@ -750,6 +769,7 @@ class MessageProcessingDelegate(
                     onToolInvocation = {
                         incrementCurrentTurnToolInvocationCount(chatId)
                     },
+                    notifyReplyOverride = turnOptions.notifyReply,
                     chatModelConfigIdOverride = chatModelConfigIdOverride,
                     chatModelIndexOverride = chatModelIndexOverride
                 )
@@ -825,7 +845,7 @@ class MessageProcessingDelegate(
                 // 只有在非waifu模式下才添加初始的AI消息
                 if (!isWaifuModeEnabled) {
                     withContext(Dispatchers.Main) {
-                        if (chatId != null) {
+                        if (effectivePersistTurn && chatId != null) {
                             addMessageToChat(chatId, aiMessage)
                         }
                     }
@@ -884,7 +904,7 @@ class MessageProcessingDelegate(
                                 contentSnapshot: String,
                                 force: Boolean = false
                             ) {
-                                if (isWaifuModeEnabled || chatId == null) return
+                                if (!effectivePersistTurn || isWaifuModeEnabled || chatId == null) return
                                 val now = messageTimingNow()
                                 if (!force && now - lastStreamingPersistAt < STREAM_PERSIST_INTERVAL_MS) {
                                     return
@@ -1074,6 +1094,7 @@ class MessageProcessingDelegate(
                     skipFinalAutoRead = didStreamAutoRead && !isWaifuModeEnabled,
                     roleCardId = effectiveRoleCardId,
                     calculateNextWindowSize = calculateNextWindowSize,
+                    turnOptions = turnOptions,
                     chatModelConfigIdOverride = chatModelConfigIdOverride,
                     chatModelIndexOverride = chatModelIndexOverride
                 )
@@ -1117,7 +1138,8 @@ class MessageProcessingDelegate(
                             chatId,
                             activeChatId,
                             service,
-                            calculateNextWindowSize
+                            calculateNextWindowSize,
+                            turnOptions
                         )
                     }
                 }
@@ -1125,7 +1147,7 @@ class MessageProcessingDelegate(
                 logMessageTiming(
                     stage = "delegate.sendUserMessage.total",
                     startTimeMs = sendUserMessageStartTime,
-                    details = "chatId=$activeChatId, addedUserMessage=$userMessageAdded, enableSummary=$enableSummary"
+                    details = "chatId=$activeChatId, addedUserMessage=$userMessageAdded, enableSummary=$enableSummary, persistTurn=${turnOptions.persistTurn}"
                 )
                 val currentJob = coroutineContext[Job]
                 if (currentJob != null && chatRuntime.sendJob === currentJob) {
@@ -1378,7 +1400,8 @@ class MessageProcessingDelegate(
         chatId: String?,
         activeChatId: String?,
         service: EnhancedAIService,
-        calculateNextWindowSize: (suspend () -> Int?)? = null
+        calculateNextWindowSize: (suspend () -> Int?)? = null,
+        turnOptions: ChatTurnOptions = ChatTurnOptions()
     ) {
         if (!chatId.isNullOrBlank()) {
             val updated = _turnCompleteCounterByChatId.value.toMutableMap()
@@ -1390,7 +1413,7 @@ class MessageProcessingDelegate(
             TAG,
             "回合完成: chatId=$activeChatId, nextWindow=$nextWindowSize, service=${service.javaClass.simpleName}"
         )
-        onTurnComplete(activeChatId, service, nextWindowSize)
+        onTurnComplete(activeChatId, service, nextWindowSize, turnOptions)
     }
 
     private suspend fun finalizeMessageAndNotify(
@@ -1402,6 +1425,7 @@ class MessageProcessingDelegate(
         skipFinalAutoRead: Boolean,
         roleCardId: String,
         calculateNextWindowSize: (suspend () -> Int?)? = null,
+        turnOptions: ChatTurnOptions = ChatTurnOptions(),
         chatModelConfigIdOverride: String? = null,
         chatModelIndexOverride: Int? = null
     ): Boolean {
@@ -1493,7 +1517,7 @@ class MessageProcessingDelegate(
                             )
 
                             withContext(Dispatchers.Main) {
-                                if (chatId != null) {
+                                if (turnOptions.persistTurn && chatId != null) {
                                     addMessageToChat(chatId, sentenceMessage)
                                 }
                                 // 如果启用了自动朗读，则朗读当前句子
@@ -1532,7 +1556,8 @@ class MessageProcessingDelegate(
                                     chatId,
                                     activeChatId,
                                     service,
-                                    calculateNextWindowSize
+                                    calculateNextWindowSize,
+                                    turnOptions
                                 )
                             }
                         }
@@ -1541,7 +1566,7 @@ class MessageProcessingDelegate(
                     // 普通模式，直接清理流
                     val finalMessage = aiMessage.copy(content = finalContent, contentStream = null)
                     withContext(Dispatchers.Main) {
-                        if (chatId != null) {
+                        if (turnOptions.persistTurn && chatId != null) {
                             addMessageToChat(chatId, finalMessage)
                         }
                         // 如果启用了自动朗读，则朗读完整消息
@@ -1564,7 +1589,7 @@ class MessageProcessingDelegate(
                 val finalContent = aiMessage.content
                 val finalMessage = aiMessage.copy(content = finalContent, contentStream = null)
                 withContext(Dispatchers.Main) {
-                    if (chatId != null) {
+                    if (turnOptions.persistTurn && chatId != null) {
                         addMessageToChat(chatId, finalMessage)
                     }
                 }
@@ -1579,6 +1604,7 @@ class MessageProcessingDelegate(
         chatRuntime.streamCollectionJob = null
         chatRuntime.stateCollectionJob?.cancel()
         chatRuntime.stateCollectionJob = null
+        chatRuntime.currentTurnOptions = ChatTurnOptions()
         chatRuntime.isLoading.value = false
 
         updateGlobalLoadingState()

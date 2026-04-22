@@ -3,6 +3,9 @@ package com.ai.assistance.operit.ui.features.packages.market
 import com.ai.assistance.operit.data.api.MarketStatsApiService
 import com.ai.assistance.operit.util.AppLogger
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -68,18 +71,20 @@ suspend fun loadMarketStatsMap(
     types: List<MarketStatsType>,
     logTag: String
 ): Map<String, MarketEntryStats> {
-    val stats = mutableMapOf<String, MarketEntryStats>()
-    types.forEach { type ->
-        stats.putAll(
-            loadMarketStatsMap(
-                marketStatsApiService = marketStatsApiService,
-                type = type,
-                logTag = logTag,
-                errorLabel = type.wireValue
-            )
-        )
+    return coroutineScope {
+        types.map { type ->
+            async {
+                loadMarketStatsMap(
+                    marketStatsApiService = marketStatsApiService,
+                    type = type,
+                    logTag = logTag,
+                    errorLabel = type.wireValue
+                )
+            }
+        }.awaitAll().fold(mutableMapOf()) { acc, item ->
+            acc.apply { putAll(item) }
+        }
     }
-    return stats
 }
 
 fun MutableStateFlow<Map<String, MarketEntryStats>>.updateMarketEntryStats(

@@ -90,7 +90,7 @@ class OkHttpClient {
     }
 
     // Execute the request
-    async execute(request) {
+    async execute(request, options) {
         // Apply interceptors to the request
         let modifiedRequest = request;
         for (const interceptor of this._config.interceptors) {
@@ -105,11 +105,24 @@ class OkHttpClient {
             body: modifiedRequest.body,
             body_type: modifiedRequest.bodyType || 'text',
             follow_redirects: this._config.followRedirects,
-            timeout_ms: modifiedRequest.method === 'GET' ? this._config.timeouts.read : this._config.timeouts.write
+            connect_timeout: Math.max(1, Math.ceil((this._config.timeouts.connect || 10000) / 1000)),
+            read_timeout: Math.max(1, Math.ceil((this._config.timeouts.read || 30000) / 1000)),
+            write_timeout: Math.max(1, Math.ceil((this._config.timeouts.write || 30000) / 1000))
         };
 
+        if (options && typeof options.onIntermediateResult === 'function') {
+            params.stream = true;
+        }
+
         // Execute the request using the underlying http_request tool
-        const response = await toolCall("http_request", params);
+        const response = await toolCall({
+            name: "http_request",
+            params,
+            onIntermediateResult:
+                options && typeof options.onIntermediateResult === 'function'
+                    ? options.onIntermediateResult
+                    : undefined
+        });
 
         // Parse response
         return new Response(response);
@@ -152,6 +165,10 @@ class OkHttpClient {
             .headers(headers || {})
             .build()
             .execute();
+    }
+
+    async streamExecute(request, onIntermediateResult) {
+        return this.execute(request, { onIntermediateResult });
     }
 
     // Create a new client builder
@@ -259,8 +276,8 @@ class RequestBuilder {
         // Return a request object with an execute method
         return {
             ...this._request,
-            execute: async () => {
-                return await this._client.execute(this._request);
+            execute: async (options) => {
+                return await this._client.execute(this._request, options);
             }
         };
     }

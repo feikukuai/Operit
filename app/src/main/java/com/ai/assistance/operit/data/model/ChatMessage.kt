@@ -22,6 +22,7 @@ data class ChatMessage(
         val sentAt: Long = 0L, // 本轮请求发送时间（时间戳）
         val outputDurationMs: Long = 0L, // 本轮输出耗时
         val waitDurationMs: Long = 0L, // 本轮等待首包耗时
+        val displayMode: ChatMessageDisplayMode = ChatMessageDisplayMode.NORMAL,
         @Transient
         val isVariantPreview: Boolean = false,
         @Transient
@@ -48,7 +49,8 @@ data class ChatMessage(
         parcel.readInt(),
         parcel.readLong(),
         parcel.readLong(),
-        parcel.readLong()
+        parcel.readLong(),
+        readDisplayModeFromParcel(parcel)
     )
 
     override fun writeToParcel(parcel: Parcel, flags: Int) {
@@ -66,6 +68,7 @@ data class ChatMessage(
         parcel.writeLong(sentAt)
         parcel.writeLong(outputDurationMs)
         parcel.writeLong(waitDurationMs)
+        parcel.writeString(displayMode.name)
         // 不需要序列化contentStream，因为它是暂时性的
     }
 
@@ -74,6 +77,14 @@ data class ChatMessage(
     }
 
     companion object CREATOR : Parcelable.Creator<ChatMessage> {
+        private fun readDisplayModeFromParcel(parcel: Parcel): ChatMessageDisplayMode {
+            return runCatching {
+                ChatMessageDisplayMode.valueOf(
+                    parcel.readString() ?: ChatMessageDisplayMode.NORMAL.name
+                )
+            }.getOrDefault(ChatMessageDisplayMode.NORMAL)
+        }
+
         override fun createFromParcel(parcel: Parcel): ChatMessage {
             return ChatMessage(parcel)
         }

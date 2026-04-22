@@ -246,7 +246,7 @@ object ModelConfigConnectionTester {
         return ModelConnectionTestReport(
             configId = configForTest.id,
             configName = configForTest.name,
-            providerType = configForTest.apiProviderType.name,
+            providerType = configForTest.apiProviderTypeId,
             requestedModelIndex = requestedModelIndex,
             actualModelIndex = actualModelIndex,
             testedModelName = testedModelName,

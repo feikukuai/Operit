@@ -26,6 +26,7 @@ import com.ai.assistance.operit.core.tools.MessageSendResultData
 import com.ai.assistance.operit.core.tools.StringResultData
 import com.ai.assistance.operit.data.model.ChatHistory
 import com.ai.assistance.operit.data.model.AITool
+import com.ai.assistance.operit.data.model.ChatTurnOptions
 import com.ai.assistance.operit.data.model.FunctionType
 import com.ai.assistance.operit.data.model.InputProcessingState
 import com.ai.assistance.operit.data.model.PromptFunctionType
@@ -113,6 +114,14 @@ class StandardChatManagerTool(private val context: Context) {
 
     private fun toEpochMillis(dateTime: java.time.LocalDateTime): Long {
         return dateTime.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+    }
+
+    private fun parseBooleanOrNull(value: String?): Boolean? {
+        return when (value?.lowercase()) {
+            "true" -> true
+            "false" -> false
+            else -> null
+        }
     }
 
     private fun buildChatInfo(
@@ -1223,6 +1232,53 @@ class StandardChatManagerTool(private val context: Context) {
 
             val senderNameParam = tool.parameters.find { it.name == "sender_name" }?.value?.trim()
             val proxySenderName = senderNameParam?.takeIf { it.isNotBlank() }
+            val persistTurnParam = tool.parameters.find { it.name == "persist_turn" }?.value?.trim()
+            val notifyReplyParam = tool.parameters.find { it.name == "notify_reply" }?.value?.trim()
+            val hideUserMessageParam =
+                tool.parameters.find { it.name == "hide_user_message" }?.value?.trim()
+
+            val persistTurn = parseBooleanOrNull(persistTurnParam)
+            if (persistTurnParam != null && persistTurn == null) {
+                return MessageSendStreamStartResult.Failed(
+                    ToolResult(
+                        toolName = tool.name,
+                        success = false,
+                        result = MessageSendResultData(chatId = "", message = message),
+                        error = "Invalid parameter: persist_turn must be true/false"
+                    )
+                )
+            }
+
+            val notifyReply = parseBooleanOrNull(notifyReplyParam)
+            if (notifyReplyParam != null && notifyReply == null) {
+                return MessageSendStreamStartResult.Failed(
+                    ToolResult(
+                        toolName = tool.name,
+                        success = false,
+                        result = MessageSendResultData(chatId = "", message = message),
+                        error = "Invalid parameter: notify_reply must be true/false"
+                    )
+                )
+            }
+
+            val hideUserMessage = parseBooleanOrNull(hideUserMessageParam)
+            if (hideUserMessageParam != null && hideUserMessage == null) {
+                return MessageSendStreamStartResult.Failed(
+                    ToolResult(
+                        toolName = tool.name,
+                        success = false,
+                        result = MessageSendResultData(chatId = "", message = message),
+                        error = "Invalid parameter: hide_user_message must be true/false"
+                    )
+                )
+            }
+
+            val turnOptions =
+                ChatTurnOptions(
+                    persistTurn = persistTurn ?: true,
+                    notifyReply = notifyReply,
+                    hideUserMessage = hideUserMessage ?: false
+                )
 
             try {
                 // 可选的 chat_id 参数
@@ -1271,7 +1327,8 @@ class StandardChatManagerTool(private val context: Context) {
                         roleCardIdOverride = roleCardId,
                         chatIdOverride = preflightChatId,
                         messageTextOverride = message,
-                        proxySenderNameOverride = proxySenderName
+                        proxySenderNameOverride = proxySenderName,
+                        turnOptions = turnOptions
                     )
                 } else {
                     // 发送消息（包含总结逻辑），由 Coordination 处理 chatId 默认
@@ -1279,7 +1336,8 @@ class StandardChatManagerTool(private val context: Context) {
                         promptFunctionType = PromptFunctionType.CHAT,
                         roleCardIdOverride = roleCardId,
                         messageTextOverride = message,
-                        proxySenderNameOverride = proxySenderName
+                        proxySenderNameOverride = proxySenderName,
+                        turnOptions = turnOptions
                     )
                 }
 
@@ -1481,6 +1539,10 @@ class StandardChatManagerTool(private val context: Context) {
             val enableThinkingParam = tool.parameters.find { it.name == "enable_thinking" }?.value?.trim()
             val thinkingGuidanceParam = tool.parameters.find { it.name == "thinking_guidance" }?.value?.trim()
             val enableMemoryQueryParam = tool.parameters.find { it.name == "enable_memory_query" }?.value?.trim()
+            val persistTurnParam = tool.parameters.find { it.name == "persist_turn" }?.value?.trim()
+            val notifyReplyParam = tool.parameters.find { it.name == "notify_reply" }?.value?.trim()
+            val hideUserMessageParam =
+                tool.parameters.find { it.name == "hide_user_message" }?.value?.trim()
             val customSystemPromptTemplate =
                 tool.parameters.find { it.name == "custom_system_prompt_template" }?.value?.trim()
                     ?.takeIf { it.isNotBlank() }
@@ -1540,6 +1602,36 @@ class StandardChatManagerTool(private val context: Context) {
                     success = false,
                     result = MessageSendResultData(chatId = chatId ?: "", message = message),
                     error = "Invalid parameter: enable_memory_query must be true/false"
+                )
+            }
+
+            val persistTurn = parseBooleanOrNull(persistTurnParam)
+            if (persistTurnParam != null && persistTurn == null) {
+                return ToolResult(
+                    toolName = tool.name,
+                    success = false,
+                    result = MessageSendResultData(chatId = chatId ?: "", message = message),
+                    error = "Invalid parameter: persist_turn must be true/false"
+                )
+            }
+
+            val notifyReply = parseBooleanOrNull(notifyReplyParam)
+            if (notifyReplyParam != null && notifyReply == null) {
+                return ToolResult(
+                    toolName = tool.name,
+                    success = false,
+                    result = MessageSendResultData(chatId = chatId ?: "", message = message),
+                    error = "Invalid parameter: notify_reply must be true/false"
+                )
+            }
+
+            val hideUserMessage = parseBooleanOrNull(hideUserMessageParam)
+            if (hideUserMessageParam != null && hideUserMessage == null) {
+                return ToolResult(
+                    toolName = tool.name,
+                    success = false,
+                    result = MessageSendResultData(chatId = chatId ?: "", message = message),
+                    error = "Invalid parameter: hide_user_message must be true/false"
                 )
             }
 
@@ -1613,6 +1705,7 @@ class StandardChatManagerTool(private val context: Context) {
                     tokenUsageThreshold = tokenUsageThreshold,
                     customSystemPromptTemplate = customSystemPromptTemplate,
                     isSubTask = isSubTask ?: false,
+                    notifyReplyOverride = notifyReply,
                     stream = stream ?: true
                 )
 

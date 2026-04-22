@@ -57,6 +57,9 @@ import java.security.MessageDigest
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -793,28 +796,54 @@ class ArtifactMarketViewModel(
     }
 
     private suspend fun loadBrowsePages(reset: Boolean) {
+        data class BrowsePageRequest(
+            val type: PublishArtifactType,
+            val nextPage: Int
+        )
+
+        data class BrowsePageResult(
+            val request: BrowsePageRequest,
+            val result: Result<com.ai.assistance.operit.data.api.MarketRankPageResponse>
+        )
+
+        val requests =
+            supportedTypes.mapNotNull { type ->
+                val nextPage =
+                    if (reset) {
+                        1
+                    } else {
+                        val totalPages = totalBrowsePages[type] ?: Int.MAX_VALUE
+                        val candidate = (currentBrowsePages[type] ?: 0) + 1
+                        if (candidate > totalPages) return@mapNotNull null
+                        candidate
+                    }
+                BrowsePageRequest(type = type, nextPage = nextPage)
+            }
+
+        val pageResults =
+            coroutineScope {
+                requests.map { request ->
+                    async {
+                        BrowsePageResult(
+                            request = request,
+                            result = marketStatsApiService.getRankPage(
+                                type = request.type.toMarketStatsType().wireValue,
+                                metric = _sortOption.value.toRankMetric(),
+                                page = request.nextPage
+                            )
+                        )
+                    }
+                }.awaitAll()
+            }
+
         val loadedItems = mutableListOf<ArtifactMarketItem>()
         var firstError: Throwable? = null
 
-        for (type in supportedTypes) {
-            val nextPage =
-                if (reset) {
-                    1
-                } else {
-                    val totalPages = totalBrowsePages[type] ?: Int.MAX_VALUE
-                    val candidate = (currentBrowsePages[type] ?: 0) + 1
-                    if (candidate > totalPages) continue
-                    candidate
-                }
-
-            marketStatsApiService.getRankPage(
-                type = type.toMarketStatsType().wireValue,
-                metric = _sortOption.value.toRankMetric(),
-                page = nextPage
-            ).fold(
+        pageResults.forEach { pageResult ->
+            pageResult.result.fold(
                 onSuccess = { page ->
-                    currentBrowsePages[type] = page.page
-                    totalBrowsePages[type] = page.totalPages.coerceAtLeast(1)
+                    currentBrowsePages[pageResult.request.type] = page.page
+                    totalBrowsePages[pageResult.request.type] = page.totalPages.coerceAtLeast(1)
                     page.items.forEach { entry ->
                         _marketStats.updateMarketEntryStats(entry.id) {
                             entry.toMarketEntryStats()
@@ -828,7 +857,7 @@ class ArtifactMarketViewModel(
                     }
                     AppLogger.e(
                         TAG,
-                        "Failed to load ${type.wireValue} market browse page $nextPage",
+                        "Failed to load ${pageResult.request.type.wireValue} market browse page ${pageResult.request.nextPage}",
                         error
                     )
                 }
@@ -862,9 +891,16 @@ class ArtifactMarketViewModel(
     private suspend fun aggregateResults(
         request: suspend (GitHubIssueMarketService) -> Result<List<GitHubIssue>>
     ): Result<List<GitHubIssue>> {
+        val results =
+            coroutineScope {
+                supportedTypes.map { type ->
+                    async { request(marketService(type)) }
+                }.awaitAll()
+            }
+
         val aggregated = mutableListOf<GitHubIssue>()
-        for (type in supportedTypes) {
-            request(marketService(type)).fold(
+        results.forEach { result ->
+            result.fold(
                 onSuccess = { aggregated += it },
                 onFailure = { return Result.failure(it) }
             )

@@ -334,28 +334,51 @@ private fun buildRuntimeToolCallScript(): String {
                 return copy;
             }
 
+            function normalizeToolCallOptions(value) {
+                if (!value || typeof value !== 'object') {
+                    return {};
+                }
+                return {
+                    onIntermediateResult:
+                        typeof value.onIntermediateResult === 'function'
+                            ? value.onIntermediateResult
+                            : null
+                };
+            }
+
             function parseToolCallArguments(rawArgs) {
                 if (rawArgs.length === 1 && typeof rawArgs[0] === 'object') {
                     return {
                         type: asString(rawArgs[0].type || 'default'),
                         name: asString(rawArgs[0].name || ''),
-                        params: clonePlainObject(rawArgs[0].params)
+                        params: clonePlainObject(rawArgs[0].params),
+                        options: normalizeToolCallOptions(rawArgs[0])
                     };
                 }
                 if (rawArgs.length === 1 && typeof rawArgs[0] === 'string') {
-                    return { type: 'default', name: asString(rawArgs[0]), params: {} };
+                    return { type: 'default', name: asString(rawArgs[0]), params: {}, options: {} };
                 }
                 if (rawArgs.length === 2 && typeof rawArgs[1] === 'object') {
                     return {
                         type: 'default',
                         name: asString(rawArgs[0]),
-                        params: clonePlainObject(rawArgs[1])
+                        params: clonePlainObject(rawArgs[1]),
+                        options: {}
+                    };
+                }
+                if (rawArgs.length === 3 && typeof rawArgs[1] === 'object' && typeof rawArgs[2] === 'object') {
+                    return {
+                        type: 'default',
+                        name: asString(rawArgs[0]),
+                        params: clonePlainObject(rawArgs[1]),
+                        options: normalizeToolCallOptions(rawArgs[2])
                     };
                 }
                 return {
                     type: asString(rawArgs[0] || 'default'),
                     name: asString(rawArgs[1] || ''),
-                    params: clonePlainObject(rawArgs[2])
+                    params: clonePlainObject(rawArgs[2]),
+                    options: normalizeToolCallOptions(rawArgs[3])
                 };
             }
 
@@ -425,21 +448,54 @@ private fun buildRuntimeToolCallScript(): String {
                     try {
                         var parsed = parseToolCallArguments(rawArgs);
                         var callbackId = nextToolCallbackId();
+                        var intermediateCallbackId =
+                            parsed.options && parsed.options.onIntermediateResult
+                                ? nextToolCallbackId()
+                                : '';
                         windowRef[callbackId] = function(result, isError) {
                             delete windowRef[callbackId];
+                            if (intermediateCallbackId) {
+                                delete windowRef[intermediateCallbackId];
+                            }
                             try {
                                 resolve(parseToolResult(result, !!isError));
                             } catch (error) {
                                 reject(error);
                             }
                         };
-                        callNative(
-                            'callToolAsync',
-                            callbackId,
-                            parsed.type || 'default',
-                            parsed.name,
-                            JSON.stringify(parsed.params || {})
-                        );
+                        if (intermediateCallbackId) {
+                            windowRef[intermediateCallbackId] = function(result, isError) {
+                                if (isError) {
+                                    try {
+                                        reject(parseToolResult(result, true));
+                                    } catch (error) {
+                                        reject(error);
+                                    }
+                                    return;
+                                }
+                                try {
+                                    parsed.options.onIntermediateResult(parseToolResult(result, false));
+                                } catch (error) {
+                                    reject(error);
+                                }
+                            };
+                            callNative(
+                                'callToolAsyncStreaming',
+                                callbackId,
+                                intermediateCallbackId,
+                                parsed.type || 'default',
+                                parsed.name,
+                                JSON.stringify(parsed.params || {})
+                            );
+                        } else {
+                            callNative(
+                                'callToolAsync',
+                                callbackId,
+                                parsed.type || 'default',
+                                parsed.name,
+                                JSON.stringify(parsed.params || {})
+                            );
+                        }
                     } catch (error) {
                         reject(error);
                     }

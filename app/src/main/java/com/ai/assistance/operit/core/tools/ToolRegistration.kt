@@ -1496,7 +1496,18 @@ fun registerAllTools(handler: AIToolHandler, context: Context) {
                 val method = tool.parameters.find { it.name == "method" }?.value ?: "GET"
                 s(R.string.toolreg_http_request_desc, method, url)
             },
-            executor = { tool -> runBlocking(Dispatchers.IO) { httpTools.httpRequest(tool) } }
+            executor =
+                    object : ToolExecutor {
+                        override fun invoke(tool: AITool): ToolResult {
+                            return runBlocking(Dispatchers.IO) { httpTools.httpRequest(tool) }
+                        }
+
+                        override fun invokeAndStream(
+                                tool: AITool
+                        ): kotlinx.coroutines.flow.Flow<ToolResult> {
+                            return runBlocking(Dispatchers.IO) { httpTools.httpRequestStream(tool) }
+                        }
+                    }
     )
 
     // 多部分表单请求（文件上传）

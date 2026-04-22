@@ -1119,14 +1119,32 @@ object SystemToolPromptsInternal {
                                         description = "optional, role card id to use for this send",
                                         required = false
                                     ),
-                                    ToolParameterSchema(
-                                        name = "sender_name",
-                                        type = "string",
-                                        description = "optional, display name of the sender when AI sends as user",
-                                        required = false
-                                    )
-                                )
-                        ),
+                                      ToolParameterSchema(
+                                          name = "sender_name",
+                                          type = "string",
+                                          description = "optional, display name of the sender when AI sends as user",
+                                          required = false
+                                      ),
+                                      ToolParameterSchema(
+                                          name = "persist_turn",
+                                          type = "boolean",
+                                          description = "optional, whether this user/AI turn should be persisted to chat history; default true",
+                                          required = false
+                                      ),
+                                      ToolParameterSchema(
+                                          name = "notify_reply",
+                                          type = "boolean",
+                                          description = "optional, override whether this turn sends reply-completed notification",
+                                          required = false
+                                      ),
+                                      ToolParameterSchema(
+                                          name = "hide_user_message",
+                                          type = "boolean",
+                                          description = "optional, hide user message content in UI and show a placeholder marker while keeping original content in history/context",
+                                          required = false
+                                      )
+                                  )
+                          ),
                         ToolPrompt(
                             name = "send_message_to_ai_advanced",
                             description = "Send a user message to AI with advanced runtime controls.",
@@ -1180,14 +1198,32 @@ object SystemToolPromptsInternal {
                                         description = "optional, enable thinking guidance",
                                         required = false
                                     ),
-                                    ToolParameterSchema(
-                                        name = "enable_memory_query",
-                                        type = "boolean",
-                                        description = "optional, enable memory query",
-                                        required = false
-                                    ),
-                                    ToolParameterSchema(
-                                        name = "max_tokens",
+                                      ToolParameterSchema(
+                                          name = "enable_memory_query",
+                                          type = "boolean",
+                                          description = "optional, enable memory query",
+                                          required = false
+                                      ),
+                                      ToolParameterSchema(
+                                          name = "persist_turn",
+                                          type = "boolean",
+                                          description = "optional, whether this user/AI turn should be persisted to chat history; default true",
+                                          required = false
+                                      ),
+                                      ToolParameterSchema(
+                                          name = "notify_reply",
+                                          type = "boolean",
+                                          description = "optional, override whether this turn sends reply-completed notification",
+                                          required = false
+                                      ),
+                                      ToolParameterSchema(
+                                          name = "hide_user_message",
+                                          type = "boolean",
+                                          description = "optional, hide user message content in UI and show a placeholder marker while keeping original content in history/context",
+                                          required = false
+                                      ),
+                                      ToolParameterSchema(
+                                          name = "max_tokens",
                                         type = "integer",
                                         description = "max token budget for this request",
                                         required = true
@@ -3781,14 +3817,32 @@ object SystemToolPromptsInternal {
                                         description = "可选，本次发送使用的角色卡 ID",
                                         required = false
                                     ),
-                                    ToolParameterSchema(
-                                        name = "sender_name",
-                                        type = "string",
-                                        description = "可选，当以用户身份发送时的显示名称",
-                                        required = false
-                                    )
-                                )
-                        ),
+                                      ToolParameterSchema(
+                                          name = "sender_name",
+                                          type = "string",
+                                          description = "可选，当以用户身份发送时的显示名称",
+                                          required = false
+                                      ),
+                                      ToolParameterSchema(
+                                          name = "persist_turn",
+                                          type = "boolean",
+                                          description = "可选，本轮用户消息与 AI 回复是否持久化到聊天历史，默认 true",
+                                          required = false
+                                      ),
+                                      ToolParameterSchema(
+                                          name = "notify_reply",
+                                          type = "boolean",
+                                          description = "可选，覆盖本轮是否发送回复完成通知",
+                                          required = false
+                                      ),
+                                      ToolParameterSchema(
+                                          name = "hide_user_message",
+                                          type = "boolean",
+                                          description = "可选，仅在 UI 中隐藏用户消息正文并显示占位标记，同时保留原文进入历史与上下文",
+                                          required = false
+                                      )
+                                  )
+                          ),
                         ToolPrompt(
                             name = "send_message_to_ai_advanced",
                             description = "向 AI 发送消息（高级参数）。",
@@ -3842,14 +3896,32 @@ object SystemToolPromptsInternal {
                                         description = "可选，是否启用思考引导",
                                         required = false
                                     ),
-                                    ToolParameterSchema(
-                                        name = "enable_memory_query",
-                                        type = "boolean",
-                                        description = "可选，是否启用记忆查询",
-                                        required = false
-                                    ),
-                                    ToolParameterSchema(
-                                        name = "max_tokens",
+                                      ToolParameterSchema(
+                                          name = "enable_memory_query",
+                                          type = "boolean",
+                                          description = "可选，是否启用记忆查询",
+                                          required = false
+                                      ),
+                                      ToolParameterSchema(
+                                          name = "persist_turn",
+                                          type = "boolean",
+                                          description = "可选，本轮用户消息与 AI 回复是否持久化到聊天历史，默认 true",
+                                          required = false
+                                      ),
+                                      ToolParameterSchema(
+                                          name = "notify_reply",
+                                          type = "boolean",
+                                          description = "可选，覆盖本轮是否发送回复完成通知",
+                                          required = false
+                                      ),
+                                      ToolParameterSchema(
+                                          name = "hide_user_message",
+                                          type = "boolean",
+                                          description = "可选，仅在 UI 中隐藏用户消息正文并显示占位标记，同时保留原文进入历史与上下文",
+                                          required = false
+                                      ),
+                                      ToolParameterSchema(
+                                          name = "max_tokens",
                                         type = "integer",
                                         description = "本次请求最大 token 预算",
                                         required = true

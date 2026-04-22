@@ -21,7 +21,7 @@ object AppIconManager {
     private val simpleLauncherAliasClassName = "${mainActivityClassName}SimpleAlias"
 
     fun getCurrentIconType(context: Context): AppIconType {
-        return if (isAliasEnabled(context, simpleLauncherAliasClassName, defaultEnabled = false)) {
+        return if (isAliasEnabled(context, simpleLauncherAliasClassName, defaultEnabled = true)) {
             AppIconType.SIMPLE
         } else {
             AppIconType.DEFAULT
@@ -36,11 +36,11 @@ object AppIconManager {
         return runCatching {
             setAliasEnabled(packageManager, context, ideLaunchAliasClassName, true)
 
-            val simpleEnabled = isAliasEnabled(context, simpleLauncherAliasClassName, defaultEnabled = false)
+            val simpleEnabled = isAliasEnabled(context, simpleLauncherAliasClassName, defaultEnabled = true)
             val defaultLauncherEnabled = isAliasEnabled(
                 context,
                 defaultLauncherAliasClassName,
-                defaultEnabled = true
+                defaultEnabled = false
             )
 
             if (simpleEnabled && defaultLauncherEnabled) {

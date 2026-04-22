@@ -10,19 +10,21 @@ package com.ai.assistance.operit.core.tools
  import kotlinx.coroutines.flow.Flow
  import kotlinx.serialization.builtins.MapSerializer
  import kotlinx.serialization.builtins.serializer
- import kotlinx.serialization.Serializable
- import kotlinx.serialization.KSerializer
- import kotlinx.serialization.descriptors.SerialDescriptor
- import kotlinx.serialization.descriptors.buildClassSerialDescriptor
- import kotlinx.serialization.descriptors.element
- import kotlinx.serialization.encoding.Decoder
- import kotlinx.serialization.encoding.Encoder
- import kotlinx.serialization.json.Json
- import kotlinx.serialization.json.JsonDecoder
- import kotlinx.serialization.json.JsonElement
- import kotlinx.serialization.json.JsonNames
- import kotlinx.serialization.json.JsonObject
- import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.KSerializer
+import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.descriptors.buildClassSerialDescriptor
+import kotlinx.serialization.descriptors.element
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonDecoder
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNames
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
  import kotlinx.serialization.json.buildJsonObject
  import kotlinx.serialization.json.jsonPrimitive
  import kotlinx.serialization.json.put
@@ -123,45 +125,76 @@ package com.ai.assistance.operit.core.tools
      }
  }
  
- object LocalizedTextSerializer : KSerializer<LocalizedText> {
- 
-     override val descriptor: SerialDescriptor =
-         buildClassSerialDescriptor("LocalizedText") {
-             element<String>("default", isOptional = true)
-         }
- 
-     override fun deserialize(decoder: Decoder): LocalizedText {
-         val jsonDecoder = decoder as? JsonDecoder
-             ?: return LocalizedText.of(decoder.decodeString())
- 
-         val element = jsonDecoder.decodeJsonElement()
-         return when (element) {
-             is JsonPrimitive -> LocalizedText.of(element.content)
-             is JsonObject -> {
-                 val map = element.entries
-                     .mapNotNull { (k, v) ->
-                         val value = (v as? JsonPrimitive)?.content ?: runCatching { v.jsonPrimitive.content }.getOrNull()
-                         if (value == null) null else k to value
-                     }
-                     .toMap()
-                 LocalizedText(map)
-             }
-             else -> LocalizedText.of(element.toString())
-         }
-     }
- 
-     override fun serialize(encoder: Encoder, value: LocalizedText) {
-         val onlyDefault = value.values.size == 1 && value.values.containsKey("default")
-         if (onlyDefault) {
-             encoder.encodeString(value.values.getValue("default"))
-             return
-         }
- 
-         val entries = value.values.entries
-         val mapSerializer = MapSerializer(String.serializer(), String.serializer())
-         encoder.encodeSerializableValue(mapSerializer, entries.associate { it.key to it.value })
-     }
- }
+object LocalizedTextSerializer : KSerializer<LocalizedText> {
+
+    override val descriptor: SerialDescriptor =
+        buildClassSerialDescriptor("LocalizedText") {
+            element<String>("default", isOptional = true)
+        }
+
+    override fun deserialize(decoder: Decoder): LocalizedText {
+        val jsonDecoder = decoder as? JsonDecoder
+            ?: return LocalizedText.of(decoder.decodeString())
+
+        val element = jsonDecoder.decodeJsonElement()
+        return when (element) {
+            is JsonPrimitive -> LocalizedText.of(element.content)
+            is JsonObject -> {
+                val map = element.entries
+                    .mapNotNull { (k, v) ->
+                        val value =
+                            (v as? JsonPrimitive)?.content
+                                ?: runCatching { v.jsonPrimitive.content }.getOrNull()
+                        if (value == null) null else k to value
+                    }
+                    .toMap()
+                LocalizedText(map)
+            }
+            else -> LocalizedText.of(element.toString())
+        }
+    }
+
+    override fun serialize(encoder: Encoder, value: LocalizedText) {
+        val onlyDefault = value.values.size == 1 && value.values.containsKey("default")
+        if (onlyDefault) {
+            encoder.encodeString(value.values.getValue("default"))
+            return
+        }
+
+        val entries = value.values.entries
+        val mapSerializer = MapSerializer(String.serializer(), String.serializer())
+        encoder.encodeSerializableValue(mapSerializer, entries.associate { it.key to it.value })
+    }
+}
+
+object StringOrStringListSerializer : KSerializer<List<String>> {
+    private val delegateSerializer = ListSerializer(String.serializer())
+
+    override val descriptor: SerialDescriptor = delegateSerializer.descriptor
+
+    override fun deserialize(decoder: Decoder): List<String> {
+        val jsonDecoder = decoder as? JsonDecoder
+            ?: return listOf(decoder.decodeString().trim()).filter { it.isNotBlank() }
+
+        val element = jsonDecoder.decodeJsonElement()
+        return when (element) {
+            is JsonPrimitive -> listOf(element.content.trim()).filter { it.isNotBlank() }
+            is JsonArray -> element.mapNotNull { item ->
+                (item as? JsonPrimitive)?.content?.trim()?.takeIf { it.isNotBlank() }
+            }
+            else -> throw IllegalArgumentException("Expected string or string array")
+        }
+    }
+
+    override fun serialize(encoder: Encoder, value: List<String>) {
+        val normalized = value.map { it.trim() }.filter { it.isNotBlank() }
+        when (normalized.size) {
+            0 -> encoder.encodeSerializableValue(delegateSerializer, emptyList())
+            1 -> encoder.encodeString(normalized.first())
+            else -> encoder.encodeSerializableValue(delegateSerializer, normalized)
+        }
+    }
+}
  
  /**
   * Represents an environment variable declaration for a package
@@ -297,7 +330,9 @@ data class ToolPackage(
     val enabledByDefault: Boolean = false,
     @JsonNames("display_name")
     val displayName: LocalizedText = LocalizedText.of(""),
-    val category: String = "Other"
+    val category: String = "Other",
+    @Serializable(with = StringOrStringListSerializer::class)
+    val author: List<String> = emptyList()
 )
  
  @Serializable

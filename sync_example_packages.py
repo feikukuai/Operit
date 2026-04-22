@@ -11,6 +11,7 @@ from pathlib import Path
 
 MANIFEST_FILENAMES = ("manifest.hjson", "manifest.json")
 SYNCABLE_SUFFIXES = {".js", ".toolpkg"}
+SYNC_MODES = ("normal", "test")
 
 
 @dataclass(frozen=True)
@@ -110,6 +111,26 @@ def _default_whitelist(packages_dir: Path) -> list[str]:
             continue
         names.append(p.name)
     return sorted(names)
+
+
+def _collect_all_example_items(examples_dir: Path) -> list[str]:
+    if not examples_dir.exists():
+        return []
+
+    items: list[str] = []
+
+    for child in sorted(examples_dir.iterdir(), key=lambda p: p.name.lower()):
+        if child.name == "types":
+            continue
+
+        if child.is_file() and child.suffix.lower() in SYNCABLE_SUFFIXES:
+            items.append(child.name)
+            continue
+
+        if child.is_dir() and _find_manifest_file(child):
+            items.append(child.name)
+
+    return items
 
 
 def _find_manifest_file(folder: Path) -> Path | None:
@@ -217,6 +238,33 @@ def _pack_toolpkg_folder(repo_root: Path, source_folder: Path, destination_file:
             zf.write(file_path, arcname)
 
 
+def _delete_unplanned_outputs(
+    packages_dir: Path,
+    planned_destination_names: set[str],
+    *,
+    dry_run: bool,
+) -> int:
+    if not packages_dir.exists():
+        return 0
+
+    deleted = 0
+    for file_path in sorted(packages_dir.iterdir(), key=lambda p: p.name.lower()):
+        if not file_path.is_file():
+            continue
+        if file_path.suffix.lower() not in SYNCABLE_SUFFIXES:
+            continue
+        if file_path.name in planned_destination_names:
+            continue
+
+        action = "DELETE" if not dry_run else "DRY-DELETE"
+        print(f"{action}: {file_path}")
+        if not dry_run:
+            file_path.unlink(missing_ok=True)
+        deleted += 1
+
+    return deleted
+
+
 def main() -> int:
     repo_root = Path(__file__).resolve().parent
     examples_dir = repo_root / "examples"
@@ -230,6 +278,17 @@ def main() -> int:
             "If an item maps to a folder that has manifest.hjson/manifest.json, it is packed as .toolpkg; "
             "otherwise .js/.toolpkg files are copied directly."
         )
+    )
+    parser.add_argument(
+        "--mode",
+        choices=SYNC_MODES,
+        default="normal",
+        help=(
+            "Sync mode. "
+            "'normal' syncs by whitelist. "
+            "'test' syncs every syncable example from examples/. "
+            "In both modes, only outputs not planned for this run are deleted."
+        ),
     )
     parser.add_argument(
         "--whitelist",
@@ -257,7 +316,7 @@ def main() -> int:
     parser.add_argument(
         "--delete-extra",
         action="store_true",
-        help="Delete *.js and *.toolpkg in assets/packages that are not in the resolved whitelist outputs.",
+        help="Deprecated. Extra outputs not planned for this run are deleted automatically.",
     )
 
     args = parser.parse_args()
@@ -272,8 +331,12 @@ def main() -> int:
         print(f"ERROR: prebuild step failed: {exc}", file=sys.stderr)
         return 3
 
+    sync_mode = args.mode
+
     whitelist: list[str]
-    if args.whitelist:
+    if sync_mode == "test":
+        whitelist = _collect_all_example_items(examples_dir)
+    elif args.whitelist:
         whitelist = _read_whitelist_file(Path(args.whitelist))
     elif default_whitelist_file.exists():
         whitelist = _read_whitelist_file(default_whitelist_file)
@@ -304,6 +367,7 @@ def main() -> int:
     copied = 0
     packed = 0
     missing = 0
+    deleted = 0
 
     plans: list[SyncPlanItem] = []
     seen_dest_names: set[str] = set()
@@ -322,6 +386,12 @@ def main() -> int:
         seen_dest_names.add(plan.destination_name)
         plans.append(plan)
 
+    deleted = _delete_unplanned_outputs(
+        packages_dir,
+        planned_destination_names=seen_dest_names,
+        dry_run=args.dry_run,
+    )
+
     for plan in plans:
         dest = packages_dir / plan.destination_name
 
@@ -339,24 +409,9 @@ def main() -> int:
             _pack_toolpkg_folder(repo_root, plan.source, dest)
             packed += 1
 
-    if args.delete_extra and packages_dir.exists():
-        whitelist_names = {plan.destination_name for plan in plans}
-        for p in packages_dir.iterdir():
-            if not p.is_file():
-                continue
-            if p.suffix.lower() not in SYNCABLE_SUFFIXES:
-                continue
-            if p.name in whitelist_names:
-                continue
-
-            action = "DELETE" if not args.dry_run else "DRY-DELETE"
-            print(f"{action}: {p}")
-            if not args.dry_run:
-                p.unlink(missing_ok=True)
-
     print(
         "Done. "
-        f"copied={copied}, packed={packed}, missing={missing}, "
+        f"mode={sync_mode}, copied={copied}, packed={packed}, deleted={deleted}, missing={missing}, "
         f"whitelist={len(final_items)}, resolved={len(plans)}, dry_run={bool(args.dry_run)}"
     )
     return 0 if missing == 0 else 1

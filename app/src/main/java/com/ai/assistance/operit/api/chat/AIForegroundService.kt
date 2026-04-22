@@ -286,7 +286,8 @@ class AIForegroundService : Service() {
             chatId: String?,
             characterName: String?,
             rawReplyContent: String?,
-            avatarUri: String?
+            avatarUri: String?,
+            notifyReplyOverride: Boolean? = null
         ) {
             try {
                 AppLogger.d(TAG, "检查是否需要发送会话完成通知: chatId=$chatId")
@@ -298,10 +299,11 @@ class AIForegroundService : Service() {
 
                 val appContext = context.applicationContext
                 val displayPreferences = DisplayPreferencesManager.getInstance(appContext)
-                val enableReplyNotification = runBlocking {
+                val globalEnableReplyNotification = runBlocking {
                     displayPreferences.enableReplyNotification.first()
                 }
-                if (!enableReplyNotification) {
+                val shouldNotify = notifyReplyOverride ?: globalEnableReplyNotification
+                if (!shouldNotify) {
                     AppLogger.d(TAG, "回复通知已禁用，跳过发送")
                     return
                 }

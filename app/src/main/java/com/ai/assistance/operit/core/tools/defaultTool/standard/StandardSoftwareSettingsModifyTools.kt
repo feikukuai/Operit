@@ -1564,12 +1564,16 @@ class StandardSoftwareSettingsModifyTools(private val context: Context) {
         applyString("api_key") { config, value -> config.copy(apiKey = value) }
         applyString("api_endpoint") { config, value -> config.copy(apiEndpoint = value) }
         applyString("model_name") { config, value -> config.copy(modelName = value) }
-
         getParameterValue(tool, "api_provider_type")?.let { raw ->
-            val provider =
-                parseApiProviderType(raw)
-                    ?: throw IllegalArgumentException("Invalid api_provider_type: $raw")
-            updated = updated.copy(apiProviderType = provider)
+            val providerTypeId = raw.trim()
+            if (providerTypeId.isEmpty()) {
+                throw IllegalArgumentException("Invalid api_provider_type: $raw")
+            }
+            val provider = parseApiProviderType(providerTypeId) ?: ApiProviderType.OTHER
+            updated = updated.copy(
+                apiProviderType = provider,
+                apiProviderTypeId = providerTypeId
+            )
             changedFields.add("api_provider_type")
         }
 
@@ -1679,7 +1683,8 @@ class StandardSoftwareSettingsModifyTools(private val context: Context) {
         return ModelConfigResultItem(
             id = config.id,
             name = config.name,
-            apiProviderType = config.apiProviderType.name,
+            apiProviderType = config.apiProviderTypeId,
+            apiProviderTypeId = config.apiProviderTypeId,
             apiEndpoint = config.apiEndpoint,
             modelName = config.modelName,
             modelList = getModelList(config.modelName),

@@ -542,16 +542,33 @@ const dailyLife = (function () {
         const sendNodeId = `send_${uniqueId}`;
         const deleteNodeId = `delete_${uniqueId}`;
 
+        const sendMessageOptions: NonNullable<Parameters<typeof Tools.Chat.sendMessage>[4]> = {
+            hide_user_message: true,
+            notify_reply: true,
+            persist_turn: true,
+        };
+        const sendMessageArgs: Parameters<typeof Tools.Chat.sendMessage> = [
+            messageContent,
+            resolvedChatId,
+            resolvedRoleCardId || undefined,
+            resolvedSenderName || undefined,
+            sendMessageOptions
+        ];
+        const [typedMessage, typedChatId, typedRoleCardId, typedSenderName, typedOptions] = sendMessageArgs;
+
         const actionConfig: Record<string, any> = {
-            message: messageContent,
-            chat_id: resolvedChatId
+            message: typedMessage,
+            chat_id: typedChatId,
+            hide_user_message: true,
+            notify_reply: true,
+            persist_turn: true,
         };
 
-        if (resolvedRoleCardId) {
-            actionConfig.role_card_id = resolvedRoleCardId;
+        if (typedRoleCardId) {
+            actionConfig.role_card_id = typedRoleCardId;
         }
-        if (resolvedSenderName) {
-            actionConfig.sender_name = resolvedSenderName;
+        if (typedSenderName) {
+            actionConfig.sender_name = typedSenderName;
         }
 
         const nodeTexts = resolvedLang?.toLowerCase()?.startsWith("zh")

@@ -16,7 +16,8 @@ data class ToolPkgMainRegistrationCapture(
     val systemPromptComposeHooks: List<String>,
     val toolPromptComposeHooks: List<String>,
     val promptFinalizeHooks: List<String>,
-    val promptEstimateFinalizeHooks: List<String>
+    val promptEstimateFinalizeHooks: List<String>,
+    val aiProviders: List<String>
 )
 
 private enum class RegistrationBucket {
@@ -32,7 +33,8 @@ private enum class RegistrationBucket {
     SYSTEM_PROMPT_COMPOSE,
     TOOL_PROMPT_COMPOSE,
     PROMPT_FINALIZE,
-    PROMPT_ESTIMATE_FINALIZE
+    PROMPT_ESTIMATE_FINALIZE,
+    AI_PROVIDER
 }
 
 internal class JsToolPkgRegistrationSession {
@@ -73,6 +75,8 @@ internal class JsToolPkgRegistrationSession {
         append(RegistrationBucket.PROMPT_FINALIZE, specJson)
     fun appendPromptEstimateFinalizeHook(specJson: String) =
         append(RegistrationBucket.PROMPT_ESTIMATE_FINALIZE, specJson)
+    fun appendAiProvider(specJson: String) =
+        append(RegistrationBucket.AI_PROVIDER, specJson)
 
     fun finish(executionResult: Any?): ToolPkgMainRegistrationCapture {
         if (executionResult is String && executionResult.trim().startsWith("Error:", ignoreCase = true)) {
@@ -95,7 +99,8 @@ internal class JsToolPkgRegistrationSession {
                 systemPromptComposeHooks = read(RegistrationBucket.SYSTEM_PROMPT_COMPOSE),
                 toolPromptComposeHooks = read(RegistrationBucket.TOOL_PROMPT_COMPOSE),
                 promptFinalizeHooks = read(RegistrationBucket.PROMPT_FINALIZE),
-                promptEstimateFinalizeHooks = read(RegistrationBucket.PROMPT_ESTIMATE_FINALIZE)
+                promptEstimateFinalizeHooks = read(RegistrationBucket.PROMPT_ESTIMATE_FINALIZE),
+                aiProviders = read(RegistrationBucket.AI_PROVIDER)
             )
         }
     }
@@ -204,6 +209,42 @@ internal fun buildToolPkgRegistrationBridgeScript(): String {
                 if (!exportedName) {
                     normalized.function_source = String(fn);
                 }
+                return normalized;
+            }
+
+            function normalizeNestedFunctionField(definition, fieldName, label) {
+                if (!definition || typeof definition !== 'object' || Array.isArray(definition)) {
+                    throw new Error(label + ' expects an object');
+                }
+                var fieldValue = definition[fieldName];
+                if (!fieldValue || typeof fieldValue !== 'object' || Array.isArray(fieldValue)) {
+                    throw new Error(label + ' requires an object field: ' + fieldName);
+                }
+                var fn = fieldValue.function;
+                if (typeof fn !== 'function') {
+                    throw new Error(label + '.' + fieldName + '.function must be a function reference');
+                }
+                var exportedName = resolveExportedFunctionName(fn);
+                var normalizedField = copyObject(fieldValue, 'function');
+                normalizedField.function = exportedName || buildInlineFunctionName({
+                    id: String((definition && definition.id) || 'provider') + '_' + fieldName
+                });
+                if (!exportedName) {
+                    normalizedField.function_source = String(fn);
+                }
+                return normalizedField;
+            }
+
+            function normalizeAiProviderDefinition(definition, label) {
+                var normalized = copyObject(definition, '');
+                [
+                    'listModels',
+                    'sendMessage',
+                    'testConnection',
+                    'calculateInputTokens'
+                ].forEach(function(fieldName) {
+                    normalized[fieldName] = normalizeNestedFunctionField(definition, fieldName, label);
+                });
                 return normalized;
             }
 
@@ -322,6 +363,11 @@ internal fun buildToolPkgRegistrationBridgeScript(): String {
                     registerWithNative(definition, apiName, nativeMethod, 'function');
                 };
             });
+
+            api.registerAiProvider = function(definition) {
+                var normalized = normalizeAiProviderDefinition(definition, 'registerAiProvider');
+                requireNative('registerToolPkgAiProvider')(JSON.stringify(normalized));
+            };
 
             installGlobal('ToolPkg', api);
         })();

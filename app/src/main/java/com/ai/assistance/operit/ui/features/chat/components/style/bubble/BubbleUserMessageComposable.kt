@@ -47,11 +47,13 @@ import androidx.compose.ui.window.Dialog
 import coil.compose.rememberAsyncImagePainter
 import com.ai.assistance.operit.R
 import com.ai.assistance.operit.data.model.ChatMessage
+import com.ai.assistance.operit.data.model.ChatMessageDisplayMode
 import com.ai.assistance.operit.data.preferences.CharacterCardManager
 import com.ai.assistance.operit.data.preferences.DisplayPreferencesManager
 import com.ai.assistance.operit.data.preferences.UserPreferencesManager
 import com.ai.assistance.operit.ui.features.chat.components.attachments.AttachmentViewerDialog
 import com.ai.assistance.operit.ui.features.chat.components.attachments.ChatAttachment
+import com.ai.assistance.operit.ui.features.chat.components.style.common.HiddenUserMessagePlaceholderContent
 import com.ai.assistance.operit.api.chat.llmprovider.MediaLinkParser
 import com.ai.assistance.operit.util.ImageBitmapLimiter
 import com.ai.assistance.operit.util.ImagePoolManager
@@ -84,6 +86,17 @@ fun BubbleUserMessageComposable(
     enableDialogs: Boolean = true
 ) {
     val context = LocalContext.current
+    val isHiddenPlaceholder =
+        message.sender == "user" &&
+            message.displayMode == ChatMessageDisplayMode.HIDDEN_PLACEHOLDER
+    val effectiveBackgroundColor =
+        if (isHiddenPlaceholder) {
+            Color.Transparent
+        } else {
+            backgroundColor
+        }
+    val effectiveTextColor =
+        textColor
     val preferencesManager = remember { UserPreferencesManager.getInstance(context) }
     val displayPreferencesManager = remember { DisplayPreferencesManager.getInstance(context) }
     val characterCardManager = remember { CharacterCardManager.getInstance(context) }
@@ -111,12 +124,19 @@ fun BubbleUserMessageComposable(
     val scope = rememberCoroutineScope()
 
     // Parse message content to separate text and attachments
-    val parseResult = remember(message.content) { parseMessageContent(context, message.content) }
+    val parseResult =
+        remember(message.content, isHiddenPlaceholder) {
+            if (isHiddenPlaceholder) {
+                MessageParseResult(processedText = "", trailingAttachments = emptyList())
+            } else {
+                parseMessageContent(context, message.content)
+            }
+        }
     val textContent = parseResult.processedText
     val trailingAttachments = parseResult.trailingAttachments
     val replyInfo = parseResult.replyInfo
     val imageLinks = parseResult.imageLinks
-    val proxySenderName = parseResult.proxySenderName
+    val proxySenderName = if (isHiddenPlaceholder) null else parseResult.proxySenderName
 
     val isProxySender = !proxySenderName.isNullOrBlank()
     val proxyAvatarUri by remember(proxySenderName) {
@@ -187,11 +207,11 @@ fun BubbleUserMessageComposable(
                     ),
             )
         }
-    val waterGlassEnabled = enableWaterGlass && isWaterGlassSupported()
+    val waterGlassEnabled = !isHiddenPlaceholder && enableWaterGlass && isWaterGlassSupported()
     val liquidGlassEnabled =
-        !waterGlassEnabled && enableLiquidGlass && isLiquidGlassSupported()
+        !isHiddenPlaceholder && !waterGlassEnabled && enableLiquidGlass && isLiquidGlassSupported()
     val effectiveBubbleImageStyle =
-        if (liquidGlassEnabled || waterGlassEnabled) {
+        if (isHiddenPlaceholder || liquidGlassEnabled || waterGlassEnabled) {
             null
         } else {
             bubbleImageStyle
@@ -201,7 +221,7 @@ fun BubbleUserMessageComposable(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 0.dp, vertical = 4.dp)
+            .padding(horizontal = 0.dp, vertical = if (isHiddenPlaceholder) 0.dp else 4.dp)
     ) {
         // Display reply info above attachments if present
         replyInfo?.let { reply ->
@@ -390,7 +410,7 @@ fun BubbleUserMessageComposable(
                     }
                 val bubbleModifier =
                     Modifier
-                        .widthIn(max = maxBubbleWidth)
+                        .widthIn(max = if (isHiddenPlaceholder) minOf(maxBubbleWidth, 320.dp) else maxBubbleWidth)
                         .defaultMinSize(minHeight = 44.dp)
 
                 Row(
@@ -405,16 +425,23 @@ fun BubbleUserMessageComposable(
                             contentPadding =
                                 PaddingValues(
                                     start = bubbleContentPaddingLeft.dp,
-                                    top = 12.dp,
+                                    top = if (isHiddenPlaceholder) 0.dp else 12.dp,
                                     end = bubbleContentPaddingRight.dp,
-                                    bottom = 12.dp,
+                                    bottom = if (isHiddenPlaceholder) 0.dp else 12.dp,
                                 ),
                         ) {
-                            Text(
-                                text = textContent,
-                                color = textColor,
-                                style = MaterialTheme.typography.bodyMedium,
-                            )
+                            if (isHiddenPlaceholder) {
+                                HiddenUserMessagePlaceholderContent(
+                                    titleColor = effectiveTextColor,
+                                    subtitleColor = effectiveTextColor.copy(alpha = 0.72f),
+                                )
+                            } else {
+                                Text(
+                                    text = textContent,
+                                    color = effectiveTextColor,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                )
+                            }
                         }
                     } else {
                         Surface(
@@ -423,7 +450,7 @@ fun BubbleUserMessageComposable(
                                     .waterGlass(
                                         enabled = waterGlassEnabled,
                                         shape = bubbleShape,
-                                        containerColor = backgroundColor,
+                                        containerColor = effectiveBackgroundColor,
                                         shadowElevation = 10.dp,
                                         borderWidth = 0.7.dp,
                                         overlayAlphaBoost = 0.08f,
@@ -431,7 +458,7 @@ fun BubbleUserMessageComposable(
                                     .liquidGlass(
                                         enabled = liquidGlassEnabled,
                                         shape = bubbleShape,
-                                        containerColor = backgroundColor,
+                                        containerColor = effectiveBackgroundColor,
                                         shadowElevation = 10.dp,
                                         borderWidth = 0.28.dp,
                                         blurRadius = 28.dp,
@@ -443,27 +470,44 @@ fun BubbleUserMessageComposable(
                                 if (liquidGlassEnabled || waterGlassEnabled) {
                                     Color.Transparent
                                 } else {
-                                    backgroundColor
+                                    effectiveBackgroundColor
                                 },
                             tonalElevation =
-                                if (liquidGlassEnabled || waterGlassEnabled) {
+                                if (liquidGlassEnabled || waterGlassEnabled || isHiddenPlaceholder) {
                                     0.dp
                                 } else {
                                     2.dp
                                 },
                         ) {
-                            Text(
-                                text = textContent,
-                                modifier =
-                                    Modifier.padding(
-                                        start = bubbleContentPaddingLeft.dp,
-                                        top = 12.dp,
-                                        end = bubbleContentPaddingRight.dp,
-                                        bottom = 12.dp,
-                                    ),
-                                color = textColor,
-                                style = MaterialTheme.typography.bodyMedium,
-                            )
+                            if (isHiddenPlaceholder) {
+                                Box(
+                                    modifier =
+                                        Modifier.padding(
+                                            start = bubbleContentPaddingLeft.dp,
+                                            top = 0.dp,
+                                            end = bubbleContentPaddingRight.dp,
+                                            bottom = 0.dp,
+                                        ),
+                                ) {
+                                    HiddenUserMessagePlaceholderContent(
+                                        titleColor = effectiveTextColor,
+                                        subtitleColor = effectiveTextColor.copy(alpha = 0.72f),
+                                    )
+                                }
+                            } else {
+                                Text(
+                                    text = textContent,
+                                    modifier =
+                                        Modifier.padding(
+                                            start = bubbleContentPaddingLeft.dp,
+                                            top = 12.dp,
+                                            end = bubbleContentPaddingRight.dp,
+                                            bottom = 12.dp,
+                                        ),
+                                    color = effectiveTextColor,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                )
+                            }
                         }
                     }
                 }
@@ -511,7 +555,7 @@ fun BubbleUserMessageComposable(
                         }
                     val bubbleModifier =
                         Modifier
-                            .widthIn(max = maxBubbleWidth)
+                            .widthIn(max = if (isHiddenPlaceholder) minOf(maxBubbleWidth, 320.dp) else maxBubbleWidth)
                             .defaultMinSize(minHeight = 44.dp)
 
                     if (effectiveBubbleImageStyle != null) {
@@ -522,16 +566,23 @@ fun BubbleUserMessageComposable(
                             contentPadding =
                                 PaddingValues(
                                     start = bubbleContentPaddingLeft.dp,
-                                    top = 12.dp,
+                                    top = if (isHiddenPlaceholder) 0.dp else 12.dp,
                                     end = bubbleContentPaddingRight.dp,
-                                    bottom = 12.dp,
+                                    bottom = if (isHiddenPlaceholder) 0.dp else 12.dp,
                                 ),
                         ) {
-                            Text(
-                                text = textContent,
-                                color = textColor,
-                                style = MaterialTheme.typography.bodyMedium,
-                            )
+                            if (isHiddenPlaceholder) {
+                                HiddenUserMessagePlaceholderContent(
+                                    titleColor = effectiveTextColor,
+                                    subtitleColor = effectiveTextColor.copy(alpha = 0.72f),
+                                )
+                            } else {
+                                Text(
+                                    text = textContent,
+                                    color = effectiveTextColor,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                )
+                            }
                         }
                     } else {
                         Surface(
@@ -540,7 +591,7 @@ fun BubbleUserMessageComposable(
                                     .waterGlass(
                                         enabled = waterGlassEnabled,
                                         shape = bubbleShape,
-                                        containerColor = backgroundColor,
+                                        containerColor = effectiveBackgroundColor,
                                         shadowElevation = 10.dp,
                                         borderWidth = 0.7.dp,
                                         overlayAlphaBoost = 0.08f,
@@ -548,7 +599,7 @@ fun BubbleUserMessageComposable(
                                     .liquidGlass(
                                         enabled = liquidGlassEnabled,
                                         shape = bubbleShape,
-                                        containerColor = backgroundColor,
+                                        containerColor = effectiveBackgroundColor,
                                         shadowElevation = 10.dp,
                                         borderWidth = 0.28.dp,
                                         blurRadius = 28.dp,
@@ -560,27 +611,44 @@ fun BubbleUserMessageComposable(
                                 if (liquidGlassEnabled || waterGlassEnabled) {
                                     Color.Transparent
                                 } else {
-                                    backgroundColor
+                                    effectiveBackgroundColor
                                 },
                             tonalElevation =
-                                if (liquidGlassEnabled || waterGlassEnabled) {
+                                if (liquidGlassEnabled || waterGlassEnabled || isHiddenPlaceholder) {
                                     0.dp
                                 } else {
                                     2.dp
                                 }
                         ) {
-                            Text(
-                                text = textContent,
-                                modifier =
-                                    Modifier.padding(
-                                        start = bubbleContentPaddingLeft.dp,
-                                        top = 12.dp,
-                                        end = bubbleContentPaddingRight.dp,
-                                        bottom = 12.dp,
-                                    ),
-                                color = textColor,
-                                style = MaterialTheme.typography.bodyMedium
-                            )
+                            if (isHiddenPlaceholder) {
+                                Box(
+                                    modifier =
+                                        Modifier.padding(
+                                            start = bubbleContentPaddingLeft.dp,
+                                            top = 0.dp,
+                                            end = bubbleContentPaddingRight.dp,
+                                            bottom = 0.dp,
+                                        ),
+                                ) {
+                                    HiddenUserMessagePlaceholderContent(
+                                        titleColor = effectiveTextColor,
+                                        subtitleColor = effectiveTextColor.copy(alpha = 0.72f),
+                                    )
+                                }
+                            } else {
+                                Text(
+                                    text = textContent,
+                                    modifier =
+                                        Modifier.padding(
+                                            start = bubbleContentPaddingLeft.dp,
+                                            top = 12.dp,
+                                            end = bubbleContentPaddingRight.dp,
+                                            bottom = 12.dp,
+                                        ),
+                                    color = effectiveTextColor,
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                            }
                         }
                     }
                 }

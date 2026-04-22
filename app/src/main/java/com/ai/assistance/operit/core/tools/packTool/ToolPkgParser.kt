@@ -3,6 +3,7 @@ package com.ai.assistance.operit.core.tools.packTool
 import android.content.Context
 import android.provider.DocumentsContract
 import com.ai.assistance.operit.core.tools.LocalizedText
+import com.ai.assistance.operit.core.tools.StringOrStringListSerializer
 import com.ai.assistance.operit.core.tools.ToolPackage
 import java.io.File
 import java.io.InputStream
@@ -52,6 +53,21 @@ internal data class ToolPkgFunctionHookRuntime(
     val functionSource: String? = null
 )
 
+internal data class ToolPkgAiProviderHandlerRuntime(
+    val function: String,
+    val functionSource: String? = null
+)
+
+internal data class ToolPkgAiProviderRuntime(
+    val id: String,
+    val displayName: String,
+    val description: String,
+    val listModelsHandler: ToolPkgAiProviderHandlerRuntime,
+    val sendMessageHandler: ToolPkgAiProviderHandlerRuntime,
+    val testConnectionHandler: ToolPkgAiProviderHandlerRuntime,
+    val calculateInputTokensHandler: ToolPkgAiProviderHandlerRuntime
+)
+
 internal data class ToolPkgTagFunctionHookRuntime(
     val id: String,
     val tag: String,
@@ -74,6 +90,7 @@ internal data class ToolPkgContainerRuntime(
     val displayName: LocalizedText,
     val description: LocalizedText,
     val version: String,
+    val author: List<String>,
     val mainEntry: String,
     val sourceType: ToolPkgSourceType,
     val sourcePath: String,
@@ -91,7 +108,8 @@ internal data class ToolPkgContainerRuntime(
     val systemPromptComposeHooks: List<ToolPkgFunctionHookRuntime>,
     val toolPromptComposeHooks: List<ToolPkgFunctionHookRuntime>,
     val promptFinalizeHooks: List<ToolPkgFunctionHookRuntime>,
-    val promptEstimateFinalizeHooks: List<ToolPkgFunctionHookRuntime>
+    val promptEstimateFinalizeHooks: List<ToolPkgFunctionHookRuntime>,
+    val aiProviders: List<ToolPkgAiProviderRuntime>
 )
 
 internal data class ToolPkgLoadResult(
@@ -108,6 +126,8 @@ internal data class ToolPkgManifest(
     val main: String = "",
     @SerialName("display_name") val displayName: LocalizedText = LocalizedText.of(""),
     val description: LocalizedText = LocalizedText.of(""),
+    @Serializable(with = StringOrStringListSerializer::class)
+    val author: List<String> = emptyList(),
     @SerialName("enabled_by_default") val enabledByDefault: Boolean = true,
     val subpackages: List<ToolPkgManifestSubpackage> = emptyList(),
     val resources: List<ToolPkgManifestResource> = emptyList()
@@ -146,6 +166,21 @@ internal data class ToolPkgRegisteredFunctionHook(
     val functionSource: String? = null
 )
 
+internal data class ToolPkgRegisteredAiProviderHandler(
+    val function: String,
+    val functionSource: String? = null
+)
+
+internal data class ToolPkgRegisteredAiProvider(
+    val id: String,
+    val displayName: String,
+    val description: String,
+    val listModelsHandler: ToolPkgRegisteredAiProviderHandler,
+    val sendMessageHandler: ToolPkgRegisteredAiProviderHandler,
+    val testConnectionHandler: ToolPkgRegisteredAiProviderHandler,
+    val calculateInputTokensHandler: ToolPkgRegisteredAiProviderHandler
+)
+
 internal data class ToolPkgRegisteredTagFunctionHook(
     val id: String,
     val tag: String,
@@ -166,7 +201,8 @@ internal data class ToolPkgMainRegistration(
     val systemPromptComposeHooks: List<ToolPkgRegisteredFunctionHook> = emptyList(),
     val toolPromptComposeHooks: List<ToolPkgRegisteredFunctionHook> = emptyList(),
     val promptFinalizeHooks: List<ToolPkgRegisteredFunctionHook> = emptyList(),
-    val promptEstimateFinalizeHooks: List<ToolPkgRegisteredFunctionHook> = emptyList()
+    val promptEstimateFinalizeHooks: List<ToolPkgRegisteredFunctionHook> = emptyList(),
+    val aiProviders: List<ToolPkgRegisteredAiProvider> = emptyList()
 )
 
 internal object ToolPkgArchiveParser {
@@ -656,6 +692,51 @@ internal object ToolPkgArchiveParser {
             )
         }
 
+        val aiProviders = mutableListOf<ToolPkgAiProviderRuntime>()
+        val aiProviderIds = linkedSetOf<String>()
+        mainRegistration.aiProviders.forEachIndexed { index, provider ->
+            val id = provider.id.trim()
+            if (id.isBlank()) {
+                throw IllegalArgumentException("$TOOLPKG_REGISTRATION_AI_PROVIDER[$index].id is required")
+            }
+            if (!aiProviderIds.add(id.lowercase())) {
+                throw IllegalArgumentException("Duplicate ai provider id: $id")
+            }
+
+            fun buildHandler(
+                fieldName: String,
+                handler: ToolPkgRegisteredAiProviderHandler
+            ): ToolPkgAiProviderHandlerRuntime {
+                val function = handler.function.trim()
+                if (function.isBlank()) {
+                    throw IllegalArgumentException(
+                        "$TOOLPKG_REGISTRATION_AI_PROVIDER[$index].$fieldName is required"
+                    )
+                }
+                return ToolPkgAiProviderHandlerRuntime(
+                    function = function,
+                    functionSource = handler.functionSource
+                )
+            }
+
+            aiProviders.add(
+                ToolPkgAiProviderRuntime(
+                    id = id,
+                    displayName = provider.displayName.trim().ifBlank { id },
+                    description = provider.description.trim(),
+                    listModelsHandler = buildHandler("listModels", provider.listModelsHandler),
+                    sendMessageHandler = buildHandler("sendMessage", provider.sendMessageHandler),
+                    testConnectionHandler =
+                        buildHandler("testConnection", provider.testConnectionHandler),
+                    calculateInputTokensHandler =
+                        buildHandler(
+                            "calculateInputTokens",
+                            provider.calculateInputTokensHandler
+                        )
+                )
+            )
+        }
+
         val containerDescription =
             when {
                 hasLocalizedTextContent(manifest.description) -> manifest.description
@@ -671,7 +752,8 @@ internal object ToolPkgArchiveParser {
                 isBuiltIn = isBuiltIn,
                 enabledByDefault = manifest.enabledByDefault,
                 displayName = containerDisplayName,
-                category = "ToolPkg"
+                category = "ToolPkg",
+                author = manifest.author
             )
 
         val runtime =
@@ -680,6 +762,7 @@ internal object ToolPkgArchiveParser {
                 displayName = containerDisplayName,
                 description = containerDescription,
                 version = manifest.version,
+                author = manifest.author,
                 mainEntry = normalizedMainEntry,
                 sourceType = sourceType,
                 sourcePath = sourcePath,
@@ -697,7 +780,8 @@ internal object ToolPkgArchiveParser {
                 systemPromptComposeHooks = systemPromptComposeHooks,
                 toolPromptComposeHooks = toolPromptComposeHooks,
                 promptFinalizeHooks = promptFinalizeHooks,
-                promptEstimateFinalizeHooks = promptEstimateFinalizeHooks
+                promptEstimateFinalizeHooks = promptEstimateFinalizeHooks,
+                aiProviders = aiProviders
             )
 
         return ToolPkgLoadResult(

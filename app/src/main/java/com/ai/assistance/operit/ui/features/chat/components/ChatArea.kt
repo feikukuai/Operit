@@ -15,6 +15,7 @@ import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -37,11 +38,13 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.automirrored.rounded.VolumeUp
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -65,6 +68,7 @@ import androidx.compose.ui.unit.sp
 import com.ai.assistance.operit.R
 import com.ai.assistance.operit.data.model.AiReference
 import com.ai.assistance.operit.data.model.ChatMessage
+import com.ai.assistance.operit.data.model.ChatMessageDisplayMode
 import com.ai.assistance.operit.data.preferences.DisplayPreferencesManager
 
 import androidx.compose.ui.window.PopupProperties
@@ -138,6 +142,11 @@ private data class PaginationWindow(
 
 private fun isPaginationTriggerMessage(message: ChatMessage): Boolean {
     return message.sender == "user" || message.sender == "ai" || message.sender == "summary"
+}
+
+private fun isHiddenUserPlaceholder(message: ChatMessage): Boolean {
+    return message.sender == "user" &&
+        message.displayMode == ChatMessageDisplayMode.HIDDEN_PLACEHOLDER
 }
 
 private fun buildPaginationState(
@@ -721,10 +730,12 @@ private fun MessageItem(
     val context = LocalContext.current
     var showContextMenu by remember { mutableStateOf(false) }
     var showMessageInfoDialog by remember { mutableStateOf(false) }
+    var showHiddenUserMessageDialog by remember { mutableStateOf(false) }
 
 
     // 只有用户和AI的消息才能被操作
     val isActionable = message.sender == "user" || message.sender == "ai"
+    val isHiddenUserMessage = isHiddenUserPlaceholder(message)
 
     Box(
         modifier =
@@ -742,6 +753,8 @@ private fun MessageItem(
                 onClick = {
                     if (isMultiSelectMode && isActionable) {
                         onToggleSelection?.invoke()
+                    } else if (!isMultiSelectMode && enableDialogs && isHiddenUserMessage) {
+                        showHiddenUserMessageDialog = true
                     }
                 },
                 onLongClick = { 
@@ -840,89 +853,93 @@ private fun MessageItem(
                 dismissOnClickOutside = true
             )
         ) {
-            // 复制选项
-            DropdownMenuItem(
-                text = {
-                    Text(
-                        stringResource(id = R.string.copy_message),
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontSize = 13.sp
-                    )
-                },
-                onClick = {
-                    val clipboardManager =
-                        context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                    val cleanContent = cleanXmlTags(message.content)
-                    val clipData =
-                        ClipData.newPlainText(
-                            context.getString(R.string.chat_clipboard_label_message),
-                            cleanContent
-                        )
-                    clipboardManager.setPrimaryClip(clipData)
-                    Toast.makeText(context, context.getString(R.string.message_copied), Toast.LENGTH_SHORT).show()
-                    onCopyMessage?.invoke(message)
-                    showContextMenu = false
-                },
-                leadingIcon = {
-                    Icon(
-                        imageVector = Icons.Default.ContentCopy,
-                        contentDescription = stringResource(id = R.string.copy_message),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(16.dp)
-                    )
-                },
-                modifier = Modifier.height(36.dp)
-            )
-
-            // 朗读消息选项
-            DropdownMenuItem(
-                text = {
-                    Text(
-                        stringResource(R.string.read_message),
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontSize = 13.sp
-                    )
-                },
-                onClick = {
-                    onSpeakMessage?.invoke(message.content)
-                    showContextMenu = false
-                },
-                leadingIcon = {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Rounded.VolumeUp,
-                        contentDescription = stringResource(R.string.read_message),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(16.dp)
-                    )
-                },
-                modifier = Modifier.height(36.dp)
-            )
-
-            // 根据消息发送者显示不同的操作
-            if (message.sender == "user") {
-                // 编辑并重发选项
+            if (!isHiddenUserMessage) {
+                // 复制选项
                 DropdownMenuItem(
                     text = {
                         Text(
-                            stringResource(id = R.string.edit_and_resend),
+                            stringResource(id = R.string.copy_message),
                             style = MaterialTheme.typography.bodyMedium,
                             fontSize = 13.sp
                         )
                     },
                     onClick = {
-                        onSelectMessageToEdit?.invoke(index, message, "user")
+                        val clipboardManager =
+                            context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                        val cleanContent = cleanXmlTags(message.content)
+                        val clipData =
+                            ClipData.newPlainText(
+                                context.getString(R.string.chat_clipboard_label_message),
+                                cleanContent
+                            )
+                        clipboardManager.setPrimaryClip(clipData)
+                        Toast.makeText(context, context.getString(R.string.message_copied), Toast.LENGTH_SHORT).show()
+                        onCopyMessage?.invoke(message)
                         showContextMenu = false
                     },
                     leadingIcon = {
                         Icon(
-                            imageVector = Icons.Default.Edit,
-                            contentDescription = stringResource(id = R.string.edit_and_resend),
+                            imageVector = Icons.Default.ContentCopy,
+                            contentDescription = stringResource(id = R.string.copy_message),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(16.dp)
                         )
                     },
                     modifier = Modifier.height(36.dp)
                 )
+
+                // 朗读消息选项
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            stringResource(R.string.read_message),
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontSize = 13.sp
+                        )
+                    },
+                    onClick = {
+                        onSpeakMessage?.invoke(message.content)
+                        showContextMenu = false
+                    },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Rounded.VolumeUp,
+                            contentDescription = stringResource(R.string.read_message),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    },
+                    modifier = Modifier.height(36.dp)
+                )
+            }
+
+            // 根据消息发送者显示不同的操作
+            if (message.sender == "user") {
+                if (!isHiddenUserMessage) {
+                    // 编辑并重发选项
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                stringResource(id = R.string.edit_and_resend),
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontSize = 13.sp
+                            )
+                        },
+                        onClick = {
+                            onSelectMessageToEdit?.invoke(index, message, "user")
+                            showContextMenu = false
+                        },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Default.Edit,
+                                contentDescription = stringResource(id = R.string.edit_and_resend),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        },
+                        modifier = Modifier.height(36.dp)
+                    )
+                }
                 // 回滚到此处
                 DropdownMenuItem(
                     text = {
@@ -1137,6 +1154,27 @@ private fun MessageItem(
                     )
                 },
                 modifier = Modifier.height(36.dp)
+            )
+        }
+
+        if (enableDialogs && isHiddenUserMessage && showHiddenUserMessageDialog) {
+            AlertDialog(
+                onDismissRequest = { showHiddenUserMessageDialog = false },
+                title = { Text(text = stringResource(R.string.chat_hidden_user_message_badge)) },
+                text = {
+                    Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                        Text(
+                            text = message.content,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { showHiddenUserMessageDialog = false }) {
+                        Text(text = stringResource(R.string.floating_close))
+                    }
+                },
             )
         }
 

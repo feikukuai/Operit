@@ -51,7 +51,6 @@ class ClaudeProvider(
     private val JSON = "application/json".toMediaType()
     private val ANTHROPIC_VERSION = "2023-06-01" // Claude API版本
     private val PROMPT_CACHE_CONTROL_TYPE = "ephemeral"
-    private val PROMPT_CACHE_CONTROL_TTL = "1h"
     private val DEFAULT_MAX_TOKENS = 4096
 
     // 当前活跃的Call对象，用于取消流式传输
@@ -541,7 +540,6 @@ class ClaudeProvider(
     private fun cacheControlObject(): JSONObject {
         return JSONObject().apply {
             put("type", PROMPT_CACHE_CONTROL_TYPE)
-            put("ttl", PROMPT_CACHE_CONTROL_TTL)
         }
     }
 

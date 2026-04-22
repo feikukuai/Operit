@@ -51,6 +51,21 @@ internal data class ToolPkgPromptHookRegistration(
     val functionSource: String? = null
 )
 
+internal data class ToolPkgAiProviderRegistration(
+    val containerPackageName: String,
+    val providerId: String,
+    val displayName: String,
+    val description: String,
+    val listModelsFunctionName: String,
+    val listModelsFunctionSource: String? = null,
+    val sendMessageFunctionName: String,
+    val sendMessageFunctionSource: String? = null,
+    val testConnectionFunctionName: String,
+    val testConnectionFunctionSource: String? = null,
+    val calculateInputTokensFunctionName: String,
+    val calculateInputTokensFunctionSource: String? = null
+)
+
 internal fun toolPkgPackageManager(): PackageManager {
     val application = OperitApplication.instance.applicationContext
     return PackageManager.getInstance(application, AIToolHandler.getInstance(application))

@@ -96,6 +96,7 @@ class ModelConfigManager(private val context: Context) {
                 apiEndpoint = ApiPreferences.DEFAULT_API_ENDPOINT,
                 modelName = ApiPreferences.DEFAULT_MODEL_NAME,
                 apiProviderType = DEFAULT_API_PROVIDER_TYPE,
+                apiProviderTypeId = DEFAULT_API_PROVIDER_TYPE.name,
                 hasCustomParameters = false,
                 maxTokensEnabled = false,
                 temperatureEnabled = false,
@@ -241,6 +242,7 @@ class ModelConfigManager(private val context: Context) {
                         id = configId,
                         name = name,
                         apiProviderType = ApiProviderType.OPENAI_GENERIC,
+                        apiProviderTypeId = ApiProviderType.OPENAI_GENERIC.name,
                         enableToolCall = true
                 )
 
@@ -298,14 +300,16 @@ class ModelConfigManager(private val context: Context) {
             apiKey: String,
             apiEndpoint: String,
             modelName: String,
-            apiProviderType: com.ai.assistance.operit.data.model.ApiProviderType
+            apiProviderType: com.ai.assistance.operit.data.model.ApiProviderType,
+            apiProviderTypeId: String = apiProviderType.name
     ): ModelConfigData {
         return updateConfigInternal(configId) {
             it.copy(
                     apiKey = apiKey,
                     apiEndpoint = apiEndpoint,
                     modelName = modelName,
-                    apiProviderType = apiProviderType
+                    apiProviderType = apiProviderType,
+                    apiProviderTypeId = apiProviderTypeId
             )
         }
     }
@@ -317,6 +321,7 @@ class ModelConfigManager(private val context: Context) {
             apiEndpoint: String,
             modelName: String,
             apiProviderType: com.ai.assistance.operit.data.model.ApiProviderType,
+            apiProviderTypeId: String = apiProviderType.name,
             mnnForwardType: Int,
             mnnThreadCount: Int
     ): ModelConfigData {
@@ -326,6 +331,7 @@ class ModelConfigManager(private val context: Context) {
                     apiEndpoint = apiEndpoint,
                     modelName = modelName,
                     apiProviderType = apiProviderType,
+                    apiProviderTypeId = apiProviderTypeId,
                     mnnForwardType = mnnForwardType,
                     mnnThreadCount = mnnThreadCount
             )
@@ -338,6 +344,7 @@ class ModelConfigManager(private val context: Context) {
             apiEndpoint: String,
             modelName: String,
             apiProviderType: ApiProviderType,
+            apiProviderTypeId: String = apiProviderType.name,
             mnnForwardType: Int,
             mnnThreadCount: Int,
             llamaThreadCount: Int,
@@ -355,6 +362,7 @@ class ModelConfigManager(private val context: Context) {
                     apiEndpoint = apiEndpoint,
                     modelName = modelName,
                     apiProviderType = apiProviderType,
+                    apiProviderTypeId = apiProviderTypeId,
                     mnnForwardType = mnnForwardType,
                     mnnThreadCount = mnnThreadCount,
                     llamaThreadCount = llamaThreadCount.coerceAtLeast(1),
