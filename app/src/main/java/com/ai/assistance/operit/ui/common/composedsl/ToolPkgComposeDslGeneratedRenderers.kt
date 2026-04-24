@@ -814,16 +814,16 @@ internal fun renderFilledTonalButtonNode(
     nodePath: String
 ) {
     val props = node.props
-    val onClickActionId = ToolPkgComposeDslParser.extractActionId(props["onClick"])
+    val actionId = ToolPkgComposeDslParser.extractActionId(props["onClick"])
     androidx.compose.material3.FilledTonalButton(
         onClick = {
-            if (!onClickActionId.isNullOrBlank()) {
-                onAction(onClickActionId, null)
+            if (!actionId.isNullOrBlank()) {
+                onAction(actionId, null)
             }
         },
+        enabled = !actionId.isNullOrBlank() && props.bool("enabled", true),
         modifier = applyCommonModifier(Modifier, props),
-        enabled = props.bool("enabled", true),
-        shape = props.shapeOrNull() ?: androidx.compose.foundation.shape.RoundedCornerShape(0.dp)
+        shape = props.shapeOrNull() ?: androidx.compose.material3.ButtonDefaults.shape
     ) {
         renderNodeChildren(node, onAction, nodePath)
     }
@@ -1047,16 +1047,16 @@ internal fun renderOutlinedButtonNode(
     nodePath: String
 ) {
     val props = node.props
-    val onClickActionId = ToolPkgComposeDslParser.extractActionId(props["onClick"])
+    val actionId = ToolPkgComposeDslParser.extractActionId(props["onClick"])
     androidx.compose.material3.OutlinedButton(
         onClick = {
-            if (!onClickActionId.isNullOrBlank()) {
-                onAction(onClickActionId, null)
+            if (!actionId.isNullOrBlank()) {
+                onAction(actionId, null)
             }
         },
+        enabled = !actionId.isNullOrBlank() && props.bool("enabled", true),
         modifier = applyCommonModifier(Modifier, props),
-        enabled = props.bool("enabled", true),
-        shape = props.shapeOrNull() ?: androidx.compose.foundation.shape.RoundedCornerShape(0.dp)
+        shape = props.shapeOrNull() ?: androidx.compose.material3.ButtonDefaults.shape
     ) {
         renderNodeChildren(node, onAction, nodePath)
     }

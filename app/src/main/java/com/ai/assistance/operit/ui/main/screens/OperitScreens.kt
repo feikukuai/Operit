@@ -86,16 +86,13 @@ import com.ai.assistance.operit.ui.features.toolbox.screens.autoglm.AutoGlmToolS
 import com.ai.assistance.operit.ui.features.update.screens.UpdateScreen
 import com.ai.assistance.operit.ui.features.workflow.screens.WorkflowListScreen
 import com.ai.assistance.operit.ui.features.workflow.screens.WorkflowDetailScreen
+import com.ai.assistance.operit.ui.main.navigation.AppRouterGateway
 
 // 路由配置类
 typealias ScreenNavigationHandler = (Screen) -> Unit
 
-typealias NavItemChangeHandler = (NavItem) -> Unit
-
 // 重构的Screen类，添加了路由相关属性和内容渲染函数
 sealed class Screen(
-        // 指定父屏幕，用于返回导航
-        open val parentScreen: Screen? = null,
         // 对应的导航项，用于侧边栏高亮显示
         open val navItem: NavItem? = null,
         // 屏幕标题资源ID
@@ -109,7 +106,6 @@ sealed class Screen(
     open fun Content(
             navController: NavController,
             navigateTo: ScreenNavigationHandler,
-            updateNavItem: NavItemChangeHandler,
             onGoBack: () -> Unit,
             hasBackgroundImage: Boolean,
             onLoading: (Boolean) -> Unit,
@@ -125,7 +121,6 @@ sealed class Screen(
         override fun Content(
                 navController: NavController,
                 navigateTo: ScreenNavigationHandler,
-                updateNavItem: NavItemChangeHandler,
                 onGoBack: () -> Unit,
                 hasBackgroundImage: Boolean,
                 onLoading: (Boolean) -> Unit,
@@ -138,10 +133,7 @@ sealed class Screen(
                     isFloatingMode = false,
                     hasBackgroundImage = hasBackgroundImage,
                     onNavigateToTokenConfig = { navigateTo(TokenConfig) },
-                    onNavigateToSettings = {
-                        navigateTo(Settings)
-                        updateNavItem(NavItem.Settings)
-                    },
+                    onNavigateToSettings = { navigateTo(Settings) },
                     onNavigateToUserPreferences = { navigateTo(UserPreferencesSettings) },
                     onNavigateToModelConfig = { navigateTo(ModelConfig) },
                     onNavigateToModelPrompts = { navigateTo(ModelPromptsSettings) },
@@ -158,7 +150,6 @@ sealed class Screen(
         override fun Content(
                 navController: NavController,
                 navigateTo: ScreenNavigationHandler,
-                updateNavItem: NavItemChangeHandler,
                 onGoBack: () -> Unit,
                 hasBackgroundImage: Boolean,
                 onLoading: (Boolean) -> Unit,
@@ -174,7 +165,6 @@ sealed class Screen(
         override fun Content(
                 navController: NavController,
                 navigateTo: ScreenNavigationHandler,
-                updateNavItem: NavItemChangeHandler,
                 onGoBack: () -> Unit,
                 hasBackgroundImage: Boolean,
                 onLoading: (Boolean) -> Unit,
@@ -199,12 +189,11 @@ sealed class Screen(
     }
 
     data class Market(val initialTab: MarketHomeTab = MarketHomeTab.ARTIFACT) :
-            Screen(parentScreen = Packages, navItem = NavItem.Packages, titleRes = R.string.screen_title_market) {
+            Screen(navItem = NavItem.Packages, titleRes = R.string.screen_title_market) {
         @Composable
         override fun Content(
                 navController: NavController,
                 navigateTo: ScreenNavigationHandler,
-                updateNavItem: NavItemChangeHandler,
                 onGoBack: () -> Unit,
                 hasBackgroundImage: Boolean,
                 onLoading: (Boolean) -> Unit,
@@ -232,12 +221,11 @@ sealed class Screen(
         }
     }
 
-    data object ArtifactManage : Screen(parentScreen = Market(MarketHomeTab.ARTIFACT), navItem = NavItem.Packages, titleRes = R.string.screen_title_artifact_manage) {
+    data object ArtifactManage : Screen(navItem = NavItem.Packages, titleRes = R.string.screen_title_artifact_manage) {
         @Composable
         override fun Content(
                 navController: NavController,
                 navigateTo: ScreenNavigationHandler,
-                updateNavItem: NavItemChangeHandler,
                 onGoBack: () -> Unit,
                 hasBackgroundImage: Boolean,
                 onLoading: (Boolean) -> Unit,
@@ -257,12 +245,11 @@ sealed class Screen(
         }
     }
 
-    data object ArtifactPublish : Screen(parentScreen = Market(MarketHomeTab.ARTIFACT), navItem = NavItem.Packages, titleRes = R.string.screen_title_artifact_publish) {
+    data object ArtifactPublish : Screen(navItem = NavItem.Packages, titleRes = R.string.screen_title_artifact_publish) {
         @Composable
         override fun Content(
                 navController: NavController,
                 navigateTo: ScreenNavigationHandler,
-                updateNavItem: NavItemChangeHandler,
                 onGoBack: () -> Unit,
                 hasBackgroundImage: Boolean,
                 onLoading: (Boolean) -> Unit,
@@ -274,12 +261,11 @@ sealed class Screen(
     }
 
     data class ArtifactEdit(val editingIssue: com.ai.assistance.operit.data.api.GitHubIssue) :
-            Screen(parentScreen = ArtifactManage, navItem = NavItem.Packages, titleRes = R.string.screen_title_artifact_publish) {
+            Screen(navItem = NavItem.Packages, titleRes = R.string.screen_title_artifact_publish) {
         @Composable
         override fun Content(
                 navController: NavController,
                 navigateTo: ScreenNavigationHandler,
-                updateNavItem: NavItemChangeHandler,
                 onGoBack: () -> Unit,
                 hasBackgroundImage: Boolean,
                 onLoading: (Boolean) -> Unit,
@@ -294,12 +280,11 @@ sealed class Screen(
     }
 
     data class ArtifactDetail(val issue: com.ai.assistance.operit.data.api.GitHubIssue) :
-            Screen(parentScreen = Market(MarketHomeTab.ARTIFACT), navItem = NavItem.Packages) {
+            Screen(navItem = NavItem.Packages) {
         @Composable
         override fun Content(
                 navController: NavController,
                 navigateTo: ScreenNavigationHandler,
-                updateNavItem: NavItemChangeHandler,
                 onGoBack: () -> Unit,
                 hasBackgroundImage: Boolean,
                 onLoading: (Boolean) -> Unit,
@@ -313,12 +298,11 @@ sealed class Screen(
         }
     }
 
-    data object SkillManage : Screen(parentScreen = Market(MarketHomeTab.SKILL), navItem = NavItem.Packages, titleRes = R.string.screen_title_skill_manage) {
+    data object SkillManage : Screen(navItem = NavItem.Packages, titleRes = R.string.screen_title_skill_manage) {
         @Composable
         override fun Content(
                 navController: NavController,
                 navigateTo: ScreenNavigationHandler,
-                updateNavItem: NavItemChangeHandler,
                 onGoBack: () -> Unit,
                 hasBackgroundImage: Boolean,
                 onLoading: (Boolean) -> Unit,
@@ -338,12 +322,11 @@ sealed class Screen(
         }
     }
 
-    data object SkillPublish : Screen(parentScreen = Market(MarketHomeTab.SKILL), navItem = NavItem.Packages, titleRes = R.string.screen_title_skill_publish) {
+    data object SkillPublish : Screen(navItem = NavItem.Packages, titleRes = R.string.screen_title_skill_publish) {
         @Composable
         override fun Content(
                 navController: NavController,
                 navigateTo: ScreenNavigationHandler,
-                updateNavItem: NavItemChangeHandler,
                 onGoBack: () -> Unit,
                 hasBackgroundImage: Boolean,
                 onLoading: (Boolean) -> Unit,
@@ -355,12 +338,11 @@ sealed class Screen(
     }
 
     data class SkillEdit(val editingIssue: com.ai.assistance.operit.data.api.GitHubIssue) :
-            Screen(parentScreen = SkillManage, navItem = NavItem.Packages, titleRes = R.string.screen_title_skill_publish) {
+            Screen(navItem = NavItem.Packages, titleRes = R.string.screen_title_skill_publish) {
         @Composable
         override fun Content(
                 navController: NavController,
                 navigateTo: ScreenNavigationHandler,
-                updateNavItem: NavItemChangeHandler,
                 onGoBack: () -> Unit,
                 hasBackgroundImage: Boolean,
                 onLoading: (Boolean) -> Unit,
@@ -375,12 +357,11 @@ sealed class Screen(
     }
 
     data class SkillDetail(val issue: com.ai.assistance.operit.data.api.GitHubIssue) :
-            Screen(parentScreen = Market(MarketHomeTab.SKILL), navItem = NavItem.Packages) {
+            Screen(navItem = NavItem.Packages) {
         @Composable
         override fun Content(
                 navController: NavController,
                 navigateTo: ScreenNavigationHandler,
-                updateNavItem: NavItemChangeHandler,
                 onGoBack: () -> Unit,
                 hasBackgroundImage: Boolean,
                 onLoading: (Boolean) -> Unit,
@@ -394,12 +375,11 @@ sealed class Screen(
         }
     }
 
-    data object MCPPublish : Screen(parentScreen = Market(MarketHomeTab.MCP), navItem = NavItem.Packages, titleRes = R.string.screen_title_mcp_publish) {
+    data object MCPPublish : Screen(navItem = NavItem.Packages, titleRes = R.string.screen_title_mcp_publish) {
         @Composable
         override fun Content(
                 navController: NavController,
                 navigateTo: ScreenNavigationHandler,
-                updateNavItem: NavItemChangeHandler,
                 onGoBack: () -> Unit,
                 hasBackgroundImage: Boolean,
                 onLoading: (Boolean) -> Unit,
@@ -410,12 +390,11 @@ sealed class Screen(
         }
     }
 
-    data object MCPManage : Screen(parentScreen = Market(MarketHomeTab.MCP), navItem = NavItem.Packages, titleRes = R.string.screen_title_mcp_manage) {
+    data object MCPManage : Screen(navItem = NavItem.Packages, titleRes = R.string.screen_title_mcp_manage) {
         @Composable
         override fun Content(
                 navController: NavController,
                 navigateTo: ScreenNavigationHandler,
-                updateNavItem: NavItemChangeHandler,
                 onGoBack: () -> Unit,
                 hasBackgroundImage: Boolean,
                 onLoading: (Boolean) -> Unit,
@@ -432,12 +411,11 @@ sealed class Screen(
         }
     }
 
-    data class MCPEditPlugin(val editingIssue: com.ai.assistance.operit.data.api.GitHubIssue) : Screen(parentScreen = MCPManage, navItem = NavItem.Packages, titleRes = R.string.screen_title_mcp_publish) {
+    data class MCPEditPlugin(val editingIssue: com.ai.assistance.operit.data.api.GitHubIssue) : Screen(navItem = NavItem.Packages, titleRes = R.string.screen_title_mcp_publish) {
         @Composable
         override fun Content(
                 navController: NavController,
                 navigateTo: ScreenNavigationHandler,
-                updateNavItem: NavItemChangeHandler,
                 onGoBack: () -> Unit,
                 hasBackgroundImage: Boolean,
                 onLoading: (Boolean) -> Unit,
@@ -456,7 +434,6 @@ sealed class Screen(
         override fun Content(
                 navController: NavController,
                 navigateTo: ScreenNavigationHandler,
-                updateNavItem: NavItemChangeHandler,
                 onGoBack: () -> Unit,
                 hasBackgroundImage: Boolean,
                 onLoading: (Boolean) -> Unit,
@@ -465,32 +442,17 @@ sealed class Screen(
         ) {
             ToolboxScreen(
                     navController = navController,
-                    onFileManagerSelected = { navigateTo(FileManager) },
-                    onTerminalSelected = { navigateTo(Terminal) },
-                    onAppPermissionsSelected = { navigateTo(AppPermissions) },
-                    onUIDebuggerSelected = { navigateTo(UIDebugger) },
-                    onFFmpegToolboxSelected = { navigateTo(FFmpegToolbox) },
-                    onShellExecutorSelected = { navigateTo(ShellExecutor) },
-                    onLogcatSelected = { navigateTo(Logcat) },
-                    onTextToSpeechSelected = { navigateTo(TextToSpeech) },
-                    onSpeechToTextSelected = { navigateTo(SpeechToText) },
-                    onToolTesterSelected = { navigateTo(ToolTester) },
-                    onAgreementSelected = { navigateTo(Agreement) },
-                    onDefaultAssistantGuideSelected = { navigateTo(DefaultAssistantGuide) },
-                    onProcessLimitRemoverSelected = { navigateTo(ProcessLimitRemover) },
-                    onHtmlPackagerSelected = { navigateTo(HtmlPackager) },
-                    onAutoGlmOneClickSelected = { navigateTo(AutoGlmOneClick) },
-                    onAutoGlmToolSelected = { navigateTo(AutoGlmTool) },
-                    onSqlViewerSelected = { navigateTo(SqlViewer) },
-                    onTokenConfigSelected = { navigateTo(TokenConfig) },
-                    onToolPkgComposeDslSelected = { containerPackageName, uiModuleId, title ->
-                        navigateTo(
-                            ToolPkgComposeDsl(
-                                containerPackageName = containerPackageName,
-                                uiModuleId = uiModuleId,
-                                title = title
+                    onNavigationEntrySelected = { entry ->
+                        val nativeScreen = ScreenRouteRegistry.buildScreen(entry.routeId, entry.routeArgs)
+                        if (nativeScreen != null) {
+                            navigateTo(nativeScreen)
+                        } else {
+                            AppRouterGateway.navigate(
+                                routeId = entry.routeId,
+                                args = entry.routeArgs,
+                                source = com.ai.assistance.operit.ui.main.navigation.RouteEntrySource.DEFAULT
                             )
-                        )
+                        }
                     }
             )
         }
@@ -502,7 +464,6 @@ sealed class Screen(
         override fun Content(
                 navController: NavController,
                 navigateTo: ScreenNavigationHandler,
-                updateNavItem: NavItemChangeHandler,
                 onGoBack: () -> Unit,
                 hasBackgroundImage: Boolean,
                 onLoading: (Boolean) -> Unit,
@@ -518,7 +479,6 @@ sealed class Screen(
         override fun Content(
                 navController: NavController,
                 navigateTo: ScreenNavigationHandler,
-                updateNavItem: NavItemChangeHandler,
                 onGoBack: () -> Unit,
                 hasBackgroundImage: Boolean,
                 onLoading: (Boolean) -> Unit,
@@ -548,12 +508,11 @@ sealed class Screen(
         }
     }
 
-    data object GitHubAccount : Screen(parentScreen = Settings, navItem = NavItem.Settings, titleRes = R.string.github_account) {
+    data object GitHubAccount : Screen(navItem = NavItem.Settings, titleRes = R.string.github_account) {
         @Composable
         override fun Content(
             navController: NavController,
             navigateTo: ScreenNavigationHandler,
-            updateNavItem: NavItemChangeHandler,
             onGoBack: () -> Unit,
             hasBackgroundImage: Boolean,
             onLoading: (Boolean) -> Unit,
@@ -569,7 +528,6 @@ sealed class Screen(
         override fun Content(
                 navController: NavController,
                 navigateTo: ScreenNavigationHandler,
-                updateNavItem: NavItemChangeHandler,
                 onGoBack: () -> Unit,
                 hasBackgroundImage: Boolean,
                 onLoading: (Boolean) -> Unit,
@@ -585,7 +543,6 @@ sealed class Screen(
         override fun Content(
                 navController: NavController,
                 navigateTo: ScreenNavigationHandler,
-                updateNavItem: NavItemChangeHandler,
                 onGoBack: () -> Unit,
                 hasBackgroundImage: Boolean,
                 onLoading: (Boolean) -> Unit,
@@ -605,7 +562,6 @@ sealed class Screen(
         override fun Content(
             navController: NavController,
             navigateTo: ScreenNavigationHandler,
-            updateNavItem: NavItemChangeHandler,
             onGoBack: () -> Unit,
             hasBackgroundImage: Boolean,
             onLoading: (Boolean) -> Unit,
@@ -620,7 +576,6 @@ sealed class Screen(
 
     data object UpdateHistory :
             Screen(
-                    parentScreen = About,
                     navItem = NavItem.About,
                     titleRes = R.string.update_history
             ) {
@@ -628,7 +583,6 @@ sealed class Screen(
         override fun Content(
             navController: NavController,
             navigateTo: ScreenNavigationHandler,
-            updateNavItem: NavItemChangeHandler,
             onGoBack: () -> Unit,
             hasBackgroundImage: Boolean,
             onLoading: (Boolean) -> Unit,
@@ -648,7 +602,6 @@ sealed class Screen(
         override fun Content(
                 navController: NavController,
                 navigateTo: ScreenNavigationHandler,
-                updateNavItem: NavItemChangeHandler,
                 onGoBack: () -> Unit,
                 hasBackgroundImage: Boolean,
                 onLoading: (Boolean) -> Unit,
@@ -664,7 +617,6 @@ sealed class Screen(
         override fun Content(
                 navController: NavController,
                 navigateTo: ScreenNavigationHandler,
-                updateNavItem: NavItemChangeHandler,
                 onGoBack: () -> Unit,
                 hasBackgroundImage: Boolean,
                 onLoading: (Boolean) -> Unit,
@@ -679,12 +631,11 @@ sealed class Screen(
         }
     }
 
-    data class WorkflowDetail(val workflowId: String) : Screen(parentScreen = Workflow, navItem = NavItem.Workflow, titleRes = R.string.nav_workflow) {
+    data class WorkflowDetail(val workflowId: String) : Screen(navItem = NavItem.Workflow, titleRes = R.string.nav_workflow) {
         @Composable
         override fun Content(
                 navController: NavController,
                 navigateTo: ScreenNavigationHandler,
-                updateNavItem: NavItemChangeHandler,
                 onGoBack: () -> Unit,
                 hasBackgroundImage: Boolean,
                 onLoading: (Boolean) -> Unit,
@@ -698,12 +649,11 @@ sealed class Screen(
         }
     }
 
-    data object TokenConfig : Screen(parentScreen = AiChat, navItem = NavItem.TokenConfig) {
+    data object TokenConfig : Screen(navItem = NavItem.TokenConfig) {
         @Composable
         override fun Content(
                 navController: NavController,
                 navigateTo: ScreenNavigationHandler,
-                updateNavItem: NavItemChangeHandler,
                 onGoBack: () -> Unit,
                 hasBackgroundImage: Boolean,
                 onLoading: (Boolean) -> Unit,
@@ -716,12 +666,11 @@ sealed class Screen(
 
     // Secondary screens - Settings
     data object ToolPermission :
-            Screen(parentScreen = Settings, navItem = NavItem.Settings, titleRes = R.string.screen_title_tool_permissions) {
+            Screen(navItem = NavItem.Settings, titleRes = R.string.screen_title_tool_permissions) {
         @Composable
         override fun Content(
                 navController: NavController,
                 navigateTo: ScreenNavigationHandler,
-                updateNavItem: NavItemChangeHandler,
                 onGoBack: () -> Unit,
                 hasBackgroundImage: Boolean,
                 onLoading: (Boolean) -> Unit,
@@ -733,12 +682,11 @@ sealed class Screen(
     }
 
     data class UserPreferencesGuide(var profileName: String = "", var profileId: String = "") :
-            Screen(parentScreen = Settings, navItem = NavItem.Settings, titleRes = R.string.screen_title_user_preferences_guide) {
+            Screen(navItem = NavItem.Settings, titleRes = R.string.screen_title_user_preferences_guide) {
         @Composable
         override fun Content(
                 navController: NavController,
                 navigateTo: ScreenNavigationHandler,
-                updateNavItem: NavItemChangeHandler,
                 onGoBack: () -> Unit,
                 hasBackgroundImage: Boolean,
                 onLoading: (Boolean) -> Unit,
@@ -749,21 +697,17 @@ sealed class Screen(
                     profileName = profileName,
                     profileId = profileId,
                     onComplete = onGoBack,
-                    navigateToPermissions = {
-                        navigateTo(ShizukuCommands)
-                        updateNavItem(NavItem.ShizukuCommands)
-                    }
+                    navigateToPermissions = { navigateTo(ShizukuCommands) }
             )
         }
     }
 
     data object UserPreferencesSettings :
-            Screen(parentScreen = Settings, navItem = NavItem.Settings, titleRes = R.string.screen_title_user_preferences_settings) {
+            Screen(navItem = NavItem.Settings, titleRes = R.string.screen_title_user_preferences_settings) {
         @Composable
         override fun Content(
                 navController: NavController,
                 navigateTo: ScreenNavigationHandler,
-                updateNavItem: NavItemChangeHandler,
                 onGoBack: () -> Unit,
                 hasBackgroundImage: Boolean,
                 onLoading: (Boolean) -> Unit,
@@ -780,12 +724,11 @@ sealed class Screen(
     }
 
     data object ModelConfig :
-            Screen(parentScreen = Settings, navItem = NavItem.Settings, titleRes = R.string.screen_title_model_config) {
+            Screen(navItem = NavItem.Settings, titleRes = R.string.screen_title_model_config) {
         @Composable
         override fun Content(
                 navController: NavController,
                 navigateTo: ScreenNavigationHandler,
-                updateNavItem: NavItemChangeHandler,
                 onGoBack: () -> Unit,
                 hasBackgroundImage: Boolean,
                 onLoading: (Boolean) -> Unit,
@@ -800,12 +743,11 @@ sealed class Screen(
     }
     // 添加SpeechServicesSettings屏幕定义
     data object SpeechServicesSettings :
-            Screen(parentScreen = Settings, navItem = NavItem.Settings, titleRes = R.string.screen_title_speech_services_settings) {
+            Screen(navItem = NavItem.Settings, titleRes = R.string.screen_title_speech_services_settings) {
         @Composable
         override fun Content(
                 navController: NavController,
                 navigateTo: ScreenNavigationHandler,
-                updateNavItem: NavItemChangeHandler,
                 onGoBack: () -> Unit,
                 hasBackgroundImage: Boolean,
                 onLoading: (Boolean) -> Unit,
@@ -820,12 +762,11 @@ sealed class Screen(
     }
     
     data object ExternalHttpChatSettings :
-        Screen(parentScreen = Settings, navItem = NavItem.Settings, titleRes = R.string.screen_title_external_http_chat_settings) {
+        Screen(navItem = NavItem.Settings, titleRes = R.string.screen_title_external_http_chat_settings) {
         @Composable
         override fun Content(
             navController: NavController,
             navigateTo: ScreenNavigationHandler,
-            updateNavItem: NavItemChangeHandler,
             onGoBack: () -> Unit,
             hasBackgroundImage: Boolean,
             onLoading: (Boolean) -> Unit,
@@ -838,12 +779,11 @@ sealed class Screen(
     
     // MNN模型下载屏幕
     data object MnnModelDownload :
-        Screen(parentScreen = Settings, navItem = NavItem.Settings, titleRes = R.string.screen_title_mnn_model_download) {
+        Screen(navItem = NavItem.Settings, titleRes = R.string.screen_title_mnn_model_download) {
         @Composable
         override fun Content(
             navController: NavController,
             navigateTo: ScreenNavigationHandler,
-            updateNavItem: NavItemChangeHandler,
             onGoBack: () -> Unit,
             hasBackgroundImage: Boolean,
             onLoading: (Boolean) -> Unit,
@@ -856,12 +796,11 @@ sealed class Screen(
     
     // 新增：人设卡生成页面
     data object PersonaCardGeneration :
-        Screen(parentScreen = Settings, navItem = NavItem.Settings, titleRes = R.string.screen_title_persona_card_generation) {
+        Screen(navItem = NavItem.Settings, titleRes = R.string.screen_title_persona_card_generation) {
         @Composable
         override fun Content(
             navController: NavController,
             navigateTo: ScreenNavigationHandler,
-            updateNavItem: NavItemChangeHandler,
             onGoBack: () -> Unit,
             hasBackgroundImage: Boolean,
             onLoading: (Boolean) -> Unit,
@@ -879,12 +818,11 @@ sealed class Screen(
 
     // 新增：Waifu模式设置页面
     data object WaifuModeSettings :
-        Screen(parentScreen = Settings, navItem = NavItem.Settings, titleRes = R.string.screen_title_waifu_mode_settings) {
+        Screen(navItem = NavItem.Settings, titleRes = R.string.screen_title_waifu_mode_settings) {
         @Composable
         override fun Content(
             navController: NavController,
             navigateTo: ScreenNavigationHandler,
-            updateNavItem: NavItemChangeHandler,
             onGoBack: () -> Unit,
             hasBackgroundImage: Boolean,
             onLoading: (Boolean) -> Unit,
@@ -900,12 +838,11 @@ sealed class Screen(
     
     // 自定义表情管理页面
     data object CustomEmojiManagement :
-        Screen(parentScreen = WaifuModeSettings, navItem = NavItem.Settings, titleRes = R.string.manage_custom_emoji) {
+        Screen(navItem = NavItem.Settings, titleRes = R.string.manage_custom_emoji) {
         @Composable
         override fun Content(
             navController: NavController,
             navigateTo: ScreenNavigationHandler,
-            updateNavItem: NavItemChangeHandler,
             onGoBack: () -> Unit,
             hasBackgroundImage: Boolean,
             onLoading: (Boolean) -> Unit,
@@ -919,12 +856,11 @@ sealed class Screen(
     }
     
     data object TagMarket :
-        Screen(parentScreen = ModelPromptsSettings, navItem = NavItem.Settings, titleRes = R.string.screen_title_tag_market) {
+        Screen(navItem = NavItem.Settings, titleRes = R.string.screen_title_tag_market) {
         @Composable
         override fun Content(
                 navController: NavController,
                 navigateTo: ScreenNavigationHandler,
-                updateNavItem: NavItemChangeHandler,
                 onGoBack: () -> Unit,
                 hasBackgroundImage: Boolean,
                 onLoading: (Boolean) -> Unit,
@@ -936,12 +872,11 @@ sealed class Screen(
     }
 
     data object ModelPromptsSettings :
-            Screen(parentScreen = Settings, navItem = NavItem.Settings, titleRes = R.string.screen_title_model_prompts_settings) {
+            Screen(navItem = NavItem.Settings, titleRes = R.string.screen_title_model_prompts_settings) {
         @Composable
         override fun Content(
                 navController: NavController,
                 navigateTo: ScreenNavigationHandler,
-                updateNavItem: NavItemChangeHandler,
                 onGoBack: () -> Unit,
                 hasBackgroundImage: Boolean,
                 onLoading: (Boolean) -> Unit,
@@ -958,12 +893,11 @@ sealed class Screen(
     }
 
     data object FunctionalConfig :
-            Screen(parentScreen = Settings, navItem = NavItem.Settings, titleRes = R.string.screen_title_functional_config) {
+            Screen(navItem = NavItem.Settings, titleRes = R.string.screen_title_functional_config) {
         @Composable
         override fun Content(
                 navController: NavController,
                 navigateTo: ScreenNavigationHandler,
-                updateNavItem: NavItemChangeHandler,
                 onGoBack: () -> Unit,
                 hasBackgroundImage: Boolean,
                 onLoading: (Boolean) -> Unit,
@@ -978,12 +912,11 @@ sealed class Screen(
     }
 
     data object ThemeSettings :
-            Screen(parentScreen = Settings, navItem = NavItem.Settings, titleRes = R.string.screen_title_theme_settings) {
+            Screen(navItem = NavItem.Settings, titleRes = R.string.screen_title_theme_settings) {
         @Composable
         override fun Content(
                 navController: NavController,
                 navigateTo: ScreenNavigationHandler,
-                updateNavItem: NavItemChangeHandler,
                 onGoBack: () -> Unit,
                 hasBackgroundImage: Boolean,
                 onLoading: (Boolean) -> Unit,
@@ -995,12 +928,11 @@ sealed class Screen(
     }
 
     data object GlobalDisplaySettings :
-            Screen(parentScreen = Settings, navItem = NavItem.Settings, titleRes = R.string.screen_title_global_display_settings) {
+            Screen(navItem = NavItem.Settings, titleRes = R.string.screen_title_global_display_settings) {
         @Composable
         override fun Content(
                 navController: NavController,
                 navigateTo: ScreenNavigationHandler,
-                updateNavItem: NavItemChangeHandler,
                 onGoBack: () -> Unit,
                 hasBackgroundImage: Boolean,
                 onLoading: (Boolean) -> Unit,
@@ -1012,12 +944,11 @@ sealed class Screen(
     }
 
     data object LayoutAdjustmentSettings :
-            Screen(parentScreen = Settings, navItem = NavItem.Settings, titleRes = R.string.screen_title_layout_adjustment) {
+            Screen(navItem = NavItem.Settings, titleRes = R.string.screen_title_layout_adjustment) {
         @Composable
         override fun Content(
                 navController: NavController,
                 navigateTo: ScreenNavigationHandler,
-                updateNavItem: NavItemChangeHandler,
                 onGoBack: () -> Unit,
                 hasBackgroundImage: Boolean,
                 onLoading: (Boolean) -> Unit,
@@ -1029,12 +960,11 @@ sealed class Screen(
     }
 
     data object ChatHistorySettings :
-            Screen(parentScreen = Settings, navItem = NavItem.Settings, titleRes = R.string.screen_title_chat_history_settings) {
+            Screen(navItem = NavItem.Settings, titleRes = R.string.screen_title_chat_history_settings) {
         @Composable
         override fun Content(
                 navController: NavController,
                 navigateTo: ScreenNavigationHandler,
-                updateNavItem: NavItemChangeHandler,
                 onGoBack: () -> Unit,
                 hasBackgroundImage: Boolean,
                 onLoading: (Boolean) -> Unit,
@@ -1046,12 +976,11 @@ sealed class Screen(
     }
 
     data object ChatBackupSettings :
-            Screen(parentScreen = Settings, navItem = NavItem.Settings, titleRes = R.string.screen_title_chat_backup_settings) {
+            Screen(navItem = NavItem.Settings, titleRes = R.string.screen_title_chat_backup_settings) {
         @Composable
         override fun Content(
                 navController: NavController,
                 navigateTo: ScreenNavigationHandler,
-                updateNavItem: NavItemChangeHandler,
                 onGoBack: () -> Unit,
                 hasBackgroundImage: Boolean,
                 onLoading: (Boolean) -> Unit,
@@ -1063,12 +992,11 @@ sealed class Screen(
     }
 
     data object LanguageSettings :
-            Screen(parentScreen = Settings, navItem = NavItem.Settings, titleRes = R.string.screen_title_language_settings) {
+            Screen(navItem = NavItem.Settings, titleRes = R.string.screen_title_language_settings) {
         @Composable
         override fun Content(
                 navController: NavController,
                 navigateTo: ScreenNavigationHandler,
-                updateNavItem: NavItemChangeHandler,
                 onGoBack: () -> Unit,
                 hasBackgroundImage: Boolean,
                 onLoading: (Boolean) -> Unit,
@@ -1080,12 +1008,11 @@ sealed class Screen(
     }
 
     data object TokenUsageStatistics :
-            Screen(parentScreen = Settings, navItem = NavItem.Settings, titleRes = R.string.settings_token_usage_stats) {
+            Screen(navItem = NavItem.Settings, titleRes = R.string.settings_token_usage_stats) {
         @Composable
         override fun Content(
                 navController: NavController,
                 navigateTo: ScreenNavigationHandler,
-                updateNavItem: NavItemChangeHandler,
                 onGoBack: () -> Unit,
                 hasBackgroundImage: Boolean,
                 onLoading: (Boolean) -> Unit,
@@ -1097,12 +1024,11 @@ sealed class Screen(
     }
 
     data object ContextSummarySettings :
-            Screen(parentScreen = Settings, navItem = NavItem.Settings, titleRes = R.string.screen_title_context_summary_settings) {
+            Screen(navItem = NavItem.Settings, titleRes = R.string.screen_title_context_summary_settings) {
         @Composable
         override fun Content(
                 navController: NavController,
                 navigateTo: ScreenNavigationHandler,
-                updateNavItem: NavItemChangeHandler,
                 onGoBack: () -> Unit,
                 hasBackgroundImage: Boolean,
                 onLoading: (Boolean) -> Unit,
@@ -1117,12 +1043,11 @@ sealed class Screen(
         val containerPackageName: String,
         val uiModuleId: String,
         val title: String
-    ) : Screen(parentScreen = Toolbox, navItem = NavItem.Toolbox) {
+    ) : Screen(navItem = NavItem.Toolbox) {
         @Composable
         override fun Content(
                 navController: NavController,
                 navigateTo: ScreenNavigationHandler,
-                updateNavItem: NavItemChangeHandler,
                 onGoBack: () -> Unit,
                 hasBackgroundImage: Boolean,
                 onLoading: (Boolean) -> Unit,
@@ -1131,6 +1056,7 @@ sealed class Screen(
         ) {
             ToolPkgComposeDslToolScreen(
                 navController = navController,
+                routeInstanceId = "screen:$containerPackageName:$uiModuleId",
                 containerPackageName = containerPackageName,
                 uiModuleId = uiModuleId,
                 fallbackTitle = title
@@ -1145,12 +1071,11 @@ sealed class Screen(
         val containerPackageName: String,
         val uiModuleId: String,
         val title: String
-    ) : Screen(parentScreen = Packages, navItem = NavItem.Packages) {
+    ) : Screen(navItem = NavItem.Packages) {
         @Composable
         override fun Content(
                 navController: NavController,
                 navigateTo: ScreenNavigationHandler,
-                updateNavItem: NavItemChangeHandler,
                 onGoBack: () -> Unit,
                 hasBackgroundImage: Boolean,
                 onLoading: (Boolean) -> Unit,
@@ -1159,6 +1084,7 @@ sealed class Screen(
         ) {
             ToolPkgComposeDslToolScreen(
                 navController = navController,
+                routeInstanceId = "legacy:$containerPackageName:$uiModuleId",
                 containerPackageName = containerPackageName,
                 uiModuleId = uiModuleId,
                 fallbackTitle = title
@@ -1172,12 +1098,11 @@ sealed class Screen(
     // Toolbox secondary screens
 
     data object FileManager :
-            Screen(parentScreen = Toolbox, navItem = NavItem.Toolbox, titleRes = R.string.screen_title_file_manager) {
+            Screen(navItem = NavItem.Toolbox, titleRes = R.string.screen_title_file_manager) {
         @Composable
         override fun Content(
                 navController: NavController,
                 navigateTo: ScreenNavigationHandler,
-                updateNavItem: NavItemChangeHandler,
                 onGoBack: () -> Unit,
                 hasBackgroundImage: Boolean,
                 onLoading: (Boolean) -> Unit,
@@ -1189,12 +1114,11 @@ sealed class Screen(
     }
 
     data object Terminal :
-            Screen(parentScreen = Toolbox, navItem = NavItem.Toolbox, titleRes = R.string.screen_title_terminal) {
+            Screen(navItem = NavItem.Toolbox, titleRes = R.string.screen_title_terminal) {
         @Composable
         override fun Content(
                 navController: NavController,
                 navigateTo: ScreenNavigationHandler,
-                updateNavItem: NavItemChangeHandler,
                 onGoBack: () -> Unit,
                 hasBackgroundImage: Boolean,
                 onLoading: (Boolean) -> Unit,
@@ -1206,12 +1130,11 @@ sealed class Screen(
     }
 
     data object TerminalSetup :
-            Screen(parentScreen = Toolbox, navItem = NavItem.Toolbox, titleRes = R.string.screen_title_terminal) {
+            Screen(navItem = NavItem.Toolbox, titleRes = R.string.screen_title_terminal) {
         @Composable
         override fun Content(
                 navController: NavController,
                 navigateTo: ScreenNavigationHandler,
-                updateNavItem: NavItemChangeHandler,
                 onGoBack: () -> Unit,
                 hasBackgroundImage: Boolean,
                 onLoading: (Boolean) -> Unit,
@@ -1223,12 +1146,11 @@ sealed class Screen(
     }
 
     data object TerminalAutoConfig :
-            Screen(parentScreen = Toolbox, navItem = NavItem.Toolbox, titleRes = R.string.screen_title_terminal_auto_config) {
+            Screen(navItem = NavItem.Toolbox, titleRes = R.string.screen_title_terminal_auto_config) {
         @Composable
         override fun Content(
                 navController: NavController,
                 navigateTo: ScreenNavigationHandler,
-                updateNavItem: NavItemChangeHandler,
                 onGoBack: () -> Unit,
                 hasBackgroundImage: Boolean,
                 onLoading: (Boolean) -> Unit,
@@ -1240,12 +1162,11 @@ sealed class Screen(
     }
 
     data object AppPermissions :
-            Screen(parentScreen = Toolbox, navItem = NavItem.Toolbox, titleRes = R.string.screen_title_app_permissions) {
+            Screen(navItem = NavItem.Toolbox, titleRes = R.string.screen_title_app_permissions) {
         @Composable
         override fun Content(
                 navController: NavController,
                 navigateTo: ScreenNavigationHandler,
-                updateNavItem: NavItemChangeHandler,
                 onGoBack: () -> Unit,
                 hasBackgroundImage: Boolean,
                 onLoading: (Boolean) -> Unit,
@@ -1257,12 +1178,11 @@ sealed class Screen(
     }
 
     data object UIDebugger :
-            Screen(parentScreen = Toolbox, navItem = NavItem.Toolbox, titleRes = R.string.screen_title_ui_debugger) {
+            Screen(navItem = NavItem.Toolbox, titleRes = R.string.screen_title_ui_debugger) {
         @Composable
         override fun Content(
                 navController: NavController,
                 navigateTo: ScreenNavigationHandler,
-                updateNavItem: NavItemChangeHandler,
                 onGoBack: () -> Unit,
                 hasBackgroundImage: Boolean,
                 onLoading: (Boolean) -> Unit,
@@ -1274,12 +1194,11 @@ sealed class Screen(
     }
 
     data object ShellExecutor :
-            Screen(parentScreen = Toolbox, navItem = NavItem.Toolbox, titleRes = R.string.screen_title_shell_executor) {
+            Screen(navItem = NavItem.Toolbox, titleRes = R.string.screen_title_shell_executor) {
         @Composable
         override fun Content(
                 navController: NavController,
                 navigateTo: ScreenNavigationHandler,
-                updateNavItem: NavItemChangeHandler,
                 onGoBack: () -> Unit,
                 hasBackgroundImage: Boolean,
                 onLoading: (Boolean) -> Unit,
@@ -1291,12 +1210,11 @@ sealed class Screen(
     }
 
     data object Logcat :
-            Screen(parentScreen = Toolbox, navItem = NavItem.Toolbox, titleRes = R.string.screen_title_logcat) {
+            Screen(navItem = NavItem.Toolbox, titleRes = R.string.screen_title_logcat) {
         @Composable
         override fun Content(
                 navController: NavController,
                 navigateTo: ScreenNavigationHandler,
-                updateNavItem: NavItemChangeHandler,
                 onGoBack: () -> Unit,
                 hasBackgroundImage: Boolean,
                 onLoading: (Boolean) -> Unit,
@@ -1308,12 +1226,11 @@ sealed class Screen(
     }
 
     data object SqlViewer :
-            Screen(parentScreen = Toolbox, navItem = NavItem.Toolbox, titleRes = R.string.screen_title_sql_viewer) {
+            Screen(navItem = NavItem.Toolbox, titleRes = R.string.screen_title_sql_viewer) {
         @Composable
         override fun Content(
                 navController: NavController,
                 navigateTo: ScreenNavigationHandler,
-                updateNavItem: NavItemChangeHandler,
                 onGoBack: () -> Unit,
                 hasBackgroundImage: Boolean,
                 onLoading: (Boolean) -> Unit,
@@ -1326,12 +1243,11 @@ sealed class Screen(
 
     // FFmpeg Toolbox screen
     data object FFmpegToolbox :
-            Screen(parentScreen = Toolbox, navItem = NavItem.Toolbox, titleRes = R.string.screen_title_ffmpeg_toolbox) {
+            Screen(navItem = NavItem.Toolbox, titleRes = R.string.screen_title_ffmpeg_toolbox) {
         @Composable
         override fun Content(
                 navController: NavController,
                 navigateTo: ScreenNavigationHandler,
-                updateNavItem: NavItemChangeHandler,
                 onGoBack: () -> Unit,
                 hasBackgroundImage: Boolean,
                 onLoading: (Boolean) -> Unit,
@@ -1344,12 +1260,11 @@ sealed class Screen(
 
     // 流式Markdown演示屏幕
     data object MarkdownDemo :
-            Screen(parentScreen = Toolbox, navItem = NavItem.Toolbox, titleRes = R.string.screen_title_markdown_demo) {
+            Screen(navItem = NavItem.Toolbox, titleRes = R.string.screen_title_markdown_demo) {
         @Composable
         override fun Content(
                 navController: NavController,
                 navigateTo: ScreenNavigationHandler,
-                updateNavItem: NavItemChangeHandler,
                 onGoBack: () -> Unit,
                 hasBackgroundImage: Boolean,
                 onLoading: (Boolean) -> Unit,
@@ -1362,12 +1277,11 @@ sealed class Screen(
 
     // 工具测试屏幕
     data object ToolTester :
-            Screen(parentScreen = Toolbox, navItem = NavItem.Toolbox, titleRes = R.string.screen_title_tool_tester) {
+            Screen(navItem = NavItem.Toolbox, titleRes = R.string.screen_title_tool_tester) {
         @Composable
         override fun Content(
                 navController: NavController,
                 navigateTo: ScreenNavigationHandler,
-                updateNavItem: NavItemChangeHandler,
                 onGoBack: () -> Unit,
                 hasBackgroundImage: Boolean,
                 onLoading: (Boolean) -> Unit,
@@ -1380,12 +1294,11 @@ sealed class Screen(
 
     // 在MarkdownDemo对象后添加TextToSpeech对象
     data object TextToSpeech :
-            Screen(parentScreen = Toolbox, navItem = NavItem.Toolbox, titleRes = R.string.screen_title_text_to_speech) {
+            Screen(navItem = NavItem.Toolbox, titleRes = R.string.screen_title_text_to_speech) {
         @Composable
         override fun Content(
                 navController: NavController,
                 navigateTo: ScreenNavigationHandler,
-                updateNavItem: NavItemChangeHandler,
                 onGoBack: () -> Unit,
                 hasBackgroundImage: Boolean,
                 onLoading: (Boolean) -> Unit,
@@ -1398,12 +1311,11 @@ sealed class Screen(
 
     // Tools screens
     data object SpeechToText :
-            Screen(parentScreen = Toolbox, navItem = NavItem.Toolbox, titleRes = R.string.screen_title_speech_to_text) {
+            Screen(navItem = NavItem.Toolbox, titleRes = R.string.screen_title_speech_to_text) {
         @Composable
         override fun Content(
                 navController: NavController,
                 navigateTo: ScreenNavigationHandler,
-                updateNavItem: NavItemChangeHandler,
                 onGoBack: () -> Unit,
                 hasBackgroundImage: Boolean,
                 onLoading: (Boolean) -> Unit,
@@ -1415,12 +1327,11 @@ sealed class Screen(
     }
 
     data object DefaultAssistantGuide :
-            Screen(parentScreen = Toolbox, navItem = NavItem.Toolbox, titleRes = R.string.screen_title_default_assistant_guide) {
+            Screen(navItem = NavItem.Toolbox, titleRes = R.string.screen_title_default_assistant_guide) {
         @Composable
         override fun Content(
                 navController: NavController,
                 navigateTo: ScreenNavigationHandler,
-                updateNavItem: NavItemChangeHandler,
                 onGoBack: () -> Unit,
                 hasBackgroundImage: Boolean,
                 onLoading: (Boolean) -> Unit,
@@ -1432,12 +1343,11 @@ sealed class Screen(
     }
 
 
-    data object ProcessLimitRemover : Screen(parentScreen = Toolbox, navItem = NavItem.Toolbox, titleRes = R.string.tool_process_limit_remover) {
+    data object ProcessLimitRemover : Screen(navItem = NavItem.Toolbox, titleRes = R.string.tool_process_limit_remover) {
         @Composable
         override fun Content(
             navController: NavController,
             navigateTo: ScreenNavigationHandler,
-            updateNavItem: NavItemChangeHandler,
             onGoBack: () -> Unit,
             hasBackgroundImage: Boolean,
             onLoading: (Boolean) -> Unit,
@@ -1448,12 +1358,11 @@ sealed class Screen(
         }
     }
 
-    data object HtmlPackager : Screen(parentScreen = Toolbox, navItem = NavItem.Toolbox, titleRes = R.string.screen_title_html_packager) {
+    data object HtmlPackager : Screen(navItem = NavItem.Toolbox, titleRes = R.string.screen_title_html_packager) {
         @Composable
         override fun Content(
                 navController: NavController,
                 navigateTo: ScreenNavigationHandler,
-                updateNavItem: NavItemChangeHandler,
                 onGoBack: () -> Unit,
                 hasBackgroundImage: Boolean,
                 onLoading: (Boolean) -> Unit,
@@ -1464,12 +1373,11 @@ sealed class Screen(
         }
     }
 
-    data object AutoGlmOneClick : Screen(parentScreen = Toolbox, navItem = NavItem.Toolbox, titleRes = R.string.screen_title_autoglm_one_click) {
+    data object AutoGlmOneClick : Screen(navItem = NavItem.Toolbox, titleRes = R.string.screen_title_autoglm_one_click) {
         @Composable
         override fun Content(
                 navController: NavController,
                 navigateTo: ScreenNavigationHandler,
-                updateNavItem: NavItemChangeHandler,
                 onGoBack: () -> Unit,
                 hasBackgroundImage: Boolean,
                 onLoading: (Boolean) -> Unit,
@@ -1478,20 +1386,16 @@ sealed class Screen(
         ) {
             AutoGlmOneClickToolScreen(
                 navController = navController,
-                onNavigateToModelConfig = {
-                    navigateTo(ModelConfig)
-                    updateNavItem(NavItem.Settings)
-                }
+                onNavigateToModelConfig = { navigateTo(ModelConfig) }
             )
         }
     }
     
-    data object AutoGlmTool : Screen(parentScreen = Toolbox, navItem = NavItem.Toolbox, titleRes = R.string.screen_title_autoglm_tool) {
+    data object AutoGlmTool : Screen(navItem = NavItem.Toolbox, titleRes = R.string.screen_title_autoglm_tool) {
         @Composable
         override fun Content(
                 navController: NavController,
                 navigateTo: ScreenNavigationHandler,
-                updateNavItem: NavItemChangeHandler,
                 onGoBack: () -> Unit,
                 hasBackgroundImage: Boolean,
                 onLoading: (Boolean) -> Unit,
@@ -1504,12 +1408,11 @@ sealed class Screen(
 
     // MCP 插件详情页面
     data class MCPPluginDetail(val issue: com.ai.assistance.operit.data.api.GitHubIssue) :
-            Screen(parentScreen = Market(MarketHomeTab.MCP), navItem = NavItem.Packages) {
+            Screen(navItem = NavItem.Packages) {
         @Composable
         override fun Content(
                 navController: NavController,
                 navigateTo: ScreenNavigationHandler,
-                updateNavItem: NavItemChangeHandler,
                 onGoBack: () -> Unit,
                 hasBackgroundImage: Boolean,
                 onLoading: (Boolean) -> Unit,
@@ -1526,38 +1429,6 @@ sealed class Screen(
     // 获取屏幕标题
     @Composable
     open fun getTitle(): String = titleRes?.let { stringResource(it) } ?: ""
-
-    // 判断是否为二级屏幕
-    val isSecondaryScreen: Boolean
-        get() = parentScreen != null
-}
-
-// 路由管理器
-object OperitRouter {
-    // 处理返回导航
-    fun handleBackNavigation(currentScreen: Screen): Screen? {
-        return currentScreen.parentScreen
-    }
-
-    // 根据NavItem获取对应的Screen
-    fun getScreenForNavItem(navItem: NavItem): Screen {
-        return when (navItem) {
-            NavItem.AiChat -> Screen.AiChat
-            NavItem.MemoryBase -> Screen.MemoryBase
-            NavItem.Packages -> Screen.Packages
-            NavItem.Toolbox -> Screen.Toolbox
-            NavItem.ShizukuCommands -> Screen.ShizukuCommands
-            NavItem.Settings -> Screen.Settings
-            NavItem.Help -> Screen.Help
-            NavItem.About -> Screen.About
-            NavItem.TokenConfig -> Screen.TokenConfig
-            NavItem.UserPreferencesGuide -> Screen.UserPreferencesGuide()
-            NavItem.AssistantConfig -> Screen.AssistantConfig
-            NavItem.Agreement -> Screen.Agreement
-            NavItem.Workflow -> Screen.Workflow
-            else -> Screen.AiChat
-        }
-    }
 }
 
 // 全局的手势状态持有者，用于在不同组件间共享手势状态
@@ -1565,3 +1436,4 @@ object GestureStateHolder {
     // 聊天界面手势是否被消费的状态
     var isChatScreenGestureConsumed: Boolean = false
 }
+

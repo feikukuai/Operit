@@ -46,6 +46,7 @@ data class MessageSendStreamSession(
     val chatId: String,
     val message: String,
     val responseStream: SharedStream<String>,
+    val responseTimeoutMs: Long,
     private val currentStateProvider: () -> InputProcessingState,
     private val cancelAction: () -> Unit
 ) {
@@ -72,7 +73,7 @@ class StandardChatManagerTool(private val context: Context) {
         private const val TAG = "StandardChatManagerTool"
         private const val SERVICE_CONNECTION_TIMEOUT = 15000L // 15秒超时
         private const val RESPONSE_STREAM_ACQUIRE_TIMEOUT = 15000L
-        private const val AI_RESPONSE_TIMEOUT = 300000L
+        private const val AI_RESPONSE_TIMEOUT = 180000L
     }
 
     private fun simplifyXmlBlocksForHistory(text: String): String {
@@ -1233,6 +1234,7 @@ class StandardChatManagerTool(private val context: Context) {
                 tool.parameters.find { it.name == "hide_user_message" }?.value?.trim()
             val disableWarningParam =
                 tool.parameters.find { it.name == "disable_warning" }?.value?.trim()
+            val timeoutMsParam = tool.parameters.find { it.name == "timeout_ms" }?.value?.trim()
 
             val persistTurn = parseBooleanOrNull(persistTurnParam)
             if (persistTurnParam != null && persistTurn == null) {
@@ -1282,6 +1284,25 @@ class StandardChatManagerTool(private val context: Context) {
                 )
             }
 
+            val timeoutMs = timeoutMsParam?.takeIf { it.isNotBlank() }?.toLongOrNull()
+            if (timeoutMsParam != null && timeoutMsParam.isNotBlank() && (timeoutMs == null || timeoutMs <= 0L)) {
+                return MessageSendStreamStartResult.Failed(
+                    ToolResult(
+                        toolName = tool.name,
+                        success = false,
+                        result = MessageSendResultData(chatId = "", message = message),
+                        error = "Invalid parameter: timeout_ms must be a positive integer (milliseconds)"
+                    )
+                )
+            }
+
+            val timeoutDeadlineMs = timeoutMs?.let { System.currentTimeMillis() + it }
+
+            fun remainingTimeoutMs(defaultTimeoutMs: Long): Long {
+                val deadline = timeoutDeadlineMs ?: return defaultTimeoutMs
+                return (deadline - System.currentTimeMillis()).coerceAtLeast(1L)
+            }
+
             val turnOptions =
                 ChatTurnOptions(
                     persistTurn = persistTurn ?: true,
@@ -1313,7 +1334,7 @@ class StandardChatManagerTool(private val context: Context) {
 
                 try {
                     preflightChatId?.let { chatId ->
-                        withTimeout(300000L) {
+                        withTimeout(remainingTimeoutMs(AI_RESPONSE_TIMEOUT)) {
                             core.activeStreamingChatIds.first { activeChatIds ->
                                 !activeChatIds.contains(chatId)
                             }
@@ -1354,7 +1375,7 @@ class StandardChatManagerTool(private val context: Context) {
                 val resolvedChatId = if (hasTargetChat) {
                     preflightChatId
                 } else {
-                    withTimeout(RESPONSE_STREAM_ACQUIRE_TIMEOUT) {
+                    withTimeout(remainingTimeoutMs(RESPONSE_STREAM_ACQUIRE_TIMEOUT)) {
                         var id = core.currentChatId.value
                         while (id == null) {
                             delay(50)
@@ -1377,7 +1398,7 @@ class StandardChatManagerTool(private val context: Context) {
 
                 val responseStream: SharedStream<String> = try {
                     var stream: SharedStream<String>? = core.getResponseStream(resolvedChatId)
-                    withTimeout(RESPONSE_STREAM_ACQUIRE_TIMEOUT) {
+                    withTimeout(remainingTimeoutMs(RESPONSE_STREAM_ACQUIRE_TIMEOUT)) {
                         while (stream == null) {
                             val state = core.inputProcessingStateByChatId.value[resolvedChatId]
                                 ?: InputProcessingState.Idle
@@ -1406,6 +1427,7 @@ class StandardChatManagerTool(private val context: Context) {
                         chatId = resolvedChatId,
                         message = message,
                         responseStream = responseStream,
+                        responseTimeoutMs = remainingTimeoutMs(AI_RESPONSE_TIMEOUT),
                         currentStateProvider = {
                             core.inputProcessingStateByChatId.value[resolvedChatId]
                                 ?: InputProcessingState.Idle
@@ -1437,7 +1459,7 @@ class StandardChatManagerTool(private val context: Context) {
                     val session = startResult.session
                     val aiResponse =
                         try {
-                            withTimeout(AI_RESPONSE_TIMEOUT) {
+                            withTimeout(session.responseTimeoutMs) {
                                 val sb = StringBuilder()
                                 session.responseStream.collect { chunk: String ->
                                     sb.append(chunk)

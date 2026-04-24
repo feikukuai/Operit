@@ -29,6 +29,8 @@ internal object ToolPkgMainRegistrationScriptParser {
                         )
                 )
             val uiModules = parseRegisteredUiModules(captured.toolboxUiModules)
+            val uiRoutes = parseRegisteredUiRoutes(captured.uiRoutes, toolPkgId)
+            val navigationEntries = parseRegisteredNavigationEntries(captured.navigationEntries)
             val appLifecycleHooks = parseRegisteredAppLifecycleHooks(captured.appLifecycleHooks)
             val messageProcessingPlugins =
                 parseRegisteredFunctionHooks(
@@ -92,6 +94,8 @@ internal object ToolPkgMainRegistrationScriptParser {
                 )
             ToolPkgMainRegistration(
                 toolboxUiModules = uiModules,
+                uiRoutes = uiRoutes,
+                navigationEntries = navigationEntries,
                 appLifecycleHooks = appLifecycleHooks,
                 messageProcessingPlugins = messageProcessingPlugins,
                 xmlRenderPlugins = xmlRenderPlugins,
@@ -154,6 +158,98 @@ internal object ToolPkgMainRegistrationScriptParser {
             )
         }
         return modules
+    }
+
+    private fun parseRegisteredUiRoutes(
+        registrations: List<String>,
+        toolPkgId: String
+    ): List<ToolPkgRegisteredUiRoute> {
+        val routes = mutableListOf<ToolPkgRegisteredUiRoute>()
+        registrations.forEachIndexed { index, raw ->
+            val item =
+                try {
+                    JSONObject(raw)
+                } catch (e: Exception) {
+                    throw IllegalArgumentException(
+                        "$TOOLPKG_REGISTRATION_UI_ROUTE payload[$index] must be a JSON object",
+                        e
+                    )
+                }
+
+            val id = item.optString("id").trim()
+            val screen = item.optString("screen").trim()
+            val routeId =
+                item.optString("route").trim().ifBlank {
+                    item.optString("routeId").trim()
+                }.ifBlank {
+                    buildToolPkgRouteId(toolPkgId, id)
+                }
+            if (id.isBlank()) {
+                throw IllegalArgumentException("$TOOLPKG_REGISTRATION_UI_ROUTE[$index].id is required")
+            }
+            if (screen.isBlank()) {
+                throw IllegalArgumentException("$TOOLPKG_REGISTRATION_UI_ROUTE[$index].screen is required")
+            }
+            if (routeId.isBlank()) {
+                throw IllegalArgumentException("$TOOLPKG_REGISTRATION_UI_ROUTE[$index].route is required")
+            }
+
+            val runtime = item.optString("runtime").trim().ifBlank { TOOLPKG_RUNTIME_COMPOSE_DSL }
+            val title = parseLocalizedText(item.opt("title"), fallback = id)
+            routes.add(
+                ToolPkgRegisteredUiRoute(
+                    id = id,
+                    routeId = routeId,
+                    runtime = runtime,
+                    screen = screen,
+                    title = title
+                )
+            )
+        }
+        return routes
+    }
+
+    private fun parseRegisteredNavigationEntries(
+        registrations: List<String>
+    ): List<ToolPkgRegisteredNavigationEntry> {
+        val entries = mutableListOf<ToolPkgRegisteredNavigationEntry>()
+        registrations.forEachIndexed { index, raw ->
+            val item =
+                try {
+                    JSONObject(raw)
+                } catch (e: Exception) {
+                    throw IllegalArgumentException(
+                        "$TOOLPKG_REGISTRATION_NAVIGATION_ENTRY payload[$index] must be a JSON object",
+                        e
+                    )
+                }
+            val id = item.optString("id").trim()
+            val routeId =
+                item.optString("route").trim().ifBlank {
+                    item.optString("routeId").trim()
+                }
+            val surface = item.optString("surface").trim().lowercase()
+            if (id.isBlank()) {
+                throw IllegalArgumentException("$TOOLPKG_REGISTRATION_NAVIGATION_ENTRY[$index].id is required")
+            }
+            if (routeId.isBlank()) {
+                throw IllegalArgumentException("$TOOLPKG_REGISTRATION_NAVIGATION_ENTRY[$index].route is required")
+            }
+            if (surface.isBlank()) {
+                throw IllegalArgumentException("$TOOLPKG_REGISTRATION_NAVIGATION_ENTRY[$index].surface is required")
+            }
+            entries.add(
+                ToolPkgRegisteredNavigationEntry(
+                    id = id,
+                    routeId = routeId,
+                    surface = surface,
+                    title = parseLocalizedText(item.opt("title"), fallback = id),
+                    icon = item.optString("icon").trim().ifBlank { null },
+                    order = item.optInt("order", 0)
+                )
+            )
+        }
+        return entries
     }
 
     private fun parseRegisteredAppLifecycleHooks(

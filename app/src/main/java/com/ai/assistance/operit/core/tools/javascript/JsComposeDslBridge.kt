@@ -383,7 +383,39 @@ internal fun buildComposeDslContextBridgeDefinition(): String {
                         return Promise.resolve();
                     },
                     navigate: function(route, args) {
+                        var routeId = String(route || '').trim();
+                        if (!routeId) {
+                            return Promise.reject(new Error('route is required'));
+                        }
+                        invokeNative('navigateToRoute', [
+                            routeId,
+                            JSON.stringify(args && typeof args === 'object' ? args : {})
+                        ]);
                         return Promise.resolve();
+                    },
+                    listRoutes: function() {
+                        var json = invokeNative('listRoutes', []);
+                        if (typeof json !== 'string' || !json.trim()) {
+                            return [];
+                        }
+                        try {
+                            var parsed = JSON.parse(json);
+                            return Array.isArray(parsed) ? parsed : [];
+                        } catch (e) {
+                            return [];
+                        }
+                    },
+                    getHostRoutes: function() {
+                        var json = invokeNative('listHostRoutes', []);
+                        if (typeof json !== 'string' || !json.trim()) {
+                            return [];
+                        }
+                        try {
+                            var parsed = JSON.parse(json);
+                            return Array.isArray(parsed) ? parsed : [];
+                        } catch (e) {
+                            return [];
+                        }
                     },
                     showToast: function(message) {
                         return toolCall('toast', { message: String(message || '') });

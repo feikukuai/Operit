@@ -167,6 +167,7 @@ renderx = { group = "com.github.tech-pw", name = "RenderX", version.ref = "rende
 
 # Serialization
 kotlinx-serialization = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "kotlinx-serialization" }
+kotlin-reflect = { group = "org.jetbrains.kotlin", name = "kotlin-reflect", version.ref = "kotlin" }
 uuid = { group = "com.benasher44", name = "uuid", version.ref = "uuid" }
 gson = { group = "com.google.code.gson", name = "gson", version.ref = "gson" }
 hjson = { group = "org.hjson", name = "hjson", version.ref = "hjson" }

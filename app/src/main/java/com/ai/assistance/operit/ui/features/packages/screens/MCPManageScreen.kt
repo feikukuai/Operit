@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.ai.assistance.operit.R
 import com.ai.assistance.operit.data.api.GitHubIssue
+import com.ai.assistance.operit.data.mcp.MCPRepository
 import com.ai.assistance.operit.data.preferences.GitHubAuthPreferences
 import com.ai.assistance.operit.ui.features.github.GitHubLoginWebViewDialog
 import com.ai.assistance.operit.ui.features.packages.components.MarketManageDangerActionButton
@@ -49,15 +50,21 @@ import com.ai.assistance.operit.ui.features.packages.utils.MCPPluginParser
 fun MCPManageScreen(
     onNavigateBack: () -> Unit,
     onNavigateToEdit: (GitHubIssue) -> Unit,
-    onNavigateToPublish: () -> Unit,
-    viewModel: MCPMarketViewModel = viewModel()
+    onNavigateToPublish: () -> Unit
 ) {
     val context = LocalContext.current
-    val githubAuth = GitHubAuthPreferences.getInstance(context)
+    val mcpRepository = remember { MCPRepository(context.applicationContext) }
+    val viewModel: MCPMarketViewModel =
+        viewModel(
+            key = "mcp-manage",
+            factory = MCPMarketViewModel.Factory(context.applicationContext, mcpRepository)
+        )
+    val githubAuth = remember { GitHubAuthPreferences.getInstance(context) }
 
     val isLoading by viewModel.isLoading.collectAsState()
     val errorMessage by viewModel.errorMessage.collectAsState()
     val userPublishedPlugins by viewModel.userPublishedPlugins.collectAsState()
+    val hasLoadedUserPublishedPlugins by viewModel.hasLoadedUserPublishedPlugins.collectAsState()
     val isLoggedIn by githubAuth.isLoggedInFlow.collectAsState(initial = false)
 
     var showDeleteDialog by remember { mutableStateOf<GitHubIssue?>(null) }
@@ -66,14 +73,20 @@ fun MCPManageScreen(
     LaunchedEffect(isLoggedIn) {
         if (isLoggedIn) {
             viewModel.loadUserPublishedPlugins()
+        } else {
+            viewModel.resetUserPublishedPluginsState()
         }
     }
 
+    val showManageLoading = isLoading || (isLoggedIn && !hasLoadedUserPublishedPlugins)
+    val showEmptyState =
+        hasLoadedUserPublishedPlugins && errorMessage == null && userPublishedPlugins.isEmpty()
+
     MarketManageScaffold(
         isLoggedIn = isLoggedIn,
-        isLoading = isLoading,
+        isLoading = showManageLoading,
         errorMessage = errorMessage,
-        isEmpty = userPublishedPlugins.isEmpty(),
+        isEmpty = showEmptyState,
         onLogin = { showGitHubLogin = true },
         onPublish = onNavigateToPublish,
         publishContentDescription = stringResource(R.string.publish_new_plugin),

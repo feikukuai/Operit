@@ -286,7 +286,6 @@ object AIMessageManager {
      * @param workspacePath 当前工作区路径。
      * @param promptFunctionType 提示功能类型。
      * @param enableThinking 是否启用思考过程。
-     * @param thinkingGuidance 是否启用思考引导。
      * @param enableMemoryAutoUpdate 是否允许任务完成后自动更新记忆。
      * @param maxTokens 最大token数量。
      * @param tokenUsageThreshold token使用阈值。
@@ -305,7 +304,6 @@ object AIMessageManager {
         workspacePath: String?,
         promptFunctionType: PromptFunctionType,
         enableThinking: Boolean,
-        thinkingGuidance: Boolean,
         enableMemoryAutoUpdate: Boolean,
         maxTokens: Int,
         tokenUsageThreshold: Double,
@@ -439,7 +437,6 @@ object AIMessageManager {
                 workspacePath = workspacePath,
                 promptFunctionType = promptFunctionType,
                 enableThinking = enableThinking,
-                thinkingGuidance = thinkingGuidance,
                 enableMemoryAutoUpdate = enableMemoryAutoUpdate,
                 maxTokens = maxTokens,
                 tokenUsageThreshold = tokenUsageThreshold,
@@ -486,7 +483,6 @@ object AIMessageManager {
         workspacePath: String? = null,
         workspaceEnv: String? = null,
         promptFunctionType: PromptFunctionType = PromptFunctionType.CHAT,
-        thinkingGuidance: Boolean = false,
         roleCardId: String? = null,
         currentRoleName: String? = null,
         splitHistoryByRole: Boolean = true,
@@ -518,7 +514,6 @@ object AIMessageManager {
                 workspacePath = workspacePath,
                 workspaceEnv = workspaceEnv,
                 promptFunctionType = promptFunctionType,
-                thinkingGuidance = thinkingGuidance,
                 roleCardId = roleCardId,
                 enableGroupOrchestrationHint = groupOrchestrationMode,
                 groupParticipantNamesText = groupParticipantNamesText,

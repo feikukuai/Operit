@@ -19,6 +19,7 @@ export interface JavaBridgeHandle {
 /**
  * Marker object produced by `Java.implement(...)`.
  * Pass this object to Java methods/constructors expecting interface arguments.
+ * Runtime note: callbacks are marshalled back onto the QuickJS runtime thread.
  */
 export interface JavaBridgeJsInterfaceMarker {
     __javaJsInterface: true;
@@ -113,8 +114,9 @@ export interface JavaBridgeLoadedCodePath {
 
 /**
  * Dynamic proxy object for a Java/Kotlin instance.
- * - Unknown property reads first try instance field/property get, then fallback to method callable.
+ * - Unknown property reads prefer instance method callable, then fallback to instance field/property get.
  * - Unknown property writes are treated as instance field/property set.
+ * - Prefer direct syntax sugar like `obj.methodName()`. Use `.call('methodName', ...)` only for rare ambiguity/debug cases.
  */
 export interface JavaBridgeInstance extends JavaBridgeHandle {
     readonly className: string;

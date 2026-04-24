@@ -6,8 +6,11 @@ import com.ai.assistance.operit.core.chat.hooks.PromptTurnKind
 import com.ai.assistance.operit.util.AppLogger
 import com.ai.assistance.operit.data.model.ModelParameter
 import com.ai.assistance.operit.data.model.ToolPrompt
+import com.ai.assistance.operit.data.preferences.ApiPreferences
 import com.ai.assistance.operit.util.ChatUtils
 import com.ai.assistance.operit.util.stream.Stream
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
 import okhttp3.OkHttpClient
 import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -59,13 +62,16 @@ class DeepseekProvider(
         fun applyThinkingParamsIfNeeded(jsonObject: JSONObject) {
             if (!enableThinking) return
 
-            // DeepSeek Thinking Mode: thinking: { type: enabled }
-            jsonObject.put(
-                "thinking",
-                JSONObject().apply {
-                    put("type", "enabled")
-                }
-            )
+            val thinkingObject = jsonObject.optJSONObject("thinking") ?: JSONObject()
+            if (!thinkingObject.has("type")) {
+                thinkingObject.put("type", "enabled")
+            }
+            jsonObject.put("thinking", thinkingObject)
+
+            val effort = resolveDeepseekThinkingEffort(context)
+            if (effort != null && !jsonObject.has("reasoning_effort")) {
+                jsonObject.put("reasoning_effort", effort)
+            }
         }
 
         // 如果未启用推理模式，直接使用父类的实现
@@ -424,6 +430,27 @@ class DeepseekProvider(
 
         flushOpenToolCallsAsCancelled("history_end")
         return messagesArray
+    }
+
+    private fun resolveDeepseekThinkingEffort(context: Context): String? {
+        val qualityLevel = runCatching {
+            runBlocking {
+                ApiPreferences.getInstance(context).thinkingQualityLevelFlow.first()
+            }
+        }.getOrElse {
+            AppLogger.w(
+                "DeepseekProvider",
+                "Failed to read thinking quality level for DeepSeek, using provider default",
+                it
+            )
+            return null
+        }
+
+        return when (qualityLevel.coerceIn(1, 4)) {
+            1, 2 -> "high"
+            3, 4 -> "max"
+            else -> null
+        }
     }
 
     override suspend fun sendMessage(

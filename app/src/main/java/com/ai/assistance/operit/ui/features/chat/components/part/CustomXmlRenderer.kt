@@ -54,6 +54,7 @@ private const val TOOL_PARAM_TOKEN_THRESHOLD = 50
 class CustomXmlRenderer(
     private val showThinkingProcess: Boolean = true,
     private val showStatusTags: Boolean = true,
+    private val initialThinkingExpanded: Boolean = false,
     private val enableDialogs: Boolean = true,  // 新增参数：是否启用弹窗功能，默认启用
     private val fallback: XmlContentRenderer = DefaultXmlRenderer()
 ) : XmlContentRenderer {
@@ -386,20 +387,22 @@ class CustomXmlRenderer(
                 null
             }
 
-        var expanded by remember { mutableStateOf(false) }
+        var expanded by remember { mutableStateOf(initialThinkingExpanded) }
         var thinkExpandSession by remember { mutableIntStateOf(0) }
         var skipCollapseAnimationOnce by remember { mutableStateOf(false) }
         val scrollState = rememberScrollState()
         var autoScrollEnabled by remember { mutableStateOf(true) }
         var userHasInteractedWithScroll by remember { mutableStateOf(false) }
         var isProgrammaticScroll by remember { mutableStateOf(false) }
-        val thinkVisibilityState = remember { MutableTransitionState(false) }
+        val thinkVisibilityState = remember { MutableTransitionState(initialThinkingExpanded) }
 
         val accessibilityDesc = stringResource(R.string.thinking_process_block)
 
         // 使用LaunchedEffect来初始化和同步状态，避免在快速重组时状态被意外重置
         LaunchedEffect(isThinkingInProgress, expandThinkingProcess) {
-            val targetExpanded = if (isThinkingInProgress) {
+            val targetExpanded = if (initialThinkingExpanded && !isThinkingInProgress) {
+                true
+            } else if (isThinkingInProgress) {
                 // 思考过程中，状态由用户偏好决定
                 expandThinkingProcess
             } else {

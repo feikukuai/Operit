@@ -1067,10 +1067,10 @@ fun getJsToolsDefinition(): String {
                 deleteChat: (chatId) => {
                     return toolCall("delete_chat", { chat_id: String(chatId ?? "") });
                 },
-                getMessages: (chatId, order, limit) => {
-                    const params = { chat_id: chatId };
-                    if (order !== undefined && order !== null && String(order).trim() !== "") params.order = String(order);
-                    if (limit !== undefined && limit !== null && !isNaN(Number(limit))) params.limit = String(limit);
+                getMessages: (chatId, options = {}) => {
+                    const params = { chat_id: String(chatId ?? "") };
+                    if (options.order !== undefined && options.order !== null && String(options.order).trim() !== "") params.order = String(options.order);
+                    if (options.limit !== undefined && options.limit !== null && !isNaN(Number(options.limit))) params.limit = String(options.limit);
                     return toolCall("get_chat_messages", params);
                 },
                 // 发送消息给AI
@@ -1083,6 +1083,7 @@ fun getJsToolsDefinition(): String {
                     if (options.notify_reply !== undefined) params.notify_reply = options.notify_reply;
                     if (options.hide_user_message !== undefined) params.hide_user_message = options.hide_user_message;
                     if (options.disable_warning !== undefined) params.disable_warning = options.disable_warning;
+                    if (options.timeout_ms !== undefined && options.timeout_ms !== null) params.timeout_ms = String(options.timeout_ms);
                     return toolCall("send_message_to_ai", params);
                 },
                 // 列出所有角色卡

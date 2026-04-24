@@ -132,7 +132,6 @@ class ApiPreferences private constructor(private val context: Context) {
         const val DEFAULT_KEEP_SCREEN_ON = true
         // Keys for Thinking Mode and Thinking Guidance
         val ENABLE_THINKING_MODE = booleanPreferencesKey("enable_thinking_mode")
-        val ENABLE_THINKING_GUIDANCE = booleanPreferencesKey("enable_thinking_guidance")
         val THINKING_QUALITY_LEVEL = intPreferencesKey("thinking_quality_level")
 
         // Key for Memory Auto Update
@@ -162,9 +161,8 @@ class ApiPreferences private constructor(private val context: Context) {
         val MAX_IMAGE_HISTORY_USER_TURNS = intPreferencesKey("max_image_history_user_turns")
         val MAX_MEDIA_HISTORY_USER_TURNS = intPreferencesKey("max_media_history_user_turns")
 
-        // Default values for Thinking Mode and Thinking Guidance
+        // Default values for Thinking Mode
         const val DEFAULT_ENABLE_THINKING_MODE = false
-        const val DEFAULT_ENABLE_THINKING_GUIDANCE = false
         const val DEFAULT_THINKING_QUALITY_LEVEL = 2
 
         // Default value for Memory Auto Update
@@ -203,7 +201,7 @@ class ApiPreferences private constructor(private val context: Context) {
 
         // API 配置默认值
         const val DEFAULT_API_ENDPOINT = "https://api.deepseek.com/v1/chat/completions"
-        const val DEFAULT_MODEL_NAME = "deepseek-chat"
+        const val DEFAULT_MODEL_NAME = "deepseek-v4-flash"
         private const val ENCODED_API_KEY = "c2stNmI4NTYyMjUzNmFjNDhjMDgwYzUwNDhhYjVmNWQxYmQ="
         val DEFAULT_API_KEY: String by lazy { decodeApiKey(ENCODED_API_KEY) }
 
@@ -285,12 +283,6 @@ class ApiPreferences private constructor(private val context: Context) {
         context.apiDataStore.data.map { preferences ->
             preferences[ENABLE_THINKING_MODE] ?: DEFAULT_ENABLE_THINKING_MODE
         }
-
-    // Flow for Thinking Guidance
-    val enableThinkingGuidanceFlow: Flow<Boolean> =
-        context.apiDataStore.data.map { preferences ->
-            preferences[ENABLE_THINKING_GUIDANCE] ?: DEFAULT_ENABLE_THINKING_GUIDANCE
-            }
 
     val thinkingQualityLevelFlow: Flow<Int> =
         context.apiDataStore.data.map { preferences ->
@@ -384,11 +376,6 @@ class ApiPreferences private constructor(private val context: Context) {
         context.apiDataStore.edit { preferences -> preferences[ENABLE_THINKING_MODE] = isEnabled }
     }
 
-    // Save Thinking Guidance setting
-    suspend fun saveEnableThinkingGuidance(isEnabled: Boolean) {
-        context.apiDataStore.edit { preferences -> preferences[ENABLE_THINKING_GUIDANCE] = isEnabled }
-    }
-
     suspend fun saveThinkingQualityLevel(level: Int) {
         context.apiDataStore.edit { preferences ->
             preferences[THINKING_QUALITY_LEVEL] = level.coerceIn(1, 4)
@@ -397,27 +384,10 @@ class ApiPreferences private constructor(private val context: Context) {
 
     suspend fun updateThinkingSettings(
         enableThinkingMode: Boolean? = null,
-        enableThinkingGuidance: Boolean? = null,
         thinkingQualityLevel: Int? = null
     ) {
         context.apiDataStore.edit { preferences ->
-            val prevMode = preferences[ENABLE_THINKING_MODE] ?: DEFAULT_ENABLE_THINKING_MODE
-            val prevGuidance = preferences[ENABLE_THINKING_GUIDANCE] ?: DEFAULT_ENABLE_THINKING_GUIDANCE
-
-            var newMode = enableThinkingMode ?: prevMode
-            var newGuidance = enableThinkingGuidance ?: prevGuidance
-
-            // Enforce mutual exclusivity.
-            if (enableThinkingMode == true) {
-                newGuidance = false
-            } else if (enableThinkingGuidance == true) {
-                newMode = false
-            } else if (newMode && newGuidance) {
-                newGuidance = false
-            }
-
-            preferences[ENABLE_THINKING_MODE] = newMode
-            preferences[ENABLE_THINKING_GUIDANCE] = newGuidance
+            enableThinkingMode?.let { preferences[ENABLE_THINKING_MODE] = it }
 
             thinkingQualityLevel?.let { preferences[THINKING_QUALITY_LEVEL] = it.coerceIn(1, 4) }
         }

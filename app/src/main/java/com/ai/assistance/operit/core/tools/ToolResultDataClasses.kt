@@ -39,6 +39,14 @@ data class StringResultData(val value: String) : ToolResultData() {
 }
 
 @Serializable
+data class SleepResultData(
+        val requestedMs: Int,
+        val sleptMs: Int
+) : ToolResultData() {
+    override fun toString(): String = "Slept for ${sleptMs}ms"
+}
+
+@Serializable
 data class SandboxScriptExecutionResultData(
         val success: Boolean,
         val scriptPath: String,

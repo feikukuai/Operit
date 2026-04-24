@@ -2637,7 +2637,6 @@ Agora é possível usar o modo AutoGLM na interface de diálogo.</string>
     <string name="external">externo</string>
     <string name="memory_auto_update_active">A atualização automática de memória está ativada</string>
     <string name="thinking_mode_active">O modo de pensamento está ativado</string>
-    <string name="thinking_guidance_active">A orientação do pensamento é ativada</string>
     <string name="ai_planning_active">A pesquisa profunda está ativada</string>
     <string name="auto_approve_active">A aprovação automática está ativada</string>
     <string name="settings_options">Definir opções</string>
@@ -2646,7 +2645,6 @@ Agora é possível usar o modo AutoGLM na interface de diálogo.</string>
     <string name="thinking_settings_active_count">%1$d itens ativados</string>
     <string name="thinking_type_off">desligado</string>
     <string name="thinking_type_mode">modo</string>
-    <string name="thinking_type_guidance">orientação</string>
     <string name="thinking_quality">grau de pensamento</string>
     <string name="thinking_quality_desc">Eficaz apenas no modo de pensamento, existem 4 níveis no total. Quanto maior o valor, mais profundo é o pensamento. 1 é automático.</string>
     <string name="model_config">Configuração do modelo</string>
@@ -2849,8 +2847,6 @@ Agora é possível usar o modo AutoGLM na interface de diálogo.</string>
     <string name="chat_ai_computer_closed_due_to_workspace">O computador AI está fechado (devido ao espaço de trabalho aberto)</string>
     <string name="thinking_mode">Modelo de pensamento</string>
     <string name="thinking_mode_desc">Atualmente suporta Gemini, Qwen3, Claude, Doubao, NVIDIA, fluxo baseado em silício e modelos locais MNN, permitindo pensamento integrado.</string>
-    <string name="thinking_guidance">Orientação de pensamento</string>
-    <string name="thinking_guidance_desc">Um modelo que não consegue pensar pode ser forçado a pensar. Esta opção não é recomendada para modelos de pensamento.</string>
     <string name="details">Detalhes</string>
     <string name="model_selection">Seleção de modelo</string>
     <string name="prompt_selection">Seleção imediata de palavras</string>
@@ -3276,7 +3272,7 @@ Agora é possível usar o modo AutoGLM na interface de diálogo.</string>
     <string name="api_provider">Provedor de API</string>
     <string name="select_api_provider">Clique para selecionar o provedor de API</string>
     <string name="select">escolher</string>
-    <string name="default_config_model_restriction">Ao usar a configuração padrão, apenas o modelo deepseek-chat pode ser usado</string>
+    <string name="default_config_model_restriction">Ao usar a configuração padrão, apenas o modelo deepseek-v4-flash pode ser usado</string>
     <string name="enable_direct_image_processing">Modelo suporta reconhecimento de imagem</string>
     <string name="enable_direct_image_processing_desc">Quando ativado, as imagens serão enviadas diretamente para a IA para processamento, em vez de serem lidas pela IA por meio de uma ferramenta de OCR.</string>
     <string name="enable_direct_audio_processing">O modelo suporta análise de áudio</string>
@@ -6697,4 +6693,14 @@ Agora é possível usar o modo AutoGLM na interface de diálogo.</string>
     <string name="enable_new_sidebar">Nova barra lateral</string>
     <string name="enable_new_sidebar_description">Quando ativado, habilita a entrada da nova barra lateral. As próximas grandes reformulações da barra lateral também serão baseadas nisso.</string>
     <string name="chat_auto_update_memory_failed">Falha ao atualizar memória automaticamente: %1$s</string>
+
+    <string name="nav_group_plugins">Plugins</string>
+    <string name="tag_count_lock">Bloquear quantidade</string>
+    <string name="tag_count_limit">Quantidade máxima selecionável</string>
+    <string name="tag_count_locked_status">Selecionados %1$d / Limite %2$d</string>
+    <string name="chat_hidden_user_message_badge">Acionamento automático</string>
+    <string name="tool_token_config_desc">Abra a página de obtenção e configuração da chave de API para facilitar a integração rápida do modelo</string>
+    <string name="chat_delete_single_variant">Excluir mensagem única</string>
+    <string name="chat_delete_single_variant_unavailable">A mensagem atual não possui candidatos únicos para exclusão</string>
+    <string name="chat_delete_single_variant_failed">Falha ao excluir mensagem única: %1$s</string>
 </resources>

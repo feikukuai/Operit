@@ -133,7 +133,9 @@ import com.ai.assistance.operit.ui.features.chat.components.AttachmentSelectorPo
 import com.ai.assistance.operit.ui.features.chat.components.FullscreenInputDialog
 import com.ai.assistance.operit.ui.features.chat.components.style.input.common.CharacterCardModelBindingSwitchConfirmDialog
 import com.ai.assistance.operit.ui.features.chat.components.style.input.common.InputMenuToggleHookParams
+import com.ai.assistance.operit.ui.features.chat.components.style.input.common.InputMenuToggleDefinition
 import com.ai.assistance.operit.ui.features.chat.components.style.input.common.InputMenuTogglePluginRegistry
+import com.ai.assistance.operit.ui.features.chat.components.style.input.common.InputMenuToggleSlots
 import com.ai.assistance.operit.ui.features.chat.components.style.input.common.PendingMessageQueuePanel
 import com.ai.assistance.operit.ui.features.chat.components.style.input.common.PendingQueueMessageItem
 import com.ai.assistance.operit.ui.features.chat.components.style.input.common.ToolPromptManagerDialog
@@ -185,8 +187,6 @@ fun AgentChatInputSection(
     isWorkspaceOpen: Boolean = false,
     enableThinkingMode: Boolean = false,
     onToggleThinkingMode: () -> Unit = {},
-    enableThinkingGuidance: Boolean = false,
-    onToggleThinkingGuidance: () -> Unit = {},
     thinkingQualityLevel: Int = ApiPreferences.DEFAULT_THINKING_QUALITY_LEVEL,
     onThinkingQualityLevelChange: (Int) -> Unit = {},
     enableMaxContextMode: Boolean = false,
@@ -1333,14 +1333,14 @@ fun AgentChatInputSection(
                 currentConfigMapping = effectiveConfigMapping,
                 enableThinkingMode = enableThinkingMode,
                 onToggleThinkingMode = onToggleThinkingMode,
-                enableThinkingGuidance = enableThinkingGuidance,
-                onToggleThinkingGuidance = onToggleThinkingGuidance,
                 thinkingQualityLevel = thinkingQualityLevel,
                 onThinkingQualityLevelChange = onThinkingQualityLevelChange,
                 enableMaxContextMode = enableMaxContextMode,
                 onToggleEnableMaxContextMode = onToggleEnableMaxContextMode,
                 baseContextLengthInK = baseContextLengthInK,
                 maxContextLengthInK = maxContextLengthInK,
+                featureStates = featureStates,
+                onToggleFeature = onToggleFeature,
                 onSelectModel = onSelectModel,
                 onManageModels = {
                     showModelSelectorPopup.value = false
@@ -1415,14 +1415,14 @@ private fun AgentModelSelectorPopup(
     currentConfigMapping: FunctionConfigMapping,
     enableThinkingMode: Boolean,
     onToggleThinkingMode: () -> Unit,
-    enableThinkingGuidance: Boolean,
-    onToggleThinkingGuidance: () -> Unit,
     thinkingQualityLevel: Int,
     onThinkingQualityLevelChange: (Int) -> Unit,
     enableMaxContextMode: Boolean,
     onToggleEnableMaxContextMode: () -> Unit,
     baseContextLengthInK: Float,
     maxContextLengthInK: Float,
+    featureStates: Map<String, Boolean>,
+    onToggleFeature: (String) -> Unit,
     onSelectModel: (String, Int) -> Unit,
     onManageModels: () -> Unit,
     onDismiss: () -> Unit,
@@ -1432,6 +1432,16 @@ private fun AgentModelSelectorPopup(
     var showThinkingDropdown by remember { mutableStateOf(false) }
     var infoPopupContent by remember { mutableStateOf<Pair<String, String>?>(null) }
     val context = LocalContext.current
+    val inputMenuToggles = InputMenuTogglePluginRegistry.changeVersion.collectAsState().value.let {
+        InputMenuTogglePluginRegistry.createToggles(
+            params = InputMenuToggleHookParams(
+                context = context,
+                featureStates = featureStates,
+                onToggleFeature = onToggleFeature
+            )
+        )
+    }
+    val inputMenuTogglesBySlot = inputMenuToggles.groupBy { InputMenuToggleSlots.normalize(it.slot) }
 
     Popup(
         alignment = Alignment.TopStart,
@@ -1483,10 +1493,9 @@ private fun AgentModelSelectorPopup(
                         popupContainerColor = popupContainerColor,
                         enableThinkingMode = enableThinkingMode,
                         onToggleThinkingMode = onToggleThinkingMode,
-                        enableThinkingGuidance = enableThinkingGuidance,
-                        onToggleThinkingGuidance = onToggleThinkingGuidance,
                         thinkingQualityLevel = thinkingQualityLevel,
                         onThinkingQualityLevelChange = onThinkingQualityLevelChange,
+                        thinkingSlotToggles = inputMenuTogglesBySlot[InputMenuToggleSlots.THINKING].orEmpty(),
                         expanded = showThinkingDropdown,
                         onExpandedChange = { showThinkingDropdown = it },
                         onInfoClick = {
@@ -1504,12 +1513,28 @@ private fun AgentModelSelectorPopup(
                                 context.getString(R.string.thinking_quality) to
                                     context.getString(R.string.thinking_quality_desc)
                         },
-                        onThinkingGuidanceInfoClick = {
-                            infoPopupContent =
-                                context.getString(R.string.thinking_guidance) to
-                                    context.getString(R.string.thinking_guidance_desc)
+                        onToggleInfoClick = { title, description ->
+                            infoPopupContent = title to description
                         },
                     )
+                    inputMenuTogglesBySlot[InputMenuToggleSlots.MODEL].orEmpty().forEach { toggle ->
+                        AgentInputMenuToggleSettingItem(
+                            toggle = toggle,
+                            onInfoClick = { title, description -> infoPopupContent = title to description },
+                        )
+                    }
+                    inputMenuTogglesBySlot[InputMenuToggleSlots.TOOLS].orEmpty().forEach { toggle ->
+                        AgentInputMenuToggleSettingItem(
+                            toggle = toggle,
+                            onInfoClick = { title, description -> infoPopupContent = title to description },
+                        )
+                    }
+                    inputMenuTogglesBySlot[InputMenuToggleSlots.GENERAL].orEmpty().forEach { toggle ->
+                        AgentInputMenuToggleSettingItem(
+                            toggle = toggle,
+                            onInfoClick = { title, description -> infoPopupContent = title to description },
+                        )
+                    }
                     AgentMaxContextSettingItem(
                         enableMaxContextMode = enableMaxContextMode,
                         onToggleEnableMaxContextMode = onToggleEnableMaxContextMode,
@@ -1568,20 +1593,18 @@ private fun AgentThinkingSettingsItem(
     popupContainerColor: Color,
     enableThinkingMode: Boolean,
     onToggleThinkingMode: () -> Unit,
-    enableThinkingGuidance: Boolean,
-    onToggleThinkingGuidance: () -> Unit,
     thinkingQualityLevel: Int,
     onThinkingQualityLevelChange: (Int) -> Unit,
+    thinkingSlotToggles: List<InputMenuToggleDefinition>,
     expanded: Boolean,
     onExpandedChange: (Boolean) -> Unit,
     onInfoClick: () -> Unit,
     onThinkingModeInfoClick: () -> Unit,
     onThinkingQualityInfoClick: () -> Unit,
-    onThinkingGuidanceInfoClick: () -> Unit,
+    onToggleInfoClick: (String, String) -> Unit,
 ) {
     val thinkingTypeText =
         when {
-            enableThinkingGuidance -> stringResource(R.string.thinking_type_guidance)
             enableThinkingMode -> stringResource(R.string.thinking_type_mode)
             else -> stringResource(R.string.thinking_type_off)
         }
@@ -1662,24 +1685,12 @@ private fun AgentThinkingSettingsItem(
                     onInfoClick = onThinkingQualityInfoClick,
                 )
             }
-            AgentThinkingSubSettingItem(
-                title = stringResource(R.string.thinking_guidance),
-                icon =
-                    if (enableThinkingGuidance) {
-                        Icons.Rounded.TipsAndUpdates
-                    } else {
-                        Icons.Outlined.TipsAndUpdates
-                    },
-                iconTint =
-                    if (enableThinkingGuidance) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                    },
-                isChecked = enableThinkingGuidance,
-                onToggle = onToggleThinkingGuidance,
-                onInfoClick = onThinkingGuidanceInfoClick,
-            )
+            thinkingSlotToggles.forEach { toggle ->
+                AgentInputMenuToggleSettingItem(
+                    toggle = toggle,
+                    onInfoClick = onToggleInfoClick,
+                )
+            }
         }
     }
 }
@@ -2201,6 +2212,8 @@ private fun AgentExtraSettingsPopup(
             )
         )
     }
+    val inputMenuTogglesBySlot = inputMenuToggles.groupBy { toggle -> InputMenuToggleSlots.normalize(toggle.slot) }
+    val defaultInputMenuToggles = inputMenuTogglesBySlot[InputMenuToggleSlots.DEFAULT].orEmpty()
 
     Popup(
         alignment = Alignment.TopStart,
@@ -2262,6 +2275,13 @@ private fun AgentExtraSettingsPopup(
                         },
                     )
 
+                    inputMenuTogglesBySlot[InputMenuToggleSlots.MEMORY].orEmpty().forEach { toggle ->
+                        AgentInputMenuToggleSettingItem(
+                            toggle = toggle,
+                            onInfoClick = { title, description -> infoPopupContent = title to description },
+                        )
+                    }
+
                     AgentSimpleToggleSettingItem(
                         title = stringResource(R.string.memory_auto_update),
                         icon = if (enableMemoryAutoUpdate) Icons.Rounded.Save else Icons.Outlined.Save,
@@ -2288,26 +2308,10 @@ private fun AgentExtraSettingsPopup(
                         },
                     )
 
-                    inputMenuToggles.forEach { toggle ->
-                        val toggleTitle =
-                            if (toggle.titleRes != 0) stringResource(toggle.titleRes)
-                            else toggle.title.orEmpty()
-                        AgentSimpleToggleSettingItem(
-                            title = toggleTitle,
-                            icon = Icons.Outlined.Hub,
-                            isChecked = toggle.isChecked,
-                            isEnabled = toggle.isEnabled,
-                            onToggle = toggle.onToggle,
-                            onInfoClick = {
-                                val infoTitle =
-                                    if (toggle.titleRes != 0) context.getString(toggle.titleRes)
-                                    else toggle.title.orEmpty()
-                                val infoDescription =
-                                    if (toggle.descriptionRes != 0) context.getString(toggle.descriptionRes)
-                                    else toggle.description.orEmpty()
-                                infoPopupContent =
-                                    infoTitle to infoDescription
-                            },
+                    defaultInputMenuToggles.forEach { toggle ->
+                        AgentInputMenuToggleSettingItem(
+                            toggle = toggle,
+                            onInfoClick = { title, description -> infoPopupContent = title to description },
                         )
                     }
 
@@ -2726,6 +2730,33 @@ private fun AgentSimpleToggleSettingItem(
                 ),
         )
     }
+}
+
+@Composable
+private fun AgentInputMenuToggleSettingItem(
+    toggle: InputMenuToggleDefinition,
+    onInfoClick: (String, String) -> Unit,
+) {
+    val context = LocalContext.current
+    val toggleTitle =
+        if (toggle.titleRes != 0) stringResource(toggle.titleRes)
+        else toggle.title.orEmpty()
+    AgentSimpleToggleSettingItem(
+        title = toggleTitle,
+        icon = Icons.Outlined.Hub,
+        isChecked = toggle.isChecked,
+        isEnabled = toggle.isEnabled,
+        onToggle = toggle.onToggle,
+        onInfoClick = {
+            val infoTitle =
+                if (toggle.titleRes != 0) context.getString(toggle.titleRes)
+                else toggle.title.orEmpty()
+            val infoDescription =
+                if (toggle.descriptionRes != 0) context.getString(toggle.descriptionRes)
+                else toggle.description.orEmpty()
+            onInfoClick(infoTitle, infoDescription)
+        },
+    )
 }
 
 @Composable

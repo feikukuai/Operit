@@ -8,7 +8,7 @@ import {
     DirectoryListingData, FileContentData, BinaryFileContentData, FileOperationData, FileExistsData,
     FindFilesResultData, FileInfoData, FileConversionResultData, FileFormatConversionsResultData,
     HttpResponseData, VisitWebResultData,
-    SleepResultData, SystemSettingData, AppOperationData, AppListData,
+    SleepResultData, StringResultData, SystemSettingData, AppOperationData, AppListData,
     DeviceInfoResultData, NotificationData, LocationData,
     UIPageResultData, UIActionResultData, CombinedOperationResultData, AutomationExecutionResultData,
     CalculationResultData, FFmpegResultData, ADBResultData, IntentResultData, TerminalCommandResultData, HiddenTerminalCommandResultData, TerminalSessionScreenResultData,

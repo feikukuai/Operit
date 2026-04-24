@@ -611,7 +611,6 @@ class EnhancedAIService private constructor(private val context: Context) {
         functionType: FunctionType = FunctionType.CHAT,
         promptFunctionType: PromptFunctionType = PromptFunctionType.CHAT,
         enableThinking: Boolean = false,
-        thinkingGuidance: Boolean = false,
         customSystemPromptTemplate: String? = null,
         roleCardId: String? = null,
         enableGroupOrchestrationHint: Boolean = false,
@@ -631,7 +630,6 @@ class EnhancedAIService private constructor(private val context: Context) {
                 workspacePath = workspacePath,
                 workspaceEnv = workspaceEnv,
                 promptFunctionType = promptFunctionType,
-                thinkingGuidance = thinkingGuidance,
                 customSystemPromptTemplate = customSystemPromptTemplate,
                 roleCardId = roleCardId,
                 enableGroupOrchestrationHint = enableGroupOrchestrationHint,
@@ -734,7 +732,6 @@ class EnhancedAIService private constructor(private val context: Context) {
         functionType: FunctionType = FunctionType.CHAT,
         promptFunctionType: PromptFunctionType = PromptFunctionType.CHAT,
         enableThinking: Boolean = false,
-        thinkingGuidance: Boolean = false,
         enableMemoryAutoUpdate: Boolean = true,
         maxTokens: Int,
         tokenUsageThreshold: Double,
@@ -755,10 +752,7 @@ class EnhancedAIService private constructor(private val context: Context) {
         stream: Boolean = true,
         disableWarning: Boolean = false
     ): Stream<String> {
-        AppLogger.d(
-                TAG,
-                "sendMessage调用开始: 功能类型=$functionType, 提示词类型=$promptFunctionType, 思考引导=$thinkingGuidance"
-        )
+            AppLogger.d(TAG, "sendMessage调用开始: 功能类型=$functionType, 提示词类型=$promptFunctionType")
         accumulatedInputTokenCount = 0
         accumulatedOutputTokenCount = 0
         accumulatedCachedInputTokenCount = 0
@@ -799,7 +793,6 @@ class EnhancedAIService private constructor(private val context: Context) {
                                     workspacePath,
                                     workspaceEnv,
                                     promptFunctionType,
-                                    thinkingGuidance,
                                     customSystemPromptTemplate,
                                     roleCardId,
                                     enableGroupOrchestrationHint,
@@ -2441,7 +2434,6 @@ class EnhancedAIService private constructor(private val context: Context) {
             workspacePath: String?,
             workspaceEnv: String?,
             promptFunctionType: PromptFunctionType,
-            thinkingGuidance: Boolean,
             customSystemPromptTemplate: String? = null,
             roleCardId: String?,
             enableGroupOrchestrationHint: Boolean,
@@ -2483,7 +2475,6 @@ class EnhancedAIService private constructor(private val context: Context) {
                 workspaceEnv,
                 packageManager,
                 promptFunctionType,
-                thinkingGuidance,
                 customSystemPromptTemplate,
                 roleCardId,
                 enableGroupOrchestrationHint,

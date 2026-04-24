@@ -783,7 +783,7 @@ private fun MessageItem(
                         thinkingBackgroundColor = thinkingBackgroundColor,
                         thinkingTextColor = thinkingTextColor,
                         supportToolMarkup = true,
-                        initialThinkingExpanded = true,
+                        initialThinkingExpanded = false,
                         onDeleteMessage = onDeleteMessage,
                         index = index,
                         enableDialogs = enableDialogs,

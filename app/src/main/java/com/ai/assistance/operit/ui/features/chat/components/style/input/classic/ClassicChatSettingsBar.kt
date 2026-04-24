@@ -73,7 +73,9 @@ import com.ai.assistance.operit.data.model.getModelList
 import com.ai.assistance.operit.data.model.getValidModelIndex
 import com.ai.assistance.operit.data.preferences.UserPreferencesManager
 import com.ai.assistance.operit.ui.features.chat.components.style.input.common.InputMenuToggleHookParams
+import com.ai.assistance.operit.ui.features.chat.components.style.input.common.InputMenuToggleDefinition
 import com.ai.assistance.operit.ui.features.chat.components.style.input.common.InputMenuTogglePluginRegistry
+import com.ai.assistance.operit.ui.features.chat.components.style.input.common.InputMenuToggleSlots
 import com.ai.assistance.operit.ui.features.chat.components.style.input.common.CharacterCardModelBindingSwitchConfirmDialog
 import com.ai.assistance.operit.ui.features.chat.components.style.input.common.ToolPromptManagerDialog
 import com.ai.assistance.operit.ui.permissions.PermissionLevel
@@ -91,8 +93,6 @@ fun ClassicChatSettingsBar(
     onTogglePermission: () -> Unit,
     enableThinkingMode: Boolean,
     onToggleThinkingMode: () -> Unit,
-    enableThinkingGuidance: Boolean,
-    onToggleThinkingGuidance: () -> Unit,
     thinkingQualityLevel: Int,
     onThinkingQualityLevelChange: (Int) -> Unit,
     maxWindowSizeInK: Float,
@@ -190,6 +190,8 @@ fun ClassicChatSettingsBar(
             )
         )
     }
+    val inputMenuTogglesBySlot = inputMenuToggles.groupBy { InputMenuToggleSlots.normalize(it.slot) }
+    val defaultInputMenuToggles = inputMenuTogglesBySlot[InputMenuToggleSlots.DEFAULT].orEmpty()
 
     val onSelectModel: (String, Int) -> Unit = { selectedId, modelIndex ->
         if (isModelSelectionLockedByCharacterCard) {
@@ -327,6 +329,16 @@ fun ClassicChatSettingsBar(
                                     }
                             )
 
+                            inputMenuTogglesBySlot[InputMenuToggleSlots.MODEL].orEmpty().forEach { toggle ->
+                                InputMenuToggleSettingItem(
+                                    toggle = toggle,
+                                    onInfoClick = { title, description ->
+                                        infoPopupContent = title to description
+                                        showMenu = false
+                                    }
+                                )
+                            }
+
                             // 记忆选择器
                             MemorySelectorItem(
                                 preferenceProfiles = preferenceProfiles,
@@ -345,13 +357,22 @@ fun ClassicChatSettingsBar(
                                 }
                             )
 
+                            inputMenuTogglesBySlot[InputMenuToggleSlots.MEMORY].orEmpty().forEach { toggle ->
+                                InputMenuToggleSettingItem(
+                                    toggle = toggle,
+                                    onInfoClick = { title, description ->
+                                        infoPopupContent = title to description
+                                        showMenu = false
+                                    }
+                                )
+                            }
+
                             ThinkingSettingsItem(
                                 enableThinkingMode = enableThinkingMode,
                                 onToggleThinkingMode = onToggleThinkingMode,
-                                enableThinkingGuidance = enableThinkingGuidance,
-                                onToggleThinkingGuidance = onToggleThinkingGuidance,
                                 thinkingQualityLevel = thinkingQualityLevel,
                                 onThinkingQualityLevelChange = onThinkingQualityLevelChange,
+                                thinkingSlotToggles = inputMenuTogglesBySlot[InputMenuToggleSlots.THINKING].orEmpty(),
                                 expanded = showThinkingDropdown,
                                 onExpandedChange = { showThinkingDropdown = it },
                                 onInfoClick = {
@@ -369,9 +390,8 @@ fun ClassicChatSettingsBar(
                                         context.getString(R.string.thinking_quality) to context.getString(R.string.thinking_quality_desc)
                                     showMenu = false
                                 },
-                                onThinkingGuidanceInfoClick = {
-                                    infoPopupContent =
-                                        context.getString(R.string.thinking_guidance) to context.getString(R.string.thinking_guidance_desc)
+                                onToggleInfoClick = { title, description ->
+                                    infoPopupContent = title to description
                                     showMenu = false
                                 }
                             )
@@ -418,6 +438,16 @@ fun ClassicChatSettingsBar(
                                     showMenu = false
                                 }
                             )
+
+                            inputMenuTogglesBySlot[InputMenuToggleSlots.TOOLS].orEmpty().forEach { toggle ->
+                                InputMenuToggleSettingItem(
+                                    toggle = toggle,
+                                    onInfoClick = { title, description ->
+                                        infoPopupContent = title to description
+                                        showMenu = false
+                                    }
+                                )
+                            }
 
                             // Max模式
                             SettingItem(
@@ -520,6 +550,16 @@ fun ClassicChatSettingsBar(
                             )
 
                             // ========== 输出相关 ==========
+                            inputMenuTogglesBySlot[InputMenuToggleSlots.GENERAL].orEmpty().forEach { toggle ->
+                                InputMenuToggleSettingItem(
+                                    toggle = toggle,
+                                    onInfoClick = { title, description ->
+                                        infoPopupContent = title to description
+                                        showMenu = false
+                                    }
+                                )
+                            }
+
                             // 自动朗读
                             SettingItem(
                                 title = stringResource(R.string.auto_read_message),
@@ -552,33 +592,11 @@ fun ClassicChatSettingsBar(
                             )
 
                             // ========== AI功能类 ==========
-                            inputMenuToggles.forEach { toggle ->
-                                val toggleTitle =
-                                    if (toggle.titleRes != 0) stringResource(toggle.titleRes)
-                                    else toggle.title.orEmpty()
-                                SettingItem(
-                                    title = toggleTitle,
-                                    icon = Icons.Outlined.Hub,
-                                    iconTint =
-                                        if (!toggle.isEnabled)
-                                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f)
-                                        else if (toggle.isChecked) MaterialTheme.colorScheme.primary
-                                        else
-                                            MaterialTheme.colorScheme.onSurfaceVariant.copy(
-                                                alpha = 0.7f
-                                            ),
-                                    isChecked = toggle.isChecked,
-                                    isEnabled = toggle.isEnabled,
-                                    onToggle = toggle.onToggle,
-                                    onInfoClick = {
-                                        val infoTitle =
-                                            if (toggle.titleRes != 0) context.getString(toggle.titleRes)
-                                            else toggle.title.orEmpty()
-                                        val infoDescription =
-                                            if (toggle.descriptionRes != 0) context.getString(toggle.descriptionRes)
-                                            else toggle.description.orEmpty()
-                                        infoPopupContent =
-                                            infoTitle to infoDescription
+                            defaultInputMenuToggles.forEach { toggle ->
+                                InputMenuToggleSettingItem(
+                                    toggle = toggle,
+                                    onInfoClick = { title, description ->
+                                        infoPopupContent = title to description
                                         showMenu = false
                                     }
                                 )
@@ -892,6 +910,37 @@ private fun SettingSliderItem(
 }
 
 @Composable
+private fun InputMenuToggleSettingItem(
+    toggle: InputMenuToggleDefinition,
+    onInfoClick: (String, String) -> Unit
+) {
+    val context = LocalContext.current
+    val toggleTitle =
+        if (toggle.titleRes != 0) stringResource(toggle.titleRes)
+        else toggle.title.orEmpty()
+    SettingItem(
+        title = toggleTitle,
+        icon = Icons.Outlined.Hub,
+        iconTint =
+            if (!toggle.isEnabled) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f)
+            else if (toggle.isChecked) MaterialTheme.colorScheme.primary
+            else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+        isChecked = toggle.isChecked,
+        isEnabled = toggle.isEnabled,
+        onToggle = toggle.onToggle,
+        onInfoClick = {
+            val infoTitle =
+                if (toggle.titleRes != 0) context.getString(toggle.titleRes)
+                else toggle.title.orEmpty()
+            val infoDescription =
+                if (toggle.descriptionRes != 0) context.getString(toggle.descriptionRes)
+                else toggle.description.orEmpty()
+            onInfoClick(infoTitle, infoDescription)
+        }
+    )
+}
+
+@Composable
 private fun DisableSettingsGroupItem(
     disableStreamOutput: Boolean,
     onToggleDisableStreamOutput: () -> Unit,
@@ -1053,16 +1102,15 @@ private fun DisableSettingsGroupItem(
 private fun ThinkingSettingsItem(
     enableThinkingMode: Boolean,
     onToggleThinkingMode: () -> Unit,
-    enableThinkingGuidance: Boolean,
-    onToggleThinkingGuidance: () -> Unit,
     thinkingQualityLevel: Int,
     onThinkingQualityLevelChange: (Int) -> Unit,
+    thinkingSlotToggles: List<InputMenuToggleDefinition>,
     expanded: Boolean,
     onExpandedChange: (Boolean) -> Unit,
     onInfoClick: () -> Unit,
     onThinkingModeInfoClick: () -> Unit,
     onThinkingQualityInfoClick: () -> Unit,
-    onThinkingGuidanceInfoClick: () -> Unit
+    onToggleInfoClick: (String, String) -> Unit
 ) {
     val context = LocalContext.current
 
@@ -1142,7 +1190,6 @@ private fun ThinkingSettingsItem(
 
     val thinkingTypeText =
             when {
-                enableThinkingGuidance -> stringResource(R.string.thinking_type_guidance)
                 enableThinkingMode -> stringResource(R.string.thinking_type_mode)
                 else -> stringResource(R.string.thinking_type_off)
             }
@@ -1151,13 +1198,6 @@ private fun ThinkingSettingsItem(
         append(stringResource(R.string.thinking_mode))
         append(": ")
         append(if (enableThinkingMode) context.getString(R.string.enabled) else context.getString(R.string.disabled))
-        append(", ")
-        append(stringResource(R.string.thinking_guidance))
-        append(": ")
-        append(
-            if (enableThinkingGuidance) context.getString(R.string.enabled)
-            else context.getString(R.string.disabled)
-        )
     }
     val accessibilityDesc =
             "${stringResource(R.string.thinking_settings)}: $thinkingTypeText, $stateText, $expandStateDesc"
@@ -1255,18 +1295,12 @@ private fun ThinkingSettingsItem(
                     }
                 }
 
-                ThinkingSubSettingItem(
-                    title = stringResource(R.string.thinking_guidance),
-                    icon =
-                        if (enableThinkingGuidance) Icons.Rounded.TipsAndUpdates
-                        else Icons.Outlined.TipsAndUpdates,
-                    iconTint =
-                        if (enableThinkingGuidance) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                    isChecked = enableThinkingGuidance,
-                    onToggle = onToggleThinkingGuidance,
-                    onInfoClick = onThinkingGuidanceInfoClick
-                )
+                thinkingSlotToggles.forEach { toggle ->
+                    InputMenuToggleSettingItem(
+                        toggle = toggle,
+                        onInfoClick = onToggleInfoClick
+                    )
+                }
             }
         }
     }

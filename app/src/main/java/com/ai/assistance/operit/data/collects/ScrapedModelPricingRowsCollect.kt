@@ -60,6 +60,13 @@ object ScrapedModelPricingRowsCollect {
         OPENAI|gpt-5.2-chat|TOKEN|1.05|8.4|0|USD
         OPENAI|gpt-5.2-pro|TOKEN|168|1344|0|USD
         OPENAI|gpt-5.2|TOKEN|1.05|8.4|0|USD
+        OPENAI|gpt-5.4-2026-03-05|TOKEN|2.5|15|0.25|USD
+        OPENAI|gpt-5.4-mini-2026-03-17|TOKEN|0.75|4.5|0.075|USD
+        OPENAI|gpt-5.4-mini|TOKEN|0.75|4.5|0.075|USD
+        OPENAI|gpt-5.4-nano-2026-03-17|TOKEN|0.2|1.25|0.02|USD
+        OPENAI|gpt-5.4-nano|TOKEN|0.2|1.25|0.02|USD
+        OPENAI|gpt-5.4|TOKEN|2.5|15|0.25|USD
+        OPENAI|gpt-5.5|TOKEN|5|30|0.5|USD
         OPENAI|gpt-5|TOKEN|0.75|6|0|USD
         OPENAI|gpt-audio-2025-08-28|TOKEN|1.5|3|0|USD
         OPENAI|gpt-image-1-mini|TOKEN|1.5|4.8|0|USD
@@ -151,6 +158,13 @@ object ScrapedModelPricingRowsCollect {
         OPENAI_RESPONSES|gpt-5.2-chat|TOKEN|1.05|8.4|0|USD
         OPENAI_RESPONSES|gpt-5.2-pro|TOKEN|168|1344|0|USD
         OPENAI_RESPONSES|gpt-5.2|TOKEN|1.05|8.4|0|USD
+        OPENAI_RESPONSES|gpt-5.4-2026-03-05|TOKEN|2.5|15|0.25|USD
+        OPENAI_RESPONSES|gpt-5.4-mini-2026-03-17|TOKEN|0.75|4.5|0.075|USD
+        OPENAI_RESPONSES|gpt-5.4-mini|TOKEN|0.75|4.5|0.075|USD
+        OPENAI_RESPONSES|gpt-5.4-nano-2026-03-17|TOKEN|0.2|1.25|0.02|USD
+        OPENAI_RESPONSES|gpt-5.4-nano|TOKEN|0.2|1.25|0.02|USD
+        OPENAI_RESPONSES|gpt-5.4|TOKEN|2.5|15|0.25|USD
+        OPENAI_RESPONSES|gpt-5.5|TOKEN|5|30|0.5|USD
         OPENAI_RESPONSES|gpt-5|TOKEN|0.75|6|0|USD
         OPENAI_RESPONSES|gpt-audio-2025-08-28|TOKEN|1.5|3|0|USD
         OPENAI_RESPONSES|gpt-image-1-mini|TOKEN|1.5|4.8|0|USD
@@ -245,10 +259,12 @@ object ScrapedModelPricingRowsCollect {
         ANTHROPIC|claude-opus-4-5-20251101|TOKEN|5|25|0|USD
         ANTHROPIC|claude-opus-4-6-thinking|TOKEN|5|25|0|USD
         ANTHROPIC|claude-opus-4-6|TOKEN|5|25|0|USD
+        ANTHROPIC|claude-opus-4-7|TOKEN|5|25|0|USD
         ANTHROPIC|claude-sonnet-4-20250514-thinking|TOKEN|3|15|0|USD
         ANTHROPIC|claude-sonnet-4-20250514|TOKEN|3|15|0|USD
         ANTHROPIC|claude-sonnet-4-5-20250929-thinking|TOKEN|3|15|0|USD
         ANTHROPIC|claude-sonnet-4-5-20250929|TOKEN|3|15|0|USD
+        ANTHROPIC|claude-sonnet-4-6|TOKEN|3|15|0|USD
         """.trimIndent(),
         """
         ANTHROPIC_GENERIC|claude-3-5-haiku-20241022|TOKEN|0.8|4|0|USD
@@ -268,10 +284,12 @@ object ScrapedModelPricingRowsCollect {
         ANTHROPIC_GENERIC|claude-opus-4-5-20251101|TOKEN|5|25|0|USD
         ANTHROPIC_GENERIC|claude-opus-4-6-thinking|TOKEN|5|25|0|USD
         ANTHROPIC_GENERIC|claude-opus-4-6|TOKEN|5|25|0|USD
+        ANTHROPIC_GENERIC|claude-opus-4-7|TOKEN|5|25|0|USD
         ANTHROPIC_GENERIC|claude-sonnet-4-20250514-thinking|TOKEN|3|15|0|USD
         ANTHROPIC_GENERIC|claude-sonnet-4-20250514|TOKEN|3|15|0|USD
         ANTHROPIC_GENERIC|claude-sonnet-4-5-20250929-thinking|TOKEN|3|15|0|USD
         ANTHROPIC_GENERIC|claude-sonnet-4-5-20250929|TOKEN|3|15|0|USD
+        ANTHROPIC_GENERIC|claude-sonnet-4-6|TOKEN|3|15|0|USD
         """.trimIndent(),
         """
         GOOGLE|gemini-2.0-flash|TOKEN|0.06|0.24|0|USD
@@ -476,8 +494,10 @@ object ScrapedModelPricingRowsCollect {
         ALIYUN|z-image-turbo|COUNT|0|0|0.1|CNY
         """.trimIndent(),
         """
-        DEEPSEEK|deepseek-chat|TOKEN|2|3|0.2|CNY
-        DEEPSEEK|deepseek-reasoner|TOKEN|2|3|0.2|CNY
+        DEEPSEEK|deepseek-chat|TOKEN|1|2|0.2|CNY
+        DEEPSEEK|deepseek-reasoner|TOKEN|1|2|0.2|CNY
+        DEEPSEEK|deepseek-v4-flash|TOKEN|1|2|0.2|CNY
+        DEEPSEEK|deepseek-v4-pro|TOKEN|12|24|1|CNY
         """.trimIndent(),
         """
         DOUBAO|doubao-seed-1-6-250615|TOKEN|1.2|12|0|CNY

@@ -83,6 +83,9 @@ fun BubbleAiMessageComposable(
     bubbleRoundedCornersEnabled: Boolean = true,
     bubbleContentPaddingLeft: Float = 12f,
     bubbleContentPaddingRight: Float = 12f,
+    initialThinkingExpanded: Boolean = false,
+    expandThinkToolsGroups: Boolean = false,
+    forceShowThinkingProcess: Boolean = false,
     onLinkClick: ((String) -> Unit)? = null,
     isHidden: Boolean = false,
     heightMemory: ChatMessageHeightMemory? = null,
@@ -97,6 +100,7 @@ fun BubbleAiMessageComposable(
     val bubbleWideLayoutEnabled by preferencesManager.bubbleWideLayoutEnabled.collectAsState(initial = false)
     val showThinkingProcess by preferencesManager.showThinkingProcess.collectAsState(initial = true)
     val showStatusTags by preferencesManager.showStatusTags.collectAsState(initial = true)
+    val effectiveShowThinkingProcess = if (forceShowThinkingProcess) true else showThinkingProcess
     val avatarShapePref by preferencesManager.avatarShape.collectAsState(initial = UserPreferencesManager.AVATAR_SHAPE_CIRCLE)
     val avatarCornerRadius by preferencesManager.avatarCornerRadius.collectAsState(initial = 8f)
     val bubbleAiUseCustomFont by
@@ -168,17 +172,19 @@ fun BubbleAiMessageComposable(
     // 创建并保存StreamMarkdownRenderer的状态，使用message.timestamp作为key确保同一条消息共享状态
     val rendererState = remember(message.timestamp) { StreamMarkdownRendererState() }
 
-    val xmlRenderer = remember(showThinkingProcess, showStatusTags, enableDialogs) {
+    val xmlRenderer = remember(effectiveShowThinkingProcess, showStatusTags, initialThinkingExpanded, enableDialogs) {
         CustomXmlRenderer(
-            showThinkingProcess = showThinkingProcess,
+            showThinkingProcess = effectiveShowThinkingProcess,
             showStatusTags = showStatusTags,
+            initialThinkingExpanded = initialThinkingExpanded,
             enableDialogs = enableDialogs
         )
     }
 
-    val nodeGrouper = remember(showThinkingProcess, toolCollapseMode) {
+    val nodeGrouper = remember(effectiveShowThinkingProcess, toolCollapseMode, expandThinkToolsGroups) {
         ThinkToolsXmlNodeGrouper(
-            showThinkingProcess = showThinkingProcess,
+            showThinkingProcess = effectiveShowThinkingProcess,
+            forceExpandGroups = expandThinkToolsGroups,
             toolCollapseMode = toolCollapseMode
         )
     }

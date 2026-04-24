@@ -72,7 +72,9 @@ description: 用于 Operit Sandbox Package 开发。
 
 更新时按下面规则处理：
 
-1. 每次正式开始新的 Sandbox Package 开发任务前，优先重新下载一次安装脚本并重新运行
+1. 每次正式开始新的 Sandbox Package 开发任务前，必须优先重新下载一次安装脚本，再重新运行本地脚本
+   - 安装脚本下载地址：`https://cdn.jsdelivr.net/gh/AAswordman/Operit@main/tools/sandboxpackage_dev_install_or_update.js`
+   - 安装脚本保存位置：`/sdcard/Download/Operit/skills/SandboxPackage_DEV/scripts/install_or_update.js`
 2. 如果怀疑两份 guide 文档、types 或 `SKILL.md` 已经过旧，也重新运行这个脚本
 3. 如果本地 skill 目录缺文件、文件名不对、或者内容明显陈旧，不要手动零散修补，直接重跑安装脚本
 

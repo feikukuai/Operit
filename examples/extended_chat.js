@@ -128,9 +128,6 @@ const HistoryChat = (function () {
             return m;
         return 'contains';
     }
-    function asArray(value) {
-        return Array.isArray(value) ? value : [];
-    }
     async function list_chats_impl(params) {
         const query = (params?.query ?? '').toString().trim();
         const matchMode = normalizeMatchMode(params?.match);
@@ -149,8 +146,8 @@ const HistoryChat = (function () {
             listParams.sort_by = sortBy;
         if (sortOrder)
             listParams.sort_order = sortOrder;
-        const listResult = (await Tools.Chat.listChats(listParams));
-        const chats = asArray(listResult?.chats);
+        const listResult = await Tools.Chat.listChats(listParams);
+        const chats = listResult.chats;
         return {
             success: true,
             message: '对话列表获取完成',
@@ -175,7 +172,7 @@ const HistoryChat = (function () {
             findParams.match = matchMode;
         if (index !== undefined)
             findParams.index = index;
-        const findResult = (await Tools.Chat.findChat(findParams));
+        const findResult = await Tools.Chat.findChat(findParams);
         const picked = findResult?.chat ?? null;
         if (!picked) {
             throw new Error(`Chat not found by query: ${query}`);
@@ -206,7 +203,7 @@ const HistoryChat = (function () {
         findParams.match = title ? 'exact' : matchMode;
         if (index !== undefined)
             findParams.index = index;
-        const findResult = (await Tools.Chat.findChat(findParams));
+        const findResult = await Tools.Chat.findChat(findParams);
         const picked = findResult?.chat ?? null;
         if (!picked?.id) {
             throw new Error(`Chat not found by query: ${needle}`);
@@ -219,11 +216,11 @@ const HistoryChat = (function () {
         const order = (orderRaw === 'asc' || orderRaw === 'desc') ? orderRaw : 'desc';
         const limitRaw = params && params.limit !== undefined ? Number(params.limit) : 20;
         const limit = isNaN(limitRaw) ? 20 : limitRaw;
-        const result = (await Tools.Chat.getMessages(chatId, {
+        const result = await Tools.Chat.getMessages(chatId, {
             order,
             limit,
-        }));
-        const rawMessages = asArray(result?.messages);
+        });
+        const rawMessages = result.messages;
         const text = rawMessages
             .map((m) => {
             const role = (m.roleName ?? m.sender ?? '').toString() || 'message';
@@ -247,7 +244,7 @@ const HistoryChat = (function () {
             throw new Error('Missing parameter: new_title');
         }
         const chatId = await resolveChatId(params || {});
-        const result = (await Tools.Chat.updateTitle(chatId, newTitle));
+        const result = await Tools.Chat.updateTitle(chatId, newTitle);
         return {
             success: true,
             message: '对话重命名完成',
@@ -260,7 +257,7 @@ const HistoryChat = (function () {
     }
     async function delete_chat_impl(params) {
         const chatId = await resolveChatId(params || {});
-        const result = (await Tools.Chat.deleteChat(chatId));
+        const result = await Tools.Chat.deleteChat(chatId);
         return {
             success: true,
             message: '对话删除完成',
@@ -285,8 +282,8 @@ const HistoryChat = (function () {
         };
     }
     async function list_character_cards_impl() {
-        const result = (await Tools.Chat.listCharacterCards());
-        const cards = asArray(result?.cards);
+        const result = await Tools.Chat.listCharacterCards();
+        const cards = result.cards;
         return {
             success: true,
             message: '角色卡列表获取完成',
@@ -308,8 +305,8 @@ const HistoryChat = (function () {
         let characterCardName = characterCardNameInput;
         let characterCardId = '';
         try {
-            const cardResult = (await Tools.Chat.listCharacterCards());
-            const cards = asArray(cardResult?.cards);
+            const cardResult = await Tools.Chat.listCharacterCards();
+            const cards = cardResult.cards;
             const targetCard = cards.find((card) => card.name === characterCardNameInput);
             if (!targetCard) {
                 throw new Error(`Character card not found: ${characterCardNameInput}`);
@@ -332,18 +329,18 @@ const HistoryChat = (function () {
         if (!chatId) {
             const lang = (getLang() || '').toLowerCase();
             const group = lang === 'zh' ? '子任务' : 'subTask';
-            const creation = (await Tools.Chat.createNew(group, false, characterCardId));
+            const creation = await Tools.Chat.createNew(group, false, characterCardId);
             chatId = (creation?.chatId ?? '').toString().trim();
             if (!chatId) {
                 throw new Error('Failed to create new chat');
             }
         }
         else {
-            const findResult = (await Tools.Chat.findChat({
+            const findResult = await Tools.Chat.findChat({
                 query: chatId,
                 match: 'exact',
                 index: 0,
-            }));
+            });
             const boundName = findResult?.chat?.characterCardName ?? null;
             if (boundName && boundName !== characterCardName) {
                 throw new Error(`Chat ${chatId} 已绑定角色 ${boundName}，不能与 ${characterCardName} 共用会话`);

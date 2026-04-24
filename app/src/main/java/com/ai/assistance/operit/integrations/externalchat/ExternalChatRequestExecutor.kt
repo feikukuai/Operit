@@ -189,6 +189,9 @@ class ExternalChatRequestExecutor(context: Context) {
                 sendParams += ToolParameter(name = "chat_id", value = it)
             }
         }
+        if (request.timeoutMs > 0) {
+            sendParams += ToolParameter(name = "timeout_ms", value = request.timeoutMs.toString())
+        }
 
         return PreparationResult.Ready(
             requestId = requestId,

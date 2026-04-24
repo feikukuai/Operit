@@ -44,7 +44,9 @@ import com.ai.assistance.operit.ui.common.NavItem
 import com.ai.assistance.operit.ui.common.displays.FpsCounter
 import com.ai.assistance.operit.ui.main.NavigationTransitionSource
 import com.ai.assistance.operit.ui.main.TopBarTitleContent
+import com.ai.assistance.operit.ui.main.navigation.RouteEntry
 import com.ai.assistance.operit.ui.main.screens.Screen
+import com.ai.assistance.operit.ui.common.composedsl.ToolPkgComposeDslToolScreen
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import androidx.compose.animation.ExperimentalAnimationApi
@@ -91,6 +93,7 @@ private enum class ScreenVisibility {
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalAnimationApi::class)
 @Composable
 fun AppContent(
+        currentRouteEntry: RouteEntry,
         currentScreen: Screen,
         selectedItem: NavItem,
         useTabletLayout: Boolean,
@@ -103,7 +106,6 @@ fun AppContent(
         enableNavigationAnimation: Boolean,
         navigationTransitionSource: NavigationTransitionSource,
         onScreenChange: (Screen) -> Unit,
-        onNavItemChange: (NavItem) -> Unit,
         onToggleSidebar: () -> Unit,
         navigateToTokenConfig: () -> Unit,
         onLoading: (Boolean) -> Unit = {},
@@ -185,9 +187,7 @@ fun AppContent(
     // 屏幕缓存 Map - 保存已访问过的屏幕，使其状态得以保留
     val screenCache = remember { mutableStateMapOf<String, @Composable () -> Unit>() }
     val screenStateHolder = rememberSaveableStateHolder()
-    // 使用 Screen 对象的 toString() 作为 key，这对于 data class 和 data object 都能生成一个唯一的、
-    // 包含其内部状态的字符串，从而实现通用且可靠的状态缓存。
-    val currentScreenKey = currentScreen.toString()
+    val currentScreenKey = currentRouteEntry.instanceId
 
     CompositionLocalProvider(
         LocalAppBarContentColor provides appBarContentColor,
@@ -342,16 +342,34 @@ fun AppContent(
                         if (!screenCache.containsKey(currentScreenKey)) {
                             val screenSnapshot = currentScreen
                             screenCache[currentScreenKey] = {
-                                screenSnapshot.Content(
-                                    navController = navController,
-                                    navigateTo = onScreenChange,
-                                    updateNavItem = onNavItemChange,
-                                    onGoBack = onGoBack,
-                                    hasBackgroundImage = hasBackgroundImage,
-                                    onLoading = onLoading,
-                                    onError = onError,
-                                    onGestureConsumed = if (screenSnapshot is Screen.AiChat) onGestureConsumed else { _ -> }
-                                )
+                                when (screenSnapshot) {
+                                    is Screen.ToolPkgComposeDsl ->
+                                        ToolPkgComposeDslToolScreen(
+                                            navController = navController,
+                                            routeInstanceId = currentScreenKey,
+                                            containerPackageName = screenSnapshot.containerPackageName,
+                                            uiModuleId = screenSnapshot.uiModuleId,
+                                            fallbackTitle = screenSnapshot.title
+                                        )
+                                    is Screen.ToolPkgPluginConfig ->
+                                        ToolPkgComposeDslToolScreen(
+                                            navController = navController,
+                                            routeInstanceId = currentScreenKey,
+                                            containerPackageName = screenSnapshot.containerPackageName,
+                                            uiModuleId = screenSnapshot.uiModuleId,
+                                            fallbackTitle = screenSnapshot.title
+                                        )
+                                    else ->
+                                        screenSnapshot.Content(
+                                            navController = navController,
+                                            navigateTo = onScreenChange,
+                                            onGoBack = onGoBack,
+                                            hasBackgroundImage = hasBackgroundImage,
+                                            onLoading = onLoading,
+                                            onError = onError,
+                                            onGestureConsumed = if (screenSnapshot is Screen.AiChat) onGestureConsumed else { _ -> }
+                                        )
+                                }
                             }
                         }
 

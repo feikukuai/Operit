@@ -79,7 +79,7 @@ async function sendMessage(enhancedAIService, options) {
         }
         : null;
     const enableMemoryAutoUpdate = false;
-    const stream = await enhancedAIService.callSuspend("sendMessage", options.message, null, (0, prompt_turns_1.toKotlinPromptTurnList)(options.chatHistory), options.workspacePath ?? null, null, FunctionType.CHAT, PromptFunctionType.CHAT, false, false, enableMemoryAutoUpdate, options.maxTokens, options.tokenUsageThreshold, onNonFatalError, null, options.customSystemPromptTemplate ?? null, options.isSubTask, null, null, null, false, null, options.proxySenderName ?? null, onToolInvocation, null, null, true, false);
+    const stream = await enhancedAIService.callSuspend("sendMessage", options.message, null, (0, prompt_turns_1.toKotlinPromptTurnList)(options.chatHistory), options.workspacePath ?? null, null, FunctionType.CHAT, PromptFunctionType.CHAT, false, enableMemoryAutoUpdate, options.maxTokens, options.tokenUsageThreshold, onNonFatalError, null, options.customSystemPromptTemplate ?? null, options.isSubTask, null, null, null, false, null, options.proxySenderName ?? null, onToolInvocation, null, null, true, false);
     return collectStreamToString(stream, options.onChunk);
 }
 class TaskExecutor {

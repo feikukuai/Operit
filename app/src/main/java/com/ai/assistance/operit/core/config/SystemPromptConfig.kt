@@ -45,8 +45,6 @@ BEHAVIOR GUIDELINES:
     private const val TOOL_USAGE_GUIDELINES_EN = """
 When calling a tool, the user will see your response, and then will automatically send the tool results back to you in a follow-up message.
 
-Before calling a tool, briefly describe what you are about to do.
-
 To use a tool, use this format in your response:
 
 <tool name="tool_name">
@@ -58,8 +56,6 @@ When outputting XML (e.g., <tool>, <status>), insert a newline before it and ens
 Based on user needs, proactively select the most appropriate tool or combination of tools. For complex tasks, you can break down the problem and use different tools step by step to solve it. After using each tool, clearly explain the execution results and suggest the next steps."""
     private const val TOOL_USAGE_GUIDELINES_CN = """
 调用工具时，用户会看到你的响应，然后会自动将工具结果发送回给你。
-
-调用工具前，请简要说明你要做什么。
 
 使用工具时，请使用以下格式：
 
@@ -113,11 +109,6 @@ PACKAGE SYSTEM
 - 这将显示包中的所有工具及其使用方法
 - 只有在激活包后，才能直接使用其工具"""
 
-    // Tool Call API 模式下的工具使用简要说明（保留重要的"调用前描述"指示）
-    private const val TOOL_USAGE_BRIEF_EN = """
-Before calling a tool, briefly describe what you are about to do."""
-    private const val TOOL_USAGE_BRIEF_CN = """
-调用工具前，请简要说明你要做什么。"""
 
     // Tool Call API 模式下的包系统说明（不使用XML格式）
     private const val PACKAGE_SYSTEM_GUIDELINES_TOOL_CALL_EN = """
@@ -202,8 +193,6 @@ PACKAGE SYSTEM
 """
 BEGIN_SELF_INTRODUCTION_SECTION
 
-THINKING_GUIDANCE_SECTION
-
 $BEHAVIOR_GUIDELINES_EN
 
 WORKSPACE_GUIDELINES_SECTION
@@ -217,26 +206,11 @@ ACTIVE_PACKAGES_SECTION
 AVAILABLE_TOOLS_SECTION
 """.trimIndent()
 
-    /** Guidance for the AI on how to "think" using tags. */
-    val THINKING_GUIDANCE_PROMPT =
-"""
-THINKING PROCESS GUIDELINES:
-- Before providing your final response, you MUST use a <think> block to outline your thought process. This is for your internal monologue.
-- In your thoughts, deconstruct the user's request, consider alternatives, anticipate outcomes, and reflect on the best strategy. Formulate a precise action plan. Your plan should be efficient, and you may use tools in parallel or sequentially as appropriate. The tool system will decide and handle execution conflicts automatically.
-- The user will see your thoughts but cannot reply to them directly. This block is NOT saved in the chat history, so your final answer must be self-contained.
-- The <think> block must be immediately followed by your final answer or tool call without any newlines.
-- **CRITICAL REMINDER:** Even if previous messages in the chat history do not show a `<think>` block, you MUST include one in your current response. This is a mandatory instruction for this conversation mode.
-- Example:
-<think>The user wants to know about the configuration files for project A and project B. I need to read the config files for both projects. To be efficient, I will call the `read_file` tool twice in one turn to read `projectA/config.json` and `projectB/config.xml` respectively.</think><tool name="read_file"><param name="path">/sdcard/projectA/config.json</param></tool><tool name="read_file"><param name="path">/sdcard/projectB/config.xml</param></tool>
-""".trimIndent()
-
 
     /** 中文版本系统提示模板 */
     val SYSTEM_PROMPT_TEMPLATE_CN =
 """
 BEGIN_SELF_INTRODUCTION_SECTION
-
-THINKING_GUIDANCE_SECTION
 
 $BEHAVIOR_GUIDELINES_CN
 
@@ -249,19 +223,6 @@ PACKAGE_SYSTEM_GUIDELINES_SECTION
 ACTIVE_PACKAGES_SECTION
 
 AVAILABLE_TOOLS_SECTION""".trimIndent()
-
-    /** 中文版本的思考引导提示 */
-    val THINKING_GUIDANCE_PROMPT_CN =
-"""
-思考过程指南:
-- 在提供最终答案之前，你必须使用 <think> 模块来阐述你的思考过程。这是你的内心独白。
-- 在思考中，你需要拆解用户需求，评估备选方案，预判执行结果，并反思最佳策略，最终形成精确的行动计划。你的计划应当是高效的，工具既可以并行调用，也可以串行调用；具体冲突由工具系统自行决定并处理。
-- 用户能看到你的思考过程，但无法直接回复。此模块不会保存在聊天记录中，因此你的最终答案必须是完整的。
-- <think> 模块必须紧邻你的最终答案或工具调用，中间不要有任何换行。
-- **重要提醒:** 即使聊天记录中之前的消息没有 <think> 模块，你在本次回复中也必须按要求使用它。这是强制指令。
-- 范例:
-<think>用户想了解项目A和项目B的配置文件。我需要读取这两个项目的配置文件。为了提高效率，我将一次性调用两次 `read_file` 工具来分别读取 `projectA/config.json` 和 `projectB/config.xml`。</think><tool name="read_file"><param name="path">/sdcard/projectA/config.json</param></tool><tool name="read_file"><param name="path">/sdcard/projectB/config.xml</param></tool>
-""".trimIndent()
 
     /**
      * Prompt for a subtask agent that should be strictly task-focused,
@@ -279,8 +240,6 @@ AVAILABLE_TOOLS_SECTION""".trimIndent()
           1. Tool Call: To perform an action. A tool call must be the absolute last thing in your response.
           2. Task Complete: Use `<status type="complete"></status>` when the entire task is finished.
         - **CRITICAL RULE**: You are NOT allowed to use `<status type="wait_for_user_need"></status>`. If you cannot proceed without user input, you must use `<status type="complete"></status>` and the calling system will handle the user interaction.
-
-        THINKING_GUIDANCE_SECTION
 
         TOOL_USAGE_GUIDELINES_SECTION
 
@@ -328,7 +287,6 @@ AVAILABLE_TOOLS_SECTION""".trimIndent()
    * @param packageManager The PackageManager instance to get package information from
    * @param workspacePath The current workspace path, if available.
    * @param useEnglish Whether to use English or Chinese version
-   * @param thinkingGuidance Whether thinking guidance is enabled
    * @param customSystemPromptTemplate Custom system prompt template (empty means use built-in)
    * @param enableTools Whether tools are enabled
    * @param hasImageRecognition Whether a backend image recognition service is configured
@@ -342,7 +300,6 @@ AVAILABLE_TOOLS_SECTION""".trimIndent()
           workspaceEnv: String? = null,
           safBookmarkNames: List<String> = emptyList(),
           useEnglish: Boolean = false,
-          thinkingGuidance: Boolean = false,
           customSystemPromptTemplate: String = "",
           enableTools: Boolean = true,
           hasImageRecognition: Boolean = false,
@@ -437,7 +394,6 @@ AVAILABLE_TOOLS_SECTION""".trimIndent()
     } else {
         if (useEnglish) SYSTEM_PROMPT_TEMPLATE else SYSTEM_PROMPT_TEMPLATE_CN
     }
-    val thinkingGuidancePromptToUse = if (useEnglish) THINKING_GUIDANCE_PROMPT else THINKING_GUIDANCE_PROMPT_CN
     val defaultBehaviorGuidelines = if (useEnglish) BEHAVIOR_GUIDELINES_EN else BEHAVIOR_GUIDELINES_CN
     val behaviorGuidelines = getBehaviorGuidelines(useEnglish, disableStatusTags)
 
@@ -463,14 +419,6 @@ AVAILABLE_TOOLS_SECTION""".trimIndent()
         .replace(defaultBehaviorGuidelines, behaviorGuidelines)
         .replace("ACTIVE_PACKAGES_SECTION", if (enableTools) packagesSection.toString() else "")
         .replace("WORKSPACE_GUIDELINES_SECTION", workspaceGuidelines)
-            
-    // Add thinking guidance section if enabled
-    prompt =
-            if (thinkingGuidance) {
-                prompt.replace("THINKING_GUIDANCE_SECTION", thinkingGuidancePromptToUse)
-            } else {
-                prompt.replace("THINKING_GUIDANCE_SECTION", "")
-            }
 
     // Determine the available tools string based on tool visibility and recognition capabilities.
     // 当使用Tool Call API时，不在系统提示词中包含工具描述（工具已通过API的tools字段发送）
@@ -505,7 +453,7 @@ AVAILABLE_TOOLS_SECTION""".trimIndent()
 
     // Handle tools disable/enable
     if (enableTools) {
-        // 当使用Tool Call API时，使用简化的工具使用指南（保留"调用前描述"的重要指示），移除XML格式说明和工具列表
+        // 当使用Tool Call API时，移除XML格式说明和工具列表
         if (useToolCallApi) {
             val packageGuidelines =
                 if (useEnglish) {
@@ -514,7 +462,7 @@ AVAILABLE_TOOLS_SECTION""".trimIndent()
                     PACKAGE_SYSTEM_GUIDELINES_TOOL_CALL_CN
                 }
             prompt = prompt
-                .replace("TOOL_USAGE_GUIDELINES_SECTION", if (useEnglish) TOOL_USAGE_BRIEF_EN else TOOL_USAGE_BRIEF_CN)
+                .replace("TOOL_USAGE_GUIDELINES_SECTION", "")
                 .replace("PACKAGE_SYSTEM_GUIDELINES_SECTION", if (packageSystemVisible) packageGuidelines else "")
                 .replace("AVAILABLE_TOOLS_SECTION", "")
         } else {
@@ -646,7 +594,6 @@ AVAILABLE_TOOLS_SECTION""".trimIndent()
    * @param packageManager The PackageManager instance to get package information from
    * @param workspacePath The current workspace path, if available.
    * @param customIntroPrompt Custom introduction prompt text
-   * @param thinkingGuidance Whether thinking guidance is enabled
    * @param customSystemPromptTemplate Custom system prompt template (empty means use built-in)
    * @param enableTools Whether tools are enabled
    * @param hasImageRecognition Whether image recognition service is configured
@@ -661,7 +608,6 @@ AVAILABLE_TOOLS_SECTION""".trimIndent()
           safBookmarkNames: List<String> = emptyList(),
           customIntroPrompt: String,
           useEnglish: Boolean = false,
-          thinkingGuidance: Boolean = false,
           customSystemPromptTemplate: String = "",
           enableTools: Boolean = true,
           hasImageRecognition: Boolean = false,
@@ -692,7 +638,6 @@ AVAILABLE_TOOLS_SECTION""".trimIndent()
                         "workspacePath" to workspacePath,
                         "workspaceEnv" to workspaceEnv,
                         "safBookmarkNames" to safBookmarkNames,
-                        "thinkingGuidance" to thinkingGuidance,
                         "customSystemPromptTemplate" to customSystemPromptTemplate,
                         "customIntroPrompt" to customIntroPrompt,
                         "enableTools" to enableTools,
@@ -723,7 +668,6 @@ AVAILABLE_TOOLS_SECTION""".trimIndent()
             workspaceEnv = workspaceEnv,
             safBookmarkNames = safBookmarkNames,
             useEnglish = useEnglish,
-            thinkingGuidance = thinkingGuidance,
             customSystemPromptTemplate = customSystemPromptTemplate,
             enableTools = enableTools,
             hasImageRecognition = hasImageRecognition,
@@ -778,7 +722,6 @@ AVAILABLE_TOOLS_SECTION""".trimIndent()
         workspaceEnv = null,
         safBookmarkNames = emptyList(),
         useEnglish = false,
-        thinkingGuidance = false,
         customSystemPromptTemplate = "",
         enableTools = true,
         hasImageRecognition = false,

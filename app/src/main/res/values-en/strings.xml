@@ -1985,6 +1985,7 @@
     <string name="tool_log_viewer_desc">Real-time capture and view system and application logs with filtering and search support</string>
     <string name="tool_sql_viewer">SQL Viewer</string>
     <string name="tool_sql_viewer_desc">Browse built-in tables and run SQL commands</string>
+    <string name="tool_token_config_desc">Open the API key acquisition and configuration page for quick model setup</string>
     <string name="screen_title_sql_viewer">SQL Viewer</string>
     <string name="sql_viewer_title">SQL Viewer</string>
     <string name="sql_viewer_input_label">SQL Input</string>
@@ -3071,16 +3072,14 @@
     <!-- Chat Components -->
     <string name="memory_auto_update_active">Memory auto update activated</string>
     <string name="thinking_mode_active">Thinking mode activated</string>
-    <string name="thinking_guidance_active">Thinking guidance activated</string>
     <string name="ai_planning_active">AI planning mode activated</string>
     <string name="auto_approve_active">Auto approve activated</string>
     <string name="settings_options">Settings options</string>
     <string name="thinking_settings">Thinking</string>
-    <string name="thinking_settings_desc">Manage thinking mode and thinking guidance</string>
+    <string name="thinking_settings_desc">Manage thinking mode</string>
     <string name="thinking_settings_active_count">%1$d enabled</string>
     <string name="thinking_type_off">off</string>
     <string name="thinking_type_mode">mode</string>
-    <string name="thinking_type_guidance">guidance</string>
     <string name="thinking_quality">Thinking intensity</string>
     <string name="thinking_quality_desc">Only effective in thinking mode. Four levels are available; higher means deeper reasoning, and level 1 uses auto.</string>
     <string name="model_config">Model Configuration</string>
@@ -3316,8 +3315,6 @@
     <string name="ai_planning_desc">Will perform task decomposition and trigger multiple sub-agents to collect information, then summarize. Sub-agents have the same tool-calling capabilities as the chat agent. This can be very time-consuming, only recommended when collecting information.</string>
     <string name="thinking_mode">Thinking Mode</string>
     <string name="thinking_mode_desc">Currently supports Gemini, Qwen3, Claude, Doubao, NVIDIA, SiliconFlow and MNN local models, enabling built-in thinking.</string>
-    <string name="thinking_guidance">Thinking Guidance</string>
-    <string name="thinking_guidance_desc">Can force models that can\'t think to perform thinking. This option is not recommended for thinking models.</string>
     <string name="model_selection">Model Selection</string>
     <string name="prompt_selection">Prompt Selection</string>
     <string name="memory_selection">Memory Selection</string>
@@ -3753,7 +3750,7 @@
     <string name="api_provider">API Provider</string>
     <string name="select_api_provider">Click to select API provider</string>
     <string name="select">Select</string>
-    <string name="default_config_model_restriction">When using default configuration, only deepseek-chat model can be used</string>
+    <string name="default_config_model_restriction">When using default configuration, only deepseek-v4-flash model can be used</string>
     <string name="enable_direct_image_processing">Model supports vision</string>
     <string name="enable_direct_image_processing_desc">When enabled, images will be sent directly to the AI for processing instead of using OCR tools to read them</string>
     <string name="enable_direct_audio_processing">Model supports audio</string>
@@ -7479,4 +7476,9 @@
     <string name="publish_target_script_market">Will be automatically published to the script market</string>
     <string name="publish_target_package_market">Will be automatically published to the package market</string>
     <string name="display_name_label">Display Name</string>
+
+    <string name="nav_group_plugins">Plugins</string>
+    <string name="chat_delete_single_variant">Delete Single Message</string>
+    <string name="chat_delete_single_variant_unavailable">No single message candidates available for deletion</string>
+    <string name="chat_delete_single_variant_failed">Failed to delete single message: %1$s</string>
 </resources>

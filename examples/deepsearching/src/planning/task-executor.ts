@@ -114,7 +114,6 @@ async function sendMessage(
     FunctionType.CHAT,
     PromptFunctionType.CHAT,
     false,
-    false,
     enableMemoryAutoUpdate,
     options.maxTokens,
     options.tokenUsageThreshold,

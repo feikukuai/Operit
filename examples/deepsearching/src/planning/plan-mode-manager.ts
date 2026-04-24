@@ -109,7 +109,6 @@ async function sendPlanningMessage(
     FunctionType.CHAT,
     PromptFunctionType.CHAT,
     false,
-    false,
     enableMemoryAutoUpdate,
     maxTokens,
     tokenUsageThreshold,

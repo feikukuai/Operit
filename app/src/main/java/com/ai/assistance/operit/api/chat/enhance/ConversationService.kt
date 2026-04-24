@@ -254,7 +254,6 @@ class ConversationService(
      * @param workspacePath 当前绑定的工作区路径，可以为null
      * @param packageManager 包管理器
      * @param promptFunctionType 提示函数类型
-     * @param thinkingGuidance 是否需要思考指导
      * @param hasImageRecognition Whether a backend image recognition service is configured
      * @return 准备好的对话历史列表
      */
@@ -266,7 +265,6 @@ class ConversationService(
             workspaceEnv: String? = null,
             packageManager: PackageManager,
             promptFunctionType: PromptFunctionType,
-            thinkingGuidance: Boolean = false,
             customSystemPromptTemplate: String? = null,
             roleCardId: String? = null,
             enableGroupOrchestrationHint: Boolean = false,
@@ -295,7 +293,6 @@ class ConversationService(
                         mapOf(
                             "workspacePath" to workspacePath,
                             "workspaceEnv" to workspaceEnv,
-                            "thinkingGuidance" to thinkingGuidance,
                             "customSystemPromptTemplate" to customSystemPromptTemplate,
                             "roleCardId" to roleCardId,
                             "enableGroupOrchestrationHint" to enableGroupOrchestrationHint,
@@ -379,7 +376,6 @@ class ConversationService(
                     safBookmarkNames = safBookmarkNames,
                     customIntroPrompt = introPrompt,
                     useEnglish = useEnglish,
-                    thinkingGuidance = thinkingGuidance,
                     customSystemPromptTemplate = finalCustomSystemPromptTemplate,
                     enableTools = enableTools,
                     hasImageRecognition = hasImageRecognition,

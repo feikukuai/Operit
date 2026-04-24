@@ -149,6 +149,9 @@ class MCPMarketViewModel(
     // 用户已发布的插件
     private val _userPublishedPlugins = MutableStateFlow<List<GitHubIssue>>(emptyList())
     val userPublishedPlugins: StateFlow<List<GitHubIssue>> = _userPublishedPlugins.asStateFlow()
+    private val _hasLoadedUserPublishedPlugins = MutableStateFlow(false)
+    val hasLoadedUserPublishedPlugins: StateFlow<Boolean> =
+        _hasLoadedUserPublishedPlugins.asStateFlow()
 
     // 草稿保存
     private val sharedPrefs: SharedPreferences = context.getSharedPreferences("mcp_publish_draft", Context.MODE_PRIVATE)
@@ -736,6 +739,12 @@ class MCPMarketViewModel(
         _errorMessage.value = null
     }
 
+    fun resetUserPublishedPluginsState() {
+        _userPublishedPlugins.value = emptyList()
+        _hasLoadedUserPublishedPlugins.value = false
+        _errorMessage.value = null
+    }
+
     /**
      * 加载用户已发布的插件
      */
@@ -774,6 +783,7 @@ class MCPMarketViewModel(
                 _errorMessage.value = context.getString(R.string.mcp_market_network_error_with_error, e.message ?: "")
                 AppLogger.e(TAG, "Network error while loading user published plugins", e)
             } finally {
+                _hasLoadedUserPublishedPlugins.value = true
                 _isLoading.value = false
             }
         }

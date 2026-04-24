@@ -7,6 +7,22 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 
+object InputMenuToggleSlots {
+    const val THINKING = "thinking"
+    const val MEMORY = "memory"
+    const val MODEL = "model"
+    const val TOOLS = "tools"
+    const val GENERAL = "general"
+    const val DEFAULT = "default"
+
+    val builtInSlots = setOf(THINKING, MEMORY, MODEL, TOOLS, GENERAL, DEFAULT)
+
+    fun normalize(slot: String?): String {
+        val normalized = slot?.trim().orEmpty()
+        return if (normalized in builtInSlots) normalized else DEFAULT
+    }
+}
+
 data class InputMenuToggleHookParams(
     val context: android.content.Context,
     val featureStates: Map<String, Boolean>,
@@ -21,6 +37,7 @@ data class InputMenuToggleDefinition(
     val description: String? = null,
     val isChecked: Boolean,
     val isEnabled: Boolean = true,
+    val slot: String? = null,
     val onToggle: () -> Unit
 )
 

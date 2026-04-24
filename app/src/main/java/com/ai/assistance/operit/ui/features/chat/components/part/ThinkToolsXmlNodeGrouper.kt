@@ -34,6 +34,7 @@ import com.ai.assistance.operit.util.stream.Stream
 
 class ThinkToolsXmlNodeGrouper(
     private val showThinkingProcess: Boolean,
+    private val forceExpandGroups: Boolean = false,
     private val toolCollapseMode: ToolCollapseMode = ToolCollapseMode.ALL
 ) : MarkdownNodeGrouper {
 
@@ -173,11 +174,15 @@ class ThinkToolsXmlNodeGrouper(
         xmlStreamResolver: (Int) -> Stream<String>?,
         fillMaxWidth: Boolean
     ) {
-        val alpha by animateFloatAsState(
-            targetValue = if (isVisible) 1f else 0f,
-            animationSpec = tween(durationMillis = 800),
-            label = "fadeIn-think-tools-$rendererId"
-        )
+        val alpha = if (forceExpandGroups) {
+            1f
+        } else {
+            animateFloatAsState(
+                targetValue = if (isVisible) 1f else 0f,
+                animationSpec = tween(durationMillis = 800),
+                label = "fadeIn-think-tools-$rendererId"
+            ).value
+        }
         val sliceEndExclusive = (group.endIndexInclusive + 1).coerceAtMost(nodes.size)
         val slice = if (group.startIndex in 0 until sliceEndExclusive) {
             nodes.subList(group.startIndex, sliceEndExclusive)
@@ -238,13 +243,19 @@ class ThinkToolsXmlNodeGrouper(
         // 流结束（包括用户取消后落为静态消息）默认自动收起。
         val shouldAutoExpand = hasLiveXmlStream && !hasNonConformingAfterGroup
 
-        var expanded by rememberSaveable(rendererId, group.stableKey) { mutableStateOf(shouldAutoExpand) }
-        var userOverride by rememberSaveable(rendererId, group.stableKey) { mutableStateOf<Boolean?>(null) }
+        var expanded by rememberSaveable(rendererId, group.stableKey, forceExpandGroups) {
+            mutableStateOf(forceExpandGroups || shouldAutoExpand)
+        }
+        var userOverride by rememberSaveable(rendererId, group.stableKey, forceExpandGroups) {
+            mutableStateOf<Boolean?>(null)
+        }
         val appearedKeys = remember(rendererId, group.stableKey) { mutableStateMapOf<String, Boolean>() }
 
-        LaunchedEffect(shouldAutoExpand, userOverride) {
-            if (userOverride != null) return@LaunchedEffect
-            expanded = shouldAutoExpand
+        LaunchedEffect(forceExpandGroups, shouldAutoExpand, userOverride) {
+            when {
+                forceExpandGroups -> expanded = true
+                userOverride == null -> expanded = shouldAutoExpand
+            }
         }
 
         Column(
@@ -254,11 +265,15 @@ class ThinkToolsXmlNodeGrouper(
                     .padding(start = 0.dp, top = 0.dp, end = 0.dp, bottom = 4.dp)
                     .graphicsLayer { this.alpha = alpha }
         ) {
-            val rotation by animateFloatAsState(
-                targetValue = if (expanded) 90f else 0f,
-                animationSpec = tween(durationMillis = 300),
-                label = "arrowRotation-think-tools-$rendererId"
-            )
+            val rotation = if (forceExpandGroups) {
+                if (expanded) 90f else 0f
+            } else {
+                animateFloatAsState(
+                    targetValue = if (expanded) 90f else 0f,
+                    animationSpec = tween(durationMillis = 300),
+                    label = "arrowRotation-think-tools-$rendererId"
+                ).value
+            }
 
             CanvasExpandableHeaderRow(
                 title = titleText,
@@ -275,8 +290,8 @@ class ThinkToolsXmlNodeGrouper(
 
             AnimatedVisibility(
                 visible = expanded,
-                enter = fadeIn(animationSpec = tween(200)),
-                exit = fadeOut(animationSpec = tween(200))
+                enter = if (forceExpandGroups) fadeIn(animationSpec = tween(0)) else fadeIn(animationSpec = tween(200)),
+                exit = if (forceExpandGroups) fadeOut(animationSpec = tween(0)) else fadeOut(animationSpec = tween(200))
             ) {
                 Box(
                     modifier =
@@ -289,31 +304,41 @@ class ThinkToolsXmlNodeGrouper(
                             val innerKey = "think-tools-$rendererId-${group.stableKey}-$absoluteIndex"
                             androidx.compose.runtime.key(innerKey) {
                                 if (node.type == MarkdownProcessorType.XML_BLOCK) {
-                                    val alreadyAppeared = appearedKeys[innerKey] == true
-                                    var itemVisible by remember(innerKey, alreadyAppeared) {
-                                        mutableStateOf(alreadyAppeared)
-                                    }
-
-                                    LaunchedEffect(innerKey) {
-                                        if (!alreadyAppeared) {
-                                            itemVisible = true
-                                            appearedKeys[innerKey] = true
+                                    if (forceExpandGroups) {
+                                        xmlRenderer.RenderXmlContent(
+                                            xmlContent = node.content,
+                                            modifier = Modifier.fillMaxWidth(),
+                                            textColor = textColor,
+                                            xmlStream = xmlStreamResolver(absoluteIndex),
+                                            renderInstanceKey = innerKey
+                                        )
+                                    } else {
+                                        val alreadyAppeared = appearedKeys[innerKey] == true
+                                        var itemVisible by remember(innerKey, alreadyAppeared) {
+                                            mutableStateOf(alreadyAppeared)
                                         }
+
+                                        LaunchedEffect(innerKey) {
+                                            if (!alreadyAppeared) {
+                                                itemVisible = true
+                                                appearedKeys[innerKey] = true
+                                            }
+                                        }
+
+                                        val itemAlpha by animateFloatAsState(
+                                            targetValue = if (itemVisible) 1f else 0f,
+                                            animationSpec = tween(durationMillis = 800),
+                                            label = "fadeIn-$innerKey"
+                                        )
+
+                                        xmlRenderer.RenderXmlContent(
+                                            xmlContent = node.content,
+                                            modifier = Modifier.fillMaxWidth().graphicsLayer { this.alpha = itemAlpha },
+                                            textColor = textColor,
+                                            xmlStream = xmlStreamResolver(absoluteIndex),
+                                            renderInstanceKey = innerKey
+                                        )
                                     }
-
-                                    val itemAlpha by animateFloatAsState(
-                                        targetValue = if (itemVisible) 1f else 0f,
-                                        animationSpec = tween(durationMillis = 800),
-                                        label = "fadeIn-$innerKey"
-                                    )
-
-                                    xmlRenderer.RenderXmlContent(
-                                        xmlContent = node.content,
-                                        modifier = Modifier.fillMaxWidth().graphicsLayer { this.alpha = itemAlpha },
-                                        textColor = textColor,
-                                        xmlStream = xmlStreamResolver(absoluteIndex),
-                                        renderInstanceKey = innerKey
-                                    )
                                 }
                             }
                         }

@@ -73,9 +73,19 @@ findChat({ query, match?, index? }): Promise<ChatFindResultData>
 
 删除聊天。
 
-### `sendMessage(message, chatId?, roleCardId?, senderName?)`
+### `sendMessage(message, chatId?, roleCardId?, senderName?, options?)`
 
 发送普通消息。
+
+`options` 支持：
+
+- `persist_turn?: boolean`
+- `notify_reply?: boolean`
+- `hide_user_message?: boolean`
+- `disable_warning?: boolean`
+- `timeout_ms?: number`
+
+其中 `timeout_ms` 用于控制本次发送的最长等待时间，单位毫秒。
 
 ### `listCharacterCards()`
 
@@ -113,7 +123,9 @@ getMessages(chatId: string, options?: { order?: 'asc' | 'desc'; limit?: number }
 const created = await Tools.Chat.createNew('work', true);
 const chatId = created.chatId;
 
-await Tools.Chat.sendMessage('帮我总结今天的待办', chatId);
+await Tools.Chat.sendMessage('帮我总结今天的待办', chatId, undefined, undefined, {
+  timeout_ms: 60000
+});
 ```
 
 ### 查找并切换聊天

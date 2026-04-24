@@ -119,6 +119,9 @@ class SkillMarketViewModel(
 
     private val _userPublishedSkills = MutableStateFlow<List<GitHubIssue>>(emptyList())
     val userPublishedSkills: StateFlow<List<GitHubIssue>> = _userPublishedSkills.asStateFlow()
+    private val _hasLoadedUserPublishedSkills = MutableStateFlow(false)
+    val hasLoadedUserPublishedSkills: StateFlow<Boolean> =
+        _hasLoadedUserPublishedSkills.asStateFlow()
 
     private val sharedPrefs: SharedPreferences = context.getSharedPreferences("skill_publish_draft", Context.MODE_PRIVATE)
 
@@ -278,6 +281,12 @@ class SkillMarketViewModel(
     }
 
     fun clearError() {
+        _errorMessage.value = null
+    }
+
+    fun resetUserPublishedSkillsState() {
+        _userPublishedSkills.value = emptyList()
+        _hasLoadedUserPublishedSkills.value = false
         _errorMessage.value = null
     }
 
@@ -514,6 +523,7 @@ class SkillMarketViewModel(
                 _errorMessage.value = context.getString(R.string.skillmarket_network_error, e.message ?: "")
                 AppLogger.e(TAG, "Network error while loading user published skills", e)
             } finally {
+                _hasLoadedUserPublishedSkills.value = true
                 _isLoading.value = false
             }
         }

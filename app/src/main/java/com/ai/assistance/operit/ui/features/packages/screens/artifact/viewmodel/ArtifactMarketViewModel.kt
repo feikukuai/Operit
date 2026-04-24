@@ -129,6 +129,9 @@ class ArtifactMarketViewModel(
 
     private val _userPublishedArtifacts = MutableStateFlow<List<GitHubIssue>>(emptyList())
     val userPublishedArtifacts: StateFlow<List<GitHubIssue>> = _userPublishedArtifacts.asStateFlow()
+    private val _hasLoadedUserPublishedArtifacts = MutableStateFlow(false)
+    val hasLoadedUserPublishedArtifacts: StateFlow<Boolean> =
+        _hasLoadedUserPublishedArtifacts.asStateFlow()
 
     private val _installingIds = MutableStateFlow<Set<String>>(emptySet())
     val installingIds: StateFlow<Set<String>> = _installingIds.asStateFlow()
@@ -413,6 +416,7 @@ class ArtifactMarketViewModel(
                 _errorMessage.value = e.message ?: "Failed to load published artifacts"
                 AppLogger.e(TAG, "Failed to load user published artifacts", e)
             } finally {
+                _hasLoadedUserPublishedArtifacts.value = true
                 _isLoading.value = false
             }
         }
@@ -685,6 +689,12 @@ class ArtifactMarketViewModel(
     }
 
     fun clearError() {
+        _errorMessage.value = null
+    }
+
+    fun resetUserPublishedArtifactsState() {
+        _userPublishedArtifacts.value = emptyList()
+        _hasLoadedUserPublishedArtifacts.value = false
         _errorMessage.value = null
     }
 

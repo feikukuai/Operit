@@ -3,6 +3,8 @@ package com.ai.assistance.operit.core.tools.javascript
 import java.io.Closeable
 import java.lang.reflect.Method
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.ExecutionException
+import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicReference
 import org.json.JSONArray
 import org.json.JSONObject
@@ -13,13 +15,18 @@ class OperitQuickJsEngine : Closeable {
     private val runtimeRef = AtomicReference<QuickJsNativeRuntime?>()
     private val nativeInterfaceRef = AtomicReference<Any?>()
     private val methodCache = ConcurrentHashMap<String, Method>()
+    private val runtimeExecutor = Executors.newSingleThreadExecutor { runnable ->
+        Thread(runnable, "OperitQuickJsRuntime").apply { isDaemon = true }
+    }
     private val hostDispatcher = QuickJsNativeHostDispatcher(
-        runtimeProvider = { runtimeRef.get() ?: error("QuickJS runtime is not ready") },
+        dispatchTimer = ::dispatchTimerOnRuntimeThread,
         forwardCall = ::dispatchNativeCall
     )
-    private val runtime = QuickJsNativeRuntime.create(hostDispatcher).also { quickJs ->
-        runtimeRef.set(quickJs)
-        quickJs.installCompatLayerOrThrow()
+    private val runtime = runOnRuntimeThread {
+        QuickJsNativeRuntime.create(hostDispatcher).also { quickJs ->
+            runtimeRef.set(quickJs)
+            quickJs.installCompatLayerOrThrow()
+        }
     }
 
     fun bindNativeInterface(instance: Any) {
@@ -29,12 +36,14 @@ class OperitQuickJsEngine : Closeable {
 
     @Suppress("UNCHECKED_CAST")
     fun <T> evaluate(script: String, fileName: String = "<eval>"): T? {
-        val result = runtime.eval(script, fileName)
-        runtime.executePendingJobs()
-        if (!result.success) {
-            error(result.describeFailure("QuickJS evaluation failed"))
+        return runOnRuntimeThread {
+            val result = runtime.eval(script, fileName)
+            runtime.executePendingJobs()
+            if (!result.success) {
+                error(result.describeFailure("QuickJS evaluation failed"))
+            }
+            decodeJsonValue(result.valueJson) as T?
         }
-        return decodeJsonValue(result.valueJson) as T?
     }
 
     @Suppress("UNCHECKED_CAST")
@@ -43,12 +52,14 @@ class OperitQuickJsEngine : Closeable {
         argsJson: String,
         callSite: String = "<call:$functionName>"
     ): T? {
-        val result = runtime.callFunction(functionName, argsJson, callSite)
-        runtime.executePendingJobs()
-        if (!result.success) {
-            error(result.describeFailure("QuickJS function call failed"))
+        return runOnRuntimeThread {
+            val result = runtime.callFunction(functionName, argsJson, callSite)
+            runtime.executePendingJobs()
+            if (!result.success) {
+                error(result.describeFailure("QuickJS function call failed"))
+            }
+            decodeJsonValue(result.valueJson) as T?
         }
-        return decodeJsonValue(result.valueJson) as T?
     }
 
     fun interrupt() {
@@ -56,12 +67,37 @@ class OperitQuickJsEngine : Closeable {
     }
 
     override fun close() {
-        runCatching { runtime.clearAllTimers() }
+        runCatching { runOnRuntimeThread { runtime.clearAllTimers() } }
         hostDispatcher.close()
         runtime.close()
+        runtimeExecutor.shutdownNow()
         runtimeRef.set(null)
         nativeInterfaceRef.set(null)
         methodCache.clear()
+    }
+
+    private fun dispatchTimerOnRuntimeThread(timerId: Int) {
+        runtimeExecutor.execute {
+            runCatching {
+                val result = runtime.dispatchTimer(timerId)
+                runtime.executePendingJobs()
+                if (!result.success) {
+                    error(result.describeFailure("QuickJS timer callback failed"))
+                }
+            }.getOrElse { error ->
+                System.err.println("QuickJS timer dispatch failed: ${error.message}")
+                error.printStackTrace()
+            }
+        }
+    }
+
+    private fun <T> runOnRuntimeThread(block: () -> T): T {
+        val future = runtimeExecutor.submit<T> { block() }
+        try {
+            return future.get()
+        } catch (error: ExecutionException) {
+            throw (error.cause ?: error)
+        }
     }
 
     private fun dispatchNativeCall(methodName: String, argsJson: String?): String? {

@@ -45,6 +45,8 @@ import com.ai.assistance.operit.ui.common.NavItem
 import com.ai.assistance.operit.ui.main.NavGroup
 import com.ai.assistance.operit.ui.main.NavigationTransitionSource
 import com.ai.assistance.operit.ui.main.TopBarTitleContent
+import com.ai.assistance.operit.ui.main.navigation.NavigationEntrySpec
+import com.ai.assistance.operit.ui.main.navigation.RouteEntry
 import com.ai.assistance.operit.ui.main.components.AppContent
 import com.ai.assistance.operit.ui.main.components.DrawerContent
 import com.ai.assistance.operit.ui.main.components.rememberNavigationDrawerAppearance
@@ -57,10 +59,13 @@ import kotlinx.coroutines.launch
 /** Layout for phone devices with a modal navigation drawer */
 @Composable
 fun PhoneLayout(
+        currentRouteEntry: RouteEntry,
         currentScreen: Screen,
         selectedItem: NavItem,
         isLoading: Boolean,
         navGroups: List<NavGroup>,
+        pluginSidebarEntries: List<NavigationEntrySpec>,
+        selectedRouteId: String,
         isNetworkAvailable: Boolean,
         networkType: String,
         drawerWidth: Dp,
@@ -71,8 +76,8 @@ fun PhoneLayout(
         enableNavigationAnimation: Boolean,
         navigationTransitionSource: NavigationTransitionSource,
         onScreenChange: (Screen) -> Unit,
-        onNavItemChange: (NavItem) -> Unit,
-        onDrawerItemSelected: (Screen, NavItem) -> Unit,
+        onDrawerItemSelected: (Screen) -> Unit,
+        onNavigationEntrySelected: (NavigationEntrySpec) -> Unit,
         navigateToTokenConfig: () -> Unit,
         canGoBack: Boolean,
         onGoBack: () -> Unit,
@@ -159,8 +164,10 @@ fun PhoneLayout(
         // 仅在相关数据变化时更新抽屉内容
         LaunchedEffect(
                 navGroups,
+                pluginSidebarEntries,
                 currentScreen,
                 selectedItem,
+                selectedRouteId,
                 isNetworkAvailable,
                 networkType,
                 drawerAppearance,
@@ -170,15 +177,17 @@ fun PhoneLayout(
                 cachedDrawerContent = {
                         DrawerContent(
                                 navGroups = navGroups,
-                                currentScreen = currentScreen,
+                                pluginEntries = pluginSidebarEntries,
                                 selectedItem = selectedItem,
+                                selectedRouteId = selectedRouteId,
                                 isNetworkAvailable = isNetworkAvailable,
                                 networkType = networkType,
                                 appearance = drawerAppearance,
                                 topContentPadding = if (enableNewSidebar) 0.dp else drawerTopInset,
                                 scope = scope,
                                 drawerState = drawerState,
-                                onScreenSelected = { screen, item -> onDrawerItemSelected(screen, item) }
+                                onScreenSelected = onDrawerItemSelected,
+                                onNavigationEntrySelected = onNavigationEntrySelected
                         )
                 }
         }
@@ -256,6 +265,7 @@ fun PhoneLayout(
                 ) {
                     // 普通调用AppContent，但由于我们的优化，它不会在动画时重组
                     AppContent(
+                        currentRouteEntry = currentRouteEntry,
                         currentScreen = currentScreen,
                         selectedItem = selectedItem,
                         useTabletLayout = false,
@@ -268,7 +278,6 @@ fun PhoneLayout(
                         enableNavigationAnimation = enableNavigationAnimation,
                         navigationTransitionSource = navigationTransitionSource,
                         onScreenChange = onScreenChange,
-                        onNavItemChange = onNavItemChange,
                         onToggleSidebar = { /* Not used in phone layout */},
                         navigateToTokenConfig = navigateToTokenConfig,
                         canGoBack = canGoBack,

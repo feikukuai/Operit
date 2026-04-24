@@ -173,9 +173,8 @@ class ChatViewModel(private val context: Context) : ViewModel() {
     val featureToggles: StateFlow<Map<String, Boolean>> by lazy { apiConfigDelegate.featureToggles }
     val keepScreenOn: StateFlow<Boolean> by lazy { apiConfigDelegate.keepScreenOn }
 
-    // 思考模式和思考引导状态现在由ApiConfigDelegate管理
+    // 思考模式状态现在由ApiConfigDelegate管理
     val enableThinkingMode: StateFlow<Boolean> by lazy { apiConfigDelegate.enableThinkingMode }
-    val enableThinkingGuidance: StateFlow<Boolean> by lazy { apiConfigDelegate.enableThinkingGuidance }
     val thinkingQualityLevel: StateFlow<Int> by lazy { apiConfigDelegate.thinkingQualityLevel }
     val enableMemoryAutoUpdate: StateFlow<Boolean> by lazy { apiConfigDelegate.enableMemoryAutoUpdate }
     val enableTools: StateFlow<Boolean> by lazy { apiConfigDelegate.enableTools }
@@ -589,11 +588,6 @@ class ChatViewModel(private val context: Context) : ViewModel() {
         apiConfigDelegate.toggleThinkingMode()
     }
 
-    // 切换思考引导的方法现在委托给ApiConfigDelegate
-    fun toggleThinkingGuidance() {
-        apiConfigDelegate.toggleThinkingGuidance()
-    }
-
     fun updateThinkingQualityLevel(level: Int) {
         apiConfigDelegate.updateThinkingQualityLevel(level)
     }
@@ -940,6 +934,11 @@ class ChatViewModel(private val context: Context) : ViewModel() {
         thinkingBackgroundColor: Color,
         thinkingTextColor: Color,
         chatStyle: ChatStyle,
+        initialThinkingExpanded: Boolean = false,
+        expandThinkToolsGroups: Boolean = false,
+        includeBackground: Boolean = true,
+        borderWidthDp: Float = 1.5f,
+        forceShowThinkingProcess: Boolean = false,
         onSuccess: (Uri) -> Unit,
         onError: (String) -> Unit
     ) {
@@ -974,7 +973,12 @@ class ChatViewModel(private val context: Context) : ViewModel() {
                         systemTextColor = systemTextColor,
                         thinkingBackgroundColor = thinkingBackgroundColor,
                         thinkingTextColor = thinkingTextColor,
-                        chatStyle = chatStyle
+                        chatStyle = chatStyle,
+                        initialThinkingExpanded = initialThinkingExpanded,
+                        expandThinkToolsGroups = expandThinkToolsGroups,
+                        includeBackground = includeBackground,
+                        borderWidthDp = borderWidthDp,
+                        forceShowThinkingProcess = forceShowThinkingProcess
                     )
                 
                 AppLogger.d(TAG, "图片文件生成成功: ${imageFile.absolutePath}, 大小: ${imageFile.length()} bytes")

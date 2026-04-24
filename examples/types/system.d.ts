@@ -3,11 +3,10 @@
  */
 
 import {
-    SleepResultData, SystemSettingData, AppOperationData, AppListData,
+    StringResultData, SleepResultData, SystemSettingData, AppOperationData, AppListData,
     AppUsageTimeResultData, DeviceInfoResultData, NotificationData, LocationData,
     ADBResultData, IntentResultData, TerminalCommandResultData, HiddenTerminalCommandResultData,
-    TerminalSessionCreationResultData, TerminalSessionCloseResultData, TerminalSessionScreenResultData,
-    StringResultData
+    TerminalSessionCreationResultData, TerminalSessionCloseResultData, TerminalSessionScreenResultData
 } from './results';
 
 /**

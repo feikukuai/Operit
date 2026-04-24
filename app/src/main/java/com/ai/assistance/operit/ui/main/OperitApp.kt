@@ -11,7 +11,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -24,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.stringResource
 import androidx.navigation.compose.rememberNavController
 import com.ai.assistance.operit.core.tools.AIToolHandler
+import com.ai.assistance.operit.core.tools.packTool.PackageManager
 import com.ai.assistance.operit.data.announcement.RemoteAnnouncementDisplay
 import com.ai.assistance.operit.data.announcement.RemoteAnnouncementRepository
 import com.ai.assistance.operit.data.mcp.MCPRepository
@@ -35,14 +35,22 @@ import com.ai.assistance.operit.ui.common.NavItem
 import com.ai.assistance.operit.ui.features.announcement.RemoteAnnouncementDialog
 import com.ai.assistance.operit.ui.main.layout.PhoneLayout
 import com.ai.assistance.operit.ui.main.layout.TabletLayout
-import com.ai.assistance.operit.ui.main.screens.OperitRouter
+import com.ai.assistance.operit.ui.main.navigation.AppNavigationModel
+import com.ai.assistance.operit.ui.main.navigation.AppRouteCatalog
 import com.ai.assistance.operit.ui.main.screens.Screen
+import com.ai.assistance.operit.ui.main.navigation.AppRouterGateway
+import com.ai.assistance.operit.ui.main.navigation.AppRouterState
+import com.ai.assistance.operit.ui.main.navigation.AppRouteDiscoveryGateway
+import com.ai.assistance.operit.ui.main.navigation.NavigationEntrySpec
+import com.ai.assistance.operit.ui.main.navigation.NavigationSurface
+import com.ai.assistance.operit.ui.main.navigation.RouteEntrySource
 import com.ai.assistance.operit.util.NetworkUtils
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import com.ai.assistance.operit.R
 import com.ai.assistance.operit.ui.features.update.screens.UpdateScreen
 
@@ -53,6 +61,7 @@ val LocalTopBarActions = compositionLocalOf<(@Composable (RowScope.() -> Unit)) 
 class TopBarTitleContent(val content: @Composable () -> Unit)
 
 val LocalTopBarTitleContent = compositionLocalOf<(TopBarTitleContent?) -> Unit> { {} }
+val LocalAppNavigationModel = compositionLocalOf<AppNavigationModel?> { null }
 
 data class NavGroup(@StringRes val titleResId: Int, val items: List<NavItem>)
 
@@ -73,15 +82,27 @@ fun OperitApp(
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    val packageManager = remember {
+        PackageManager.getInstance(context, AIToolHandler.getInstance(context))
+    }
     val remoteAnnouncementRepository = remember { RemoteAnnouncementRepository() }
     val remoteAnnouncementPreferences = remember { RemoteAnnouncementPreferences(context) }
+    var navigationRevision by remember { mutableStateOf(0) }
+    val configuration = LocalConfiguration.current
+    val navigationModel = remember(context, configuration, navigationRevision) { AppRouteCatalog.build(context) }
 
-    // Navigation state - using a custom back stack
-    var selectedItem by remember { mutableStateOf(initialNavItem) }
-    var currentScreen by remember {
-        mutableStateOf(OperitRouter.getScreenForNavItem(initialNavItem))
+    val routerState = remember {
+        AppRouterState(AppRouteCatalog.initialEntry(initialNavItem))
     }
-    val backStack = remember { mutableStateListOf<Screen>() }
+    val currentRouteEntry = routerState.currentEntry
+    val currentScreen = AppRouteCatalog.resolveScreen(navigationModel, currentRouteEntry) ?: Screen.AiChat
+    val selectedItem = currentScreen.navItem ?: initialNavItem
+    val pluginSidebarEntries =
+        remember(navigationModel) {
+            navigationModel.navigationEntries.filter {
+                it.surface == NavigationSurface.MAIN_SIDEBAR_PLUGINS
+            }
+        }
 
     // 跟踪是否是返回操作
     var isNavigatingBack by remember { mutableStateOf(false) }
@@ -103,13 +124,10 @@ fun OperitApp(
             return@LaunchedEffect
         }
 
-        val targetScreen = OperitRouter.getScreenForNavItem(requestNavItem)
-
-        backStack.clear()
+        val targetEntry = AppRouteCatalog.initialEntry(requestNavItem)
         isNavigatingBack = false
         navigationTransitionSource = NavigationTransitionSource.DEFAULT
-        selectedItem = requestNavItem
-        currentScreen = targetScreen
+        routerState.resetTo(targetEntry)
         lastHandledShortcutRequestId = shortcutNavRequestId
         onShortcutNavHandled(shortcutNavRequestId)
     }
@@ -125,60 +143,57 @@ fun OperitApp(
 
     // Navigation functions
     fun navigateTo(newScreen: Screen, fromDrawer: Boolean = false) {
-        if (newScreen == currentScreen) return
-
-        // 设置为前进导航
         isNavigatingBack = false
         navigationTransitionSource =
             if (fromDrawer) NavigationTransitionSource.DRAWER
             else NavigationTransitionSource.DEFAULT
-
-        if (fromDrawer) {
-            // 从抽屉导航时，清除整个返回栈
-            backStack.clear()
-        } else {
-            // 检查新屏幕是否为一级路由
-            if (!newScreen.isSecondaryScreen) {
-                // 如果是一级路由，清除栈中除了AI对话以外的所有内容
-                if (backStack.isNotEmpty()) {
-                    // 保留栈底的AI对话（如果存在）
-                    val aiChatScreen = backStack.find { it is Screen.AiChat }
-                    backStack.clear()
-                    if (aiChatScreen != null && currentScreen !is Screen.AiChat) {
-                        backStack.add(aiChatScreen)
-                    }
-                }
-                // 如果当前是AI对话，并且要导航到其他一级路由，将AI对话加入栈底
-                if (currentScreen is Screen.AiChat) {
-                    backStack.add(currentScreen)
-                }
-            } else {
-                // 二级路由导航，正常将当前屏幕加入栈
-                backStack.add(currentScreen)
-            }
+        val nextEntry =
+            AppRouteCatalog.toEntry(
+                screen = newScreen,
+                source =
+                    if (fromDrawer) RouteEntrySource.DRAWER
+                    else RouteEntrySource.DEFAULT
+            )
+        if (currentRouteEntry.routeId == nextEntry.routeId && currentRouteEntry.args == nextEntry.args) {
+            return
         }
-        currentScreen = newScreen
-        // Update the selected NavItem if the new screen has one.
-        newScreen.navItem?.let { navItem -> selectedItem = navItem }
+        if (fromDrawer) {
+            routerState.resetTo(nextEntry)
+        } else {
+            routerState.navigate(
+                routeId = nextEntry.routeId,
+                args = nextEntry.args,
+                source = nextEntry.source,
+                routeSpec = navigationModel.routesById[nextEntry.routeId]
+            )
+        }
     }
 
     fun goBack() {
-        if (backStack.isNotEmpty()) {
-            // 设置为返回导航
+        if (routerState.canPop) {
             isNavigatingBack = true
             navigationTransitionSource = NavigationTransitionSource.DEFAULT
-
-            val previousScreen = backStack.removeAt(backStack.lastIndex)
-            currentScreen = previousScreen
-            // Update the selected NavItem if the previous screen has one.
-            previousScreen.navItem?.let { navItem -> selectedItem = navItem }
+            routerState.pop()
         } else if (currentScreen !is Screen.AiChat) {
-            // 一级页面（如设置）在无返回栈时，返回到聊天首页而不是直接退出应用
             isNavigatingBack = true
             navigationTransitionSource = NavigationTransitionSource.DEFAULT
-            currentScreen = Screen.AiChat
-            selectedItem = NavItem.AiChat
+            routerState.resetTo(AppRouteCatalog.toEntry(Screen.AiChat))
         }
+    }
+
+    fun navigateToNavigationEntry(entry: NavigationEntrySpec) {
+        if (currentRouteEntry.routeId == entry.routeId && currentRouteEntry.args == entry.routeArgs) {
+            return
+        }
+        isNavigatingBack = false
+        navigationTransitionSource = NavigationTransitionSource.DRAWER
+        routerState.resetTo(
+            com.ai.assistance.operit.ui.main.navigation.RouteEntry(
+                routeId = entry.routeId,
+                args = entry.routeArgs,
+                source = RouteEntrySource.DRAWER
+            )
+        )
     }
 
     // Function to navigate to TokenConfig, treated as sub-navigation.
@@ -186,12 +201,9 @@ fun OperitApp(
         navigateTo(Screen.TokenConfig)
     }
 
-    // Register system back handler to use our custom back stack.
-    // 只要不在AI对话页，统一由应用内处理返回逻辑
     BackHandler(enabled = currentScreen !is Screen.AiChat, onBack = { goBack() })
 
-    // 修改canGoBack的判断逻辑，只有当前屏幕是二级屏幕时才显示返回键
-    val canGoBack = currentScreen.isSecondaryScreen
+    val canGoBack = routerState.canPop
 
     var isLoading by remember { mutableStateOf(false) }
 
@@ -201,7 +213,6 @@ fun OperitApp(
     val collapsedTabletSidebarWidth = 64.dp // 收起时的宽度
 
     // Device screen size calculation
-    val configuration = LocalConfiguration.current
     val screenWidthDp = configuration.screenWidthDp
 
     // Determine if using tablet layout based on screen width
@@ -298,7 +309,34 @@ fun OperitApp(
 
     // Main app container
     Box(modifier = Modifier.fillMaxSize().background(Color.Transparent)) {
+        DisposableEffect(packageManager) {
+            val listener = PackageManager.ToolPkgRuntimeChangeListener {
+                navigationRevision += 1
+            }
+            packageManager.addToolPkgRuntimeChangeListener(listener)
+            onDispose {
+                packageManager.removeToolPkgRuntimeChangeListener(listener)
+            }
+        }
+        DisposableEffect(routerState, navigationModel) {
+            AppRouterGateway.install { routeId, args, source ->
+                val routeSpec = navigationModel.routesById[routeId] ?: return@install
+                isNavigatingBack = false
+                navigationTransitionSource =
+                    if (source == RouteEntrySource.DRAWER) NavigationTransitionSource.DRAWER
+                    else NavigationTransitionSource.DEFAULT
+                routerState.navigate(routeId = routeId, args = args, source = source, routeSpec = routeSpec)
+            }
+            AppRouteDiscoveryGateway.install {
+                navigationModel.routes
+            }
+            onDispose {
+                AppRouterGateway.clear()
+                AppRouteDiscoveryGateway.clear()
+            }
+        }
         CompositionLocalProvider(
+            LocalAppNavigationModel provides navigationModel,
             LocalTopBarActions provides { actions: @Composable RowScope.() -> Unit ->
                 topBarActions = actions
             },
@@ -309,12 +347,15 @@ fun OperitApp(
             if (useTabletLayout) {
                 // Tablet layout
                 TabletLayout(
+                    currentRouteEntry = currentRouteEntry,
                     currentScreen = currentScreen,
                     selectedItem = selectedItem,
                     isTabletSidebarExpanded = isTabletSidebarExpanded,
                     isLoading = isLoading,
                     navGroups = navGroups,
                     navItems = navItems,
+                    pluginSidebarEntries = pluginSidebarEntries,
+                    selectedRouteId = currentRouteEntry.routeId,
                     isNetworkAvailable = isNetworkAvailable,
                     networkType = networkType,
                     navController = navController,
@@ -326,12 +367,10 @@ fun OperitApp(
                     tabletSidebarWidth = tabletSidebarWidth,
                     collapsedTabletSidebarWidth = collapsedTabletSidebarWidth,
                     onScreenChange = { screen -> navigateTo(screen) },
-                    onNavItemChange = { item ->
-                        selectedItem = item
-                    },
-                    onDrawerItemSelected = { screen, _ ->
+                    onDrawerItemSelected = { screen ->
                         navigateTo(screen, fromDrawer = true)
                     },
+                    onNavigationEntrySelected = ::navigateToNavigationEntry,
                     onToggleSidebar = {
                         isTabletSidebarExpanded = !isTabletSidebarExpanded
                     },
@@ -345,10 +384,13 @@ fun OperitApp(
             } else {
                 // Phone layout
                 PhoneLayout(
+                    currentRouteEntry = currentRouteEntry,
                     currentScreen = currentScreen,
                     selectedItem = selectedItem,
                     isLoading = isLoading,
                     navGroups = navGroups,
+                    pluginSidebarEntries = pluginSidebarEntries,
+                    selectedRouteId = currentRouteEntry.routeId,
                     isNetworkAvailable = isNetworkAvailable,
                     networkType = networkType,
                     drawerWidth = drawerWidth,
@@ -359,12 +401,10 @@ fun OperitApp(
                     enableNavigationAnimation = enableNavigationAnimation,
                     navigationTransitionSource = navigationTransitionSource,
                     onScreenChange = { screen -> navigateTo(screen) },
-                    onNavItemChange = { item ->
-                        selectedItem = item
-                    },
-                    onDrawerItemSelected = { screen, _ ->
+                    onDrawerItemSelected = { screen ->
                         navigateTo(screen, fromDrawer = true)
                     },
+                    onNavigationEntrySelected = ::navigateToNavigationEntry,
                     navigateToTokenConfig = ::navigateToTokenConfig,
                     canGoBack = canGoBack,
                     onGoBack = ::goBack,

@@ -1148,6 +1148,12 @@ object SystemToolPromptsInternal {
                                           type = "boolean",
                                           description = "optional, suppress AI-generated warning markup for this turn; when true, warning-driven retry branches stop instead of continuing",
                                           required = false
+                                      ),
+                                      ToolParameterSchema(
+                                          name = "timeout_ms",
+                                          type = "integer",
+                                          description = "optional, maximum wait time in milliseconds for this send, including response-stream acquisition and AI reply; default 180000",
+                                          required = false
                                       )
                                 )
                         ),
@@ -3742,6 +3748,12 @@ object SystemToolPromptsInternal {
                                           name = "disable_warning",
                                           type = "boolean",
                                           description = "可选，关闭本轮 AI 生成的 warning 标记；为 true 时，依赖 warning 继续重试的分支会直接停止",
+                                          required = false
+                                      ),
+                                      ToolParameterSchema(
+                                          name = "timeout_ms",
+                                          type = "integer",
+                                          description = "可选，本次发送的最长等待时间（毫秒），覆盖响应流获取与 AI 回复等待；默认 180000",
                                           required = false
                                       )
                                   )

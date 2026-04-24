@@ -504,6 +504,14 @@ export interface ComposeResolveToolNameRequest {
   preferImported?: boolean;
 }
 
+export interface ComposeRouteInfo {
+  routeId: string;
+  runtime: string;
+  title?: string | null;
+  ownerPackageName?: string | null;
+  toolPkgUiModuleId?: string | null;
+}
+
 export interface ComposeDslContext {
   MaterialTheme: ComposeMaterialTheme;
   useState<T>(key: string, initialValue: T): [T, (value: T) => void];
@@ -540,6 +548,12 @@ export interface ComposeDslContext {
    * Batch environment writes; host may implement atomically.
    */
   setEnvs?(values: Record<string, string>): Promise<void> | void;
+
+  /**
+   * Discover available route ids that can be used with ctx.navigate(...).
+   */
+  listRoutes?(): ComposeRouteInfo[];
+  getHostRoutes?(): ComposeRouteInfo[];
 
   /**
    * Optional toolCall-compatible bridge so compose_dsl script can use package-tool style calls.

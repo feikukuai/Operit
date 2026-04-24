@@ -149,7 +149,6 @@ class MessageCoordinationDelegate(
             workspacePath = currentChat?.workspace,
             workspaceEnv = currentChat?.workspaceEnv,
             promptFunctionType = promptFunctionType,
-            thinkingGuidance = apiConfigDelegate.enableThinkingGuidance.value,
             roleCardId = roleCardId,
             currentRoleName = currentRoleName,
             splitHistoryByRole = true,
@@ -384,10 +383,7 @@ class MessageCoordinationDelegate(
                 promptFunctionType = currentPromptFunctionType,
                 roleCardId = roleCardId,
                 currentRoleName = currentRoleName,
-                enableThinking =
-                    apiConfigDelegate.enableThinkingMode.value &&
-                        !apiConfigDelegate.enableThinkingGuidance.value,
-                thinkingGuidance = apiConfigDelegate.enableThinkingGuidance.value,
+                enableThinking = apiConfigDelegate.enableThinkingMode.value,
                 enableMemoryAutoUpdate = apiConfigDelegate.enableMemoryAutoUpdate.value,
                 maxTokens = (apiConfigDelegate.contextLength.value * 1024).toInt(),
                 tokenUsageThreshold = apiConfigDelegate.summaryTokenThreshold.value.toDouble(),
@@ -617,10 +613,7 @@ class MessageCoordinationDelegate(
             workspaceEnv = workspaceEnv,
             promptFunctionType = promptFunctionType,
             roleCardId = roleCardId,
-            // Safety: thinking guidance and thinking mode are mutually exclusive.
-            // When guidance is enabled, we avoid enabling provider-level thinking simultaneously.
-            enableThinking = apiConfigDelegate.enableThinkingMode.value && !apiConfigDelegate.enableThinkingGuidance.value,
-            thinkingGuidance = apiConfigDelegate.enableThinkingGuidance.value,
+            enableThinking = apiConfigDelegate.enableThinkingMode.value,
             enableMemoryAutoUpdate = shouldEnableMemoryAutoUpdate,
             enableWorkspaceAttachment = !workspacePath.isNullOrBlank(),
             maxTokens = (apiConfigDelegate.contextLength.value * 1024).toInt(),

@@ -201,6 +201,27 @@ function registerToolPkg() {
     }
   });
 
+  ToolPkg.registerUiRoute({
+    id: "windows_dashboard",
+    route: "toolpkg:com.example.windows_bundle:ui:windows_dashboard",
+    runtime: "compose_dsl",
+    screen: toolboxUI,
+    title: {
+      zh: "Windows 面板",
+      en: "Windows Dashboard"
+    }
+  });
+
+  ToolPkg.registerNavigationEntry({
+    id: "windows_dashboard_toolbox",
+    route: "toolpkg:com.example.windows_bundle:ui:windows_dashboard",
+    surface: "toolbox",
+    title: {
+      zh: "Windows 面板",
+      en: "Windows Dashboard"
+    }
+  });
+
   ToolPkg.registerAppLifecycleHook({
     id: "windows_app_create",
     event: "application_on_create",
@@ -276,6 +297,18 @@ exports.onInputMenuToggle = onInputMenuToggle;
 | `ToolPkg.registerToolboxUiModule` | `screen` | 是 | UI 模块函数（推荐 `import/require ... default` 后传入） |
 | `ToolPkg.registerToolboxUiModule` | `params` | 否 | UI 模块初始化参数对象 |
 | `ToolPkg.registerToolboxUiModule` | `title` | 否 | 模块标题（支持 `LocalizedText`） |
+| `ToolPkg.registerUiRoute` | `id` | 是 | UI 路由唯一标识 |
+| `ToolPkg.registerUiRoute` | `route` / `routeId` | 否 | 稳定路由 ID；不填时宿主按 `toolpkg:<toolpkg_id>:ui:<id>` 自动生成 |
+| `ToolPkg.registerUiRoute` | `runtime` | 否 | 运行时类型，默认 `compose_dsl` |
+| `ToolPkg.registerUiRoute` | `screen` | 是 | UI 模块函数 |
+| `ToolPkg.registerUiRoute` | `params` | 否 | UI 模块初始化参数对象 |
+| `ToolPkg.registerUiRoute` | `title` | 否 | 路由标题（支持 `LocalizedText`） |
+| `ToolPkg.registerNavigationEntry` | `id` | 是 | 导航入口唯一标识 |
+| `ToolPkg.registerNavigationEntry` | `route` | 是 | 已注册路由 ID |
+| `ToolPkg.registerNavigationEntry` | `surface` | 是 | 挂载面，当前支持 `toolbox`、`main_sidebar_plugins` |
+| `ToolPkg.registerNavigationEntry` | `title` | 否 | 导航入口标题（支持 `LocalizedText`） |
+| `ToolPkg.registerNavigationEntry` | `icon` | 否 | 图标名 |
+| `ToolPkg.registerNavigationEntry` | `order` | 否 | 同一 surface 内排序值，越小越靠前 |
 | `ToolPkg.registerAppLifecycleHook` | `id` | 是 | 生命周期钩子唯一标识 |
 | `ToolPkg.registerAppLifecycleHook` | `event` | 是 | 生命周期事件名（见下方完整列表） |
 | `ToolPkg.registerAppLifecycleHook` | `function` | 是 | 函数引用（支持箭头函数） |
@@ -525,7 +558,8 @@ exports.windows_exec = WindowsControl.windows_exec;
 | `List` / `Set` / 其他 `Iterable` | 当普通数组用：`length`、索引、`map/filter` |
 | Java 数组 / `JSONArray` | 当普通数组用 |
 | `Map` / `JSONObject` | 当普通对象用 |
-| `String` / `CharSequence` / `char` | 当字符串用 |
+| `String` / `char` | 当字符串用 |
+| Java 方法返回的 `CharSequence` 值 | 可按字符串用 |
 | `Enum` / `Class<?>` | 当字符串用 |
 | 普通 Java / Kotlin 对象 | 当 Java 实例代理用，可继续调方法 / 读写字段 |
 
@@ -547,6 +581,13 @@ items[0];     // 对
 - plain object 可自动转 `Map` / `JSONObject`
 - plain object 或 `Java.implement(...)` 结果在目标是接口时可自动转接口代理
 - Java 实例代理会自动还原成原始 Java 对象
+
+补充建议：
+
+- 上表描述的是**Java/Kotlin 方法返回值**的归一化结果；如果你自己 `new Java.java.lang.StringBuilder()`、`new Java.java.util.ArrayList()`，拿到的仍然是 Java 实例代理。
+- Java 实例代理默认推荐 `obj.method()` 语法糖；运行时会优先把实例成员按方法解释。
+- `obj.call('method', ...)` 仍然可用，但主要用于极少数字段/方法同名冲突或调试场景。
+- `Java.implement(...)` 的 JS 回调会回到 QuickJS 运行时线程执行，不等于把 JS 逻辑真正挪到 Java 子线程。
 
 详细规则见：
 
@@ -691,9 +732,24 @@ const toolName = await ctx.resolveToolName({
 #### UI 交互
 ```javascript
 await ctx.showToast('消息内容');
-await ctx.navigate('/route', { param: value });
+const routes = ctx.listRoutes?.() ?? [];
+const hostRoutes = ctx.getHostRoutes?.() ?? [];
+await ctx.navigate('native.settings', {});
 ctx.reportError(error);
 ```
+
+`ctx.navigate(route, args?)` 现在会触发真实路由跳转。
+`ctx.listRoutes()` 会返回当前可导航路由列表（包含 `routeId`、`runtime` 等字段）。
+`ctx.getHostRoutes()` 只返回宿主 Native 路由，便于插件显式发现可用原生页面。
+Native 路由 ID 命名规则：`native.<Screen对象名的snake_case>`，例如 `Screen.Toolbox -> native.toolbox`。
+
+兼容说明：
+
+- `ToolPkg.registerToolboxUiModule(...)` 仍然保留。
+- 宿主内部会把它自动映射为：
+  - 注册一个 `compose_dsl` UI route
+  - 自动挂载一个 `toolbox` 导航入口
+- 旧接口不会自动创建主侧边栏插件入口；若需要主侧边栏插件入口，请额外调用 `ToolPkg.registerNavigationEntry(...)` 并使用 `surface: "main_sidebar_plugins"`。
 
 #### 其他
 ```javascript

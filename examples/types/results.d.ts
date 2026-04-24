@@ -280,8 +280,8 @@ export interface DeviceInfoResultData {
  * Sleep result data
  */
 export interface SleepResultData {
-    sleptMs: number;
     requestedMs: number;
+    sleptMs: number;
     toString(): string;
 }
 

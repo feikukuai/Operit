@@ -87,12 +87,14 @@ export interface ComposeGeneratedCheckboxProps extends ComposeCommonProps {
 export interface ComposeGeneratedButtonProps extends ComposeCommonProps {
   enabled?: boolean;
   onClick: () => void | Promise<void>;
+  shape?: ComposeShape;
 }
 
 export interface ComposeGeneratedIconButtonProps extends ComposeCommonProps {
   enabled?: boolean;
   icon?: string;
   onClick: () => void | Promise<void>;
+  shape?: ComposeShape;
 }
 
 export interface ComposeGeneratedCardProps extends ComposeCommonProps {
@@ -152,48 +154,61 @@ export interface ComposeGeneratedDividerProps extends ComposeCommonProps {
 export interface ComposeGeneratedElevatedButtonProps extends ComposeCommonProps {
   enabled?: boolean;
   onClick: () => void | Promise<void>;
+  shape?: ComposeShape;
 }
 
 export interface ComposeGeneratedElevatedCardProps extends ComposeCommonProps {
+  border?: ComposeBorder;
+  containerColor?: ComposeColor;
+  contentColor?: ComposeColor;
+  elevation?: number;
+  shape?: ComposeShape;
 }
 
 export interface ComposeGeneratedExtendedFloatingActionButtonProps extends ComposeCommonProps {
   contentColor?: ComposeColor;
   onClick: () => void | Promise<void>;
+  shape?: ComposeShape;
 }
 
 export interface ComposeGeneratedFilledIconButtonProps extends ComposeCommonProps {
   enabled?: boolean;
   icon?: string;
   onClick: () => void | Promise<void>;
+  shape?: ComposeShape;
 }
 
 export interface ComposeGeneratedFilledIconToggleButtonProps extends ComposeCommonProps {
   checked: boolean;
   enabled?: boolean;
   onCheckedChange: (checked: boolean) => void;
+  shape?: ComposeShape;
 }
 
 export interface ComposeGeneratedFilledTonalButtonProps extends ComposeCommonProps {
   enabled?: boolean;
   onClick: () => void | Promise<void>;
+  shape?: ComposeShape;
 }
 
 export interface ComposeGeneratedFilledTonalIconButtonProps extends ComposeCommonProps {
   enabled?: boolean;
   icon?: string;
   onClick: () => void | Promise<void>;
+  shape?: ComposeShape;
 }
 
 export interface ComposeGeneratedFilledTonalIconToggleButtonProps extends ComposeCommonProps {
   checked: boolean;
   enabled?: boolean;
   onCheckedChange: (checked: boolean) => void;
+  shape?: ComposeShape;
 }
 
 export interface ComposeGeneratedFloatingActionButtonProps extends ComposeCommonProps {
   contentColor?: ComposeColor;
   onClick: () => void | Promise<void>;
+  shape?: ComposeShape;
 }
 
 export interface ComposeGeneratedHorizontalDividerProps extends ComposeCommonProps {
@@ -206,11 +221,13 @@ export interface ComposeGeneratedIconToggleButtonProps extends ComposeCommonProp
   enabled?: boolean;
   icon?: string;
   onCheckedChange: (checked: boolean) => void;
+  shape?: ComposeShape;
 }
 
 export interface ComposeGeneratedLargeFloatingActionButtonProps extends ComposeCommonProps {
   contentColor?: ComposeColor;
   onClick: () => void | Promise<void>;
+  shape?: ComposeShape;
 }
 
 export interface ComposeGeneratedModalDrawerSheetProps extends ComposeCommonProps {
@@ -235,21 +252,29 @@ export interface ComposeGeneratedNavigationRailProps extends ComposeCommonProps 
 export interface ComposeGeneratedOutlinedButtonProps extends ComposeCommonProps {
   enabled?: boolean;
   onClick: () => void | Promise<void>;
+  shape?: ComposeShape;
 }
 
 export interface ComposeGeneratedOutlinedCardProps extends ComposeCommonProps {
+  border?: ComposeBorder;
+  containerColor?: ComposeColor;
+  contentColor?: ComposeColor;
+  elevation?: number;
+  shape?: ComposeShape;
 }
 
 export interface ComposeGeneratedOutlinedIconButtonProps extends ComposeCommonProps {
   enabled?: boolean;
   icon?: string;
   onClick: () => void | Promise<void>;
+  shape?: ComposeShape;
 }
 
 export interface ComposeGeneratedOutlinedIconToggleButtonProps extends ComposeCommonProps {
   checked: boolean;
   enabled?: boolean;
   onCheckedChange: (checked: boolean) => void;
+  shape?: ComposeShape;
 }
 
 export interface ComposeGeneratedPermanentDrawerSheetProps extends ComposeCommonProps {
@@ -271,6 +296,7 @@ export interface ComposeGeneratedShortNavigationBarProps extends ComposeCommonPr
 export interface ComposeGeneratedSmallFloatingActionButtonProps extends ComposeCommonProps {
   contentColor?: ComposeColor;
   onClick: () => void | Promise<void>;
+  shape?: ComposeShape;
 }
 
 export interface ComposeGeneratedSnackbarProps extends ComposeCommonProps {
@@ -287,6 +313,7 @@ export interface ComposeGeneratedTabProps extends ComposeCommonProps {
 export interface ComposeGeneratedTextButtonProps extends ComposeCommonProps {
   enabled?: boolean;
   onClick: () => void | Promise<void>;
+  shape?: ComposeShape;
 }
 
 export interface ComposeGeneratedVerticalDividerProps extends ComposeCommonProps {

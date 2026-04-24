@@ -118,12 +118,37 @@ private constructor(private val context: Context, private val aiToolHandler: AIT
     data class ToolPkgToolboxUiModule(
         val containerPackageName: String,
         val toolPkgId: String,
+        val routeId: String,
         val uiModuleId: String,
         val runtime: String,
         val screen: String,
         val title: String,
         val description: String,
         val moduleSpec: Map<String, Any?>
+    )
+
+    data class ToolPkgUiRoute(
+        val containerPackageName: String,
+        val toolPkgId: String,
+        val routeId: String,
+        val uiModuleId: String,
+        val runtime: String,
+        val screen: String,
+        val title: String,
+        val description: String,
+        val moduleSpec: Map<String, Any?>
+    )
+
+    data class ToolPkgNavigationEntry(
+        val containerPackageName: String,
+        val toolPkgId: String,
+        val entryId: String,
+        val routeId: String,
+        val surface: String,
+        val title: String,
+        val description: String,
+        val icon: String?,
+        val order: Int
     )
 
     data class PackageLoadErrorInfo(
@@ -153,6 +178,7 @@ private constructor(private val context: Context, private val aiToolHandler: AIT
     )
 
     private data class PackageScanCandidateResult(
+        val phase: String,
         val packageLoadErrors: Map<String, String> = emptyMap(),
         val toolPackage: ToolPackage? = null,
         val toolPkgLoadResult: ToolPkgLoadResult? = null,
@@ -321,7 +347,7 @@ private constructor(private val context: Context, private val aiToolHandler: AIT
         return toolPkgExecutionEngines.computeIfAbsent(normalizedKey) { JsEngine(context) }
     }
 
-    private fun destroyToolPkgExecutionEngine(contextKey: String) {
+    fun releaseToolPkgExecutionEngine(contextKey: String) {
         val normalizedKey = contextKey.trim().ifBlank { return }
         toolPkgExecutionEngines.remove(normalizedKey)?.destroy()
     }
@@ -331,7 +357,7 @@ private constructor(private val context: Context, private val aiToolHandler: AIT
         if (normalizedPackageName.isBlank()) {
             return
         }
-        destroyToolPkgExecutionEngine("toolpkg_main:$normalizedPackageName")
+        releaseToolPkgExecutionEngine("toolpkg_main:$normalizedPackageName")
     }
 
     internal val toolPkgContainersInternal: MutableMap<String, ToolPkgContainerRuntime>
@@ -795,6 +821,118 @@ private constructor(private val context: Context, private val aiToolHandler: AIT
         val loadToolPkg: (((String, String) -> Unit) -> ToolPkgLoadResult?)? = null
     )
 
+    private fun removeToolPkgContainerFromTargets(
+        containerPackageName: String,
+        availablePackagesTarget: MutableMap<String, ToolPackage>,
+        toolPkgContainersTarget: MutableMap<String, ToolPkgContainerRuntime>,
+        toolPkgSubpackageByPackageNameTarget: MutableMap<String, ToolPkgSubpackageRuntime>
+    ) {
+        val runtime = toolPkgContainersTarget.remove(containerPackageName) ?: return
+        availablePackagesTarget.remove(containerPackageName)
+        runtime.subpackages.forEach { subpackage ->
+            availablePackagesTarget.remove(subpackage.packageName)
+            toolPkgSubpackageByPackageNameTarget.remove(subpackage.packageName)
+        }
+    }
+
+    private fun prepareExternalStandalonePackageOverride(
+        packageName: String,
+        availablePackagesTarget: MutableMap<String, ToolPackage>,
+        toolPkgContainersTarget: MutableMap<String, ToolPkgContainerRuntime>,
+        toolPkgSubpackageByPackageNameTarget: MutableMap<String, ToolPkgSubpackageRuntime>
+    ): Boolean {
+        val existingContainer = toolPkgContainersTarget[packageName]
+        if (existingContainer != null) {
+            return if (existingContainer.sourceType == ToolPkgSourceType.ASSET) {
+                removeToolPkgContainerFromTargets(
+                    containerPackageName = existingContainer.packageName,
+                    availablePackagesTarget = availablePackagesTarget,
+                    toolPkgContainersTarget = toolPkgContainersTarget,
+                    toolPkgSubpackageByPackageNameTarget = toolPkgSubpackageByPackageNameTarget
+                )
+                true
+            } else {
+                false
+            }
+        }
+
+        val existingSubpackage = toolPkgSubpackageByPackageNameTarget[packageName]
+        if (existingSubpackage != null) {
+            val ownerContainer = toolPkgContainersTarget[existingSubpackage.containerPackageName]
+            return if (ownerContainer?.sourceType == ToolPkgSourceType.ASSET) {
+                removeToolPkgContainerFromTargets(
+                    containerPackageName = ownerContainer.packageName,
+                    availablePackagesTarget = availablePackagesTarget,
+                    toolPkgContainersTarget = toolPkgContainersTarget,
+                    toolPkgSubpackageByPackageNameTarget = toolPkgSubpackageByPackageNameTarget
+                )
+                true
+            } else {
+                false
+            }
+        }
+
+        val existingPackage = availablePackagesTarget[packageName] ?: return true
+        if (!existingPackage.isBuiltIn) {
+            return false
+        }
+        availablePackagesTarget.remove(packageName)
+        return true
+    }
+
+    private fun prepareExternalToolPkgOverride(
+        loadResult: ToolPkgLoadResult,
+        availablePackagesTarget: MutableMap<String, ToolPackage>,
+        toolPkgContainersTarget: MutableMap<String, ToolPkgContainerRuntime>,
+        toolPkgSubpackageByPackageNameTarget: MutableMap<String, ToolPkgSubpackageRuntime>
+    ): Boolean {
+        val builtInContainersToRemove = linkedSetOf<String>()
+        val builtInStandalonePackagesToRemove = linkedSetOf<String>()
+        val conflictingNames =
+            buildList {
+                add(loadResult.containerPackage.name)
+                addAll(loadResult.subpackagePackages.map(ToolPackage::name))
+            }
+
+        conflictingNames.forEach { packageName ->
+            val existingContainer = toolPkgContainersTarget[packageName]
+            if (existingContainer != null) {
+                if (existingContainer.sourceType != ToolPkgSourceType.ASSET) {
+                    return false
+                }
+                builtInContainersToRemove += existingContainer.packageName
+                return@forEach
+            }
+
+            val existingSubpackage = toolPkgSubpackageByPackageNameTarget[packageName]
+            if (existingSubpackage != null) {
+                val ownerContainer = toolPkgContainersTarget[existingSubpackage.containerPackageName]
+                if (ownerContainer?.sourceType != ToolPkgSourceType.ASSET) {
+                    return false
+                }
+                builtInContainersToRemove += ownerContainer.packageName
+                return@forEach
+            }
+
+            val existingPackage = availablePackagesTarget[packageName] ?: return@forEach
+            if (!existingPackage.isBuiltIn) {
+                return false
+            }
+            builtInStandalonePackagesToRemove += packageName
+        }
+
+        builtInContainersToRemove.forEach { containerPackageName ->
+            removeToolPkgContainerFromTargets(
+                containerPackageName = containerPackageName,
+                availablePackagesTarget = availablePackagesTarget,
+                toolPkgContainersTarget = toolPkgContainersTarget,
+                toolPkgSubpackageByPackageNameTarget = toolPkgSubpackageByPackageNameTarget
+            )
+        }
+        builtInStandalonePackagesToRemove.forEach(availablePackagesTarget::remove)
+        return true
+    }
+
     private fun parsePackageCandidate(
         phase: String,
         candidate: PackageScanCandidate
@@ -808,6 +946,7 @@ private constructor(private val context: Context, private val aiToolHandler: AIT
                             stagedPackageLoadErrors[key] = error
                         }
                     PackageScanCandidateResult(
+                        phase = phase,
                         packageLoadErrors = stagedPackageLoadErrors,
                         toolPackage = packageMetadata,
                         sourcePath = candidate.sourcePath
@@ -820,6 +959,7 @@ private constructor(private val context: Context, private val aiToolHandler: AIT
                             stagedPackageLoadErrors[key] = error
                         }
                     PackageScanCandidateResult(
+                        phase = phase,
                         packageLoadErrors = stagedPackageLoadErrors,
                         toolPkgLoadResult = loadResult,
                         sourcePath = candidate.sourcePath
@@ -827,6 +967,7 @@ private constructor(private val context: Context, private val aiToolHandler: AIT
                 }
                 else ->
                     PackageScanCandidateResult(
+                        phase = phase,
                         packageLoadErrors = stagedPackageLoadErrors,
                         sourcePath = candidate.sourcePath
                     )
@@ -840,6 +981,7 @@ private constructor(private val context: Context, private val aiToolHandler: AIT
                     sourcePath = candidate.sourcePath
                 )
             PackageScanCandidateResult(
+                phase = phase,
                 packageLoadErrors = stagedPackageLoadErrors,
                 sourcePath = candidate.sourcePath
             )
@@ -858,6 +1000,23 @@ private constructor(private val context: Context, private val aiToolHandler: AIT
         candidateResults.forEach { result ->
             stagedPackageLoadErrors.putAll(result.packageLoadErrors)
             result.toolPackage?.let { packageMetadata ->
+                if (result.phase == "external") {
+                    val prepared =
+                        prepareExternalStandalonePackageOverride(
+                            packageName = packageMetadata.name,
+                            availablePackagesTarget = stagedAvailablePackages,
+                            toolPkgContainersTarget = stagedToolPkgContainers,
+                            toolPkgSubpackageByPackageNameTarget = stagedToolPkgSubpackages
+                        )
+                    if (!prepared) {
+                        stagedPackageLoadErrors[packageMetadata.name] =
+                            formatPackageLoadError(
+                                message = "Duplicate package name: ${packageMetadata.name}",
+                                sourcePath = result.sourcePath
+                            )
+                        return@let
+                    }
+                }
                 if (stagedAvailablePackages.containsKey(packageMetadata.name)) {
                     stagedPackageLoadErrors[packageMetadata.name] =
                         formatPackageLoadError(
@@ -869,6 +1028,14 @@ private constructor(private val context: Context, private val aiToolHandler: AIT
                 }
             }
             result.toolPkgLoadResult?.let { loadResult ->
+                if (result.phase == "external") {
+                    prepareExternalToolPkgOverride(
+                        loadResult = loadResult,
+                        availablePackagesTarget = stagedAvailablePackages,
+                        toolPkgContainersTarget = stagedToolPkgContainers,
+                        toolPkgSubpackageByPackageNameTarget = stagedToolPkgSubpackages
+                    )
+                }
                 registerToolPkgInto(
                     loadResult = loadResult,
                     availablePackagesTarget = stagedAvailablePackages,
@@ -1046,11 +1213,17 @@ private constructor(private val context: Context, private val aiToolHandler: AIT
         return toolPkgFacade.getToolPkgContainerDetails(packageName, resolveContext)
     }
 
-    fun getToolPkgToolboxUiModules(
+    fun getToolPkgUiRoutes(
         runtime: String = TOOLPKG_RUNTIME_COMPOSE_DSL,
         resolveContext: Context? = null
-    ): List<ToolPkgToolboxUiModule> {
-        return toolPkgFacade.getToolPkgToolboxUiModules(runtime, resolveContext)
+    ): List<ToolPkgUiRoute> {
+        return toolPkgFacade.getToolPkgUiRoutes(runtime, resolveContext)
+    }
+
+    fun getToolPkgNavigationEntries(
+        resolveContext: Context? = null
+    ): List<ToolPkgNavigationEntry> {
+        return toolPkgFacade.getToolPkgNavigationEntries(resolveContext)
     }
 
     fun setToolPkgSubpackageEnabled(subpackagePackageName: String, enabled: Boolean): Boolean {
@@ -2167,6 +2340,81 @@ private constructor(private val context: Context, private val aiToolHandler: AIT
             if (reactivatedPackages.isNotEmpty()) {
                 append("\nReactivated packages: ")
                 append(reactivatedPackages.joinToString(", "))
+            }
+            if (reactivationFailures.isNotEmpty()) {
+                append("\nReactivation failures: ")
+                append(reactivationFailures.joinToString(" | "))
+            }
+        }
+    }
+
+    fun refreshExternalPackagesForDebug(
+        reactivateActivePackages: Boolean = true
+    ): String {
+        ensureInitialized()
+
+        val previouslyActivePackages =
+            activePackageToolNames.keys
+                .toSortedSet(String.CASE_INSENSITIVE_ORDER)
+                .toList()
+        val enabledToolPkgContainersBeforeRefresh =
+            getEnabledToolPkgContainerRuntimes()
+                .map(ToolPkgContainerRuntime::packageName)
+                .toSortedSet(String.CASE_INSENSITIVE_ORDER)
+                .toList()
+
+        getAvailablePackages(forceRefresh = true)
+
+        enabledToolPkgContainersBeforeRefresh.forEach(::destroyDefaultToolPkgExecutionEngine)
+        previouslyActivePackages.forEach(::unregisterPackageTools)
+
+        val reactivatedPackages = mutableListOf<String>()
+        val skippedPackages = mutableListOf<String>()
+        val reactivationFailures = mutableListOf<String>()
+
+        if (reactivateActivePackages) {
+            previouslyActivePackages.forEach { packageName ->
+                if (!availablePackages.containsKey(packageName)) {
+                    skippedPackages += "$packageName -> package missing after refresh"
+                    return@forEach
+                }
+                if (!isPackageEnabled(packageName)) {
+                    skippedPackages += "$packageName -> package disabled after refresh"
+                    return@forEach
+                }
+
+                val useMessage = usePackage(packageName)
+                if (activePackageToolNames.containsKey(packageName)) {
+                    reactivatedPackages += packageName
+                } else {
+                    reactivationFailures += "$packageName -> $useMessage"
+                }
+            }
+        }
+
+        val enabledExternalContainers =
+            getEnabledToolPkgContainerRuntimes()
+                .filter { runtime -> runtime.sourceType == ToolPkgSourceType.EXTERNAL }
+                .map(ToolPkgContainerRuntime::packageName)
+                .sorted()
+
+        return buildString {
+            append("Successfully refreshed external packages for debug")
+            append("\nAvailable packages: ")
+            append(availablePackages.size)
+            append("\nEnabled external toolpkg containers: ")
+            append(
+                if (enabledExternalContainers.isEmpty()) "(none)"
+                else enabledExternalContainers.joinToString(", ")
+            )
+            append("\nReactivated packages: ")
+            append(
+                if (reactivatedPackages.isEmpty()) "(none)"
+                else reactivatedPackages.joinToString(", ")
+            )
+            if (skippedPackages.isNotEmpty()) {
+                append("\nSkipped packages: ")
+                append(skippedPackages.joinToString(" | "))
             }
             if (reactivationFailures.isNotEmpty()) {
                 append("\nReactivation failures: ")

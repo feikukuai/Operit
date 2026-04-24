@@ -620,6 +620,7 @@
     <string name="tool_shell_executor_desc">Ejecutar comandos Shell y ver resultados de salida con comandos preestablecidos comunes</string>
     <string name="tool_log_viewer">Visor de registros</string>
     <string name="tool_log_viewer_desc">Captura y visualización en tiempo real de registros del sistema y aplicaciones con filtrado y búsqueda</string>
+    <string name="tool_token_config_desc">Abrir la página de obtención y configuración de la clave API para completar rápidamente la integración del modelo</string>
     <string name="toolbox_description">Colección de herramientas convenientes y prácticas para mejorar la eficiencia del trabajo</string>
     
     <!-- MCP Config Screen -->
@@ -1196,7 +1197,7 @@
     <string name="api_provider">Proveedor API</string>
     <string name="select_api_provider">Haz clic para seleccionar proveedor API</string>
     <string name="select">Seleccionar</string>
-    <string name="default_config_model_restriction">Al usar configuración predeterminada, solo se puede usar el modelo deepseek-chat</string>
+    <string name="default_config_model_restriction">Al usar configuración predeterminada, solo se puede usar el modelo deepseek-v4-flash</string>
     <string name="api_settings_saved">Configuración API guardada</string>
     <string name="save_api_settings">Guardar Configuración API</string>
     <string name="available_models_list">Lista de Modelos Disponibles</string>
@@ -1355,7 +1356,6 @@
     <string name="thinking_settings_active_count">%1$d activados</string>
     <string name="thinking_type_off">off</string>
     <string name="thinking_type_mode">mode</string>
-    <string name="thinking_type_guidance">guidance</string>
     <string name="thinking_quality">Intensidad de pensamiento</string>
     <string name="thinking_quality_desc">Solo funciona en el modo de pensamiento. Hay 4 niveles; cuanto mayor sea el valor, mas profundo razona, y el nivel 1 usa automatico.</string>
     
@@ -3130,7 +3130,6 @@ Ahora puede usar el modo AutoGLM en la interfaz de conversación.</string>
     <string name="external">Externo</string>
     <string name="memory_auto_update_active">Actualización automática de memoria activada</string>
     <string name="thinking_mode_active">Modo de pensamiento activado</string>
-    <string name="thinking_guidance_active">Guía de pensamiento activada</string>
     <string name="ai_planning_active">Búsqueda profunda activada</string>
     <string name="auto_approve_active">Aprobación automática activada</string>
     <string name="settings_options">Opciones de configuración</string>
@@ -3520,8 +3519,6 @@ Ahora puede usar el modo AutoGLM en la interfaz de conversación.</string>
     <string name="chat_ai_computer_closed_due_to_workspace">Computadora AI cerrada (debido a la apertura del espacio de trabajo)</string>
     <string name="thinking_mode">Modo de pensamiento</string>
     <string name="thinking_mode_desc">Actualmente compatible con Gemini, Qwen3, Claude, Doubao, NVIDIA, SiliconFlow y modelos locales MNN, que pueden habilitar el pensamiento integrado.</string>
-    <string name="thinking_guidance">Guía de pensamiento</string>
-    <string name="thinking_guidance_desc">Permite forzar el pensamiento en modelos que no pueden pensar de forma nativa. No se recomienda activar esta opción para modelos de pensamiento.</string>
     <string name="details">Detalles</string>
     <string name="model_selection">Selección de modelo</string>
     <string name="prompt_selection">Selección de prompt</string>
@@ -6929,4 +6926,13 @@ Ahora puede usar el modo AutoGLM en la interfaz de conversación.</string>
     <string name="openai_realtime_tts_error_send_failed">Error al enviar mensaje al WebSocket de OpenAI Realtime</string>
     <string name="openai_realtime_tts_error_empty_audio">OpenAI Realtime no devolvió audio reproducible</string>
     <string name="conversation_language_chinese">Chino</string>
+
+    <string name="nav_group_plugins">Complementos</string>
+    <string name="tag_count_lock">Bloquear cantidad</string>
+    <string name="tag_count_limit">Cantidad máxima seleccionable</string>
+    <string name="tag_count_locked_status">Seleccionados %1$d / Límite %2$d</string>
+    <string name="chat_hidden_user_message_badge">Activación automática</string>
+    <string name="chat_delete_single_variant">Eliminar mensaje único</string>
+    <string name="chat_delete_single_variant_unavailable">El mensaje actual no tiene candidatos únicos para eliminar</string>
+    <string name="chat_delete_single_variant_failed">Error al eliminar el mensaje único: %1$s</string>
 </resources>

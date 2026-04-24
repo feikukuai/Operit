@@ -52,6 +52,7 @@ fun SkillManageScreen(
 
     val skillRepository = remember { SkillRepository.getInstance(context.applicationContext) }
     val viewModel: SkillMarketViewModel = viewModel(
+        key = "skill-manage",
         factory = SkillMarketViewModel.Factory(context.applicationContext, skillRepository)
     )
 
@@ -61,6 +62,7 @@ fun SkillManageScreen(
     val isLoading by viewModel.isLoading.collectAsState()
     val errorMessage by viewModel.errorMessage.collectAsState()
     val userPublishedSkills by viewModel.userPublishedSkills.collectAsState()
+    val hasLoadedUserPublishedSkills by viewModel.hasLoadedUserPublishedSkills.collectAsState()
 
     var showDeleteDialog by remember { mutableStateOf<GitHubIssue?>(null) }
     var showGitHubLogin by remember { mutableStateOf(false) }
@@ -68,14 +70,20 @@ fun SkillManageScreen(
     LaunchedEffect(isLoggedIn) {
         if (isLoggedIn) {
             viewModel.loadUserPublishedSkills()
+        } else {
+            viewModel.resetUserPublishedSkillsState()
         }
     }
 
+    val showManageLoading = isLoading || (isLoggedIn && !hasLoadedUserPublishedSkills)
+    val showEmptyState =
+        hasLoadedUserPublishedSkills && errorMessage == null && userPublishedSkills.isEmpty()
+
     MarketManageScaffold(
         isLoggedIn = isLoggedIn,
-        isLoading = isLoading,
+        isLoading = showManageLoading,
         errorMessage = errorMessage,
-        isEmpty = userPublishedSkills.isEmpty(),
+        isEmpty = showEmptyState,
         onLogin = { showGitHubLogin = true },
         onPublish = onNavigateToPublish,
         publishContentDescription = stringResource(R.string.publish_new_skill),

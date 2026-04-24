@@ -1849,6 +1849,7 @@
     <string name="tool_log_viewer_desc">Tangkap dan lihat log sistem dan aplikasi secara masa nyata, dengan sokongan penapisan dan carian</string>
     <string name="tool_sql_viewer">Pemerhati SQL</string>
     <string name="tool_sql_viewer_desc">Lihat jadual pangkalan data aplikasi dan laksanakan arahan SQL</string>
+    <string name="tool_token_config_desc">Buka halaman mendapatkan dan mengkonfigurasi kunci API untuk menyiapkan integrasi model dengan cepat</string>
     <string name="screen_title_sql_viewer">Pemerhati SQL</string>
     <string name="sql_viewer_title">Pemerhati SQL</string>
     <string name="sql_viewer_input_label">Input SQL</string>
@@ -2586,7 +2587,6 @@
     <string name="external">Luar</string>
     <string name="memory_auto_update_active">Kemas kini ingatan automatik telah diaktifkan</string>
     <string name="thinking_mode_active">Mod berfikir telah diaktifkan</string>
-    <string name="thinking_guidance_active">Panduan berfikir telah diaktifkan</string>
     <string name="ai_planning_active">Carian mendalam telah diaktifkan</string>
     <string name="auto_approve_active">Kelulusan automatik telah diaktifkan</string>
     <string name="settings_options">Pilihan tetapan</string>
@@ -2595,7 +2595,6 @@
     <string name="thinking_settings_active_count">%1$d item telah didayakan</string>
     <string name="thinking_type_off">off</string>
     <string name="thinking_type_mode">mode</string>
-    <string name="thinking_type_guidance">guidance</string>
     <string name="thinking_quality">Tahap pemikiran</string>
     <string name="thinking_quality_desc">Hanya berkesan dalam mod berfikir, terdapat 4 peringkat, nilai lebih tinggi bermakna pemikiran lebih mendalam, 1 adalah automatik.</string>
     <string name="model_config">Konfigurasi model</string>
@@ -2732,8 +2731,6 @@
     <string name="chat_ai_computer_closed_due_to_workspace">Komputer AI telah ditutup (kerana membuka ruang kerja)</string>
     <string name="thinking_mode">Mod berfikir</string>
     <string name="thinking_mode_desc">Kini menyokong model tempatan Gemini, Qwen3, Claude, Doubao, NVIDIA, Silicon Flow dan MNN, mampu mengaktifkan pemikiran terbina dalam.</string>
-    <string name="thinking_guidance">Panduan berfikir</string>
-    <string name="thinking_guidance_desc">Mampu memaksa model yang tidak boleh berfikir untuk berfikir. Pilihan ini tidak disyorkan untuk model berfikir.</string>
     <string name="details">Butiran</string>
     <string name="model_selection">Pemilihan model</string>
     <string name="prompt_selection">Pemilihan petunjuk</string>
@@ -3392,7 +3389,7 @@ Kini anda boleh menggunakan mod AutoGLM di antara muka perbualan.</string>
     <string name="api_provider">Pembekal API</string>
     <string name="select_api_provider">Klik untuk memilih pembekal API</string>
     <string name="select">Pilih</string>
-    <string name="default_config_model_restriction">Apabila menggunakan konfigurasi lalai, hanya model deepseek-chat boleh digunakan</string>
+    <string name="default_config_model_restriction">Apabila menggunakan konfigurasi lalai, hanya model deepseek-v4-flash boleh digunakan</string>
     <string name="enable_direct_image_processing">Model menyokong pemprosesan imej langsung</string>
     <string name="enable_direct_image_processing_desc">Setelah diaktifkan, imej akan dihantar terus kepada AI untuk diproses, bukan membiarkan AI membacanya melalui alat OCR</string>
     <string name="enable_direct_audio_processing">Model menyokong pemprosesan audio langsung</string>
@@ -6860,4 +6857,13 @@ Kini anda boleh menggunakan mod AutoGLM di antara muka perbualan.</string>
     <string name="enable_new_sidebar">Bar Sisi Baharu</string>
     <string name="enable_new_sidebar_description">Aktifkan untuk menggunakan pintu masuk bar sisi baharu. Perubahan besar seterusnya pada bar sisi juga akan berdasarkan ini.</string>
     <string name="chat_auto_update_memory_failed">Gagal mengemas kini memori secara automatik: %1$s</string>
+
+    <string name="nav_group_plugins">Pemalam</string>
+    <string name="tag_count_lock">Kunci Kuantiti</string>
+    <string name="tag_count_limit">Kuantiti Maksimum Boleh Pilih</string>
+    <string name="tag_count_locked_status">Telah dipilih %1$d / Had %2$d</string>
+    <string name="chat_hidden_user_message_badge">Cetus Automatik</string>
+    <string name="chat_delete_single_variant">Padam Mesej Tunggal</string>
+    <string name="chat_delete_single_variant_unavailable">Mesej semasa tiada calon tunggal yang boleh dipadam</string>
+    <string name="chat_delete_single_variant_failed">Gagal memadam mesej tunggal: %1$s</string>
 </resources>

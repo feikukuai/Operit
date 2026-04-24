@@ -993,6 +993,60 @@ def build_component_renderer_function(spec: ComponentSpec, params: Sequence[Para
             """
         ).strip()
 
+    if component == "FilledTonalButton":
+        return textwrap.dedent(
+            """
+            @Composable
+            internal fun renderFilledTonalButtonNode(
+                node: ToolPkgComposeDslNode,
+                onAction: (String, Any?) -> Unit,
+                nodePath: String
+            ) {
+                val props = node.props
+                val actionId = ToolPkgComposeDslParser.extractActionId(props["onClick"])
+                androidx.compose.material3.FilledTonalButton(
+                    onClick = {
+                        if (!actionId.isNullOrBlank()) {
+                            onAction(actionId, null)
+                        }
+                    },
+                    enabled = !actionId.isNullOrBlank() && props.bool("enabled", true),
+                    modifier = applyCommonModifier(Modifier, props),
+                    shape = props.shapeOrNull() ?: androidx.compose.material3.ButtonDefaults.shape
+                ) {
+                    renderNodeChildren(node, onAction, nodePath)
+                }
+            }
+            """
+        ).strip()
+
+    if component == "OutlinedButton":
+        return textwrap.dedent(
+            """
+            @Composable
+            internal fun renderOutlinedButtonNode(
+                node: ToolPkgComposeDslNode,
+                onAction: (String, Any?) -> Unit,
+                nodePath: String
+            ) {
+                val props = node.props
+                val actionId = ToolPkgComposeDslParser.extractActionId(props["onClick"])
+                androidx.compose.material3.OutlinedButton(
+                    onClick = {
+                        if (!actionId.isNullOrBlank()) {
+                            onAction(actionId, null)
+                        }
+                    },
+                    enabled = !actionId.isNullOrBlank() && props.bool("enabled", true),
+                    modifier = applyCommonModifier(Modifier, props),
+                    shape = props.shapeOrNull() ?: androidx.compose.material3.ButtonDefaults.shape
+                ) {
+                    renderNodeChildren(node, onAction, nodePath)
+                }
+            }
+            """
+        ).strip()
+
     if component == "IconButton":
         return textwrap.dedent(
             """
@@ -1436,7 +1490,10 @@ def build_ts_generated_file(
         if component == "IconButton" or component.endswith("IconButton") or component == "IconToggleButton":
             emitted.setdefault("icon", ("string", False))
 
-        if component == "Card":
+        if component == "Button" or component.endswith("Button"):
+            emitted.setdefault("shape", ("ComposeShape", False))
+
+        if component == "Card" or component.endswith("Card"):
             emitted.setdefault("containerColor", ("ComposeColor", False))
             emitted.setdefault("contentColor", ("ComposeColor", False))
             emitted.setdefault("shape", ("ComposeShape", False))

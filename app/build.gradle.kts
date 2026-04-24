@@ -282,6 +282,7 @@ dependencies {
 
     // Kotlin Serialization
     implementation(libs.kotlinx.serialization)
+    implementation(libs.kotlin.reflect)
     
     // UUID dependencies
     implementation(libs.uuid)

@@ -5,7 +5,8 @@
 
 默认行为：
 - 扫描 app/src/main/res 下已有的语言目录（values-en / values-es / values-pt-rBR ...）
-- 仅翻译并追加缺失的 <string>，不覆盖已有翻译
+- 删除目标语言中源文件已不存在的 <string>
+- 翻译并追加缺失的 <string>，不覆盖已有翻译
 - 复用 tools/github/.env 中的 OpenAI 兼容接口配置
 
 示例：
@@ -192,6 +193,38 @@ def _parse_string_names(file_path: Path) -> set[str]:
     if not file_path.exists():
         return set()
     return {entry.name for entry in _parse_strings_file(file_path)}
+
+
+def _remove_stale_strings(file_path: Path, stale_keys: set[str]) -> int:
+    if not file_path.exists() or not stale_keys:
+        return 0
+
+    original = file_path.read_text(encoding="utf-8")
+    removed: set[str] = set()
+
+    def remove_if_stale(match: re.Match[str]) -> str:
+        attrs = match.group(1)
+        name_match = re.search(r'\bname\s*=\s*"([^"]+)"', attrs)
+        if name_match and name_match.group(1) in stale_keys:
+            removed.add(name_match.group(1))
+            return ""
+        return match.group(0)
+
+    string_pattern = re.compile(
+        r'^[ \t]*<string(?=\s|>|/)([^>]*)>.*?</string>[ \t]*(?:\r?\n)?',
+        re.MULTILINE | re.DOTALL,
+    )
+    updated = string_pattern.sub(remove_if_stale, original)
+
+    empty_string_pattern = re.compile(
+        r'^[ \t]*<string(?=\s|>|/)([^>]*)/\s*>[ \t]*(?:\r?\n)?',
+        re.MULTILINE,
+    )
+    updated = empty_string_pattern.sub(remove_if_stale, updated)
+
+    if removed:
+        file_path.write_text(updated, encoding="utf-8")
+    return len(removed)
 
 
 def _split_csv(value: str) -> list[str]:
@@ -582,23 +615,43 @@ def main() -> int:
         print("[X] no target languages found", file=sys.stderr)
         return 2
 
+    source_key_set = {entry.name for entry in source_entries}
     target_missing: list[tuple[TargetSpec, list[StringEntry]]] = []
+    target_stale: list[tuple[TargetSpec, set[str]]] = []
     for target in targets:
         target_keys = _parse_string_names(target.file_path)
+        stale = target_keys - source_key_set
+        if stale and not args.dry_run and not args.report_only:
+            removed_count = _remove_stale_strings(target.file_path, stale)
+            if removed_count != len(stale):
+                raise RuntimeError(
+                    f"{target.code}: expected to remove {len(stale)} stale strings, removed {removed_count}"
+                )
+            target_keys -= stale
         missing = [entry for entry in source_entries if entry.name not in target_keys]
         if args.limit:
             missing = missing[: args.limit]
         target_missing.append((target, missing))
+        target_stale.append((target, stale))
 
-    _log("Missing translation summary")
-    _log("=" * 60)
+    _log("Translation sync summary")
+    _log("=" * 72)
     total_missing = 0
+    total_stale = 0
+    stale_by_target = {target.file_path: stale for target, stale in target_stale}
     for target, missing in target_missing:
         exists_mark = "existing" if target.file_path.exists() else "new"
-        _log(f"{target.code:<8} {target.dir_name:<18} {len(missing):>5} missing ({exists_mark})")
+        stale = stale_by_target[target.file_path]
+        action = "stale" if args.dry_run or args.report_only else "removed"
+        _log(
+            f"{target.code:<8} {target.dir_name:<18} {len(missing):>5} missing "
+            f"{len(stale):>5} {action} ({exists_mark})"
+        )
         total_missing += len(missing)
-    _log("-" * 60)
+        total_stale += len(stale)
+    _log("-" * 72)
     _log(f"Total missing strings: {total_missing}")
+    _log(f"Total stale strings: {total_stale}")
 
     if args.report_only or total_missing == 0:
         return 0

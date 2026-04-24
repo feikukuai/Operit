@@ -4,7 +4,6 @@ import com.ai.assistance.operit.core.application.OperitApplication
 import com.ai.assistance.operit.core.tools.AIToolHandler
 import com.ai.assistance.operit.core.tools.packTool.PackageManager
 import com.ai.assistance.operit.core.tools.packTool.ToolPkgContainerRuntime
-import com.ai.assistance.operit.core.tools.packTool.TOOLPKG_RUNTIME_COMPOSE_DSL
 import com.ai.assistance.operit.plugins.OperitPlugin
 import com.ai.assistance.operit.plugins.lifecycle.AppLifecycleEvent
 import com.ai.assistance.operit.plugins.lifecycle.AppLifecycleHookParams
@@ -15,35 +14,6 @@ import com.ai.assistance.operit.util.AppLogger
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-
-private object ToolPkgToolboxScriptPlugin : ToolboxScriptPlugin {
-    override val id: String = "builtin.toolbox.toolpkg-compose-dsl"
-
-    override suspend fun createDefinitions(
-        params: ToolboxScriptHookParams
-    ): List<ToolboxScriptDefinition> {
-        val context = params.context
-        val packageManager =
-            PackageManager.getInstance(
-                context,
-                AIToolHandler.getInstance(context)
-            )
-        return packageManager
-            .getToolPkgToolboxUiModules(
-                runtime = TOOLPKG_RUNTIME_COMPOSE_DSL,
-                resolveContext = context
-            )
-            .map { module ->
-                ToolboxScriptDefinition(
-                    containerPackageName = module.containerPackageName,
-                    uiModuleId = module.uiModuleId,
-                    runtime = module.runtime,
-                    title = module.title,
-                    description = module.description
-                )
-            }
-    }
-}
 
 private object ToolPkgAppLifecycleHookPlugin : AppLifecycleHookPlugin {
     private const val TAG = "ToolboxPlugin"
@@ -135,7 +105,6 @@ object ToolboxPlugin : OperitPlugin {
         if (!installed.compareAndSet(false, true)) {
             return
         }
-        ToolboxScriptPluginRegistry.register(ToolPkgToolboxScriptPlugin)
         AppLifecycleHookPluginRegistry.register(ToolPkgAppLifecycleHookPlugin)
 
         val context = OperitApplication.instance.applicationContext

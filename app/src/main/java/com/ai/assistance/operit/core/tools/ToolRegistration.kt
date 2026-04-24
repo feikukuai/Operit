@@ -961,7 +961,10 @@ fun registerAllTools(handler: AIToolHandler, context: Context) {
                 ToolResult(
                         toolName = tool.name,
                         success = true,
-                        result = StringResultData("Slept for ${safeDuration}ms")
+                        result = SleepResultData(
+                                requestedMs = durationMs,
+                                sleptMs = safeDuration
+                        )
                 )
             }
     )

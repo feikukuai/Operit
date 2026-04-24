@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import shutil
 import subprocess
@@ -12,6 +13,17 @@ from pathlib import Path
 MANIFEST_FILENAMES = ("manifest.hjson", "manifest.json")
 SYNCABLE_SUFFIXES = {".js", ".toolpkg"}
 SYNC_MODES = ("normal", "test")
+APP_PACKAGE = "com.ai.assistance.operit"
+ACTION_DEBUG_INSTALL_TOOLPKG = "com.ai.assistance.operit.DEBUG_INSTALL_TOOLPKG"
+ACTION_DEBUG_REFRESH_PACKAGES = "com.ai.assistance.operit.DEBUG_REFRESH_PACKAGES"
+RECEIVER_COMPONENT_TOOLPKG = (
+    "com.ai.assistance.operit/.core.tools.packTool.ToolPkgDebugInstallReceiver"
+)
+RECEIVER_COMPONENT_REFRESH = (
+    "com.ai.assistance.operit/.core.tools.packTool.PackageDebugRefreshReceiver"
+)
+REMOTE_PACKAGES_DIR = f"/sdcard/Android/data/{APP_PACKAGE}/files/packages"
+HOT_RELOAD_STATE_FILE = ".sync_example_packages_hot_reload_state.json"
 
 
 @dataclass(frozen=True)
@@ -238,6 +250,273 @@ def _pack_toolpkg_folder(repo_root: Path, source_folder: Path, destination_file:
             zf.write(file_path, arcname)
 
 
+def _run_command(
+    command: list[str],
+    *,
+    capture_output: bool = False,
+    check: bool = True,
+) -> subprocess.CompletedProcess[str]:
+    completed = subprocess.run(
+        command,
+        text=True,
+        capture_output=capture_output,
+    )
+    if check and completed.returncode != 0:
+        output = f"{completed.stdout or ''}{completed.stderr or ''}".strip()
+        raise RuntimeError(
+            f"Command failed ({completed.returncode}): {' '.join(command)}\n{output}"
+        )
+    return completed
+
+
+def _list_adb_devices() -> list[str]:
+    completed = _run_command(["adb", "devices"], capture_output=True)
+    devices: list[str] = []
+    for line in completed.stdout.splitlines()[1:]:
+        parts = line.split()
+        if len(parts) >= 2 and parts[1] == "device":
+            devices.append(parts[0])
+    return devices
+
+
+def _resolve_hot_reload_device(explicit_serial: str | None) -> str | None:
+    try:
+        _run_command(["adb", "version"], capture_output=True)
+    except Exception:
+        print("SKIP-HOT-RELOAD: adb not available in PATH")
+        return None
+
+    try:
+        devices = _list_adb_devices()
+    except Exception as exc:
+        print(f"SKIP-HOT-RELOAD: failed to query adb devices: {exc}")
+        return None
+
+    if explicit_serial:
+        if explicit_serial not in devices:
+            print(
+                "SKIP-HOT-RELOAD: requested device not available: "
+                f"{explicit_serial} (available: {', '.join(devices) or 'none'})"
+            )
+            return None
+        return explicit_serial
+
+    if len(devices) == 1:
+        return devices[0]
+
+    if not devices:
+        print("SKIP-HOT-RELOAD: no authorized adb devices found")
+    else:
+        print(
+            "SKIP-HOT-RELOAD: multiple adb devices detected, use --device to choose one: "
+            + ", ".join(devices)
+        )
+    return None
+
+
+def _adb_command(
+    device_serial: str,
+    *args: str,
+    capture_output: bool = False,
+    check: bool = True,
+) -> subprocess.CompletedProcess[str]:
+    return _run_command(
+        ["adb", "-s", device_serial, *args],
+        capture_output=capture_output,
+        check=check,
+    )
+
+
+def _parse_toolpkg_manifest_text(text: str, manifest_path: Path) -> str:
+    package_id = ""
+    try:
+        parsed = json.loads(text)
+    except json.JSONDecodeError:
+        parsed = None
+
+    if isinstance(parsed, dict):
+        package_id = str(parsed.get("toolpkg_id", "")).strip()
+
+    if not package_id:
+        for line in text.splitlines():
+            if "toolpkg_id" not in line:
+                continue
+            _, _, value = line.partition(":")
+            package_id = value.strip().strip('",\'')
+            if package_id:
+                break
+
+    if not package_id:
+        raise ValueError(f"manifest.toolpkg_id is required: {manifest_path}")
+    return package_id
+
+
+def _read_toolpkg_package_id(archive_path: Path) -> str:
+    with zipfile.ZipFile(archive_path, "r") as archive:
+        manifest_name = next(
+            (name for name in archive.namelist() if Path(name).name in MANIFEST_FILENAMES),
+            None,
+        )
+        if manifest_name is None:
+            raise ValueError(
+                f"Archive does not contain manifest.json or manifest.hjson: {archive_path}"
+            )
+        text = archive.read(manifest_name).decode("utf-8")
+        return _parse_toolpkg_manifest_text(text, archive_path / manifest_name)
+
+
+def _compute_file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _load_hot_reload_state(path: Path) -> dict[str, dict[str, str]]:
+    if not path.is_file():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    normalized: dict[str, dict[str, str]] = {}
+    for device, entry in data.items():
+        if not isinstance(device, str) or not isinstance(entry, dict):
+            continue
+        normalized[device] = {
+            str(name): str(signature)
+            for name, signature in entry.items()
+            if isinstance(name, str) and isinstance(signature, str)
+        }
+    return normalized
+
+
+def _save_hot_reload_state(path: Path, state: dict[str, dict[str, str]]) -> None:
+    path.write_text(
+        json.dumps(state, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+
+
+def _broadcast_refresh_packages(device_serial: str) -> None:
+    _adb_command(
+        device_serial,
+        "shell",
+        "am",
+        "broadcast",
+        "-a",
+        ACTION_DEBUG_REFRESH_PACKAGES,
+        "-n",
+        RECEIVER_COMPONENT_REFRESH,
+        "--include-stopped-packages",
+        "--ez",
+        "reactivate_active_packages",
+        "true",
+        capture_output=True,
+    )
+
+
+def _broadcast_debug_install_toolpkg(
+    device_serial: str,
+    *,
+    package_name: str,
+    remote_file_path: str,
+) -> None:
+    _adb_command(
+        device_serial,
+        "shell",
+        "am",
+        "broadcast",
+        "-a",
+        ACTION_DEBUG_INSTALL_TOOLPKG,
+        "-n",
+        RECEIVER_COMPONENT_TOOLPKG,
+        "--include-stopped-packages",
+        "--es",
+        "package_name",
+        package_name,
+        "--es",
+        "file_path",
+        remote_file_path,
+        "--ez",
+        "reset_subpackage_states",
+        "false",
+        capture_output=True,
+    )
+
+
+def _hot_reload_packages(
+    *,
+    repo_root: Path,
+    packages_dir: Path,
+    plans: list[SyncPlanItem],
+    device_serial: str,
+) -> None:
+    state_file = repo_root / HOT_RELOAD_STATE_FILE
+    state = _load_hot_reload_state(state_file)
+    previous_signatures = state.get(device_serial, {})
+
+    current_signatures: dict[str, str] = {}
+    for plan in plans:
+        destination_path = packages_dir / plan.destination_name
+        if destination_path.is_file():
+            current_signatures[plan.destination_name] = _compute_file_sha256(destination_path)
+
+    changed_names = sorted(
+        [
+            destination_name
+            for destination_name, signature in current_signatures.items()
+            if previous_signatures.get(destination_name) != signature
+        ]
+    )
+    deleted_names = sorted(
+        [
+            destination_name
+            for destination_name in previous_signatures.keys()
+            if destination_name not in current_signatures
+        ]
+    )
+
+    if not changed_names and not deleted_names:
+        print(f"SKIP-HOT-RELOAD: no package content changes for device {device_serial}")
+        return
+
+    print(f"HOT-RELOAD: device={device_serial}, changed={len(changed_names)}, deleted={len(deleted_names)}")
+    _adb_command(device_serial, "shell", "mkdir", "-p", REMOTE_PACKAGES_DIR)
+
+    for destination_name in deleted_names:
+        remote_path = f"{REMOTE_PACKAGES_DIR}/{destination_name}"
+        print(f"HOT-DELETE: {remote_path}")
+        _adb_command(device_serial, "shell", "rm", "-f", remote_path)
+
+    changed_toolpkgs: list[tuple[str, str]] = []
+    for destination_name in changed_names:
+        local_path = packages_dir / destination_name
+        remote_path = f"{REMOTE_PACKAGES_DIR}/{destination_name}"
+        print(f"HOT-PUSH: {local_path} -> {remote_path}")
+        _adb_command(device_serial, "push", str(local_path), remote_path)
+        if destination_name.lower().endswith(".toolpkg"):
+            package_id = _read_toolpkg_package_id(local_path)
+            changed_toolpkgs.append((package_id, remote_path))
+
+    print("HOT-RELOAD: broadcasting package refresh")
+    _broadcast_refresh_packages(device_serial)
+
+    for package_id, remote_path in changed_toolpkgs:
+        print(f"HOT-INSTALL: {package_id} -> {remote_path}")
+        _broadcast_debug_install_toolpkg(
+            device_serial,
+            package_name=package_id,
+            remote_file_path=remote_path,
+        )
+
+    state[device_serial] = current_signatures
+    _save_hot_reload_state(state_file, state)
+
+
 def _delete_unplanned_outputs(
     packages_dir: Path,
     planned_destination_names: set[str],
@@ -312,6 +591,23 @@ def main() -> int:
         "--dry-run",
         action="store_true",
         help="Show what would be copied/packed without writing files.",
+    )
+    parser.add_argument(
+        "--device",
+        type=str,
+        default=None,
+        help=(
+            "adb device serial for post-sync hot reload. "
+            "If omitted and exactly one device is connected, that device is used automatically."
+        ),
+    )
+    parser.add_argument(
+        "--no-hot-reload",
+        action="store_true",
+        help=(
+            "Disable post-sync adb hot reload. "
+            "By default the script will try to push changed packages to the device and refresh the app when adb is available."
+        ),
     )
     parser.add_argument(
         "--delete-extra",
@@ -414,6 +710,20 @@ def main() -> int:
         f"mode={sync_mode}, copied={copied}, packed={packed}, deleted={deleted}, missing={missing}, "
         f"whitelist={len(final_items)}, resolved={len(plans)}, dry_run={bool(args.dry_run)}"
     )
+
+    if not args.dry_run and not args.no_hot_reload:
+        device_serial = _resolve_hot_reload_device(args.device)
+        if device_serial is not None:
+            try:
+                _hot_reload_packages(
+                    repo_root=repo_root,
+                    packages_dir=packages_dir,
+                    plans=plans,
+                    device_serial=device_serial,
+                )
+            except Exception as exc:
+                print(f"SKIP-HOT-RELOAD: {exc}", file=sys.stderr)
+
     return 0 if missing == 0 else 1
 
 

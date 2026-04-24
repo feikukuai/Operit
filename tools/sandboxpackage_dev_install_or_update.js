@@ -3,7 +3,6 @@ const SandboxPackageDevInstallerState = {
 };
 
 const SandboxPackageDevInstaller = (function () {
-  const TOOL_TYPE = "default";
   const ENVIRONMENT = "android";
   const SKILL_NAME = "SandboxPackage_DEV";
   const SKILL_ROOT = `/sdcard/Download/Operit/skills/${SKILL_NAME}`;
@@ -14,6 +13,7 @@ const SandboxPackageDevInstaller = (function () {
   const EXAMPLE_PACKAGES_DIR = `${EXAMPLES_DIR}/packages`;
   const BUILTIN_PACKAGES_ASSET_DIR = "packages";
   const CDN_BASE = "https://cdn.jsdelivr.net/gh/AAswordman/Operit@main";
+  const MAX_DOWNLOAD_CONCURRENCY = 8;
   const TYPE_FILES = [
     "android.d.ts",
     "chat.d.ts",
@@ -66,67 +66,32 @@ const SandboxPackageDevInstaller = (function () {
     console.log(message);
   }
 
-  function parseToolResult(toolName, rawText) {
-    let parsed;
-    try {
-      parsed = JSON.parse(String(rawText ?? ""));
-    } catch (error) {
-      throw new Error(`${toolName} returned non-JSON result: ${String(error && error.message ? error.message : error)}`);
-    }
-    if (!parsed || parsed.success !== true) {
-      const detail =
-        (parsed && (parsed.error || parsed.message)) ||
-        `Unknown ${toolName} failure`;
-      throw new Error(`${toolName} failed: ${String(detail)}`);
-    }
-    return parsed;
-  }
-
-  function callTool(toolName, params) {
-    const rawText = NativeInterface.callTool(TOOL_TYPE, toolName, JSON.stringify(params || {}));
-    return parseToolResult(toolName, rawText);
-  }
-
-  function makeDirectory(path) {
-    return callTool("make_directory", {
-      path,
-      create_parents: "true",
-      environment: ENVIRONMENT
-    });
-  }
-
-  function downloadFile(url, destination) {
-    return callTool("download_file", {
-      url,
-      destination,
-      environment: ENVIRONMENT
-    });
+  async function makeDirectory(path) {
+    return await Tools.Files.mkdir(path, true, ENVIRONMENT);
   }
 
   async function downloadFileAsync(url, destination) {
-    const result = await toolCall(TOOL_TYPE, "download_file", {
-      url,
-      destination,
-      environment: ENVIRONMENT
-    });
-
-    if (!result || result.success !== true) {
-      const detail =
-        (result && (result.error || result.message)) ||
-        `Unknown download_file failure for ${destination}`;
-      throw new Error(String(detail));
-    }
-
-    return result;
+    return await Tools.Files.download(url, destination, ENVIRONMENT);
   }
 
   async function downloadAllFiles() {
-    await Promise.all(
-      DOWNLOADS.map(async (item) => {
+    let nextIndex = 0;
+
+    async function worker() {
+      while (nextIndex < DOWNLOADS.length) {
+        const item = DOWNLOADS[nextIndex];
+        nextIndex += 1;
         logStep(`Downloading -> ${item.destination}`);
         await downloadFileAsync(item.url, item.destination);
-      })
-    );
+      }
+    }
+
+    const workerCount = Math.min(MAX_DOWNLOAD_CONCURRENCY, DOWNLOADS.length);
+    const workers = [];
+    for (let index = 0; index < workerCount; index += 1) {
+      workers.push(worker());
+    }
+    await Promise.all(workers);
   }
 
   function collectRelativeFiles(directory, relativePrefix, collectedFiles) {
@@ -171,12 +136,12 @@ const SandboxPackageDevInstaller = (function () {
 
   async function run() {
     logStep(`Preparing skill root -> ${SKILL_ROOT}`);
-    makeDirectory("/sdcard/Download/Operit/skills");
-    makeDirectory(SKILL_ROOT);
-    makeDirectory(REFERENCES_DIR);
-    makeDirectory(TYPES_DIR);
-    makeDirectory(SCRIPTS_DIR);
-    makeDirectory(EXAMPLES_DIR);
+    await makeDirectory("/sdcard/Download/Operit/skills");
+    await makeDirectory(SKILL_ROOT);
+    await makeDirectory(REFERENCES_DIR);
+    await makeDirectory(TYPES_DIR);
+    await makeDirectory(SCRIPTS_DIR);
+    await makeDirectory(EXAMPLES_DIR);
     await downloadAllFiles();
 
     logStep(`Syncing built-in package examples -> ${EXAMPLE_PACKAGES_DIR}`);

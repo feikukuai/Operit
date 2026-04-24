@@ -45,6 +45,9 @@ fun AiMessageComposable(
     backgroundColor: Color,
     textColor: Color,
     onLinkClick: ((String) -> Unit)? = null,
+    initialThinkingExpanded: Boolean = false,
+    expandThinkToolsGroups: Boolean = false,
+    forceShowThinkingProcess: Boolean = false,
     overrideStream: Stream<String>? = null,
     heightMemory: ChatMessageHeightMemory? = null,
     enableDialogs: Boolean = true,  // 新增参数：是否启用弹窗功能，默认启用
@@ -54,6 +57,7 @@ fun AiMessageComposable(
     val displayPreferencesManager = remember { DisplayPreferencesManager.getInstance(context) }
     val showThinkingProcess by preferencesManager.showThinkingProcess.collectAsState(initial = true)
     val showStatusTags by preferencesManager.showStatusTags.collectAsState(initial = true)
+    val effectiveShowThinkingProcess = if (forceShowThinkingProcess) true else showThinkingProcess
     
     // 收集显示偏好设置
     val showModelProvider by displayPreferencesManager.showModelProvider.collectAsState(initial = false)
@@ -69,17 +73,19 @@ fun AiMessageComposable(
     val rendererState = remember(message.timestamp) { StreamMarkdownRendererState() }
 
     // 创建自定义XML渲染器
-    val xmlRenderer = remember(showThinkingProcess, showStatusTags, enableDialogs) {
+    val xmlRenderer = remember(effectiveShowThinkingProcess, showStatusTags, initialThinkingExpanded, enableDialogs) {
         CustomXmlRenderer(
-            showThinkingProcess = showThinkingProcess,
+            showThinkingProcess = effectiveShowThinkingProcess,
             showStatusTags = showStatusTags,
+            initialThinkingExpanded = initialThinkingExpanded,
             enableDialogs = enableDialogs  // 传递弹窗启用状态
         )
     }
 
-    val nodeGrouper = remember(showThinkingProcess, toolCollapseMode) {
+    val nodeGrouper = remember(effectiveShowThinkingProcess, toolCollapseMode, expandThinkToolsGroups) {
         ThinkToolsXmlNodeGrouper(
-            showThinkingProcess = showThinkingProcess,
+            showThinkingProcess = effectiveShowThinkingProcess,
+            forceExpandGroups = expandThinkToolsGroups,
             toolCollapseMode = toolCollapseMode
         )
     }

@@ -451,6 +451,8 @@ await toolCall('default', 'http_request', { url: 'https://example.com', method: 
 
 ## 5. Java / Kotlin Bridge
 
+如果你只想看**给脚本开发者承诺的接口**，优先阅读 [docs/JAVA_BRIDGE_INTERFACE.md](../../../../../../../../docs/JAVA_BRIDGE_INTERFACE.md)。
+
 ### 5.1 入口对象
 
 运行时会注入：
@@ -802,7 +804,8 @@ result.size();         // 错，JS 里已经不是 java.util.List 了
 | Java / Kotlin 侧值 | JS 侧表现 |
 |------|------|
 | `null` / Kotlin `Unit` | `null` |
-| `String` / `CharSequence` / `char` | `string` |
+| `String` / `char` | `string` |
+| Java 方法返回的 `CharSequence` 值 | 可按 `string` 使用 |
 | `boolean` / `Boolean` | `boolean` |
 | `int` / `long` / `double` / 其他 `Number` | `number` |
 | `float` | `number`（按 double 语义传） |
@@ -819,6 +822,7 @@ result.size();         // 错，JS 里已经不是 java.util.List 了
 - 从 Java 回来的 `List<File>`，在 JS 里要按数组用：`length`、索引、`map/filter`
 - 从 Java 回来的 `Map<String, Object>`，在 JS 里要按 plain object 用
 - 如果返回的是普通对象代理，才会有 `obj.method()`、`obj.field` 这一类桥接能力
+- 但如果你自己显式构造的是 `new Java.java.lang.StringBuilder()`、`new Java.java.util.ArrayList()` 这类对象，拿到的仍然是 Java 实例代理，不会直接拍平成字符串或数组
 
 #### JS -> Java / Kotlin
 

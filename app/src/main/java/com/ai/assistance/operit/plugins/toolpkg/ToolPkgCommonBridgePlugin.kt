@@ -686,6 +686,7 @@ private object ToolPkgInputMenuToggleBridgePlugin : InputMenuTogglePlugin {
                 title = spec.title,
                 description = spec.description,
                 isChecked = resolvedChecked,
+                slot = spec.slot,
                 onToggle = {
                     if (params.featureStates.containsKey(spec.id)) {
                         params.onToggleFeature(spec.id)
@@ -802,7 +803,8 @@ private object ToolPkgInputMenuToggleBridgePlugin : InputMenuTogglePlugin {
         val id: String,
         val title: String,
         val description: String,
-        val isChecked: Boolean
+        val isChecked: Boolean,
+        val slot: String?
     )
 
     private fun parseInputMenuDefinitions(
@@ -836,7 +838,8 @@ private object ToolPkgInputMenuToggleBridgePlugin : InputMenuTogglePlugin {
                     id = id,
                     title = title,
                     description = item.optString("description").trim(),
-                    isChecked = item.optBoolean("isChecked", false)
+                    isChecked = item.optBoolean("isChecked", false),
+                    slot = item.optString("slot").trim().takeIf { it.isNotEmpty() }
                 )
             )
         }

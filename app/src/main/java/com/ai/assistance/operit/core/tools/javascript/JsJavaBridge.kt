@@ -498,6 +498,215 @@ internal fun buildJavaClassBridgeDefinition(): String {
                 NativeInterface[methodName].apply(NativeInterface, args || []);
             }
 
+            function invokeBridgeBoolean(methodName, args) {
+                return !!invokeBridge(methodName, args);
+            }
+
+            function isPlainInterfaceImplementationCandidate(value) {
+                return (
+                    (typeof value === 'function' ||
+                        (value &&
+                            typeof value === 'object' &&
+                            !Array.isArray(value))) &&
+                    !isJavaClassReference(value)
+                );
+            }
+
+            function shouldSugarInterfaceConstruction(error) {
+                var message =
+                    error && typeof error.message === 'string'
+                        ? error.message
+                        : String(error || '');
+                return message.indexOf(' is an interface; use Java.implement(') >= 0;
+            }
+
+            function callInstanceBridge(handle, methodName, args) {
+                return invokeBridge('javaCallInstance', [
+                    handle,
+                    String(methodName || ''),
+                    JSON.stringify(normalizeArgs(args || []))
+                ]);
+            }
+
+            function tryProcessPendingJavaBridgeCallback() {
+                if (
+                    !hasNative('javaPollPendingJsCallback') ||
+                    !hasNative('javaResolvePendingJsCallback')
+                ) {
+                    return false;
+                }
+
+                var raw = NativeInterface.javaPollPendingJsCallback();
+                if (raw === undefined || raw === null) {
+                    return false;
+                }
+
+                var text = String(raw || '').trim();
+                if (!text) {
+                    return false;
+                }
+
+                var request;
+                try {
+                    request = JSON.parse(text);
+                } catch (_parseError) {
+                    return false;
+                }
+
+                if (!request || !request.id) {
+                    return false;
+                }
+
+                var payload;
+                try {
+                    var parsedArgs = [];
+                    if (typeof request.argsJson === 'string' && request.argsJson.trim()) {
+                        var candidateArgs = JSON.parse(request.argsJson);
+                        if (Array.isArray(candidateArgs)) {
+                            parsedArgs = candidateArgs;
+                        }
+                    }
+                    var value = invokeRegisteredJsObject(
+                        request.jsObjectId,
+                        request.methodName,
+                        parsedArgs
+                    );
+                    payload = JSON.stringify({
+                        success: true,
+                        data: unwrapValue(value)
+                    });
+                } catch (error) {
+                    payload = JSON.stringify({
+                        success: false,
+                        error: error && error.message ? error.message : String(error)
+                    });
+                }
+
+                NativeInterface.javaResolvePendingJsCallback(String(request.id), payload);
+                return true;
+            }
+
+            function processPendingJavaBridgeCallbacks(maxCount) {
+                var limit =
+                    typeof maxCount === 'number' && isFinite(maxCount) && maxCount > 0
+                        ? Math.floor(maxCount)
+                        : 1;
+                var processed = 0;
+                while (processed < limit && tryProcessPendingJavaBridgeCallback()) {
+                    processed += 1;
+                }
+                return processed;
+            }
+
+            function sleepForJavaBridgeWait(durationMs) {
+                var normalized =
+                    typeof durationMs === 'number' && isFinite(durationMs)
+                        ? Math.max(0, Math.floor(durationMs))
+                        : 0;
+                if (normalized <= 0) {
+                    return;
+                }
+                if (hasNative('javaSleepMillis')) {
+                    NativeInterface.javaSleepMillis(String(normalized));
+                    return;
+                }
+                var startedAt = Date.now();
+                while (Date.now() - startedAt < normalized) {
+                }
+            }
+
+            function waitForThreadJoinWithCallbacks(handle, argsLike) {
+                var args = Array.prototype.slice.call(argsLike || []);
+                var timeoutMs = 0;
+                if (args.length >= 1) {
+                    var millis = Number(args[0]);
+                    if (isFinite(millis)) {
+                        timeoutMs = Math.max(0, Math.floor(millis));
+                    }
+                }
+                var deadline = timeoutMs > 0 ? Date.now() + timeoutMs : 0;
+
+                while (true) {
+                    if (!callInstanceBridge(handle, 'isAlive', [])) {
+                        return;
+                    }
+                    var processed = processPendingJavaBridgeCallbacks(32);
+                    if (deadline > 0 && Date.now() >= deadline) {
+                        return;
+                    }
+                    sleepForJavaBridgeWait(processed > 0 ? 0 : 10);
+                }
+            }
+
+            function resolveFutureTimeoutMs(args) {
+                if (!Array.isArray(args) || args.length === 0) {
+                    return 0;
+                }
+                var rawTimeout = Number(args[0]);
+                if (!isFinite(rawTimeout)) {
+                    return 0;
+                }
+                if (
+                    args.length >= 2 &&
+                    args[1] &&
+                    typeof args[1].toMillis === 'function'
+                ) {
+                    try {
+                        var converted = Number(args[1].toMillis(rawTimeout));
+                        if (isFinite(converted)) {
+                            return Math.max(0, Math.floor(converted));
+                        }
+                    } catch (_error) {
+                    }
+                }
+                if (args.length >= 2 && typeof args[1] === 'string') {
+                    var unitName = String(args[1] || '').trim().toUpperCase();
+                    if (unitName === 'NANOSECONDS') {
+                        return Math.max(0, Math.floor(rawTimeout / 1e6));
+                    }
+                    if (unitName === 'MICROSECONDS') {
+                        return Math.max(0, Math.floor(rawTimeout / 1e3));
+                    }
+                    if (unitName === 'MILLISECONDS') {
+                        return Math.max(0, Math.floor(rawTimeout));
+                    }
+                    if (unitName === 'SECONDS') {
+                        return Math.max(0, Math.floor(rawTimeout * 1000));
+                    }
+                    if (unitName === 'MINUTES') {
+                        return Math.max(0, Math.floor(rawTimeout * 60 * 1000));
+                    }
+                    if (unitName === 'HOURS') {
+                        return Math.max(0, Math.floor(rawTimeout * 60 * 60 * 1000));
+                    }
+                    if (unitName === 'DAYS') {
+                        return Math.max(0, Math.floor(rawTimeout * 24 * 60 * 60 * 1000));
+                    }
+                }
+                return Math.max(0, Math.floor(rawTimeout));
+            }
+
+            function waitForFutureTaskResultWithCallbacks(handle, argsLike) {
+                var args = Array.prototype.slice.call(argsLike || []);
+                var timeoutMs = resolveFutureTimeoutMs(args);
+                var deadline = timeoutMs > 0 ? Date.now() + timeoutMs : 0;
+
+                while (true) {
+                    if (callInstanceBridge(handle, 'isDone', [])) {
+                        return callInstanceBridge(
+                            handle,
+                            'get',
+                            args.length > 0 ? args : []
+                        );
+                    }
+                    var processed = processPendingJavaBridgeCallbacks(32);
+                    if (deadline > 0 && Date.now() >= deadline) {
+                        throw new Error('FutureTask.get timed out after ' + timeoutMs + 'ms');
+                    }
+                    sleepForJavaBridgeWait(processed > 0 ? 0 : 10);
+                }
+            }
+
             function normalizeExternalCodeLoadOptions(options) {
                 if (options === undefined || options === null) {
                     return {};
@@ -606,9 +815,25 @@ internal fun buildJavaClassBridgeDefinition(): String {
                         };
                     },
                     toString: function() {
-                        return '[JavaObject ' + className + '#' + handle + ']';
+                        return invokeBridge('javaCallInstance', [
+                            handle,
+                            'toString',
+                            '[]'
+                        ]);
                     }
                 };
+
+                if (className === 'java.lang.Thread') {
+                    target.join = function() {
+                        return waitForThreadJoinWithCallbacks(handle, arguments);
+                    };
+                }
+
+                if (className === 'java.util.concurrent.FutureTask') {
+                    target.get = function() {
+                        return waitForFutureTaskResultWithCallbacks(handle, arguments);
+                    };
+                }
 
                 var proxy = new Proxy(target, {
                     get: function(obj, prop) {
@@ -623,6 +848,22 @@ internal fun buildJavaClassBridgeDefinition(): String {
                         }
                         if (typeof prop !== 'string') {
                             return undefined;
+                        }
+                        try {
+                            if (invokeBridgeBoolean('javaHasInstanceMethod', [
+                                handle,
+                                prop
+                            ])) {
+                                return function() {
+                                    var args = Array.prototype.slice.call(arguments);
+                                    return invokeBridge('javaCallInstance', [
+                                        handle,
+                                        prop,
+                                        JSON.stringify(normalizeArgs(args))
+                                    ]);
+                                };
+                            }
+                        } catch (_methodProbeError) {
                         }
                         try {
                             return invokeBridge('javaGetInstanceField', [
@@ -738,8 +979,20 @@ internal fun buildJavaClassBridgeDefinition(): String {
                         normalizeBridgeBoolean(NativeInterface.javaClassExists(className));
                 };
                 target.newInstance = function() {
-                    var args = normalizeArgs(arguments);
-                    return invokeBridge('javaNewInstance', [className, JSON.stringify(args)]);
+                    var rawArgs = Array.prototype.slice.call(arguments);
+                    var args = normalizeArgs(rawArgs);
+                    try {
+                        return invokeBridge('javaNewInstance', [className, JSON.stringify(args)]);
+                    } catch (error) {
+                        if (
+                            rawArgs.length === 1 &&
+                            isPlainInterfaceImplementationCandidate(rawArgs[0]) &&
+                            shouldSugarInterfaceConstruction(error)
+                        ) {
+                            return JavaApi.implement(className, rawArgs[0]);
+                        }
+                        throw error;
+                    }
                 };
                 target.callStatic = function(methodName) {
                     var args = Array.prototype.slice.call(arguments, 1);

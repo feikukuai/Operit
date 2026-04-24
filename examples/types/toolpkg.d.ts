@@ -84,11 +84,20 @@ export namespace ToolPkg {
         | void
         | Promise<string | XmlRenderHookObjectResult | null | void>;
 
+    export type InputMenuToggleSlot =
+        | "thinking"
+        | "memory"
+        | "model"
+        | "tools"
+        | "general"
+        | "default";
+
     export interface InputMenuToggleDefinitionResult extends JsonObject {
         id: string;
         title: string;
         description?: string;
         isChecked?: boolean;
+        slot?: `${InputMenuToggleSlot}`;
     }
 
     export interface InputMenuToggleObjectResult extends JsonObject {
@@ -469,6 +478,29 @@ export namespace ToolPkg {
         title?: LocalizedText;
     }
 
+    export interface UiRouteRegistration {
+        id: string;
+        route?: string;
+        routeId?: string;
+        runtime?: string;
+        screen: ComposeDslScreen;
+        params?: ToolParams;
+        title?: LocalizedText;
+    }
+
+    export type NavigationSurface =
+        | "toolbox"
+        | "main_sidebar_plugins";
+
+    export interface NavigationEntryRegistration {
+        id: string;
+        route: string;
+        surface: NavigationSurface;
+        title?: LocalizedText;
+        icon?: string;
+        order?: number;
+    }
+
     export interface AppLifecycleHookRegistration {
         id: string;
         event: AppLifecycleEvent;
@@ -543,6 +575,8 @@ export namespace ToolPkg {
 
     export interface Registry {
         registerToolboxUiModule(definition: ToolboxUiModuleRegistration): void;
+        registerUiRoute(definition: UiRouteRegistration): void;
+        registerNavigationEntry(definition: NavigationEntryRegistration): void;
         registerAppLifecycleHook(definition: AppLifecycleHookRegistration): void;
         registerMessageProcessingPlugin(definition: MessageProcessingPluginRegistration): void;
         registerXmlRenderPlugin(definition: XmlRenderPluginRegistration): void;
@@ -562,6 +596,10 @@ export namespace ToolPkg {
 
 declare global {
     function registerToolPkgToolboxUiModule(definition: ToolPkg.ToolboxUiModuleRegistration): void;
+
+    function registerToolPkgUiRoute(definition: ToolPkg.UiRouteRegistration): void;
+
+    function registerToolPkgNavigationEntry(definition: ToolPkg.NavigationEntryRegistration): void;
 
     function registerToolPkgAppLifecycleHook(definition: ToolPkg.AppLifecycleHookRegistration): void;
 

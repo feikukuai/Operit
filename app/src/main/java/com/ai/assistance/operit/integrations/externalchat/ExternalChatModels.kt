@@ -27,6 +27,8 @@ data class ExternalChatRequest(
     val initialMode: String? = null,
     @SerialName("auto_exit_after_ms")
     val autoExitAfterMs: Long = -1L,
+    @SerialName("timeout_ms")
+    val timeoutMs: Long = -1L,
     @SerialName("stop_after")
     val stopAfter: Boolean = false
 )
@@ -72,6 +74,8 @@ data class ExternalChatHttpRequest(
     val initialMode: String? = null,
     @SerialName("auto_exit_after_ms")
     val autoExitAfterMs: Long = -1L,
+    @SerialName("timeout_ms")
+    val timeoutMs: Long = -1L,
     @SerialName("stop_after")
     val stopAfter: Boolean = false,
     @SerialName("stream")
@@ -105,6 +109,7 @@ data class ExternalChatHttpRequest(
             returnToolStatus = returnToolStatus,
             initialMode = initialMode,
             autoExitAfterMs = autoExitAfterMs,
+            timeoutMs = timeoutMs,
             stopAfter = stopAfter
         )
     }

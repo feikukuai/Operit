@@ -176,7 +176,8 @@ fun BubbleUserMessageComposable(
         }
     }
     val resolvedDisplayName = if (isProxySender) proxySenderName else globalUserName
-    val shouldShowResolvedName = if (isProxySender) true else showUserName
+    val shouldShowResolvedName = !isHiddenPlaceholder && if (isProxySender) true else showUserName
+    val shouldShowAvatar = !isHiddenPlaceholder && bubbleShowAvatar
 
     // 添加状态控制内容预览
     val showContentPreview = remember { mutableStateOf(false) }
@@ -349,7 +350,7 @@ fun BubbleUserMessageComposable(
 
         // Message bubble
         if (bubbleWideLayoutEnabled) {
-            val headerVisible = bubbleShowAvatar || (shouldShowResolvedName && !resolvedDisplayName.isNullOrEmpty())
+            val headerVisible = shouldShowAvatar || (shouldShowResolvedName && !resolvedDisplayName.isNullOrEmpty())
 
             if (headerVisible) {
                 Row(
@@ -370,7 +371,7 @@ fun BubbleUserMessageComposable(
                         }
                     }
 
-                    if (bubbleShowAvatar) {
+                    if (shouldShowAvatar) {
                         if (shouldShowResolvedName && !resolvedDisplayName.isNullOrEmpty()) {
                             Spacer(modifier = Modifier.width(8.dp))
                         }
@@ -524,13 +525,13 @@ fun BubbleUserMessageComposable(
                     .weight(1f, fill = false)
                     .padding(
                         start = 32.dp,
-                        end = if (bubbleShowAvatar) 0.dp else 8.dp
+                        end = if (shouldShowAvatar) 0.dp else 8.dp
                     ),
                 horizontalAlignment = Alignment.End
             ) {
                 // 显示用户名（如果开启了显示选项并且设置了用户名）
-                val displayName = if (isProxySender) proxySenderName else globalUserName
-                val shouldShowName = if (isProxySender) true else showUserName
+                val displayName = resolvedDisplayName
+                val shouldShowName = shouldShowResolvedName
                 if (shouldShowName) {
                     displayName?.let { userName ->
                         if (userName.isNotEmpty()) {
@@ -653,7 +654,7 @@ fun BubbleUserMessageComposable(
                     }
                 }
             }
-            if (bubbleShowAvatar) {
+            if (shouldShowAvatar) {
                 Spacer(modifier = Modifier.width(8.dp))
                 // Avatar
                 if (!avatarUri.isNullOrEmpty()) {

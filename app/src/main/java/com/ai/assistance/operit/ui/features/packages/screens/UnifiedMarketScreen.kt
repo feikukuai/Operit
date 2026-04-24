@@ -281,6 +281,7 @@ private fun SkillMarketPane(
     val skillRepository = remember { SkillRepository.getInstance(context.applicationContext) }
     val viewModel: SkillMarketViewModel =
         viewModel(
+            key = "skill-market",
             factory = SkillMarketViewModel.Factory(
                 context.applicationContext,
                 skillRepository
@@ -357,6 +358,7 @@ private fun McpMarketPane(
     val mcpRepository = remember { MCPRepository(context.applicationContext) }
     val viewModel: MCPMarketViewModel =
         viewModel(
+            key = "mcp-market",
             factory = MCPMarketViewModel.Factory(
                 context.applicationContext,
                 mcpRepository

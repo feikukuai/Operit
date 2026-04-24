@@ -41,10 +41,12 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -98,9 +100,10 @@ private const val TAG = "ToolPkgComposeDslScreen"
 
 private fun buildComposeDslExecutionContextKey(
     containerPackageName: String,
-    uiModuleId: String
+    uiModuleId: String,
+    routeInstanceId: String
 ): String =
-    "toolpkg_compose_dsl:${containerPackageName.trim().ifBlank { "default" }}:${uiModuleId.trim().ifBlank { "default" }}"
+    "toolpkg_compose_dsl:${containerPackageName.trim().ifBlank { "default" }}:${uiModuleId.trim().ifBlank { "default" }}:${routeInstanceId.trim().ifBlank { "default" }}"
 
 internal fun normalizeToken(raw: String): String =
     raw.lowercase(Locale.ROOT)
@@ -170,6 +173,7 @@ private val colorSchemeFieldByToken: Map<String, java.lang.reflect.Field> by laz
 @Composable
 fun ToolPkgComposeDslToolScreen(
     navController: NavController,
+    routeInstanceId: String,
     containerPackageName: String,
     uiModuleId: String,
     fallbackTitle: String
@@ -193,8 +197,12 @@ fun ToolPkgComposeDslToolScreen(
     val packageManager = remember {
         PackageManager.getInstance(context, AIToolHandler.getInstance(context))
     }
-    val executionContextKey = remember(containerPackageName, uiModuleId) {
-        buildComposeDslExecutionContextKey(containerPackageName, uiModuleId)
+    val executionContextKey = remember(routeInstanceId, containerPackageName, uiModuleId) {
+        buildComposeDslExecutionContextKey(
+            containerPackageName = containerPackageName,
+            uiModuleId = uiModuleId,
+            routeInstanceId = routeInstanceId
+        )
     }
     val jsEngine = remember(packageManager, executionContextKey) {
         packageManager.getToolPkgExecutionEngine(executionContextKey)
@@ -209,6 +217,12 @@ fun ToolPkgComposeDslToolScreen(
     var isLoading by remember(containerPackageName, uiModuleId) { mutableStateOf(true) }
     var isDispatching by remember(containerPackageName, uiModuleId) { mutableStateOf(false) }
     var dispatchingCount by remember(containerPackageName, uiModuleId) { mutableStateOf(0) }
+    var hasDispatchedInitialOnLoad by
+        rememberSaveable(routeInstanceId, containerPackageName, uiModuleId) {
+            mutableStateOf(false)
+        }
+    var nextDispatchTicket by remember(containerPackageName, uiModuleId) { mutableStateOf(1L) }
+    val settledDispatchTickets = remember(containerPackageName, uiModuleId) { mutableSetOf<Long>() }
 
     fun buildModuleSpec(screenPath: String?): Map<String, Any?> =
         mapOf(
@@ -243,6 +257,8 @@ fun ToolPkgComposeDslToolScreen(
         if (normalizedActionId.isBlank()) {
             return
         }
+        val dispatchTicket = nextDispatchTicket
+        nextDispatchTicket += 1
 
         dispatchingCount += 1
         isDispatching = dispatchingCount > 0
@@ -253,6 +269,9 @@ fun ToolPkgComposeDslToolScreen(
                 payload = payload,
                 runtimeOptions = buildActionRuntimeOptions(),
                 onIntermediateResult = { intermediateResult ->
+                    if (settledDispatchTickets.contains(dispatchTicket)) {
+                        return@dispatchComposeDslActionAsync
+                    }
                     val parsedIntermediate =
                         ToolPkgComposeDslParser.parseRenderResult(intermediateResult)
                     if (parsedIntermediate != null) {
@@ -263,6 +282,11 @@ fun ToolPkgComposeDslToolScreen(
                 onComplete = {
                     dispatchingCount = (dispatchingCount - 1).coerceAtLeast(0)
                     isDispatching = dispatchingCount > 0
+                    settledDispatchTickets.add(dispatchTicket)
+                    if (settledDispatchTickets.size > 64) {
+                        val latestTickets = settledDispatchTickets.toList().sortedDescending().take(32).toSet()
+                        settledDispatchTickets.retainAll(latestTickets)
+                    }
                 },
                 onError = { error ->
                     errorMessage = "compose_dsl runtime error: $error"
@@ -276,6 +300,7 @@ fun ToolPkgComposeDslToolScreen(
         if (!dispatched) {
             dispatchingCount = (dispatchingCount - 1).coerceAtLeast(0)
             isDispatching = dispatchingCount > 0
+            settledDispatchTickets.add(dispatchTicket)
         }
     }
 
@@ -370,14 +395,21 @@ fun ToolPkgComposeDslToolScreen(
         }
 
         val onLoadActionId = followUpActionId
-        if (!onLoadActionId.isNullOrBlank()) {
+        if (!onLoadActionId.isNullOrBlank() && !hasDispatchedInitialOnLoad) {
+            hasDispatchedInitialOnLoad = true
             dispatchAction(actionId = onLoadActionId, payload = null)
         }
     }
 
-    LaunchedEffect(containerPackageName, uiModuleId) {
+    LaunchedEffect(routeInstanceId, containerPackageName, uiModuleId) {
         scope.launch {
             render()
+        }
+    }
+
+    DisposableEffect(executionContextKey) {
+        onDispose {
+            packageManager.releaseToolPkgExecutionEngine(executionContextKey)
         }
     }
 
@@ -416,6 +448,7 @@ fun ToolPkgComposeDslToolScreen(
                         Button(
                             onClick = {
                                 scope.launch {
+                                    hasDispatchedInitialOnLoad = false
                                     render()
                                 }
                             }

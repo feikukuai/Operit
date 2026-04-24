@@ -18,26 +18,34 @@ internal class PackageManagerToolPkgFacade(
         val containerDisplayName =
             container.displayName.resolve(localizationContext).ifBlank { container.packageName }
         val containerDescription = container.description.resolve(localizationContext)
-        return container.uiModules
-            .filter { module ->
-                module.runtime.equals(runtime, ignoreCase = true)
+        val toolboxRouteIds =
+            container.navigationEntries
+                .filter { it.surface.equals(TOOLPKG_NAV_SURFACE_TOOLBOX, ignoreCase = true) }
+                .map { it.routeId.lowercase() }
+                .toSet()
+        return container.uiRoutes
+            .filter { route ->
+                route.runtime.equals(runtime, ignoreCase = true) &&
+                    toolboxRouteIds.contains(route.routeId.lowercase())
             }
-            .map { module ->
+            .map { route ->
                 val moduleTitle =
-                    module.title.resolve(localizationContext).trim().ifBlank { containerDisplayName }
+                    route.title.resolve(localizationContext).trim().ifBlank { containerDisplayName }
                 PackageManager.ToolPkgToolboxUiModule(
                     containerPackageName = container.packageName,
                     toolPkgId = container.packageName,
-                    uiModuleId = module.id,
-                    runtime = module.runtime,
-                    screen = module.screen,
+                    routeId = route.routeId,
+                    uiModuleId = route.id,
+                    runtime = route.runtime,
+                    screen = route.screen,
                     title = moduleTitle,
                     description = containerDescription,
                     moduleSpec =
                         mapOf(
-                            "id" to module.id,
-                            "runtime" to module.runtime,
-                            "screen" to module.screen,
+                            "id" to route.id,
+                            "routeId" to route.routeId,
+                            "runtime" to route.runtime,
+                            "screen" to route.screen,
                             "title" to moduleTitle,
                             "toolPkgId" to container.packageName
                         )
@@ -48,6 +56,76 @@ internal class PackageManagerToolPkgFacade(
                     PackageManager.ToolPkgToolboxUiModule::title,
                     PackageManager.ToolPkgToolboxUiModule::containerPackageName,
                     PackageManager.ToolPkgToolboxUiModule::uiModuleId
+                )
+            )
+    }
+
+    private fun buildToolPkgUiRoutes(
+        container: ToolPkgContainerRuntime,
+        localizationContext: Context,
+        runtime: String = TOOLPKG_RUNTIME_COMPOSE_DSL
+    ): List<PackageManager.ToolPkgUiRoute> {
+        val containerDisplayName =
+            container.displayName.resolve(localizationContext).ifBlank { container.packageName }
+        val containerDescription = container.description.resolve(localizationContext)
+        return container.uiRoutes
+            .filter { route -> route.runtime.equals(runtime, ignoreCase = true) }
+            .map { route ->
+                val routeTitle =
+                    route.title.resolve(localizationContext).trim().ifBlank { containerDisplayName }
+                PackageManager.ToolPkgUiRoute(
+                    containerPackageName = container.packageName,
+                    toolPkgId = container.packageName,
+                    routeId = route.routeId,
+                    uiModuleId = route.id,
+                    runtime = route.runtime,
+                    screen = route.screen,
+                    title = routeTitle,
+                    description = containerDescription,
+                    moduleSpec =
+                        mapOf(
+                            "id" to route.id,
+                            "routeId" to route.routeId,
+                            "runtime" to route.runtime,
+                            "screen" to route.screen,
+                            "title" to routeTitle,
+                            "toolPkgId" to container.packageName
+                        )
+                )
+            }
+            .sortedWith(
+                compareBy(
+                    PackageManager.ToolPkgUiRoute::title,
+                    PackageManager.ToolPkgUiRoute::containerPackageName,
+                    PackageManager.ToolPkgUiRoute::uiModuleId
+                )
+            )
+    }
+
+    private fun buildToolPkgNavigationEntries(
+        container: ToolPkgContainerRuntime,
+        localizationContext: Context
+    ): List<PackageManager.ToolPkgNavigationEntry> {
+        val containerDescription = container.description.resolve(localizationContext)
+        return container.navigationEntries
+            .map { entry ->
+                PackageManager.ToolPkgNavigationEntry(
+                    containerPackageName = container.packageName,
+                    toolPkgId = container.packageName,
+                    entryId = entry.id,
+                    routeId = entry.routeId,
+                    surface = entry.surface,
+                    title = entry.title.resolve(localizationContext).trim().ifBlank { entry.id },
+                    description = containerDescription,
+                    icon = entry.icon,
+                    order = entry.order
+                )
+            }
+            .sortedWith(
+                compareBy(
+                    PackageManager.ToolPkgNavigationEntry::surface,
+                    PackageManager.ToolPkgNavigationEntry::order,
+                    PackageManager.ToolPkgNavigationEntry::title
                 )
             )
     }
@@ -111,31 +189,38 @@ internal class PackageManagerToolPkgFacade(
         return result
     }
 
-    fun getToolPkgToolboxUiModules(
+    fun getToolPkgUiRoutes(
         runtime: String = TOOLPKG_RUNTIME_COMPOSE_DSL,
         resolveContext: Context? = null
-    ): List<PackageManager.ToolPkgToolboxUiModule> {
+    ): List<PackageManager.ToolPkgUiRoute> {
         packageManager.ensureInitialized()
         val enabledSet = packageManager.getEnabledPackageNameSetInternal()
         val localizationContext = resolveContext ?: packageManager.contextInternal
-
-        val result = packageManager.toolPkgContainersInternal.values
+        return packageManager.toolPkgContainersInternal.values
             .filter { container -> enabledSet.contains(container.packageName) }
             .flatMap { container ->
-                buildToolPkgToolboxUiModules(
+                buildToolPkgUiRoutes(
                     container = container,
                     localizationContext = localizationContext,
                     runtime = runtime
                 )
             }
-            .sortedWith(
-                compareBy(
-                    PackageManager.ToolPkgToolboxUiModule::title,
-                    PackageManager.ToolPkgToolboxUiModule::containerPackageName,
-                    PackageManager.ToolPkgToolboxUiModule::uiModuleId
+    }
+
+    fun getToolPkgNavigationEntries(
+        resolveContext: Context? = null
+    ): List<PackageManager.ToolPkgNavigationEntry> {
+        packageManager.ensureInitialized()
+        val enabledSet = packageManager.getEnabledPackageNameSetInternal()
+        val localizationContext = resolveContext ?: packageManager.contextInternal
+        return packageManager.toolPkgContainersInternal.values
+            .filter { container -> enabledSet.contains(container.packageName) }
+            .flatMap { container ->
+                buildToolPkgNavigationEntries(
+                    container = container,
+                    localizationContext = localizationContext
                 )
-            )
-        return result
+            }
     }
 
     fun setToolPkgSubpackageEnabled(subpackagePackageName: String, enabled: Boolean): Boolean {

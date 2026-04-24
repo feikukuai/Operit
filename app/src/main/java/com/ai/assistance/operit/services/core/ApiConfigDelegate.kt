@@ -50,10 +50,6 @@ class ApiConfigDelegate(
     private val _enableThinkingMode = MutableStateFlow(ApiPreferences.DEFAULT_ENABLE_THINKING_MODE)
     val enableThinkingMode: StateFlow<Boolean> = _enableThinkingMode.asStateFlow()
 
-    private val _enableThinkingGuidance =
-            MutableStateFlow(ApiPreferences.DEFAULT_ENABLE_THINKING_GUIDANCE)
-    val enableThinkingGuidance: StateFlow<Boolean> = _enableThinkingGuidance.asStateFlow()
-
     private val _thinkingQualityLevel =
             MutableStateFlow(ApiPreferences.DEFAULT_THINKING_QUALITY_LEVEL)
     val thinkingQualityLevel: StateFlow<Int> = _thinkingQualityLevel.asStateFlow()
@@ -222,13 +218,6 @@ class ApiConfigDelegate(
             }
         }
 
-        // Collect thinking guidance setting
-        coroutineScope.launch {
-            apiPreferences.enableThinkingGuidanceFlow.collect { enabled ->
-                _enableThinkingGuidance.value = enabled
-            }
-        }
-
         coroutineScope.launch {
             apiPreferences.thinkingQualityLevelFlow.collect { level ->
                 _thinkingQualityLevel.value = level
@@ -380,21 +369,7 @@ class ApiConfigDelegate(
     fun toggleThinkingMode() {
         coroutineScope.launch {
             val newValue = !_enableThinkingMode.value
-            apiPreferences.updateThinkingSettings(
-                enableThinkingMode = newValue,
-                enableThinkingGuidance = if (newValue) false else null
-            )
-        }
-    }
-
-    /** 切换思考引导 */
-    fun toggleThinkingGuidance() {
-        coroutineScope.launch {
-            val newValue = !_enableThinkingGuidance.value
-            apiPreferences.updateThinkingSettings(
-                enableThinkingGuidance = newValue,
-                enableThinkingMode = if (newValue) false else null
-            )
+            apiPreferences.updateThinkingSettings(enableThinkingMode = newValue)
         }
     }
 

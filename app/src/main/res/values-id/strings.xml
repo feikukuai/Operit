@@ -2551,7 +2551,6 @@ Sekarang Anda dapat menggunakan mode AutoGLM di antarmuka percakapan.</string>
     <string name="external">Eksternal</string>
     <string name="memory_auto_update_active">Pembaruan memori otomatis telah diaktifkan</string>
     <string name="thinking_mode_active">Mode berpikir telah diaktifkan</string>
-    <string name="thinking_guidance_active">Panduan berpikir telah diaktifkan</string>
     <string name="ai_planning_active">Pencarian mendalam telah diaktifkan</string>
     <string name="auto_approve_active">Persetujuan otomatis telah diaktifkan</string>
 
@@ -2643,7 +2642,6 @@ Sekarang Anda dapat menggunakan mode AutoGLM di antarmuka percakapan.</string>
     <string name="thinking_settings_active_count">%1$d item diaktifkan</string>
     <string name="thinking_type_off">off</string>
     <string name="thinking_type_mode">mode</string>
-    <string name="thinking_type_guidance">guidance</string>
     <string name="thinking_quality">Tingkat Pemikiran</string>
     <string name="thinking_quality_desc">Hanya berlaku dalam mode berpikir, total 4 tingkat, semakin tinggi nilainya semakin dalam pemikirannya, 1 adalah otomatis.</string>
     <string name="model_config">Konfigurasi Model</string>
@@ -2985,8 +2983,6 @@ Sekarang Anda dapat menggunakan mode AutoGLM di antarmuka percakapan.</string>
     <string name="chat_ai_computer_closed_due_to_workspace">Komputer AI telah ditutup (karena membuka ruang kerja)</string>
     <string name="thinking_mode">Mode berpikir</string>
     <string name="thinking_mode_desc">Saat ini mendukung model Gemini, Qwen3, Claude, Doubao, NVIDIA, Silicon Flow, dan MNN lokal, dapat mengaktifkan pemikiran bawaan.</string>
-    <string name="thinking_guidance">Panduan berpikir</string>
-    <string name="thinking_guidance_desc">Dapat memaksa model yang tidak bisa berpikir untuk melakukan pemikiran. Opsi ini tidak disarankan untuk diaktifkan pada model berpikir.</string>
     <string name="details">Detail</string>
     <string name="model_selection">Pemilihan model</string>
     <string name="prompt_selection">Pemilihan prompt</string>
@@ -3517,7 +3513,7 @@ Sekarang Anda dapat menggunakan mode AutoGLM di antarmuka percakapan.</string>
     <string name="api_provider">Penyedia API</string>
     <string name="select_api_provider">Ketuk untuk memilih penyedia API</string>
     <string name="select">Pilih</string>
-    <string name="default_config_model_restriction">Saat menggunakan konfigurasi default, hanya model deepseek-chat yang dapat digunakan</string>
+    <string name="default_config_model_restriction">Saat menggunakan konfigurasi default, hanya model deepseek-v4-flash yang dapat digunakan</string>
     <string name="enable_direct_image_processing">Model mendukung pengenalan gambar</string>
     <string name="enable_direct_image_processing_desc">Setelah diaktifkan, gambar akan langsung dikirim ke AI untuk diproses, bukan dibaca oleh AI melalui alat OCR</string>
     <string name="enable_direct_audio_processing">Model mendukung analisis audio</string>
@@ -6862,4 +6858,14 @@ Sekarang Anda dapat menggunakan mode AutoGLM di antarmuka percakapan.</string>
     <string name="enable_new_sidebar">Sidebar Baru</string>
     <string name="enable_new_sidebar_description">Aktifkan untuk mengaktifkan pintu masuk sidebar baru, perubahan besar sidebar selanjutnya juga akan didasarkan pada ini.</string>
     <string name="chat_auto_update_memory_failed">Gagal memperbarui memori otomatis: %1$s</string>
+
+    <string name="nav_group_plugins">Plugin</string>
+    <string name="tag_count_lock">Jumlah terkunci</string>
+    <string name="tag_count_limit">Jumlah maksimal yang dapat dipilih</string>
+    <string name="tag_count_locked_status">Telah dipilih %1$d / batas %2$d</string>
+    <string name="chat_hidden_user_message_badge">Dipicu otomatis</string>
+    <string name="tool_token_config_desc">Buka halaman pengambilan dan konfigurasi kunci API untuk memudahkan penyelesaian integrasi model</string>
+    <string name="chat_delete_single_variant">Hapus pesan tunggal</string>
+    <string name="chat_delete_single_variant_unavailable">Pesan saat ini tidak memiliki kandidat tunggal yang dapat dihapus</string>
+    <string name="chat_delete_single_variant_failed">Gagal menghapus pesan tunggal: %1$s</string>
 </resources>

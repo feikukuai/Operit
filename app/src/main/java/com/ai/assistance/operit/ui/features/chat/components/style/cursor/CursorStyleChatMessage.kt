@@ -25,6 +25,8 @@ fun CursorStyleChatMessage(
         thinkingTextColor: Color,
         supportToolMarkup: Boolean = true,
         initialThinkingExpanded: Boolean = false,
+        expandThinkToolsGroups: Boolean = false,
+        forceShowThinkingProcess: Boolean = false,
         overrideStream: Stream<String>? = null,
         heightMemory: ChatMessageHeightMemory? = null,
         onDeleteMessage: ((Int) -> Unit)? = null,
@@ -48,6 +50,9 @@ fun CursorStyleChatMessage(
                     message = message,
                     backgroundColor = aiMessageColor,
                     textColor = aiTextColor,
+                    initialThinkingExpanded = initialThinkingExpanded,
+                    expandThinkToolsGroups = expandThinkToolsGroups,
+                    forceShowThinkingProcess = forceShowThinkingProcess,
                     overrideStream = overrideStream,
                     heightMemory = heightMemory,
                     enableDialogs = enableDialogs,  // 传递弹窗启用状态

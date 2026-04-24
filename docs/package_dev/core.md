@@ -90,6 +90,12 @@ const result = await toolCall({
 });
 ```
 
+补充说明：
+
+- `toolCall()` 运行时走的是异步桥接，但 JS 回调的分发仍会回到同一个 QuickJS 运行时线程。
+- `Promise.all([...toolCall(...)])` 只表示“同时等待多个 Promise”，不保证底层工具一定并行执行；是否真正并行，取决于对应工具执行器本身。
+- 如果需要中间结果，请使用带 `onIntermediateResult` 的重载。
+
 ### `complete(result)`
 
 ```ts
@@ -97,6 +103,12 @@ complete<T>(result: T): void
 ```
 
 结束脚本执行并返回结果。
+
+补充说明：
+
+- 导出函数既可以直接 `return result`，也可以显式调用 `complete(result)`。
+- Java Bridge 契约以 [docs/JAVA_BRIDGE_INTERFACE.md](../JAVA_BRIDGE_INTERFACE.md) 为准。
+- `complete(result)` 适合你需要手动结束或配合 emitter 使用的场景。
 
 ## `NativeInterface`
 
@@ -139,6 +151,7 @@ complete<T>(result: T): void
 - `javaNewInstance(className, argsJson)`
 - `javaCallStatic(className, methodName, argsJson)`
 - `javaCallInstance(instanceHandle, methodName, argsJson)`
+- `javaHasInstanceMethod(instanceHandle, methodName)`
 - `javaGetStaticField(className, fieldName)`
 - `javaSetStaticField(className, fieldName, valueJson)`
 - `javaGetInstanceField(instanceHandle, fieldName)`
@@ -148,8 +161,12 @@ complete<T>(result: T): void
 
 补充说明：
 
+- 对脚本开发者承诺的高层 Java Bridge 接口，统一以 [docs/JAVA_BRIDGE_INTERFACE.md](../JAVA_BRIDGE_INTERFACE.md) 为准。
 - Java 实例句柄的解绑属于运行时内部生命周期管理，不再提供公开的 `release` / `releaseAll` 脚本接口。
 - `Java.implement(...)` / `Java.proxy(...)` 产生的 JS 回调对象改为运行时自动解绑，旧的脚本侧手动释放接口已移除。
+- `obj.methodName()` 是首选用法，运行时会优先把实例成员按方法来解释，尽量保证语法糖可用。
+- `obj.call('methodName', ...)` 仍然保留，主要用于极少数字段/方法同名冲突或底层调试场景。
+- `Java.implement(...)` 创建的 JS 回调实际仍在 QuickJS 运行时线程执行，不会把 JS 代码真正迁移到 Java 子线程里运行。
 
 ## 全局工具对象
 

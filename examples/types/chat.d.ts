@@ -29,6 +29,7 @@ export namespace Chat {
         notify_reply?: boolean;
         hide_user_message?: boolean;
         disable_warning?: boolean;
+        timeout_ms?: number;
     }
 
     /**
@@ -100,7 +101,7 @@ export namespace Chat {
      * @param chatId - Optional chat ID to send the message to (defaults to current chat)
      * @param roleCardId - Optional role card ID to use for this send
      * @param senderName - Optional display name when AI sends as user
-     * @param options - Optional per-turn controls for persistence, notification, and hidden user-message display
+     * @param options - Optional per-turn controls for persistence, notification, hidden user-message display, and timeout
      * @returns Promise resolving to the message send result
      */
     function sendMessage(

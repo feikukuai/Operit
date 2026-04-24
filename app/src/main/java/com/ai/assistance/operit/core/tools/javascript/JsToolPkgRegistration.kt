@@ -5,6 +5,8 @@ import org.json.JSONTokener
 
 data class ToolPkgMainRegistrationCapture(
     val toolboxUiModules: List<String>,
+    val uiRoutes: List<String>,
+    val navigationEntries: List<String>,
     val appLifecycleHooks: List<String>,
     val messageProcessingPlugins: List<String>,
     val xmlRenderPlugins: List<String>,
@@ -22,6 +24,8 @@ data class ToolPkgMainRegistrationCapture(
 
 private enum class RegistrationBucket {
     TOOLBOX_UI,
+    UI_ROUTE,
+    NAVIGATION_ENTRY,
     APP_LIFECYCLE,
     MESSAGE_PROCESSING,
     XML_RENDER,
@@ -48,6 +52,8 @@ internal class JsToolPkgRegistrationSession {
     }
 
     fun appendToolboxUiModule(specJson: String) = append(RegistrationBucket.TOOLBOX_UI, specJson)
+    fun appendUiRoute(specJson: String) = append(RegistrationBucket.UI_ROUTE, specJson)
+    fun appendNavigationEntry(specJson: String) = append(RegistrationBucket.NAVIGATION_ENTRY, specJson)
     fun appendAppLifecycleHook(specJson: String) = append(RegistrationBucket.APP_LIFECYCLE, specJson)
     fun appendMessageProcessingPlugin(specJson: String) =
         append(RegistrationBucket.MESSAGE_PROCESSING, specJson)
@@ -88,6 +94,8 @@ internal class JsToolPkgRegistrationSession {
             fun read(bucket: RegistrationBucket): List<String> = current[bucket]?.toList().orEmpty()
             return ToolPkgMainRegistrationCapture(
                 toolboxUiModules = read(RegistrationBucket.TOOLBOX_UI),
+                uiRoutes = read(RegistrationBucket.UI_ROUTE),
+                navigationEntries = read(RegistrationBucket.NAVIGATION_ENTRY),
                 appLifecycleHooks = read(RegistrationBucket.APP_LIFECYCLE),
                 messageProcessingPlugins = read(RegistrationBucket.MESSAGE_PROCESSING),
                 xmlRenderPlugins = read(RegistrationBucket.XML_RENDER),
@@ -338,6 +346,19 @@ internal fun buildToolPkgRegistrationBridgeScript(): String {
                         'registerToolPkgToolboxUiModule',
                         'registerToolPkgToolboxUiModule',
                         ''
+                    );
+                },
+                registerUiRoute: function(definition) {
+                    registerWithNative(
+                        definition,
+                        'registerToolPkgUiRoute',
+                        'registerToolPkgUiRoute',
+                        ''
+                    );
+                },
+                registerNavigationEntry: function(definition) {
+                    requireNative('registerToolPkgNavigationEntry')(
+                        JSON.stringify(definition || {})
                     );
                 },
                 readResource: readToolPkgResource

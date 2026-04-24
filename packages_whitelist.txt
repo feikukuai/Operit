@@ -40,3 +40,5 @@ apktool
 remote_operit
 pdf_vision_parser
 hex_editor.js
+worldbook
+thinking_guidance

@@ -19,6 +19,8 @@ import com.ai.assistance.operit.ui.common.NavItem
 import com.ai.assistance.operit.ui.main.NavGroup
 import com.ai.assistance.operit.ui.main.NavigationTransitionSource
 import com.ai.assistance.operit.ui.main.TopBarTitleContent
+import com.ai.assistance.operit.ui.main.navigation.NavigationEntrySpec
+import com.ai.assistance.operit.ui.main.navigation.RouteEntry
 import com.ai.assistance.operit.ui.main.components.AppContent
 import com.ai.assistance.operit.ui.main.components.CollapsedDrawerContent
 import com.ai.assistance.operit.ui.main.components.DrawerContent
@@ -31,12 +33,15 @@ import androidx.compose.foundation.layout.RowScope
 /** Layout for tablet devices with a permanent side navigation drawer */
 @Composable
 fun TabletLayout(
+        currentRouteEntry: RouteEntry,
         currentScreen: Screen,
         selectedItem: NavItem,
         isTabletSidebarExpanded: Boolean,
         isLoading: Boolean,
         navGroups: List<NavGroup>,
         navItems: List<NavItem>,
+        pluginSidebarEntries: List<NavigationEntrySpec>,
+        selectedRouteId: String,
         isNetworkAvailable: Boolean,
         networkType: String,
         navController: androidx.navigation.NavController,
@@ -48,8 +53,8 @@ fun TabletLayout(
         tabletSidebarWidth: androidx.compose.ui.unit.Dp,
         collapsedTabletSidebarWidth: androidx.compose.ui.unit.Dp,
         onScreenChange: (Screen) -> Unit,
-        onNavItemChange: (NavItem) -> Unit,
-        onDrawerItemSelected: (Screen, NavItem) -> Unit,
+        onDrawerItemSelected: (Screen) -> Unit,
+        onNavigationEntrySelected: (NavigationEntrySpec) -> Unit,
         onToggleSidebar: () -> Unit,
         navigateToTokenConfig: () -> Unit,
         canGoBack: Boolean,
@@ -113,22 +118,27 @@ fun TabletLayout(
                         if (isTabletSidebarExpanded) {
                                 DrawerContent(
                                         navGroups = navGroups,
-                                        currentScreen = currentScreen,
+                                        pluginEntries = pluginSidebarEntries,
                                         selectedItem = selectedItem,
+                                        selectedRouteId = selectedRouteId,
                                         isNetworkAvailable = isNetworkAvailable,
                                         networkType = networkType,
                                         appearance = drawerAppearance,
                                         scope = scope,
                                         drawerState = drawerState,
-                                        onScreenSelected = { screen, item -> onDrawerItemSelected(screen, item) }
+                                        onScreenSelected = onDrawerItemSelected,
+                                        onNavigationEntrySelected = onNavigationEntrySelected
                                 )
                         } else {
                                 CollapsedDrawerContent(
                                         navItems = navItems,
+                                        pluginEntries = pluginSidebarEntries,
                                         selectedItem = selectedItem,
+                                        selectedRouteId = selectedRouteId,
                                         isNetworkAvailable = isNetworkAvailable,
                                         appearance = drawerAppearance,
-                                        onScreenSelected = { screen, item -> onDrawerItemSelected(screen, item) }
+                                        onScreenSelected = onDrawerItemSelected,
+                                        onNavigationEntrySelected = onNavigationEntrySelected
                                 )
                         }
                 }
@@ -142,6 +152,7 @@ fun TabletLayout(
                                         .zIndex(1f)
                 ) {
                         AppContent(
+                                currentRouteEntry = currentRouteEntry,
                                 currentScreen = currentScreen,
                                 selectedItem = selectedItem,
                                 useTabletLayout = true,
@@ -154,7 +165,6 @@ fun TabletLayout(
                                 enableNavigationAnimation = enableNavigationAnimation,
                                 navigationTransitionSource = navigationTransitionSource,
                                 onScreenChange = onScreenChange,
-                                onNavItemChange = onNavItemChange,
                                 onToggleSidebar = onToggleSidebar,
                                 navigateToTokenConfig = navigateToTokenConfig,
                                 onGestureConsumed = { consumed ->

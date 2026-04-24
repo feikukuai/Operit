@@ -60,7 +60,7 @@ object ApiProviderConfigs {
         ),
         ProviderApiConfig(
             providerType = ApiProviderType.DEEPSEEK,
-            defaultModelName = "deepseek-chat",
+            defaultModelName = "deepseek-v4-flash",
             defaultApiEndpoint = "https://api.deepseek.com/v1/chat/completions"
         ),
         ProviderApiConfig(

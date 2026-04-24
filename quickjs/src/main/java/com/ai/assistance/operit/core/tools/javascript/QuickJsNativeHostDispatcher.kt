@@ -9,7 +9,7 @@ import kotlin.math.max
 import org.json.JSONArray
 
 class QuickJsNativeHostDispatcher(
-    private val runtimeProvider: () -> QuickJsNativeRuntime,
+    private val dispatchTimer: (Int) -> Unit,
     private val forwardCall: (String, String?) -> String?
 ) : QuickJsNativeRuntime.HostBridge, Closeable {
 
@@ -50,7 +50,7 @@ class QuickJsNativeHostDispatcher(
             if (repeat) {
                 val safePeriod = max(1L, delayMs)
                 scheduler.scheduleAtFixedRate(
-                    { runtimeProvider().dispatchTimer(timerId) },
+                    { dispatchTimer(timerId) },
                     safePeriod,
                     safePeriod,
                     TimeUnit.MILLISECONDS
@@ -59,7 +59,7 @@ class QuickJsNativeHostDispatcher(
                 scheduler.schedule(
                     {
                         timerTasks.remove(timerId)
-                        runtimeProvider().dispatchTimer(timerId)
+                        dispatchTimer(timerId)
                     },
                     delayMs,
                     TimeUnit.MILLISECONDS

@@ -64,6 +64,7 @@ fun ArtifactManageScreen(
     val isLoading by viewModel.isLoading.collectAsState()
     val errorMessage by viewModel.errorMessage.collectAsState()
     val userPublishedArtifacts by viewModel.userPublishedArtifacts.collectAsState()
+    val hasLoadedUserPublishedArtifacts by viewModel.hasLoadedUserPublishedArtifacts.collectAsState()
 
     var showDeleteDialog by remember { mutableStateOf<GitHubIssue?>(null) }
     var showGitHubLogin by remember { mutableStateOf(false) }
@@ -71,14 +72,20 @@ fun ArtifactManageScreen(
     LaunchedEffect(isLoggedIn) {
         if (isLoggedIn) {
             viewModel.loadUserPublishedArtifacts()
+        } else {
+            viewModel.resetUserPublishedArtifactsState()
         }
     }
 
+    val showManageLoading = isLoading || (isLoggedIn && !hasLoadedUserPublishedArtifacts)
+    val showEmptyState =
+        hasLoadedUserPublishedArtifacts && errorMessage == null && userPublishedArtifacts.isEmpty()
+
     MarketManageScaffold(
         isLoggedIn = isLoggedIn,
-        isLoading = isLoading,
+        isLoading = showManageLoading,
         errorMessage = errorMessage,
-        isEmpty = userPublishedArtifacts.isEmpty(),
+        isEmpty = showEmptyState,
         onLogin = { showGitHubLogin = true },
         onPublish = onNavigateToPublish,
         publishContentDescription = stringResource(R.string.publish_new_artifact),

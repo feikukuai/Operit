@@ -50,6 +50,20 @@ execute_js.bat path\to\your\script.js functionName @params.json
 run_sandbox_script.bat path\to\your\script.js @params.json
 ```
 
+### Execute A Whole Directory (supports `require(...)`)
+
+Sometimes a script needs `require('./helper')` or shared modules. The single-file executors only push one JS file, so this repo also provides directory-based executors.
+
+Windows:
+```cmd
+tools\execute_js_dir.bat app\src\androidTest\js com\ai\assistance\operit\util\ttscleaner\main.js run "{}"
+```
+
+Linux/macOS:
+```bash
+./tools/execute_js_dir.sh app/src/androidTest/js com/ai/assistance/operit/util/ttscleaner/ttscleaner.js run '{}'
+```
+
 You can still pass inline JSON directly. The scripts now write that JSON into a temporary file and push it to the device, which avoids the old `adb shell am broadcast --es params ...` quoting breakage. On PowerShell, prefer single-quoted JSON like `'{"param1":"value1"}'` or use `@params.json`.
 
 ### Using Python Script (Cross-platform)
@@ -139,7 +153,7 @@ That means:
 
 - Use `console.log(...)`, `console.info(...)`, `console.warn(...)`, `console.error(...)` for logs
 - Use `emit(...)` to send intermediate events
-- Use `complete(...)` to finish with a structured result
+- Use `return result` or `complete(...)` to finish with a structured result
 - Do **not** assume `params` is directly available inside `source_code`
 - Do **not** call `intermediate(...)`; the supported helper name is `emit(...)`
 
@@ -165,7 +179,7 @@ If you need parameter-driven logic, prefer one of these approaches:
 - Files must be valid JavaScript (TypeScript not supported)
 - Functions must be exported (using `exports.functionName = functionName`)
 - Functions must accept a params parameter (containing the passed parameters)
-- Functions should use the `complete(result)` function to return results
+- Functions can either `return result` directly or call `complete(result)`
 
 ## Required Function Example
 
@@ -178,10 +192,10 @@ function myFunction(params) {
     const result = `Result: ${name}`;
     
     // Return result
-    complete({
+    return {
         success: true,
         result: result
-    });
+    };
 }
 
 // Export function

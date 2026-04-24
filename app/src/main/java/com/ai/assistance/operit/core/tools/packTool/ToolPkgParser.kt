@@ -40,6 +40,23 @@ internal data class ToolPkgUiModuleRuntime(
     val title: LocalizedText
 )
 
+internal data class ToolPkgUiRouteRuntime(
+    val id: String,
+    val routeId: String,
+    val runtime: String,
+    val screen: String,
+    val title: LocalizedText
+)
+
+internal data class ToolPkgNavigationEntryRuntime(
+    val id: String,
+    val routeId: String,
+    val surface: String,
+    val title: LocalizedText,
+    val icon: String? = null,
+    val order: Int = 0
+)
+
 internal data class ToolPkgAppLifecycleHookRuntime(
     val id: String,
     val event: String,
@@ -97,6 +114,8 @@ internal data class ToolPkgContainerRuntime(
     val subpackages: List<ToolPkgSubpackageRuntime>,
     val resources: List<ToolPkgResourceRuntime>,
     val uiModules: List<ToolPkgUiModuleRuntime>,
+    val uiRoutes: List<ToolPkgUiRouteRuntime>,
+    val navigationEntries: List<ToolPkgNavigationEntryRuntime>,
     val appLifecycleHooks: List<ToolPkgAppLifecycleHookRuntime>,
     val messageProcessingPlugins: List<ToolPkgFunctionHookRuntime>,
     val xmlRenderPlugins: List<ToolPkgTagFunctionHookRuntime>,
@@ -153,6 +172,23 @@ internal data class ToolPkgRegisteredUiModule(
     val title: LocalizedText
 )
 
+internal data class ToolPkgRegisteredUiRoute(
+    val id: String,
+    val routeId: String,
+    val runtime: String,
+    val screen: String,
+    val title: LocalizedText
+)
+
+internal data class ToolPkgRegisteredNavigationEntry(
+    val id: String,
+    val routeId: String,
+    val surface: String,
+    val title: LocalizedText,
+    val icon: String? = null,
+    val order: Int = 0
+)
+
 internal data class ToolPkgRegisteredAppLifecycleHook(
     val id: String,
     val event: String,
@@ -190,6 +226,8 @@ internal data class ToolPkgRegisteredTagFunctionHook(
 
 internal data class ToolPkgMainRegistration(
     val toolboxUiModules: List<ToolPkgRegisteredUiModule> = emptyList(),
+    val uiRoutes: List<ToolPkgRegisteredUiRoute> = emptyList(),
+    val navigationEntries: List<ToolPkgRegisteredNavigationEntry> = emptyList(),
     val appLifecycleHooks: List<ToolPkgRegisteredAppLifecycleHook> = emptyList(),
     val messageProcessingPlugins: List<ToolPkgRegisteredFunctionHook> = emptyList(),
     val xmlRenderPlugins: List<ToolPkgRegisteredTagFunctionHook> = emptyList(),
@@ -360,26 +398,67 @@ internal object ToolPkgArchiveParser {
                         "main script must export registerToolPkg()"
                 )
 
+        val registeredUiRoutes =
+            buildList {
+                mainRegistration.toolboxUiModules.forEach { module ->
+                    add(
+                        ToolPkgRegisteredUiRoute(
+                            id = module.id,
+                            routeId = buildToolPkgRouteId(manifest.toolpkgId, module.id),
+                            runtime = module.runtime,
+                            screen = module.screen,
+                            title = module.title
+                        )
+                    )
+                }
+                addAll(mainRegistration.uiRoutes)
+            }
+
+        val registeredNavigationEntries =
+            buildList {
+                mainRegistration.toolboxUiModules.forEachIndexed { index, module ->
+                    add(
+                        ToolPkgRegisteredNavigationEntry(
+                            id = "toolbox_${module.id}",
+                            routeId = buildToolPkgRouteId(manifest.toolpkgId, module.id),
+                            surface = TOOLPKG_NAV_SURFACE_TOOLBOX,
+                            title = module.title,
+                            order = index
+                        )
+                    )
+                }
+                addAll(mainRegistration.navigationEntries)
+            }
+
         val uiModules = mutableListOf<ToolPkgUiModuleRuntime>()
+        val uiRoutes = mutableListOf<ToolPkgUiRouteRuntime>()
         val uiModuleIds = linkedSetOf<String>()
-        mainRegistration.toolboxUiModules.forEachIndexed { index, module ->
+        val routeIds = linkedSetOf<String>()
+        registeredUiRoutes.forEachIndexed { index, module ->
             val id = module.id.trim()
             if (id.isBlank()) {
-                throw IllegalArgumentException("$TOOLPKG_REGISTRATION_TOOLBOX_UI_MODULE[$index].id is required")
+                throw IllegalArgumentException("$TOOLPKG_REGISTRATION_UI_ROUTE[$index].id is required")
             }
             if (!uiModuleIds.add(id.lowercase())) {
-                throw IllegalArgumentException("Duplicate toolbox ui module id: $id")
+                throw IllegalArgumentException("Duplicate toolpkg ui route id: $id")
             }
 
             val runtimeName = module.runtime.trim().ifBlank { TOOLPKG_RUNTIME_COMPOSE_DSL }
+            val routeId = module.routeId.trim()
+            if (routeId.isBlank()) {
+                throw IllegalArgumentException("$TOOLPKG_REGISTRATION_UI_ROUTE[$index].route is required")
+            }
+            if (!routeIds.add(routeId.lowercase())) {
+                throw IllegalArgumentException("Duplicate toolpkg route id: $routeId")
+            }
             val normalizedScreenPath =
                 normalizeZipEntryPath(module.screen)
                     ?: throw IllegalArgumentException(
-                        "$TOOLPKG_REGISTRATION_TOOLBOX_UI_MODULE[$index].screen is invalid: ${module.screen}"
+                        "$TOOLPKG_REGISTRATION_UI_ROUTE[$index].screen is invalid: ${module.screen}"
                     )
             if (!containsZipEntry(entries, normalizedScreenPath)) {
                 throw IllegalArgumentException(
-                    "$TOOLPKG_REGISTRATION_TOOLBOX_UI_MODULE[$index].screen not found: ${module.screen}"
+                    "$TOOLPKG_REGISTRATION_UI_ROUTE[$index].screen not found: ${module.screen}"
                 )
             }
 
@@ -389,6 +468,55 @@ internal object ToolPkgArchiveParser {
                     runtime = runtimeName,
                     screen = normalizedScreenPath,
                     title = module.title
+                )
+            )
+            uiRoutes.add(
+                ToolPkgUiRouteRuntime(
+                    id = id,
+                    routeId = routeId,
+                    runtime = runtimeName,
+                    screen = normalizedScreenPath,
+                    title = module.title
+                )
+            )
+        }
+
+        val navigationEntries = mutableListOf<ToolPkgNavigationEntryRuntime>()
+        val navigationEntryIds = linkedSetOf<String>()
+        registeredNavigationEntries.forEachIndexed { index, entry ->
+            val id = entry.id.trim()
+            val routeId = entry.routeId.trim()
+            val surface = entry.surface.trim().lowercase()
+            if (id.isBlank()) {
+                throw IllegalArgumentException("$TOOLPKG_REGISTRATION_NAVIGATION_ENTRY[$index].id is required")
+            }
+            if (!navigationEntryIds.add(id.lowercase())) {
+                throw IllegalArgumentException("Duplicate toolpkg navigation entry id: $id")
+            }
+            if (routeId.isBlank()) {
+                throw IllegalArgumentException("$TOOLPKG_REGISTRATION_NAVIGATION_ENTRY[$index].route is required")
+            }
+            if (uiRoutes.none { it.routeId.equals(routeId, ignoreCase = true) }) {
+                throw IllegalArgumentException(
+                    "$TOOLPKG_REGISTRATION_NAVIGATION_ENTRY[$index].route not found: $routeId"
+                )
+            }
+            if (
+                surface != TOOLPKG_NAV_SURFACE_TOOLBOX &&
+                    surface != TOOLPKG_NAV_SURFACE_MAIN_SIDEBAR_PLUGINS
+            ) {
+                throw IllegalArgumentException(
+                    "$TOOLPKG_REGISTRATION_NAVIGATION_ENTRY[$index].surface is unsupported: $surface"
+                )
+            }
+            navigationEntries.add(
+                ToolPkgNavigationEntryRuntime(
+                    id = id,
+                    routeId = routeId,
+                    surface = surface,
+                    title = entry.title,
+                    icon = entry.icon,
+                    order = entry.order
                 )
             )
         }
@@ -769,6 +897,8 @@ internal object ToolPkgArchiveParser {
                 subpackages = subpackageRuntimes,
                 resources = resources,
                 uiModules = uiModules,
+                uiRoutes = uiRoutes,
+                navigationEntries = navigationEntries,
                 appLifecycleHooks = appLifecycleHooks,
                 messageProcessingPlugins = messageProcessingPlugins,
                 xmlRenderPlugins = xmlRenderPlugins,
