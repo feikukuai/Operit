@@ -87,7 +87,7 @@ fun ShareImagePreviewDialog(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text("Share preview", style = MaterialTheme.typography.titleMedium)
+                    Text(stringResource(R.string.share_preview_title), style = MaterialTheme.typography.titleMedium)
                     IconButton(onClick = onDismiss) {
                         Icon(Icons.Default.Close, contentDescription = stringResource(R.string.common_cancel))
                     }
@@ -107,7 +107,7 @@ fun ShareImagePreviewDialog(
                         var offsetY by remember(imageUri) { mutableStateOf(0f) }
                         Image(
                             painter = rememberAsyncImagePainter(imageUri),
-                            contentDescription = "Share image preview",
+                            contentDescription = stringResource(R.string.share_preview_image_content_description),
                             modifier = Modifier
                                 .fillMaxSize()
                                 .graphicsLayer(
@@ -132,7 +132,7 @@ fun ShareImagePreviewDialog(
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             CircularProgressIndicator()
                             Spacer(modifier = Modifier.height(12.dp))
-                            Text("Generating preview...", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(stringResource(R.string.share_preview_generating), color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                 }
@@ -151,7 +151,7 @@ fun ShareImagePreviewDialog(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Text("Expand thinking", style = MaterialTheme.typography.bodyMedium)
+                        Text(stringResource(R.string.share_preview_expand_thinking), style = MaterialTheme.typography.bodyMedium)
                         Switch(checked = thinkingExpanded, onCheckedChange = onThinkingExpandedChange)
                     }
                     Row(
@@ -159,7 +159,7 @@ fun ShareImagePreviewDialog(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Text("展开工具和思考组", style = MaterialTheme.typography.bodyMedium)
+                        Text(stringResource(R.string.share_preview_expand_tools_groups), style = MaterialTheme.typography.bodyMedium)
                         Switch(checked = expandThinkToolsGroups, onCheckedChange = onExpandThinkToolsGroupsChange)
                     }
                     Row(
@@ -167,10 +167,13 @@ fun ShareImagePreviewDialog(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Text("Include background", style = MaterialTheme.typography.bodyMedium)
+                        Text(stringResource(R.string.share_preview_include_background), style = MaterialTheme.typography.bodyMedium)
                         Switch(checked = includeBackground, onCheckedChange = onIncludeBackgroundChange)
                     }
-                    Text("Border: " + String.format("%.1f", borderWidth) + "dp", style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        stringResource(R.string.share_preview_border_width, borderWidth),
+                        style = MaterialTheme.typography.bodyMedium
+                    )
                     Slider(
                         value = borderWidth,
                         onValueChange = onBorderWidthChange,

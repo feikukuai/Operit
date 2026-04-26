@@ -1298,6 +1298,8 @@
     <string name="disable_status_tags">Nonaktifkan Tag Status</string>
     <string name="disable_status_tags_desc">Setelah dinonaktifkan, aturan yang mengharuskan balasan diakhiri dengan tag status "Tugas Selesai / Menunggu Respons" tidak akan lagi ditambahkan ke prompt sistem</string>
     <string name="reply_message">Balas</string>
+    <string name="pause_reading">Jeda Pembacaan</string>
+    <string name="resume_reading">Lanjutkan Pembacaan</string>
     <string name="stop_reading">Hentikan Pembacaan</string>
     <string name="edit_and_resend">Edit dan Kirim Ulang</string>
     <string name="rollback_to_here">Kembalikan ke Sini</string>
@@ -6868,4 +6870,11 @@ Sekarang Anda dapat menggunakan mode AutoGLM di antarmuka percakapan.</string>
     <string name="chat_delete_single_variant">Hapus pesan tunggal</string>
     <string name="chat_delete_single_variant_unavailable">Pesan saat ini tidak memiliki kandidat tunggal yang dapat dihapus</string>
     <string name="chat_delete_single_variant_failed">Gagal menghapus pesan tunggal: %1$s</string>
+    <string name="share_preview_title">Pratinjau berbagi</string>
+    <string name="share_preview_image_content_description">Pratinjau gambar berbagi</string>
+    <string name="share_preview_generating">Membuat pratinjau...</string>
+    <string name="share_preview_expand_thinking">Perluas pemikiran</string>
+    <string name="share_preview_expand_tools_groups">Perluas alat dan grup pemikiran</string>
+    <string name="share_preview_include_background">Sertakan latar belakang</string>
+    <string name="share_preview_border_width">Bingkai: %1$.1f dp</string>
 </resources>

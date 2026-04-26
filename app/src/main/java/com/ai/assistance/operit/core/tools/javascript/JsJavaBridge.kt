@@ -598,6 +598,10 @@ internal fun buildJavaClassBridgeDefinition(): String {
                 return processed;
             }
 
+            if (typeof globalThis !== 'undefined') {
+                globalThis.__operitProcessPendingJavaBridgeCallbacks = processPendingJavaBridgeCallbacks;
+            }
+
             function sleepForJavaBridgeWait(durationMs) {
                 var normalized =
                     typeof durationMs === 'number' && isFinite(durationMs)

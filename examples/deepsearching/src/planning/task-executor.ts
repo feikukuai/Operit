@@ -1,9 +1,7 @@
 import type { ExecutionGraph, TaskNode } from "./plan-models";
 import { topologicalSort, validateExecutionGraph } from "./plan-parser";
 import { resolveDeepSearchI18n } from "../i18n";
-import { toKotlinPromptTurnList, type PromptTurn } from "../prompt-turns";
-const FunctionType = Java.com.ai.assistance.operit.data.model.FunctionType;
-const PromptFunctionType = Java.com.ai.assistance.operit.data.model.PromptFunctionType;
+import { createSendMessageOptions, type PromptTurn } from "../prompt-turns";
 const SystemPromptConfig = Java.com.ai.assistance.operit.core.config.SystemPromptConfig;
 const Unit = Java.kotlin.Unit;
 
@@ -95,43 +93,27 @@ async function sendMessage(
     onChunk?: (chunk: string) => void;
   }
 ): Promise<string> {
-  const onNonFatalError = (_value: string) => Unit.INSTANCE;
-  const onToolInvocation = options.onToolInvocation
-    ? (toolName: string) => {
-      options.onToolInvocation?.(toolName);
-      return Unit.INSTANCE;
-    }
-    : null;
-  const enableMemoryAutoUpdate = false;
-
   const stream = await (enhancedAIService as { callSuspend: (...args: unknown[]) => Promise<unknown> }).callSuspend(
     "sendMessage",
-    options.message,
-    null,
-    toKotlinPromptTurnList(options.chatHistory),
-    options.workspacePath ?? null,
-    null,
-    FunctionType.CHAT,
-    PromptFunctionType.CHAT,
-    false,
-    enableMemoryAutoUpdate,
-    options.maxTokens,
-    options.tokenUsageThreshold,
-    onNonFatalError,
-    null,
-    options.customSystemPromptTemplate ?? null,
-    options.isSubTask,
-    null,
-    null,
-    null,
-    false,
-    null,
-    options.proxySenderName ?? null,
-    onToolInvocation,
-    null,
-    null,
-    true,
-    false
+    createSendMessageOptions({
+      message: options.message,
+      chatHistory: options.chatHistory,
+      workspacePath: options.workspacePath ?? null,
+      maxTokens: options.maxTokens,
+      tokenUsageThreshold: options.tokenUsageThreshold,
+      customSystemPromptTemplate: options.customSystemPromptTemplate ?? null,
+      isSubTask: options.isSubTask,
+      proxySenderName: options.proxySenderName ?? null,
+      enableMemoryAutoUpdate: false,
+      callbacks: options.onToolInvocation
+        ? {
+          onToolInvocation(toolName: string) {
+            options.onToolInvocation?.(toolName);
+            return Unit.INSTANCE;
+          }
+        }
+        : null
+    })
   );
   return collectStreamToString(stream, options.onChunk);
 }

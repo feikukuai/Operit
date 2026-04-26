@@ -32,6 +32,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -44,6 +45,7 @@ import com.ai.assistance.operit.ui.features.chat.components.ChatStyle
 import com.ai.assistance.operit.ui.features.chat.components.style.bubble.BubbleStyleChatMessage
 import com.ai.assistance.operit.ui.features.chat.components.style.cursor.CursorStyleChatMessage
 import com.ai.assistance.operit.ui.theme.AppBackgroundLayer
+
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -89,6 +91,12 @@ object MessageImageGenerator {
         thinkingBackgroundColor: Color,
         thinkingTextColor: Color,
         chatStyle: ChatStyle = ChatStyle.CURSOR,
+        cursorUserBubbleLiquidGlass: Boolean = false,
+        cursorUserBubbleWaterGlass: Boolean = false,
+        bubbleUserBubbleLiquidGlass: Boolean = false,
+        bubbleUserBubbleWaterGlass: Boolean = false,
+        bubbleAiBubbleLiquidGlass: Boolean = false,
+        bubbleAiBubbleWaterGlass: Boolean = false,
         initialThinkingExpanded: Boolean = false,
         expandThinkToolsGroups: Boolean = false,
         includeBackground: Boolean = true,
@@ -133,10 +141,10 @@ object MessageImageGenerator {
                             .memoryCachePolicy(CachePolicy.ENABLED)
                             .build()
 
-                        androidx.compose.runtime.CompositionLocalProvider(
+                        CompositionLocalProvider(
                             LocalImageLoader provides softwareImageLoader
                         ) {
-                        MaterialTheme(colorScheme = colorScheme) {
+                            MaterialTheme(colorScheme = colorScheme) {
                             // 不再使用 Capturable，直接渲染内容
                             val density = LocalDensity.current
                             val widthDp = with(density) { width.toDp() }
@@ -158,6 +166,7 @@ object MessageImageGenerator {
                             val backgroundBlurRadius by
                                 preferencesManager.backgroundBlurRadius.collectAsState(initial = 10f)
 
+
                             val cardBackgroundColor = if (includeBackground) Color.Transparent else colorScheme.surface
                             val headerBackgroundColor = if (includeBackground) Color.Transparent else colorScheme.surfaceVariant
                             val contentBackgroundColor = if (includeBackground) Color.Transparent else colorScheme.surface
@@ -167,121 +176,133 @@ object MessageImageGenerator {
                                     .width(widthDp)
                                     .wrapContentHeight()
                             ) {
-                                if (includeBackground) {
-                                    AppBackgroundLayer(
-                                        darkTheme = isDarkTheme,
-                                        useBackgroundImage = useBackgroundImage,
-                                        backgroundImageUri = backgroundImageUri,
-                                        backgroundImageOpacity = backgroundImageOpacity,
-                                        backgroundMediaType = backgroundMediaType,
-                                        videoBackgroundMuted = videoBackgroundMuted,
-                                        videoBackgroundLoop = videoBackgroundLoop,
-                                        useBackgroundBlur = useBackgroundBlur,
-                                        backgroundBlurRadius = backgroundBlurRadius,
-                                        modifier = Modifier.matchParentSize()
-                                    )
-                                }
-
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .wrapContentHeight()
-                                        .padding(12.dp),
-                                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    // 内容卡片：圆角边框 + 阴影效果
                                     Column(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .clip(RoundedCornerShape(12.dp))
-                                            .border(
-                                                width = borderWidthDp.dp,
-                                                color = colorScheme.outlineVariant,
-                                                shape = RoundedCornerShape(12.dp)
-                                            )
-                                            .background(cardBackgroundColor)
+                                            .wrapContentHeight()
+                                            .padding(12.dp),
+                                        verticalArrangement = Arrangement.spacedBy(8.dp)
                                     ) {
-                                        // 顶部品牌栏：Logo + "Operit AI"
-                                        Row(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .background(headerBackgroundColor)
-                                                .padding(horizontal = 12.dp, vertical = 8.dp),
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.Center
-                                        ) {
-                                            // Logo
-                                            Image(
-                                                painter = painterResource(id = com.ai.assistance.operit.R.drawable.ic_launcher_foreground),
-                                                contentDescription = "Operit Logo",
-                                                modifier = Modifier.size(48.dp)
-                                            )
-                                            Spacer(modifier = Modifier.width(2.dp))
-                                            // 品牌名称
-                                            Text(
-                                                text = "Operit AI",
-                                                fontSize = 16.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                color = colorScheme.onSurface
-                                            )
-                                        }
+                                        val cardShape = RoundedCornerShape(12.dp)
 
-                                        // 分隔线
                                         Box(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .height(1.dp)
-                                                .background(colorScheme.outlineVariant)
-                                        )
-
-                                        // 消息内容区域
-                                        Column(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .wrapContentHeight()
-                                                .background(contentBackgroundColor)
-                                                .padding(12.dp),
-                                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                                            modifier =
+                                                Modifier.fillMaxWidth()
+                                                    .clip(cardShape)
+                                                    .border(
+                                                        width = borderWidthDp.dp,
+                                                        color = colorScheme.outlineVariant,
+                                                        shape = cardShape
+                                                    )
+                                                    .background(cardBackgroundColor)
                                         ) {
-                                            // 创建消息副本，清除 contentStream，确保只使用 content 字段
-                                            val staticMessages = messages.map { message ->
-                                                message.copy(contentStream = null)
+                                            if (includeBackground) {
+                                                AppBackgroundLayer(
+                                                    darkTheme = isDarkTheme,
+                                                    useBackgroundImage = useBackgroundImage,
+                                                    backgroundImageUri = backgroundImageUri,
+                                                    backgroundImageOpacity = backgroundImageOpacity,
+                                                    backgroundMediaType = backgroundMediaType,
+                                                    videoBackgroundMuted = videoBackgroundMuted,
+                                                    videoBackgroundLoop = videoBackgroundLoop,
+                                                    useBackgroundBlur = useBackgroundBlur,
+                                                    backgroundBlurRadius = backgroundBlurRadius,
+                                                    modifier = Modifier.matchParentSize()
+                                                )
                                             }
 
-                                            staticMessages.forEach { message ->
-                                                when (chatStyle) {
-                                                    ChatStyle.BUBBLE -> {
-                                                        BubbleStyleChatMessage(
-                                                            message = message,
-                                                            userMessageColor = userMessageColor,
-                                                            aiMessageColor = aiMessageColor,
-                                                            userTextColor = userTextColor,
-                                                            aiTextColor = aiTextColor,
-                                                            systemMessageColor = systemMessageColor,
-                                                            systemTextColor = systemTextColor,
-                                                            initialThinkingExpanded = initialThinkingExpanded,
-                                                            expandThinkToolsGroups = expandThinkToolsGroups,
-                                                            forceShowThinkingProcess = forceShowThinkingProcess,
-                                                            enableDialogs = false
-                                                        )
+                                            Column(
+                                                modifier = Modifier.fillMaxWidth().wrapContentHeight()
+                                            ) {
+                                                // 顶部品牌栏：Logo + "Operit AI"
+                                                Row(
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .background(headerBackgroundColor)
+                                                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    horizontalArrangement = Arrangement.Center
+                                                ) {
+                                                    // Logo
+                                                    Image(
+                                                        painter = painterResource(id = com.ai.assistance.operit.R.drawable.ic_launcher_foreground),
+                                                        contentDescription = "Operit Logo",
+                                                        modifier = Modifier.size(48.dp)
+                                                    )
+                                                    Spacer(modifier = Modifier.width(2.dp))
+                                                    // 品牌名称
+                                                    Text(
+                                                        text = "Operit AI",
+                                                        fontSize = 16.sp,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = colorScheme.onSurface
+                                                    )
+                                                }
+
+                                                // 分隔线
+                                                Box(
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .height(1.dp)
+                                                        .background(colorScheme.outlineVariant)
+                                                )
+
+                                                // 消息内容区域
+                                                Column(
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .wrapContentHeight()
+                                                        .background(contentBackgroundColor)
+                                                        .padding(12.dp),
+                                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                                ) {
+                                                    // 创建消息副本，清除 contentStream，确保只使用 content 字段
+                                                    val staticMessages = messages.map { message ->
+                                                        message.copy(contentStream = null)
                                                     }
-                                                    ChatStyle.CURSOR -> {
-                                                        CursorStyleChatMessage(
-                                                            message = message,
-                                                            userMessageColor = userMessageColor,
-                                                            aiMessageColor = aiMessageColor,
-                                                            userTextColor = userTextColor,
-                                                            aiTextColor = aiTextColor,
-                                                            systemMessageColor = systemMessageColor,
-                                                            systemTextColor = systemTextColor,
-                                                            thinkingBackgroundColor = thinkingBackgroundColor,
-                                                            thinkingTextColor = thinkingTextColor,
-                                                            supportToolMarkup = true,
-                                                            initialThinkingExpanded = initialThinkingExpanded,
-                                                            expandThinkToolsGroups = expandThinkToolsGroups,
-                                                            forceShowThinkingProcess = forceShowThinkingProcess,
-                                                            enableDialogs = false
-                                                        )
+
+                                                    staticMessages.forEach { message ->
+                                                        when (chatStyle) {
+                                                            ChatStyle.BUBBLE -> {
+                                                                BubbleStyleChatMessage(
+                                                                    message = message,
+                                                                    userMessageColor = userMessageColor,
+                                                                    aiMessageColor = aiMessageColor,
+                                                                    userTextColor = userTextColor,
+                                                                    aiTextColor = aiTextColor,
+                                                                    systemMessageColor = systemMessageColor,
+                                                                    systemTextColor = systemTextColor,
+                                                                    userMessageLiquidGlassEnabled = bubbleUserBubbleLiquidGlass,
+                                                                    userMessageWaterGlassEnabled = bubbleUserBubbleWaterGlass,
+                                                                    aiMessageLiquidGlassEnabled = bubbleAiBubbleLiquidGlass,
+                                                                    aiMessageWaterGlassEnabled = bubbleAiBubbleWaterGlass,
+                                                                    initialThinkingExpanded = initialThinkingExpanded,
+                                                                    expandThinkToolsGroups = expandThinkToolsGroups,
+                                                                    forceShowThinkingProcess = forceShowThinkingProcess,
+                                                                    enableDialogs = false
+                                                                )
+                                                            }
+                                                            ChatStyle.CURSOR -> {
+                                                                CursorStyleChatMessage(
+                                                                    message = message,
+                                                                    userMessageColor = userMessageColor,
+                                                                    userMessageLiquidGlassEnabled = cursorUserBubbleLiquidGlass,
+                                                                    userMessageWaterGlassEnabled = cursorUserBubbleWaterGlass,
+                                                                    aiMessageColor = aiMessageColor,
+                                                                    userTextColor = userTextColor,
+                                                                    aiTextColor = aiTextColor,
+                                                                    systemMessageColor = systemMessageColor,
+                                                                    systemTextColor = systemTextColor,
+                                                                    thinkingBackgroundColor = thinkingBackgroundColor,
+                                                                    thinkingTextColor = thinkingTextColor,
+                                                                    supportToolMarkup = true,
+                                                                    initialThinkingExpanded = initialThinkingExpanded,
+                                                                    expandThinkToolsGroups = expandThinkToolsGroups,
+                                                                    forceShowThinkingProcess = forceShowThinkingProcess,
+                                                                    enableDialogs = false
+                                                                )
+                                                            }
+                                                        }
                                                     }
                                                 }
                                             }
@@ -289,7 +310,6 @@ object MessageImageGenerator {
                                     }
                                 }
                             }
-                        }
                         }
                     }
                 }
@@ -341,8 +361,8 @@ object MessageImageGenerator {
                     )
                     val canvas = Canvas(tempBitmap)
                     
-                    // 根据当前主题填充背景色
-                    val backgroundColor = if (!includeBackground) {
+                    // includeBackground=true 时，外围保持透明，仅卡片内部渲染应用背景
+                    val backgroundColor = if (includeBackground) {
                         AndroidColor.TRANSPARENT
                     } else if (isDarkTheme) {
                         AndroidColor.BLACK

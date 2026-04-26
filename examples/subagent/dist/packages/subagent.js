@@ -66,12 +66,11 @@ exports.subagent_run = subagent_run;
 require("../../../types/quickjs-runtime.js");
 const EnhancedAIService = Java.com.ai.assistance.operit.api.chat.EnhancedAIService;
 const FunctionType = Java.com.ai.assistance.operit.data.model.FunctionType;
-const PromptFunctionType = Java.com.ai.assistance.operit.data.model.PromptFunctionType;
 const SystemPromptConfig = Java.com.ai.assistance.operit.core.config.SystemPromptConfig;
 const Unit = Java.kotlin.Unit;
-const ArrayList = Java.type("java.util.ArrayList");
-const LinkedHashMap = Java.type("java.util.LinkedHashMap");
+const PromptTurnClass = Java.type("com.ai.assistance.operit.core.chat.hooks.PromptTurn");
 const PromptTurnKindClass = Java.type("com.ai.assistance.operit.core.chat.hooks.PromptTurnKind");
+const SendMessageOptionsClass = Java.type("com.ai.assistance.operit.api.chat.EnhancedAIService$SendMessageOptions");
 const TOOL_TAG = /<tool\b[\s\S]*?<\/tool>/gi;
 const TOOL_SELF_CLOSING = /<tool\b[^>]*\/>/gi;
 const TOOL_RESULT_TAG = /<tool_result\b[\s\S]*?<\/tool_result>/gi;
@@ -176,11 +175,7 @@ function extractFinalNonToolAssistantContent(raw) {
     return parts.length > 0 ? parts[parts.length - 1] : fullStripped;
 }
 function toKotlinPromptTurnList(history) {
-    const list = new ArrayList();
-    for (const turn of history || []) {
-        list.add(Java.newInstance("com.ai.assistance.operit.core.chat.hooks.PromptTurn", resolvePromptTurnKind(turn.kind), String(turn.content ?? ""), typeof turn.toolName === "string" ? turn.toolName : null, toJavaJsonObject(isJsonObject(turn.metadata) ? turn.metadata : undefined)));
-    }
-    return list;
+    return (history || []).map((turn) => new PromptTurnClass(resolvePromptTurnKind(turn.kind), String(turn.content ?? ""), typeof turn.toolName === "string" ? turn.toolName : null, isJsonObject(turn.metadata) ? turn.metadata : {}));
 }
 function resolvePromptTurnKind(kind) {
     switch (kind) {
@@ -202,31 +197,17 @@ function resolvePromptTurnKind(kind) {
 function isJsonObject(value) {
     return !!value && typeof value === "object" && !Array.isArray(value);
 }
-function toJavaJsonObject(value) {
-    if (!value) {
-        return new LinkedHashMap();
-    }
-    const map = new LinkedHashMap();
-    for (const [key, item] of Object.entries(value)) {
-        map.put(String(key), toJavaValue(item));
-    }
-    return map;
-}
-function toJavaValue(value) {
-    if (value === undefined || value === null) {
-        return null;
-    }
-    if (Array.isArray(value)) {
-        const list = new ArrayList();
-        for (const item of value) {
-            list.add(toJavaValue(item));
-        }
-        return list;
-    }
-    if (typeof value === "object") {
-        return toJavaJsonObject(value);
-    }
-    return value;
+function createSendMessageOptions(options) {
+    const javaOptions = new SendMessageOptionsClass();
+    javaOptions.message = String(options.message ?? "");
+    javaOptions.chatHistory = toKotlinPromptTurnList(options.chatHistory || []);
+    javaOptions.maxTokens = Number(options.maxTokens);
+    javaOptions.tokenUsageThreshold = Number(options.tokenUsageThreshold);
+    javaOptions.customSystemPromptTemplate = options.customSystemPromptTemplate || null;
+    javaOptions.subTask = true;
+    javaOptions.proxySenderName = "Subagent";
+    javaOptions.enableMemoryAutoUpdate = false;
+    return javaOptions;
 }
 async function collectStreamToString(stream) {
     let buffer = "";
@@ -240,15 +221,16 @@ async function collectStreamToString(stream) {
     return buffer;
 }
 async function sendMessage(enhancedAIService, options) {
-    const onNonFatalError = (_value) => Unit.INSTANCE;
-    const onToolInvocation = options.onToolInvocation
-        ? (toolName) => {
-            options.onToolInvocation?.(toolName);
-            return Unit.INSTANCE;
+    const javaOptions = createSendMessageOptions(options);
+    javaOptions.callbacks = options.onToolInvocation
+        ? {
+            onToolInvocation(toolName) {
+                options.onToolInvocation?.(toolName);
+                return Unit.INSTANCE;
+            }
         }
         : null;
-    const enableMemoryAutoUpdate = false;
-    const stream = await enhancedAIService.callSuspend("sendMessage", options.message, null, toKotlinPromptTurnList(options.chatHistory), null, null, FunctionType.CHAT, PromptFunctionType.CHAT, false, enableMemoryAutoUpdate, options.maxTokens, options.tokenUsageThreshold, onNonFatalError, null, options.customSystemPromptTemplate || null, true, null, null, null, false, null, "Subagent", onToolInvocation, null, null, true, false);
+    const stream = await enhancedAIService.callSuspend("sendMessage", javaOptions);
     return collectStreamToString(stream);
 }
 function getAppContext() {

@@ -41,6 +41,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -66,6 +67,7 @@ import com.ai.assistance.operit.ui.features.chat.webview.workspace.WorkspaceConf
 import com.ai.assistance.operit.ui.features.chat.webview.workspace.toWorkspaceCommandOutputEntries
 import com.ai.assistance.operit.core.tools.system.Terminal
 import com.ai.assistance.operit.util.TtsCleaner
+import com.ai.assistance.operit.util.TtsSegmenter
 import android.net.Uri
 import android.os.Build
 import androidx.annotation.RequiresApi
@@ -95,11 +97,26 @@ class ChatViewModel(private val context: Context) : ViewModel() {
     companion object {
         private const val TAG = "ChatViewModel"
         private const val MIN_WORKSPACE_FILE_QUERY_LENGTH = 2
+        private const val SPEECH_PREVIEW_MAX = 48
+    }
+
+    private fun speechPreview(text: String): String {
+        return text.replace("\n", "\\n").take(SPEECH_PREVIEW_MAX)
+    }
+
+    private fun logSpeechState(event: String, extra: String = "") {
+        val suffix = if (extra.isNotBlank()) " $extra" else ""
+        AppLogger.d(
+            TAG,
+            "speech[$event] session=${_isSpeechSessionActive.value} paused=${_isSpeechPaused.value} playing=${_isPlaying.value} autoRead=${isAutoReadEnabled.value}$suffix"
+        )
     }
 
     // 添加语音服务
     private var voiceService: VoiceService? = null
     private var voiceStateCollectionJob: Job? = null
+    private var speechPlaybackJob: Job? = null
+    private var speechControlsHideJob: Job? = null
     private val speechServicesPreferences = SpeechServicesPreferences(context)
     private val activePromptManager = ActivePromptManager.getInstance(context)
     private val characterCardManager = CharacterCardManager.getInstance(context)
@@ -107,6 +124,10 @@ class ChatViewModel(private val context: Context) : ViewModel() {
     // 添加语音播放状态
     private val _isPlaying = MutableStateFlow(false)
     val isPlaying: StateFlow<Boolean> = _isPlaying.asStateFlow()
+    private val _isSpeechSessionActive = MutableStateFlow(false)
+    val isSpeechSessionActive: StateFlow<Boolean> = _isSpeechSessionActive.asStateFlow()
+    private val _isSpeechPaused = MutableStateFlow(false)
+    val isSpeechPaused: StateFlow<Boolean> = _isSpeechPaused.asStateFlow()
 
     // 添加自动朗读状态 - Now managed by ApiConfigDelegate
     val isAutoReadEnabled: StateFlow<Boolean> by lazy { apiConfigDelegate.enableAutoRead }
@@ -934,6 +955,12 @@ class ChatViewModel(private val context: Context) : ViewModel() {
         thinkingBackgroundColor: Color,
         thinkingTextColor: Color,
         chatStyle: ChatStyle,
+        cursorUserBubbleLiquidGlass: Boolean = false,
+        cursorUserBubbleWaterGlass: Boolean = false,
+        bubbleUserBubbleLiquidGlass: Boolean = false,
+        bubbleUserBubbleWaterGlass: Boolean = false,
+        bubbleAiBubbleLiquidGlass: Boolean = false,
+        bubbleAiBubbleWaterGlass: Boolean = false,
         initialThinkingExpanded: Boolean = false,
         expandThinkToolsGroups: Boolean = false,
         includeBackground: Boolean = true,
@@ -974,6 +1001,12 @@ class ChatViewModel(private val context: Context) : ViewModel() {
                         thinkingBackgroundColor = thinkingBackgroundColor,
                         thinkingTextColor = thinkingTextColor,
                         chatStyle = chatStyle,
+                        cursorUserBubbleLiquidGlass = cursorUserBubbleLiquidGlass,
+                        cursorUserBubbleWaterGlass = cursorUserBubbleWaterGlass,
+                        bubbleUserBubbleLiquidGlass = bubbleUserBubbleLiquidGlass,
+                        bubbleUserBubbleWaterGlass = bubbleUserBubbleWaterGlass,
+                        bubbleAiBubbleLiquidGlass = bubbleAiBubbleLiquidGlass,
+                        bubbleAiBubbleWaterGlass = bubbleAiBubbleWaterGlass,
                         initialThinkingExpanded = initialThinkingExpanded,
                         expandThinkToolsGroups = expandThinkToolsGroups,
                         includeBackground = includeBackground,
@@ -2487,6 +2520,8 @@ class ChatViewModel(private val context: Context) : ViewModel() {
             observeVoiceState(currentVoiceService)
         } else {
             _isPlaying.value = false
+            _isSpeechSessionActive.value = false
+            _isSpeechPaused.value = false
         }
         return initialized
     }
@@ -2497,11 +2532,14 @@ class ChatViewModel(private val context: Context) : ViewModel() {
             AppLogger.d(TAG, "检测到TTS服务实例已切换，更新聊天页引用")
             voiceStateCollectionJob?.cancel()
             voiceService = latestVoiceService
+            logSpeechState("voiceService.swap", "provider=${latestVoiceService.javaClass.simpleName}")
         }
 
         val currentVoiceService = voiceService ?: return null
+        logSpeechState("voiceService.ensure", "provider=${currentVoiceService.javaClass.simpleName} initialized=${currentVoiceService.isInitialized}")
         if (!currentVoiceService.isInitialized) {
             val initialized = currentVoiceService.initialize()
+            logSpeechState("voiceService.initializeResult", "provider=${currentVoiceService.javaClass.simpleName} initialized=$initialized")
             if (!initialized) {
                 return null
             }
@@ -2513,11 +2551,42 @@ class ChatViewModel(private val context: Context) : ViewModel() {
         return currentVoiceService
     }
 
+    private fun cancelSpeechControlsHide(reason: String) {
+        if (speechControlsHideJob?.isActive == true) {
+            speechControlsHideJob?.cancel()
+            logSpeechState("cancelHide", "reason=$reason")
+        }
+        speechControlsHideJob = null
+    }
+
     private fun observeVoiceState(service: VoiceService) {
         voiceStateCollectionJob?.cancel()
+        cancelSpeechControlsHide("observeVoiceState.restart provider=${service::class.java.simpleName}")
         voiceStateCollectionJob = viewModelScope.launch {
             service.speakingStateFlow.collect { isSpeaking ->
                 _isPlaying.value = isSpeaking
+                logSpeechState(
+                    event = "speakingStateFlow",
+                    extra = "provider=${service::class.java.simpleName} emitted=$isSpeaking"
+                )
+                if (isSpeaking || !_isSpeechSessionActive.value || _isSpeechPaused.value || isAutoReadEnabled.value) {
+                    cancelSpeechControlsHide(
+                        "stateChanged provider=${service::class.java.simpleName} emitted=$isSpeaking"
+                    )
+                    return@collect
+                }
+
+                cancelSpeechControlsHide("reschedule provider=${service::class.java.simpleName}")
+                logSpeechState("scheduleHide", "reason=idle provider=${service::class.java.simpleName} delayMs=3000")
+                speechControlsHideJob = viewModelScope.launch {
+                    delay(3000)
+                    if (!_isPlaying.value && _isSpeechSessionActive.value && !_isSpeechPaused.value && !isAutoReadEnabled.value) {
+                        _isSpeechSessionActive.value = false
+                        logSpeechState("hideControls", "reason=idleTimeout provider=${service::class.java.simpleName}")
+                    } else {
+                        logSpeechState("skipHide", "reason=stateChangedDuringDelay provider=${service::class.java.simpleName}")
+                    }
+                }
             }
         }
     }
@@ -2528,10 +2597,23 @@ class ChatViewModel(private val context: Context) : ViewModel() {
     }
 
     fun speakMessage(message: String, interrupt: Boolean) {
-        viewModelScope.launch {
+        if (interrupt) {
+            speechPlaybackJob?.cancel()
+            logSpeechState("cancelPlaybackJob", "reason=newInterruptingSpeak")
+        }
+        speechPlaybackJob = viewModelScope.launch {
             try {
+                cancelSpeechControlsHide("newSpeak")
                 val currentVoiceService = ensureActiveVoiceService()
+                _isSpeechSessionActive.value = true
+                _isSpeechPaused.value = false
+                logSpeechState(
+                    "speakMessage.start",
+                    "interrupt=$interrupt provider=${currentVoiceService?.javaClass?.simpleName} rawLen=${message.length} preview=\"${speechPreview(message)}\""
+                )
                 if (currentVoiceService == null) {
+                    _isSpeechSessionActive.value = false
+                    logSpeechState("speakMessage.abort", "reason=noVoiceService")
                     uiStateDelegate.showToast(context.getString(R.string.chat_voice_service_init_failed))
                     AppLogger.e(TAG, "语音服务不可用")
                     return@launch
@@ -2540,23 +2622,49 @@ class ChatViewModel(private val context: Context) : ViewModel() {
                 val cleanerRegexs = speechServicesPreferences.ttsCleanerRegexsFlow.first()
                 val cleanedText = TtsCleaner.clean(message, cleanerRegexs)
                 val cleanMessage = WaifuMessageProcessor.cleanContentForWaifu(cleanedText)
+                AppLogger.d(
+                    TAG,
+                    "speech[cleaned] rawLen=${message.length} cleanedLen=${cleanedText.length} finalLen=${cleanMessage.length} preview=\"${speechPreview(cleanMessage)}\""
+                )
 
                 if (cleanMessage.isBlank()) {
                     AppLogger.d(TAG, "朗读内容为空，跳过请求")
+                    _isSpeechSessionActive.value = false
+                    logSpeechState("speakMessage.abort", "reason=blankAfterClean")
                     return@launch
                 }
 
-                val success = currentVoiceService.speak(
-                    text = cleanMessage,
-                    interrupt = interrupt,
-                    rate = null,
-                    pitch = null
-                )
+                val segments = TtsSegmenter.split(cleanMessage)
+                AppLogger.d(TAG, "speech[segments] count=${segments.size} lengths=${segments.joinToString(prefix = "[", postfix = "]") { it.length.toString() }}")
+                var isFirstSegment = true
+                for ((index, segment) in segments.withIndex()) {
+                    if (_isSpeechPaused.value) {
+                        logSpeechState("waitResume", "segmentIndex=$index")
+                        isSpeechPaused.filter { !it }.first()
+                        logSpeechState("resumeObserved", "segmentIndex=$index")
+                    }
 
-                if (!success) {
-                    uiStateDelegate.showToast(context.getString(R.string.chat_speak_failed))
+                    AppLogger.d(
+                        TAG,
+                        "speech[segmentSpeak] index=$index/${segments.lastIndex} interrupt=${if (isFirstSegment) interrupt else false} len=${segment.length} preview=\"${speechPreview(segment)}\""
+                    )
+                    val success = currentVoiceService.speak(
+                        text = segment,
+                        interrupt = if (isFirstSegment) interrupt else false,
+                        rate = null,
+                        pitch = null
+                    )
+                    AppLogger.d(TAG, "speech[segmentResult] index=$index success=$success provider=${currentVoiceService.javaClass.simpleName}")
+
+                    if (!success) {
+                        logSpeechState("segmentFailed", "index=$index")
+                        uiStateDelegate.showToast(context.getString(R.string.chat_speak_failed))
+                        break
+                    }
+                    isFirstSegment = false
                 }
             } catch (e: Exception) {
+                logSpeechState("speakMessage.exception", "type=${e::class.java.simpleName} message=${e.message}")
                 AppLogger.e(TAG, "朗读消息失败", e)
                 uiStateDelegate.showToast(context.getString(R.string.chat_speak_message_failed, e.message ?: "Unknown error"))
             }
@@ -2567,20 +2675,70 @@ class ChatViewModel(private val context: Context) : ViewModel() {
     fun stopSpeaking() {
         viewModelScope.launch {
             try {
+                logSpeechState("stopSpeaking.request")
+                cancelSpeechControlsHide("stopSpeaking")
+                speechPlaybackJob?.cancel()
+                speechPlaybackJob = null
                 ensureActiveVoiceService()?.stop()
+                _isSpeechPaused.value = false
+                _isSpeechSessionActive.value = false
+                logSpeechState("stopSpeaking.done")
             } catch (e: Exception) {
+                logSpeechState("stopSpeaking.exception", "type=${e::class.java.simpleName} message=${e.message}")
                 AppLogger.e(TAG, "停止朗读失败", e)
             }
         }
     }
 
+    fun pauseSpeaking() {
+        viewModelScope.launch {
+            try {
+                logSpeechState("pauseSpeaking.request")
+                cancelSpeechControlsHide("pauseSpeaking")
+                val success = ensureActiveVoiceService()?.pause() == true
+                if (success) {
+                    _isSpeechPaused.value = true
+                    _isSpeechSessionActive.value = true
+                    logSpeechState("pauseSpeaking.done", "success=true")
+                } else {
+                    logSpeechState("pauseSpeaking.done", "success=false")
+                }
+            } catch (e: Exception) {
+                logSpeechState("pauseSpeaking.exception", "type=${e::class.java.simpleName} message=${e.message}")
+                AppLogger.e(TAG, "暂停朗读失败", e)
+            }
+        }
+    }
+
+    fun resumeSpeaking() {
+        viewModelScope.launch {
+            try {
+                logSpeechState("resumeSpeaking.request")
+                cancelSpeechControlsHide("resumeSpeaking")
+                val success = ensureActiveVoiceService()?.resume() == true
+                if (success) {
+                    _isSpeechPaused.value = false
+                    _isSpeechSessionActive.value = true
+                    logSpeechState("resumeSpeaking.done", "success=true")
+                } else {
+                    logSpeechState("resumeSpeaking.done", "success=false")
+                }
+            } catch (e: Exception) {
+                logSpeechState("resumeSpeaking.exception", "type=${e::class.java.simpleName} message=${e.message}")
+                AppLogger.e(TAG, "继续朗读失败", e)
+            }
+        }
+    }
+
     fun toggleAutoRead() {
+        AppLogger.d(TAG, "speech[toggleAutoRead] before=${isAutoReadEnabled.value}")
         apiConfigDelegate.toggleAutoRead()
         // Stop speaking if auto-read is being turned off.
         // We check the new value directly from the delegate's state flow.
         viewModelScope.launch {
             // A small delay to allow the state flow to update, although it's often fast.
             delay(50)
+            AppLogger.d(TAG, "speech[toggleAutoRead] after=${isAutoReadEnabled.value}")
             if (!isAutoReadEnabled.value) {
                 stopSpeaking()
             }
@@ -2589,12 +2747,14 @@ class ChatViewModel(private val context: Context) : ViewModel() {
 
     fun disableAutoRead() {
         if (isAutoReadEnabled.value) {
+            AppLogger.d(TAG, "speech[disableAutoRead] current=true")
             apiConfigDelegate.toggleAutoRead() // This will set it to false
             stopSpeaking()
         }
     }
 
     fun enableAutoReadAndSpeak(content: String) {
+        AppLogger.d(TAG, "speech[enableAutoReadAndSpeak] autoReadBefore=${isAutoReadEnabled.value} len=${content.length} preview=\"${speechPreview(content)}\"")
         if (!isAutoReadEnabled.value) {
             apiConfigDelegate.toggleAutoRead() // This will set it to true
         }

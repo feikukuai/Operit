@@ -16,6 +16,7 @@ import java.nio.charset.Charset
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
@@ -63,6 +64,11 @@ class HttpVoiceProvider(
     companion object {
         private const val TAG = "HttpVoiceProvider"
         private const val DEFAULT_TIMEOUT = 10 // 10秒超时
+        private const val SPEECH_PREVIEW_MAX = 48
+    }
+
+    private fun speechPreview(text: String): String {
+        return text.replace("\n", "\\n").take(SPEECH_PREVIEW_MAX)
     }
 
     // OkHttpClient实例
@@ -94,6 +100,7 @@ class HttpVoiceProvider(
     private val speakQueue = Channel<SpeakRequest>(Channel.UNLIMITED)
     private val playbackQueue = Channel<PreparedRequest>(capacity = 1)
     private val stopGeneration = AtomicLong(0)
+    private val isPaused = AtomicBoolean(false)
 
     // 缓存的音频文件映射表
     private val audioCache = ConcurrentHashMap<String, File>()
@@ -178,6 +185,10 @@ class HttpVoiceProvider(
         this.httpConfig = config
         this.currentVoiceId = config.voiceId.takeIf { it.isNotBlank() }
         this._isInitialized.value = false // 强制重新初始化
+        AppLogger.d(
+            TAG,
+            "setConfiguration method=${config.httpMethod} url=${config.urlTemplate} voice=${config.voiceId} model=${config.modelName} pipelineSteps=${config.responsePipeline.size}"
+        )
     }
 
     /** 初始化TTS引擎 */
@@ -241,6 +252,10 @@ class HttpVoiceProvider(
         pitch: Float?,
         extraParams: Map<String, String>
     ): Boolean = withContext(Dispatchers.IO) {
+        AppLogger.d(
+            TAG,
+            "speak request interrupt=$interrupt len=${text.length} preview=\"${speechPreview(text)}\" rate=$rate pitch=$pitch voice=$currentVoiceId paused=${isPaused.get()} initialized=$isInitialized extraKeys=${extraParams.keys}"
+        )
         if (interrupt) {
             clearForInterrupt()
         }
@@ -336,7 +351,9 @@ class HttpVoiceProvider(
     }
 
     private fun clearForInterrupt() {
+        AppLogger.d(TAG, "clearForInterrupt paused=${isPaused.get()} speaking=${_isSpeaking.value}")
         stopGeneration.incrementAndGet()
+        isPaused.set(false)
         clearPendingRequests()
         clearPendingPlayback()
         stopPlaybackOnly()
@@ -344,7 +361,9 @@ class HttpVoiceProvider(
 
     private fun stopPlaybackOnly(): Boolean {
         return try {
+            isPaused.set(false)
             mediaPlayer?.let {
+                AppLogger.d(TAG, "stopPlaybackOnly playerExists=true isPlaying=${it.isPlaying}")
                 if (it.isPlaying) {
                     it.stop()
                 }
@@ -360,11 +379,15 @@ class HttpVoiceProvider(
 
     /** 停止当前正在播放的语音 */
     override suspend fun stop(): Boolean = withContext(Dispatchers.IO) {
+        AppLogger.d(TAG, "stop request paused=${isPaused.get()} speaking=${_isSpeaking.value}")
         stopGeneration.incrementAndGet()
+        isPaused.set(false)
         clearPendingRequests()
         clearPendingPlayback()
         if (!isInitialized) return@withContext false
-        stopPlaybackOnly()
+        val result = stopPlaybackOnly()
+        AppLogger.d(TAG, "stop result=$result paused=${isPaused.get()} speaking=${_isSpeaking.value}")
+        result
     }
 
     /** 暂停当前正在播放的语音 */
@@ -373,12 +396,16 @@ class HttpVoiceProvider(
 
         try {
             mediaPlayer?.let {
+                AppLogger.d(TAG, "pause request playerExists=true isPlaying=${it.isPlaying} paused=${isPaused.get()}")
                 if (it.isPlaying) {
                     it.pause()
+                    isPaused.set(true)
                     _isSpeaking.value = false
+                    AppLogger.d(TAG, "pause result=true paused=${isPaused.get()} speaking=${_isSpeaking.value}")
                     return@withContext true
                 }
             }
+            AppLogger.d(TAG, "pause result=false reason=noActivePlayback paused=${isPaused.get()} speaking=${_isSpeaking.value}")
             return@withContext false
         } catch (e: Exception) {
             AppLogger.e(TAG, "暂停HTTP TTS播放失败", e)
@@ -392,12 +419,16 @@ class HttpVoiceProvider(
 
         try {
             mediaPlayer?.let {
+                AppLogger.d(TAG, "resume request playerExists=true isPlaying=${it.isPlaying} paused=${isPaused.get()}")
                 if (!it.isPlaying) {
                     it.start()
+                    isPaused.set(false)
                     _isSpeaking.value = true
+                    AppLogger.d(TAG, "resume result=true paused=${isPaused.get()} speaking=${_isSpeaking.value}")
                     return@withContext true
                 }
             }
+            AppLogger.d(TAG, "resume result=false reason=noPlayerOrAlreadyPlaying paused=${isPaused.get()} speaking=${_isSpeaking.value}")
             return@withContext false
         } catch (e: Exception) {
             AppLogger.e(TAG, "恢复HTTP TTS播放失败", e)
@@ -464,6 +495,10 @@ class HttpVoiceProvider(
         voiceId: String?,
         extraParams: Map<String, String>
     ): File? = withContext(Dispatchers.IO) {
+        AppLogger.d(
+            TAG,
+            "fetchAudioFromServer len=${text.length} preview=\"${speechPreview(text)}\" rate=$rate pitch=$pitch voice=$voiceId extraKeys=${extraParams.keys}"
+        )
         if (httpConfig.urlTemplate.isBlank()) {
             AppLogger.e(TAG, "HTTP TTS URL template is not configured.")
             return@withContext null
@@ -1094,7 +1129,9 @@ class HttpVoiceProvider(
         }
 
         try {
+            AppLogger.d(TAG, "playAudioFile start path=${audioFile.absolutePath} size=${audioFile.length()} paused=${isPaused.get()}")
             withContext(Dispatchers.IO) {
+                isPaused.set(false)
                 FileInputStream(audioFile).use { fis ->
                     val mp = MediaPlayer().apply {
                         setAudioAttributes(
@@ -1116,14 +1153,17 @@ class HttpVoiceProvider(
 
             // Wait for playback to complete
             this@HttpVoiceProvider.mediaPlayer?.let {
-                while (it.isPlaying) {
+                while (it.isPlaying || isPaused.get()) {
                     delay(100)
                 }
             }
+            AppLogger.d(TAG, "playAudioFile waitLoopExit paused=${isPaused.get()} speaking=${_isSpeaking.value}")
         } catch (e: Exception) {
             AppLogger.e(TAG, "播放HTTP TTS音频失败", e)
         } finally {
             _isSpeaking.value = false
+            isPaused.set(false)
+            AppLogger.d(TAG, "playAudioFile finally paused=${isPaused.get()} speaking=${_isSpeaking.value}")
             this@HttpVoiceProvider.mediaPlayer?.apply {
                 try {
                     if (isPlaying) {

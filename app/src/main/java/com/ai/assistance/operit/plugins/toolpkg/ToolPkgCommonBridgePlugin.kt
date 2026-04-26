@@ -188,6 +188,7 @@ private object ToolPkgMessageProcessingBridgePlugin : MessageProcessingPlugin {
         probeOnly: Boolean
     ): Map<String, Any?> {
         return mapOf(
+            "chatId" to params.chatId,
             "messageContent" to params.messageContent,
             "chatHistory" to params.chatHistory.map(::promptTurnToMap),
             "workspacePath" to params.workspacePath,

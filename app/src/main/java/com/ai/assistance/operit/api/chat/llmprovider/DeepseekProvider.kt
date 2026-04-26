@@ -60,13 +60,15 @@ class DeepseekProvider(
         preserveThinkInHistory: Boolean
     ): RequestBody {
         fun applyThinkingParamsIfNeeded(jsonObject: JSONObject) {
-            if (!enableThinking) return
-
             val thinkingObject = jsonObject.optJSONObject("thinking") ?: JSONObject()
-            if (!thinkingObject.has("type")) {
-                thinkingObject.put("type", "enabled")
-            }
+            val thinkingType = if (enableThinking) "enabled" else "disabled"
+            thinkingObject.put("type", thinkingType)
             jsonObject.put("thinking", thinkingObject)
+
+            if (!enableThinking) {
+                AppLogger.d("DeepseekProvider", "DeepSeek thinking mode explicitly set to disabled")
+                return
+            }
 
             val effort = resolveDeepseekThinkingEffort(context)
             if (effort != null && !jsonObject.has("reasoning_effort")) {
@@ -80,8 +82,7 @@ class DeepseekProvider(
         jsonObject.put("model", modelName)
         jsonObject.put("stream", stream)
 
-        // DeepSeek Thinking Mode (官方字段为 thinking: { enabled/disabled })
-        // 这里仅在 enableThinking=true 时开启。
+        // DeepSeek Thinking Mode 默认开启，关闭时也必须显式发送 thinking.type=disabled。
         applyThinkingParamsIfNeeded(jsonObject)
 
         // 添加已启用的模型参数

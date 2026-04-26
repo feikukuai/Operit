@@ -1272,6 +1272,8 @@
     <!-- Context Menu -->
     <string name="copy_message">Copiar Mensaje</string>
     <string name="read_message">Leer Mensaje</string>
+    <string name="pause_reading">Pausar Lectura</string>
+    <string name="resume_reading">Continuar Lectura</string>
     <string name="stop_reading">Detener Lectura</string>
     <string name="edit_and_resend">Editar y Reenviar</string>
     <string name="rollback_to_here">Revertir hasta aquí</string>
@@ -6935,4 +6937,11 @@ Ahora puede usar el modo AutoGLM en la interfaz de conversación.</string>
     <string name="chat_delete_single_variant">Eliminar mensaje único</string>
     <string name="chat_delete_single_variant_unavailable">El mensaje actual no tiene candidatos únicos para eliminar</string>
     <string name="chat_delete_single_variant_failed">Error al eliminar el mensaje único: %1$s</string>
+    <string name="share_preview_title">Vista previa para compartir</string>
+    <string name="share_preview_image_content_description">Vista previa de imagen para compartir</string>
+    <string name="share_preview_generating">Generando vista previa...</string>
+    <string name="share_preview_expand_thinking">Expandir razonamiento</string>
+    <string name="share_preview_expand_tools_groups">Expandir herramientas y grupos de razonamiento</string>
+    <string name="share_preview_include_background">Incluir fondo</string>
+    <string name="share_preview_border_width">Borde: %1$.1f dp</string>
 </resources>

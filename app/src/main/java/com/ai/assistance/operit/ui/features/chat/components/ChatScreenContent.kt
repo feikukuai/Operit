@@ -53,6 +53,8 @@ import kotlinx.coroutines.launch
 import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material.icons.filled.Send
@@ -180,8 +182,15 @@ fun ChatScreenContent(
     var hasHiddenNewerMessages by remember { mutableStateOf(false) }
     
     // 监听朗读状态
-    val isPlaying by actualViewModel.isPlaying.collectAsState()
+    val isSpeechSessionActive by actualViewModel.isSpeechSessionActive.collectAsState()
+    val isSpeechPaused by actualViewModel.isSpeechPaused.collectAsState()
     val isAutoReadEnabled by actualViewModel.isAutoReadEnabled.collectAsState()
+    LaunchedEffect(isSpeechSessionActive, isSpeechPaused, isAutoReadEnabled) {
+        AppLogger.d(
+            "ChatScreenContent",
+            "speechControls session=$isSpeechSessionActive paused=$isSpeechPaused autoRead=$isAutoReadEnabled visible=${isSpeechSessionActive || isSpeechPaused || isAutoReadEnabled}"
+        )
+    }
     LaunchedEffect(pendingRollbackIndex) {
         val index = pendingRollbackIndex
         if (index != null) {
@@ -557,7 +566,7 @@ fun ChatScreenContent(
             }
 
             AnimatedVisibility(
-                visible = isPlaying || isAutoReadEnabled,
+                visible = isSpeechSessionActive || isSpeechPaused || isAutoReadEnabled,
                 enter = fadeIn() + slideInHorizontally(initialOffsetX = { it }),
                 exit = fadeOut() + slideOutHorizontally(targetOffsetX = { it }),
                 modifier = Modifier
@@ -575,18 +584,67 @@ fun ChatScreenContent(
                         }
                     }
             ) {
-                SmallFloatingActionButton(
-                    onClick = {
-                        actualViewModel.stopSpeaking()
-                    },
-                    containerColor = MaterialTheme.colorScheme.secondary,
-                    contentColor = MaterialTheme.colorScheme.onSecondary
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Filled.Stop,
-                        contentDescription = stringResource(R.string.stop_reading),
-                        modifier = Modifier.size(24.dp)
-                    )
+                    SmallFloatingActionButton(
+                        onClick = {
+                            AppLogger.d(
+                                "ChatScreenContent",
+                                "speechControls pauseClick session=$isSpeechSessionActive paused=$isSpeechPaused autoRead=$isAutoReadEnabled"
+                            )
+                            actualViewModel.pauseSpeaking()
+                        },
+                        containerColor = MaterialTheme.colorScheme.secondary,
+                        contentColor = MaterialTheme.colorScheme.onSecondary
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Pause,
+                            contentDescription = stringResource(R.string.pause_reading),
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+
+                    AnimatedVisibility(visible = isSpeechPaused) {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            SmallFloatingActionButton(
+                                onClick = {
+                                    AppLogger.d(
+                                        "ChatScreenContent",
+                                        "speechControls resumeClick session=$isSpeechSessionActive paused=$isSpeechPaused autoRead=$isAutoReadEnabled"
+                                    )
+                                    actualViewModel.resumeSpeaking()
+                                },
+                                containerColor = MaterialTheme.colorScheme.primary,
+                                contentColor = MaterialTheme.colorScheme.onPrimary
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.PlayArrow,
+                                    contentDescription = stringResource(R.string.resume_reading),
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
+
+                            SmallFloatingActionButton(
+                                onClick = {
+                                    AppLogger.d(
+                                        "ChatScreenContent",
+                                        "speechControls stopClick session=$isSpeechSessionActive paused=$isSpeechPaused autoRead=$isAutoReadEnabled"
+                                    )
+                                    actualViewModel.stopSpeaking()
+                                },
+                                containerColor = MaterialTheme.colorScheme.error,
+                                contentColor = MaterialTheme.colorScheme.onError
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.Stop,
+                                    contentDescription = stringResource(R.string.stop_reading),
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -637,6 +695,12 @@ fun ChatScreenContent(
                         thinkingBackgroundColor = thinkingBackgroundColor,
                         thinkingTextColor = thinkingTextColor,
                         chatStyle = chatStyle,
+                        cursorUserBubbleLiquidGlass = cursorUserBubbleLiquidGlass,
+                        cursorUserBubbleWaterGlass = cursorUserBubbleWaterGlass,
+                        bubbleUserBubbleLiquidGlass = bubbleUserBubbleLiquidGlass,
+                        bubbleUserBubbleWaterGlass = bubbleUserBubbleWaterGlass,
+                        bubbleAiBubbleLiquidGlass = bubbleAiBubbleLiquidGlass,
+                        bubbleAiBubbleWaterGlass = bubbleAiBubbleWaterGlass,
                         initialThinkingExpanded = sharePreviewThinkingExpanded,
                         expandThinkToolsGroups = sharePreviewExpandThinkToolsGroups,
                         includeBackground = sharePreviewIncludeBackground,

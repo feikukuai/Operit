@@ -2,10 +2,8 @@ import type { ExecutionGraph } from "./plan-models";
 import { parseExecutionGraph } from "./plan-parser";
 import { TaskExecutor } from "./task-executor";
 import { resolveDeepSearchI18n } from "../i18n";
-import { createPromptTurn, toKotlinPromptTurnList, type PromptTurn } from "../prompt-turns";
+import { createPromptTurn, createSendMessageOptions, type PromptTurn } from "../prompt-turns";
 
-const FunctionType = Java.com.ai.assistance.operit.data.model.FunctionType;
-const PromptFunctionType = Java.com.ai.assistance.operit.data.model.PromptFunctionType;
 const Unit = Java.kotlin.Unit;
 const InputProcessingStateBase = "com.ai.assistance.operit.data.model.InputProcessingState$";
 
@@ -94,39 +92,20 @@ async function sendPlanningMessage(
   maxTokens: number,
   tokenUsageThreshold: number
 ): Promise<string> {
-  const onNonFatalError = (_value: string) => Unit.INSTANCE;
-  const enableMemoryAutoUpdate = false;
   console.log(
     `${TAG} sendPlanningMessage start historySize=${chatHistory.length} maxTokens=${maxTokens} tokenUsageThreshold=${tokenUsageThreshold} ${describeBridgeCapabilities(enhancedAIService, ["callSuspend", "sendMessage", "getModelConfigForFunction"])}`
   );
   const stream = await (enhancedAIService as { callSuspend: (...args: unknown[]) => Promise<unknown> }).callSuspend(
     "sendMessage",
-    getI18n().planGenerateDetailedPlan,
-    null,
-    toKotlinPromptTurnList(chatHistory),
-    null,
-    null,
-    FunctionType.CHAT,
-    PromptFunctionType.CHAT,
-    false,
-    enableMemoryAutoUpdate,
-    maxTokens,
-    tokenUsageThreshold,
-    onNonFatalError,
-    null,
-    null,
-    true,
-    null,
-    null,
-    null,
-    false,
-    null,
-    "DeepSearch Planner",
-    null,
-    null,
-    null,
-    true,
-    false
+    createSendMessageOptions({
+      message: getI18n().planGenerateDetailedPlan,
+      chatHistory,
+      maxTokens,
+      tokenUsageThreshold,
+      enableMemoryAutoUpdate: false,
+      isSubTask: true,
+      proxySenderName: "DeepSearch Planner"
+    })
   );
   return collectStreamToString(stream);
 }

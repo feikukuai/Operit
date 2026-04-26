@@ -13,6 +13,7 @@ import com.ai.assistance.operit.ui.floating.ui.fullscreen.XmlTextProcessor
 import com.ai.assistance.operit.ui.floating.ui.pet.AvatarEmotionManager
 import com.ai.assistance.operit.ui.floating.voice.SpeechInteractionManager
 import com.ai.assistance.operit.util.AppLogger
+import com.ai.assistance.operit.util.TtsSegmenter
 import com.ai.assistance.operit.util.stream.Stream
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -229,7 +230,7 @@ class FloatingFullscreenModeViewModel(
                     aiStreamJob?.cancel()
                     aiStreamJob = null
                     activeAiStreamIdentity = null
-                    handleStaticResponse(message.content, ttsCleanerRegexs)
+                    handleStaticResponse(message.content)
                 }
             }
         }
@@ -239,9 +240,6 @@ class FloatingFullscreenModeViewModel(
         val sb = StringBuilder()
         var isFirstSentence = true
         var isFirstChar = true
-        // 流式朗读只在较强的句边界切分，逗号不参与断句，避免语气被打断。
-        val endChars = ".!?;:。！？；：\n"
-        
         XmlTextProcessor.processStreamToText(stream).collect { char ->
             if (isFirstChar) {
                 aiMessage = "" // 收到第一个字符时才清空等待提示
@@ -250,20 +248,21 @@ class FloatingFullscreenModeViewModel(
             aiMessage += char
             sb.append(char)
             
-            if (char in endChars || sb.length >= 50) {
-                if (trySpeak(sb.toString(), isFirstSentence, cleaners, armMicSuppression = isFirstSentence)) {
+            val cutIdx = TtsSegmenter.nextSegmentEnd(sb)
+            if (cutIdx >= 0) {
+                val segment = sb.substring(0, cutIdx)
+                if (trySpeak(segment, isFirstSentence, cleaners, armMicSuppression = isFirstSentence)) {
                     isFirstSentence = false
-                    sb.clear()
+                    sb.delete(0, cutIdx)
                 }
             }
         }
         trySpeak(sb.toString(), isFirstSentence, cleaners, armMicSuppression = isFirstSentence)
     }
 
-    private fun handleStaticResponse(content: String, cleaners: List<String>) {
+    private fun handleStaticResponse(content: String) {
         val plainContent = stripVoiceAvatarTags(content)
         aiMessage = plainContent
-        trySpeak(plainContent, false, cleaners, armMicSuppression = true)
     }
 
     private fun trySpeak(

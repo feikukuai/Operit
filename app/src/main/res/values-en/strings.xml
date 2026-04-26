@@ -728,6 +728,8 @@
     <string name="disable_user_preference_description_desc">When disabled, the system prompt no longer appends the "User preference description" section</string>
     <string name="disable_status_tags">Disable Status Tags</string>
     <string name="disable_status_tags_desc">When disabled, the system prompt no longer appends rules that require replies to end with Task Complete / Wait for User status tags</string>
+    <string name="pause_reading">Pause Reading</string>
+    <string name="resume_reading">Resume Reading</string>
     <string name="stop_reading">Stop Reading</string>
     <string name="edit_and_resend">Edit &amp; Resend</string>
     <string name="rollback_to_here">Rollback to Here</string>
@@ -761,6 +763,13 @@
     <string name="selected_count">%d selected</string>
     <string name="generating_image">Generating image...</string>
     <string name="share_failed">Share failed</string>
+    <string name="share_preview_title">Share Preview</string>
+    <string name="share_preview_image_content_description">Shared image preview</string>
+    <string name="share_preview_generating">Generating preview...</string>
+    <string name="share_preview_expand_thinking">Expand thinking</string>
+    <string name="share_preview_expand_tools_groups">Expand tools and thinking groups</string>
+    <string name="share_preview_include_background">Include background</string>
+    <string name="share_preview_border_width">Border: %1$.1f dp</string>
     <string name="image_generated">Image generated</string>
     <string name="image_preview">Image Preview</string>
     <string name="load_more_history">Tap to load older chat history</string>

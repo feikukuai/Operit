@@ -9,6 +9,7 @@ import java.util.concurrent.CopyOnWriteArrayList
 data class MessageProcessingHookParams(
     val context: Context,
     val enhancedAIService: EnhancedAIService,
+    val chatId: String?,
     val messageContent: String,
     val chatHistory: List<PromptTurn>,
     val workspacePath: String?,

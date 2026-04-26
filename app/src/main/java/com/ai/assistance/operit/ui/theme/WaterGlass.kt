@@ -1,11 +1,13 @@
 package com.ai.assistance.operit.ui.theme
 
 import android.os.Build
+import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
@@ -30,12 +32,42 @@ fun Modifier.waterGlass(
     borderWidth: Dp = 1.dp,
     overlayAlphaBoost: Float = 0f,
 ): Modifier {
-    if (!enabled || !isWaterGlassSupported()) {
+    if (!enabled) {
         return this
     }
 
-    val liquidState = LocalWaterGlassState.current ?: return this
+    val liquidState = if (isWaterGlassSupported()) LocalWaterGlassState.current else null
     val isLightGlass = containerColor.luminance() >= 0.5f
+    if (liquidState == null) {
+        val fallbackTintAlpha = if (isLightGlass) 0.14f else 0.22f
+        val fallbackBorder =
+            if (isLightGlass) {
+                Color.White.copy(alpha = 0.26f)
+            } else {
+                Color.White.copy(alpha = 0.14f)
+            }
+        val fallbackGloss =
+            if (isLightGlass) {
+                Color.White.copy(alpha = 0.10f)
+            } else {
+                Color.White.copy(alpha = 0.05f)
+            }
+
+        return this
+            .shadow(
+                elevation = shadowElevation,
+                shape = shape,
+                clip = false,
+                ambientColor = Color.Black.copy(alpha = if (isLightGlass) 0.10f else 0.18f),
+                spotColor = Color.Black.copy(alpha = if (isLightGlass) 0.10f else 0.18f),
+            )
+            .border(width = borderWidth.coerceAtLeast(0.6.dp), color = fallbackBorder, shape = shape)
+            .background(color = containerColor.copy(alpha = fallbackTintAlpha), shape = shape)
+            .drawWithContent {
+                drawContent()
+                drawRect(fallbackGloss)
+            }
+    }
     val tintAlpha = if (isLightGlass) 0.09f else 0.16f
     val surfaceTint = containerColor.copy(alpha = (tintAlpha + overlayAlphaBoost).coerceIn(0f, 0.56f))
     val borderColor =

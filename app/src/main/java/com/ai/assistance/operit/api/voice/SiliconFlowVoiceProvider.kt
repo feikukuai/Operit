@@ -26,6 +26,7 @@ import java.io.File
 import java.io.FileOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 
 /**
@@ -44,6 +45,7 @@ class SiliconFlowVoiceProvider(
         private const val SAMPLE_RATE = 32000
         private const val SPEED = 1.0
         private const val GAIN = 0
+        private const val SPEECH_PREVIEW_MAX = 48
 
         // 可用音色列表 - 根据硅基流动官方文档
         // 注意：现在只列出音色名称，模型在设置中独立配置
@@ -60,6 +62,10 @@ class SiliconFlowVoiceProvider(
         val DEFAULT_VOICE_ID = "charles"
     }
 
+    private fun speechPreview(text: String): String {
+        return text.replace("\n", "\\n").take(SPEECH_PREVIEW_MAX)
+    }
+
     // 当前音色
     private var voiceId: String = initialVoiceId.ifBlank { DEFAULT_VOICE_ID }
 
@@ -72,6 +78,7 @@ class SiliconFlowVoiceProvider(
     private val speakQueue = Channel<SpeakRequest>(Channel.UNLIMITED)
     private val playbackQueue = Channel<PreparedRequest>(Channel.UNLIMITED)
     private val stopGeneration = AtomicLong(0)
+    private val isPaused = AtomicBoolean(false)
 
     // 初始化状态
     private val _isInitialized = MutableStateFlow(false)
@@ -156,6 +163,10 @@ class SiliconFlowVoiceProvider(
         pitch: Float?,
         extraParams: Map<String, String>
     ): Boolean = withContext(Dispatchers.IO) {
+        AppLogger.d(
+            TAG,
+            "speak request interrupt=$interrupt len=${text.length} preview=\"${speechPreview(text)}\" rate=$rate pitch=$pitch voice=$voiceId paused=${isPaused.get()} initialized=$isInitialized extraKeys=${extraParams.keys}"
+        )
         val completion = CompletableDeferred<Boolean>()
         val request = SpeakRequest(
             text = text,
@@ -329,7 +340,9 @@ class SiliconFlowVoiceProvider(
 
     private fun stopPlaybackOnly(): Boolean {
         return try {
+            isPaused.set(false)
             mediaPlayer?.apply {
+                AppLogger.d(TAG, "stopPlaybackOnly playerExists=true isPlaying=$isPlaying")
                 if (isPlaying) {
                     stop()
                 }
@@ -357,6 +370,8 @@ class SiliconFlowVoiceProvider(
         currentPlaybackFile = file
 
         return try {
+            AppLogger.d(TAG, "playAudioFileAndAwait start path=${file.absolutePath} size=${file.length()} paused=${isPaused.get()}")
+            isPaused.set(false)
             withContext(Dispatchers.Main) {
                 mediaPlayer?.release()
                 mediaPlayer = MediaPlayer().apply {
@@ -379,17 +394,20 @@ class SiliconFlowVoiceProvider(
             _isSpeaking.value = true
             while (true) {
                 val player = mediaPlayer ?: break
-                if (!player.isPlaying) {
+                if (!player.isPlaying && !isPaused.get()) {
                     break
                 }
                 delay(100)
             }
+            AppLogger.d(TAG, "playAudioFileAndAwait waitLoopExit paused=${isPaused.get()} speaking=${_isSpeaking.value}")
             true
         } catch (e: Exception) {
             AppLogger.e(TAG, "播放音频失败", e)
             false
         } finally {
             _isSpeaking.value = false
+            isPaused.set(false)
+            AppLogger.d(TAG, "playAudioFileAndAwait finally paused=${isPaused.get()} speaking=${_isSpeaking.value}")
             withContext(Dispatchers.Main) {
                 mediaPlayer?.release()
                 mediaPlayer = null
@@ -400,15 +418,23 @@ class SiliconFlowVoiceProvider(
     }
 
     override suspend fun stop(): Boolean {
+        AppLogger.d(TAG, "stop request paused=${isPaused.get()} speaking=${_isSpeaking.value}")
         stopGeneration.incrementAndGet()
+        isPaused.set(false)
         clearPendingRequests()
         clearPendingPlayback()
-        return stopPlaybackOnly()
+        val result = stopPlaybackOnly()
+        AppLogger.d(TAG, "stop result=$result paused=${isPaused.get()} speaking=${_isSpeaking.value}")
+        return result
     }
 
     override suspend fun pause(): Boolean {
         return try {
+            AppLogger.d(TAG, "pause request paused=${isPaused.get()} speaking=${_isSpeaking.value} playerExists=${mediaPlayer != null}")
             mediaPlayer?.pause()
+            isPaused.set(true)
+            _isSpeaking.value = false
+            AppLogger.d(TAG, "pause result=true paused=${isPaused.get()} speaking=${_isSpeaking.value}")
             true
         } catch (e: Exception) {
             AppLogger.e(TAG, "暂停播放失败", e)
@@ -418,7 +444,11 @@ class SiliconFlowVoiceProvider(
 
     override suspend fun resume(): Boolean {
         return try {
+            AppLogger.d(TAG, "resume request paused=${isPaused.get()} speaking=${_isSpeaking.value} playerExists=${mediaPlayer != null}")
             mediaPlayer?.start()
+            isPaused.set(false)
+            _isSpeaking.value = true
+            AppLogger.d(TAG, "resume result=true paused=${isPaused.get()} speaking=${_isSpeaking.value}")
             true
         } catch (e: Exception) {
             AppLogger.e(TAG, "恢复播放失败", e)

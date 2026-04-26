@@ -112,6 +112,7 @@ fun ModelApiSettingsSection(
     var modelNameInput by remember(config.id) { mutableStateOf(config.modelName) }
     var selectedProviderTypeId by remember(config.id) { mutableStateOf(config.apiProviderTypeId) }
     var hasInitializedProviderEndpointSync by remember(config.id) { mutableStateOf(false) }
+    var previousProviderTypeId by remember(config.id) { mutableStateOf(config.apiProviderTypeId) }
     val selectedApiProvider = ApiProviderType.fromProviderTypeId(selectedProviderTypeId)
 
     // MNN特定配置状态
@@ -303,29 +304,23 @@ fun ModelApiSettingsSection(
             return@LaunchedEffect
         }
 
-        // 非通用供应商（有强制端点的）切换时，强制重置为该供应商默认端点，避免从“其他供应商”等通用配置带入自定义值
-        val isGenericProviderForEndpoint =
-            selectedApiProvider == null ||
-                selectedApiProvider == ApiProviderType.OPENAI_RESPONSES_GENERIC ||
-                selectedApiProvider == ApiProviderType.OPENAI_GENERIC ||
-                selectedApiProvider == ApiProviderType.OTHER ||
-                selectedApiProvider == ApiProviderType.GEMINI_GENERIC ||
-                selectedApiProvider == ApiProviderType.ANTHROPIC_GENERIC ||
-                selectedApiProvider == ApiProviderType.OLLAMA
-
         if (selectedApiProvider == null) {
+            previousProviderTypeId = selectedProviderTypeId
             return@LaunchedEffect
         }
 
-        if (isGenericProviderForEndpoint) {
-            // 通用供应商仍保留原逻辑：只有在为空或当前就是某个默认端点时才写入默认值
-            if (apiEndpointInput.isEmpty() || isDefaultApiEndpoint(apiEndpointInput)) {
-                apiEndpointInput = getDefaultApiEndpoint(selectedApiProvider)
-            }
-        } else {
-            // 有强制内容的供应商：直接覆盖为该供应商默认端点，实现清空+填充+锁定的效果
+        val previousProvider = ApiProviderType.fromProviderTypeId(previousProviderTypeId)
+        val previousDefaultEndpoint =
+            previousProvider?.let { getDefaultApiEndpoint(it) }.orEmpty()
+        val shouldApplyNewProviderDefault =
+            apiEndpointInput.isEmpty() ||
+                isDefaultApiEndpoint(apiEndpointInput) ||
+                (previousDefaultEndpoint.isNotEmpty() && apiEndpointInput == previousDefaultEndpoint)
+
+        if (shouldApplyNewProviderDefault) {
             apiEndpointInput = getDefaultApiEndpoint(selectedApiProvider)
         }
+        previousProviderTypeId = selectedProviderTypeId
     }
 
     // 模型列表状态
@@ -333,6 +328,7 @@ fun ModelApiSettingsSection(
     var showModelsDialog by remember { mutableStateOf(false) }
     var modelsList by remember { mutableStateOf<List<ModelOption>>(emptyList()) }
     var modelLoadError by remember { mutableStateOf<String?>(null) }
+    var showEndpointDialog by remember(config.id) { mutableStateOf(false) }
 
     // 检查是否使用默认API密钥（仅用于UI显示）
     val isUsingDefaultApiKey = apiKeyInput == ApiPreferences.DEFAULT_API_KEY
@@ -342,6 +338,19 @@ fun ModelApiSettingsSection(
     val isLlamaProvider = selectedApiProvider == ApiProviderType.LLAMA_CPP
     val isToolPkgProvider = selectedApiProvider == null
     val endpointOptions = getEndpointOptions(selectedProviderTypeId)
+    val selectableEndpointOptions =
+        when {
+            endpointOptions != null -> endpointOptions
+            selectedApiProvider != null -> {
+                val defaultEndpoint = getDefaultApiEndpoint(selectedApiProvider)
+                if (defaultEndpoint.isNotBlank()) {
+                    listOf(defaultEndpoint to defaultEndpoint)
+                } else {
+                    emptyList()
+                }
+            }
+            else -> emptyList()
+        }
 
     suspend fun fetchAvailableModels(): Result<List<ModelOption>> {
         return when {
@@ -434,15 +443,6 @@ fun ModelApiSettingsSection(
                 SettingsInfoBanner(text = stringResource(R.string.overseas_provider_warning))
             }
 
-            // 允许自定义端点的供应商（通用类 + Ollama）
-            val isGenericProvider =
-                isToolPkgProvider ||
-                selectedApiProvider == ApiProviderType.OPENAI_RESPONSES_GENERIC ||
-                selectedApiProvider == ApiProviderType.OPENAI_GENERIC ||
-                selectedApiProvider == ApiProviderType.OTHER ||
-                selectedApiProvider == ApiProviderType.GEMINI_GENERIC ||
-                selectedApiProvider == ApiProviderType.ANTHROPIC_GENERIC ||
-                selectedApiProvider == ApiProviderType.OLLAMA
             if (isMnnProvider) {
                 MnnSettingsBlock(
                         mnnForwardTypeInput = mnnForwardTypeInput,
@@ -477,43 +477,53 @@ fun ModelApiSettingsSection(
                     }
                 )
             } else {
-                if (endpointOptions != null) {
-                    var showEndpointDialog by remember { mutableStateOf(false) }
-
-                    SettingsTextField(
+                SettingsTextField(
                         title = stringResource(R.string.api_endpoint),
                         subtitle = stringResource(R.string.api_endpoint_placeholder),
                         value = apiEndpointInput,
-                        onValueChange = {},
+                        onValueChange = {
+                            apiEndpointInput = it.replace("\n", "").replace("\r", "").replace(" ", "")
+                        },
                         enabled = true,
-                        readOnly = true,
-                        onClick = { showEndpointDialog = true },
-                        trailingContent = {
-                            Icon(
-                                imageVector = Icons.Default.KeyboardArrowDown,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                    )
+                        keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Uri,
+                                imeAction = ImeAction.Next
+                        ),
+                        trailingContent =
+                                if (selectableEndpointOptions.isNotEmpty()) {
+                                    {
+                                        IconButton(onClick = { showEndpointDialog = true }) {
+                                            Icon(
+                                                imageVector = Icons.Default.KeyboardArrowDown,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.primary
+                                            )
+                                        }
+                                    }
+                                } else {
+                                    null
+                                }
+                )
 
-                    if (showEndpointDialog) {
-                        Dialog(onDismissRequest = { showEndpointDialog = false }) {
-                            Surface(
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(16.dp),
-                                color = MaterialTheme.colorScheme.surface
-                            ) {
-                                Column(modifier = Modifier.padding(16.dp)) {
-                                    Text(
-                                        text = stringResource(R.string.api_endpoint),
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.SemiBold
-                                    )
-                                    Spacer(modifier = Modifier.height(12.dp))
-                                    endpointOptions.forEach { (endpoint, label) ->
-                                        Row(
-                                            modifier = Modifier
+                if (showEndpointDialog && selectableEndpointOptions.isNotEmpty()) {
+                    Dialog(onDismissRequest = { showEndpointDialog = false }) {
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(16.dp),
+                            color = MaterialTheme.colorScheme.surface
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Text(
+                                    text = stringResource(R.string.api_endpoint),
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Spacer(modifier = Modifier.height(12.dp))
+                                selectableEndpointOptions.forEach { (endpoint, label) ->
+                                    val isSelected = apiEndpointInput == endpoint
+                                    Column(
+                                        modifier =
+                                            Modifier
                                                 .fillMaxWidth()
                                                 .clip(RoundedCornerShape(8.dp))
                                                 .clickable {
@@ -521,34 +531,34 @@ fun ModelApiSettingsSection(
                                                     syncMoonshotModelForEndpoint(endpoint)
                                                     showEndpointDialog = false
                                                 }
-                                                .padding(vertical = 10.dp, horizontal = 8.dp),
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
+                                                .background(
+                                                    if (isSelected) {
+                                                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+                                                    } else {
+                                                        MaterialTheme.colorScheme.surface
+                                                    }
+                                                )
+                                                .padding(vertical = 10.dp, horizontal = 12.dp)
+                                    ) {
+                                        Text(
+                                            text = endpoint,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                        if (label.isNotBlank() && label != endpoint) {
+                                            Spacer(modifier = Modifier.height(2.dp))
                                             Text(
-                                                text = endpoint,
-                                                style = MaterialTheme.typography.bodyMedium,
-                                                fontWeight = FontWeight.Medium
+                                                text = label,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
                                             )
                                         }
                                     }
+                                    Spacer(modifier = Modifier.height(6.dp))
                                 }
                             }
                         }
                     }
-                } else {
-                SettingsTextField(
-                        title = stringResource(R.string.api_endpoint),
-                        subtitle = stringResource(R.string.api_endpoint_placeholder),
-                    value = apiEndpointInput,
-                    onValueChange = { 
-                        apiEndpointInput = it.replace("\n", "").replace("\r", "").replace(" ", "")
-                    },
-                        enabled = isGenericProvider,
-                        keyboardOptions = KeyboardOptions(
-                                keyboardType = KeyboardType.Uri,
-                                imeAction = ImeAction.Next
-                        )
-                )
                 }
 
             val completedEndpoint =

@@ -1296,6 +1296,8 @@
     <string name="disable_status_tags">Lumpuhkan Tag Status</string>
     <string name="disable_status_tags_desc">Apabila dilumpuhkan, peraturan yang memerlukan balasan diakhiri dengan tag status "Tugas Selesai / Menunggu Respons" tidak lagi dilampirkan pada petunjuk sistem</string>
     <string name="reply_message">Balas</string>
+    <string name="pause_reading">Jeda Bacaan</string>
+    <string name="resume_reading">Sambung Bacaan</string>
     <string name="stop_reading">Hentikan Bacaan</string>
 
     <string name="operit_terminal">Terminal Operit</string>
@@ -6866,4 +6868,11 @@ Kini anda boleh menggunakan mod AutoGLM di antara muka perbualan.</string>
     <string name="chat_delete_single_variant">Padam Mesej Tunggal</string>
     <string name="chat_delete_single_variant_unavailable">Mesej semasa tiada calon tunggal yang boleh dipadam</string>
     <string name="chat_delete_single_variant_failed">Gagal memadam mesej tunggal: %1$s</string>
+    <string name="share_preview_title">Pratonton perkongsian</string>
+    <string name="share_preview_image_content_description">Pratonton imej perkongsian</string>
+    <string name="share_preview_generating">Menjana pratonton...</string>
+    <string name="share_preview_expand_thinking">Kembangkan pemikiran</string>
+    <string name="share_preview_expand_tools_groups">Kembangkan alat dan kumpulan pemikiran</string>
+    <string name="share_preview_include_background">Sertakan latar belakang</string>
+    <string name="share_preview_border_width">Sempadan: %1$.1f dp</string>
 </resources>

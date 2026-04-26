@@ -4,8 +4,6 @@ exports.TaskExecutor = void 0;
 const plan_parser_1 = require("./plan-parser");
 const i18n_1 = require("../i18n");
 const prompt_turns_1 = require("../prompt-turns");
-const FunctionType = Java.com.ai.assistance.operit.data.model.FunctionType;
-const PromptFunctionType = Java.com.ai.assistance.operit.data.model.PromptFunctionType;
 const SystemPromptConfig = Java.com.ai.assistance.operit.core.config.SystemPromptConfig;
 const Unit = Java.kotlin.Unit;
 const TAG = "TaskExecutor";
@@ -71,15 +69,25 @@ async function collectStreamToString(stream, onChunk) {
     return buffer;
 }
 async function sendMessage(enhancedAIService, options) {
-    const onNonFatalError = (_value) => Unit.INSTANCE;
-    const onToolInvocation = options.onToolInvocation
-        ? (toolName) => {
-            options.onToolInvocation?.(toolName);
-            return Unit.INSTANCE;
-        }
-        : null;
-    const enableMemoryAutoUpdate = false;
-    const stream = await enhancedAIService.callSuspend("sendMessage", options.message, null, (0, prompt_turns_1.toKotlinPromptTurnList)(options.chatHistory), options.workspacePath ?? null, null, FunctionType.CHAT, PromptFunctionType.CHAT, false, enableMemoryAutoUpdate, options.maxTokens, options.tokenUsageThreshold, onNonFatalError, null, options.customSystemPromptTemplate ?? null, options.isSubTask, null, null, null, false, null, options.proxySenderName ?? null, onToolInvocation, null, null, true, false);
+    const stream = await enhancedAIService.callSuspend("sendMessage", (0, prompt_turns_1.createSendMessageOptions)({
+        message: options.message,
+        chatHistory: options.chatHistory,
+        workspacePath: options.workspacePath ?? null,
+        maxTokens: options.maxTokens,
+        tokenUsageThreshold: options.tokenUsageThreshold,
+        customSystemPromptTemplate: options.customSystemPromptTemplate ?? null,
+        isSubTask: options.isSubTask,
+        proxySenderName: options.proxySenderName ?? null,
+        enableMemoryAutoUpdate: false,
+        callbacks: options.onToolInvocation
+            ? {
+                onToolInvocation(toolName) {
+                    options.onToolInvocation?.(toolName);
+                    return Unit.INSTANCE;
+                }
+            }
+            : null
+    }));
     return collectStreamToString(stream, options.onChunk);
 }
 class TaskExecutor {

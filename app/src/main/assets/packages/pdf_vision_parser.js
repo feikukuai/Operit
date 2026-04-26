@@ -64,6 +64,7 @@ const PdfVisionParser = (function () {
     const TOOL_NAME = "parse_pdf_with_vision";
     const TOOL_FUNCTION_TYPE = "IMAGE_RECOGNITION";
     const RENDER_SCALE = 2;
+    const PAGE_CONCURRENCY = 4;
     const IMAGE_FORMAT = "png";
     const MERGED_OUTPUT_FILE_NAME = "parsed_output.txt";
     const File = Java.type("java.io.File");
@@ -265,6 +266,12 @@ const PdfVisionParser = (function () {
             .replace(/<search>[\s\S]*?(<\/search>|\z)/gi, "")
             .trim();
     }
+    function sortPageResults(pages) {
+        return [...pages].sort((left, right) => left.page_number - right.page_number);
+    }
+    function normalizeErrorMessage(error) {
+        return String(error instanceof Error ? error.message : error);
+    }
     async function analyzePageImage(service, imagePath, prompt) {
         const rawAnalysis = String(await service.callSuspend("analyzeImageWithIntent", imagePath, prompt)).trim();
         const analysis = stripThinkingContent(rawAnalysis);
@@ -275,6 +282,110 @@ const PdfVisionParser = (function () {
             throw new Error(rawAnalysis || analysis);
         }
         return analysis;
+    }
+    async function processSinglePage(pdfFile, outputDir, pageNumber, prompt, service) {
+        console.log(`[${TOOL_NAME}] 开始处理第 ${pageNumber} 页`);
+        const zeroBasedPageIndex = pageNumber - 1;
+        const imageFile = new File(outputDir, `page-${padPageNumber(pageNumber)}.${IMAGE_FORMAT}`);
+        const imagePath = String(imageFile.getAbsolutePath());
+        let fileDescriptor = null;
+        let pdfRenderer = null;
+        let page = null;
+        let bitmap = null;
+        let outputStream = null;
+        let stage = "render";
+        try {
+            fileDescriptor = ParcelFileDescriptor.open(pdfFile, ParcelFileDescriptor.MODE_READ_ONLY);
+            pdfRenderer = new PdfRenderer(fileDescriptor);
+            page = pdfRenderer.openPage(zeroBasedPageIndex);
+            const width = Number(page.getWidth()) * RENDER_SCALE;
+            const height = Number(page.getHeight()) * RENDER_SCALE;
+            bitmap = Bitmap.createBitmap(width, height, BitmapConfig.ARGB_8888);
+            bitmap.eraseColor(Color.WHITE);
+            page.render(bitmap, null, null, PdfRendererPage.RENDER_MODE_FOR_DISPLAY);
+            outputStream = new FileOutputStream(imageFile);
+            const compressed = bitmap.compress(BitmapCompressFormat.PNG, 100, outputStream);
+            if (!compressed) {
+                throw new Error(`页面 ${pageNumber} 图片写入失败。`);
+            }
+            safeClose(outputStream, `page-${pageNumber} output stream`);
+            outputStream = null;
+            const imageLink = String(NativeInterface.registerImageFromPath(imagePath) || "").trim();
+            if (!imageLink) {
+                throw new Error(`页面 ${pageNumber} 图片链接注册失败。`);
+            }
+            stage = "vision";
+            const analysis = await analyzePageImage(service, imagePath, prompt);
+            const pageOutputPath = writePageOutputFile(outputDir, pageNumber, analysis);
+            console.log(`[${TOOL_NAME}] 第 ${pageNumber} 页处理完成`);
+            return {
+                page_number: pageNumber,
+                image_path: imagePath,
+                image_link: imageLink,
+                output_path: pageOutputPath,
+                analysis
+            };
+        }
+        catch (error) {
+            throw {
+                page_number: pageNumber,
+                stage,
+                error: normalizeErrorMessage(error),
+                partial_results: []
+            };
+        }
+        finally {
+            safeClose(outputStream, `page-${pageNumber} output stream`);
+            safeRecycle(bitmap);
+            safeClose(page, `page-${pageNumber}`);
+            safeClose(pdfRenderer, `page-${pageNumber} pdfRenderer`);
+            safeClose(fileDescriptor, `page-${pageNumber} parcelFileDescriptor`);
+        }
+    }
+    async function processPagesWithConcurrency(pageNumbers, limit, worker) {
+        const results = new Array(pageNumbers.length);
+        let nextIndex = 0;
+        let failure = null;
+        async function runWorker() {
+            while (true) {
+                if (failure) {
+                    return;
+                }
+                const currentIndex = nextIndex;
+                nextIndex += 1;
+                if (currentIndex >= pageNumbers.length) {
+                    return;
+                }
+                const pageNumber = pageNumbers[currentIndex];
+                try {
+                    results[currentIndex] = await worker(pageNumber);
+                }
+                catch (error) {
+                    if (!failure) {
+                        const errorData = error;
+                        failure = {
+                            page_number: Number(errorData?.page_number ?? pageNumber),
+                            stage: errorData?.stage ?? "render",
+                            error: normalizeErrorMessage(errorData?.error ?? error)
+                        };
+                    }
+                    return;
+                }
+            }
+        }
+        const workerCount = Math.max(1, Math.min(limit, pageNumbers.length));
+        await Promise.all(Array.from({ length: workerCount }, () => runWorker()));
+        const partialResults = sortPageResults(results.filter((page) => Boolean(page)));
+        if (failure) {
+            const failureInfo = failure;
+            throw {
+                page_number: failureInfo.page_number,
+                stage: failureInfo.stage,
+                error: failureInfo.error,
+                partial_results: partialResults
+            };
+        }
+        return partialResults;
     }
     async function parsePdfWithVisionInternal(params) {
         let binding;
@@ -364,63 +475,27 @@ const PdfVisionParser = (function () {
             }
             outputDir = createOutputDirectory();
             imageDir = String(outputDir.getAbsolutePath());
+            const pageNumbers = [];
             for (let pageNumber = startPage ?? 1; pageNumber <= resolvedEndPage; pageNumber += 1) {
-                console.log(`[${TOOL_NAME}] 开始处理第 ${pageNumber} 页`);
-                const zeroBasedPageIndex = pageNumber - 1;
-                const imageFile = new File(outputDir, `page-${padPageNumber(pageNumber)}.${IMAGE_FORMAT}`);
-                const imagePath = String(imageFile.getAbsolutePath());
-                let page = null;
-                let bitmap = null;
-                let outputStream = null;
-                let stage = "render";
-                try {
-                    page = pdfRenderer.openPage(zeroBasedPageIndex);
-                    const width = Number(page.getWidth()) * RENDER_SCALE;
-                    const height = Number(page.getHeight()) * RENDER_SCALE;
-                    bitmap = Bitmap.createBitmap(width, height, BitmapConfig.ARGB_8888);
-                    bitmap.eraseColor(Color.WHITE);
-                    page.render(bitmap, null, null, PdfRendererPage.RENDER_MODE_FOR_DISPLAY);
-                    outputStream = new FileOutputStream(imageFile);
-                    const compressed = bitmap.compress(BitmapCompressFormat.PNG, 100, outputStream);
-                    if (!compressed) {
-                        throw new Error(`页面 ${pageNumber} 图片写入失败。`);
-                    }
-                    safeClose(outputStream, `page-${pageNumber} output stream`);
-                    outputStream = null;
-                    const imageLink = String(NativeInterface.registerImageFromPath(imagePath) || "").trim();
-                    if (!imageLink) {
-                        throw new Error(`页面 ${pageNumber} 图片链接注册失败。`);
-                    }
-                    stage = "vision";
-                    const analysis = await analyzePageImage(enhancedAiService, imagePath, resolvedPrompt);
-                    const pageOutputPath = writePageOutputFile(outputDir, pageNumber, analysis);
-                    pages.push({
-                        page_number: pageNumber,
-                        image_path: imagePath,
-                        image_link: imageLink,
-                        output_path: pageOutputPath,
-                        analysis
-                    });
-                    console.log(`[${TOOL_NAME}] 第 ${pageNumber} 页处理完成`);
-                }
-                catch (error) {
-                    const message = String(error instanceof Error ? error.message : error);
-                    outputPath = writeMergedOutputFile(outputDir, pages);
-                    return {
-                        success: false,
-                        message: `第 ${pageNumber} 页处理失败: ${message}`,
-                        data: buildData(rawPdfPath, imageDir, outputPath, totalPageCount, pages, visionModel, {
-                            page_number: pageNumber,
-                            stage,
-                            error: message
-                        })
-                    };
-                }
-                finally {
-                    safeClose(outputStream, `page-${pageNumber} output stream`);
-                    safeRecycle(bitmap);
-                    safeClose(page, `page-${pageNumber}`);
-                }
+                pageNumbers.push(pageNumber);
+            }
+            try {
+                const processedPages = await processPagesWithConcurrency(pageNumbers, PAGE_CONCURRENCY, currentPageNumber => processSinglePage(pdfFile, outputDir, currentPageNumber, resolvedPrompt, enhancedAiService));
+                pages.push(...processedPages);
+            }
+            catch (error) {
+                const failedPage = error;
+                pages.push(...sortPageResults(failedPage.partial_results ?? []));
+                outputPath = writeMergedOutputFile(outputDir, pages);
+                return {
+                    success: false,
+                    message: `第 ${failedPage.page_number} 页处理失败: ${failedPage.error}`,
+                    data: buildData(rawPdfPath, imageDir, outputPath, totalPageCount, pages, visionModel, {
+                        page_number: failedPage.page_number,
+                        stage: failedPage.stage,
+                        error: failedPage.error
+                    })
+                };
             }
             outputPath = writeMergedOutputFile(outputDir, pages);
             return {

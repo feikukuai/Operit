@@ -1,6 +1,10 @@
 import type { JavaBridgeValue } from "../../types/java-bridge";
 
+const PromptTurnClass = Java.type("com.ai.assistance.operit.core.chat.hooks.PromptTurn");
 const PromptTurnKindClass = Java.type("com.ai.assistance.operit.core.chat.hooks.PromptTurnKind");
+const SendMessageOptionsClass = Java.type(
+  "com.ai.assistance.operit.api.chat.EnhancedAIService$SendMessageOptions"
+);
 
 export type PromptTurn = ToolPkg.PromptTurn;
 export type PromptTurnKind = ToolPkg.PromptTurnKind;
@@ -53,16 +57,49 @@ export function normalizePromptTurnList(value: unknown): PromptTurn[] {
   return turns;
 }
 
-export function toKotlinPromptTurnList(history: PromptTurn[]): JavaBridgeValue {
+export function toKotlinPromptTurnList(history: PromptTurn[]): JavaBridgeValue[] {
   return (history || []).map((turn) =>
-    Java.newInstance(
-      "com.ai.assistance.operit.core.chat.hooks.PromptTurn",
+    new PromptTurnClass(
       resolvePromptTurnKind(turn.kind),
       String(turn.content ?? ""),
       typeof turn.toolName === "string" ? turn.toolName : null,
-      toJavaJsonObject(turn.metadata)
+      isJsonObject(turn.metadata) ? turn.metadata : {}
     )
   );
+}
+
+export interface SendMessageBridgeOptions {
+  message: string;
+  chatHistory: PromptTurn[];
+  maxTokens: number;
+  tokenUsageThreshold: number;
+  workspacePath?: string | null;
+  customSystemPromptTemplate?: string | null;
+  isSubTask: boolean;
+  proxySenderName?: string | null;
+  enableMemoryAutoUpdate?: boolean;
+  callbacks?: {
+    onNonFatalError?: (error: string) => unknown;
+    onTokenLimitExceeded?: () => unknown;
+    onToolInvocation?: (toolName: string) => unknown;
+  } | null;
+}
+
+export function createSendMessageOptions(
+  options: SendMessageBridgeOptions
+): JavaBridgeValue {
+  const javaOptions = new SendMessageOptionsClass();
+  javaOptions.message = String(options.message ?? "");
+  javaOptions.chatHistory = toKotlinPromptTurnList(options.chatHistory || []);
+  javaOptions.maxTokens = Number(options.maxTokens);
+  javaOptions.tokenUsageThreshold = Number(options.tokenUsageThreshold);
+  javaOptions.workspacePath = options.workspacePath ?? null;
+  javaOptions.customSystemPromptTemplate = options.customSystemPromptTemplate ?? null;
+  javaOptions.subTask = Boolean(options.isSubTask);
+  javaOptions.proxySenderName = options.proxySenderName ?? null;
+  javaOptions.enableMemoryAutoUpdate = options.enableMemoryAutoUpdate ?? true;
+  javaOptions.callbacks = options.callbacks ?? null;
+  return javaOptions;
 }
 
 function normalizePromptTurnKind(kind: unknown): PromptTurnKind | null {
@@ -100,28 +137,4 @@ function resolvePromptTurnKind(kind: PromptTurnKind): JavaBridgeValue {
 
 function isJsonObject(value: unknown): value is ToolPkg.JsonObject {
   return !!value && typeof value === "object" && !Array.isArray(value);
-}
-
-function toJavaJsonObject(value: ToolPkg.JsonObject | undefined): JavaBridgeValue {
-  if (!value) {
-    return {};
-  }
-  const map: Record<string, ToolPkg.JsonValue | null> = {};
-  for (const [key, item] of Object.entries(value)) {
-    map[String(key)] = toJavaValue(item) as ToolPkg.JsonValue | null;
-  }
-  return map;
-}
-
-function toJavaValue(value: ToolPkg.JsonValue | undefined): JavaBridgeValue {
-  if (value === undefined || value === null) {
-    return null;
-  }
-  if (Array.isArray(value)) {
-    return value.map((item) => toJavaValue(item));
-  }
-  if (typeof value === "object") {
-    return toJavaJsonObject(value as ToolPkg.JsonObject);
-  }
-  return value;
 }

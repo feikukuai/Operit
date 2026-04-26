@@ -20,6 +20,7 @@ import com.ai.assistance.operit.util.stream.shareRevisable
 import com.ai.assistance.operit.util.stream.TextStreamEventCarrier
 import com.ai.assistance.operit.util.stream.TextStreamEventType
 import com.ai.assistance.operit.util.stream.TextStreamRevisionTracker
+import com.ai.assistance.operit.util.TtsSegmenter
 import com.ai.assistance.operit.util.WaifuMessageProcessor
 import com.ai.assistance.operit.data.preferences.ApiPreferences
 import com.ai.assistance.operit.data.preferences.CharacterCardManager
@@ -78,6 +79,11 @@ class MessageProcessingDelegate(
         private const val TAG = "MessageProcessingDelegate"
         private const val STREAM_SCROLL_THROTTLE_MS = 200L
         private const val STREAM_PERSIST_INTERVAL_MS = 1000L
+        private const val AUTO_READ_PREVIEW_MAX = 48
+    }
+
+    private fun speechPreview(text: String): String {
+        return text.replace("\n", "\\n").take(AUTO_READ_PREVIEW_MAX)
     }
 
     // 角色卡管理器
@@ -856,8 +862,6 @@ class MessageProcessingDelegate(
                             val revisionMutex = Mutex()
                             val autoReadBuffer = StringBuilder()
                             var isFirstAutoReadSegment = true
-                            // 流式自动朗读只在较强的句边界切分，逗号不参与断句，避免语气被打断。
-                            val endChars = ".!?;:。！？；：\n"
                             val autoReadStream = XmlTextProcessor.processStreamToText(sharedCharStream)
                             val revisableStream = sharedCharStream as? TextStreamEventCarrier
 
@@ -865,29 +869,33 @@ class MessageProcessingDelegate(
                                 val trimmed = segment.trim()
                                 if (trimmed.isNotEmpty()) {
                                     didStreamAutoRead = true
+                                    AppLogger.d(
+                                        TAG,
+                                        "autoRead[flush] interrupt=$interrupt didStreamAutoRead=$didStreamAutoRead len=${trimmed.length} preview=\"${speechPreview(trimmed)}\""
+                                    )
                                     speakMessageHandler(trimmed, interrupt)
+                                } else if (segment.isNotEmpty()) {
+                                    AppLogger.d(
+                                        TAG,
+                                        "autoRead[flush.skipBlank] rawLen=${segment.length}"
+                                    )
                                 }
-                            }
-
-                            fun findFirstEndCharIndex(text: CharSequence): Int {
-                                for (i in 0 until text.length) {
-                                    val c = text[i]
-                                    if (endChars.indexOf(c) >= 0) return i
-                                }
-                                return -1
                             }
 
                             fun tryFlushAutoRead() {
                                 if (!getIsAutoReadEnabled()) return
                                 if (isWaifuModeEnabled) return
                                 while (true) {
-                                    val endIdx = findFirstEndCharIndex(autoReadBuffer)
-                                    val shouldFlushByLen = endIdx < 0 && autoReadBuffer.length >= 50
-                                    if (endIdx < 0 && !shouldFlushByLen) return
+                                    val bufferBefore = autoReadBuffer.length
+                                    val cutIdx = TtsSegmenter.nextSegmentEnd(autoReadBuffer)
+                                    if (cutIdx < 0) return
 
-                                    val cutIdx = if (endIdx >= 0) endIdx + 1 else autoReadBuffer.length
                                     val seg = autoReadBuffer.substring(0, cutIdx)
                                     autoReadBuffer.delete(0, cutIdx)
+                                    AppLogger.d(
+                                        TAG,
+                                        "autoRead[cut] cutIdx=$cutIdx bufferBefore=$bufferBefore bufferAfter=${autoReadBuffer.length} firstSegment=$isFirstAutoReadSegment rawLen=${seg.length} preview=\"${speechPreview(seg)}\""
+                                    )
 
                                     flushAutoReadSegment(seg, interrupt = isFirstAutoReadSegment)
                                     isFirstAutoReadSegment = false
@@ -976,6 +984,10 @@ class MessageProcessingDelegate(
                             if (getIsAutoReadEnabled() && !isWaifuModeEnabled) {
                                 val remaining = autoReadBuffer.toString()
                                 autoReadBuffer.clear()
+                                AppLogger.d(
+                                    TAG,
+                                    "autoRead[remaining] firstSegment=$isFirstAutoReadSegment rawLen=${remaining.length} trimmedLen=${remaining.trim().length} preview=\"${speechPreview(remaining)}\""
+                                )
                                 flushAutoReadSegment(remaining, interrupt = isFirstAutoReadSegment)
                             }
                         } catch (t: Throwable) {
@@ -1514,6 +1526,10 @@ class MessageProcessingDelegate(
                                 }
                                 // 如果启用了自动朗读，则朗读当前句子
                                 if (getIsAutoReadEnabled()) {
+                                    AppLogger.d(
+                                        TAG,
+                                        "autoRead[waifuSentence] index=$index/${sentences.lastIndex} len=${sentence.length} preview=\"${speechPreview(sentence)}\""
+                                    )
                                     speakMessageHandler(sentence, true)
                                 }
                                 if (index == sentences.lastIndex) {
@@ -1561,6 +1577,10 @@ class MessageProcessingDelegate(
                         if (turnOptions.persistTurn && chatId != null) {
                             addMessageToChat(chatId, finalMessage)
                         }
+                        AppLogger.d(
+                            TAG,
+                            "autoRead[final] enabled=${getIsAutoReadEnabled()} skipFinalAutoRead=$skipFinalAutoRead len=${finalContent.length} preview=\"${speechPreview(finalContent)}\""
+                        )
                         // 如果启用了自动朗读，则朗读完整消息
                         if (getIsAutoReadEnabled() && !skipFinalAutoRead) {
                             speakMessageHandler(finalContent, true)

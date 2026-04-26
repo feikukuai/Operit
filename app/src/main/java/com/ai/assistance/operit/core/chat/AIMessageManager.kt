@@ -384,6 +384,7 @@ object AIMessageManager {
                 params = MessageProcessingHookParams(
                     context = context,
                     enhancedAIService = enhancedAiService,
+                    chatId = chatId,
                     messageContent = messageContent,
                     chatHistory = memoryForRequest,
                     workspacePath = workspacePath,
@@ -431,29 +432,31 @@ object AIMessageManager {
             // 使用普通模式
             val prepareRequestStartTime = messageTimingNow()
             val responseStream = enhancedAiService.sendMessage(
-                message = messageContent,
-                chatId = chatId,
-                chatHistory = memoryForRequest, // Correct parameter name is chatHistory
-                workspacePath = workspacePath,
-                promptFunctionType = promptFunctionType,
-                enableThinking = enableThinking,
-                enableMemoryAutoUpdate = enableMemoryAutoUpdate,
-                maxTokens = maxTokens,
-                tokenUsageThreshold = tokenUsageThreshold,
-                onNonFatalError = onNonFatalError,
-                onTokenLimitExceeded = onTokenLimitExceeded, // 传递回调
-                characterName = characterName,
-                avatarUri = avatarUri,
-                roleCardId = roleCardId,
-                enableGroupOrchestrationHint = groupOrchestrationMode,
-                groupParticipantNamesText = groupParticipantNamesText,
-                proxySenderName = proxySenderName,
-                onToolInvocation = onToolInvocation,
-                notifyReplyOverride = notifyReplyOverride,
-                chatModelConfigIdOverride = chatModelConfigIdOverride,
-                chatModelIndexOverride = chatModelIndexOverride,
-                stream = enableStream,
-                disableWarning = disableWarning
+                EnhancedAIService.SendMessageOptions(
+                    message = messageContent,
+                    chatId = chatId,
+                    chatHistory = memoryForRequest,
+                    workspacePath = workspacePath,
+                    promptFunctionType = promptFunctionType,
+                    enableThinking = enableThinking,
+                    enableMemoryAutoUpdate = enableMemoryAutoUpdate,
+                    maxTokens = maxTokens,
+                    tokenUsageThreshold = tokenUsageThreshold,
+                    onNonFatalError = onNonFatalError,
+                    onTokenLimitExceeded = onTokenLimitExceeded,
+                    characterName = characterName,
+                    avatarUri = avatarUri,
+                    roleCardId = roleCardId,
+                    enableGroupOrchestrationHint = groupOrchestrationMode,
+                    groupParticipantNamesText = groupParticipantNamesText,
+                    proxySenderName = proxySenderName,
+                    onToolInvocation = onToolInvocation,
+                    notifyReplyOverride = notifyReplyOverride,
+                    chatModelConfigIdOverride = chatModelConfigIdOverride,
+                    chatModelIndexOverride = chatModelIndexOverride,
+                    stream = enableStream,
+                    disableWarning = disableWarning
+                )
             ).shareRevisable(
                 scope = scope,
                 onComplete = {

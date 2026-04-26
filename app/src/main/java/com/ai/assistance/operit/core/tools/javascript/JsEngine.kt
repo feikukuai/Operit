@@ -294,6 +294,48 @@ class JsEngine(private val context: Context) {
         }
     }
 
+    private fun requestPendingJsBridgeCallbackPump() {
+        ensureQuickJs()
+        if (quickJs == null || !jsEnvironmentInitialized) {
+            return
+        }
+        launchQuickJsEvaluation(
+            script =
+                """
+                (function() {
+                    var processPending =
+                        (typeof globalThis !== 'undefined' &&
+                         typeof globalThis.__operitProcessPendingJavaBridgeCallbacks === 'function')
+                            ? globalThis.__operitProcessPendingJavaBridgeCallbacks
+                            : (typeof processPendingJavaBridgeCallbacks === 'function'
+                                ? processPendingJavaBridgeCallbacks
+                                : null);
+                    if (typeof processPending !== 'function') {
+                        return 0;
+                    }
+
+                    var total = 0;
+                    while (total < 256) {
+                        var processed = Number(processPending(32)) || 0;
+                        if (processed <= 0) {
+                            break;
+                        }
+                        total += processed;
+                    }
+                    return total;
+                })();
+                """.trimIndent(),
+            fileName = "quickjs/runtime/java-bridge-pending-callback-pump.js",
+            onError = { error ->
+                AppLogger.e(
+                    TAG,
+                    "Error pumping pending Java bridge callbacks: ${error.message}",
+                    error
+                )
+            }
+        )
+    }
+
     private fun pollPendingJsBridgeCallbackPayload(): String? {
         while (true) {
             val request = pendingJsBridgeCallbacks.poll() ?: return null
@@ -493,6 +535,7 @@ class JsEngine(private val context: Context) {
             )
         pendingJsBridgeCallbackMap[request.requestId] = request
         pendingJsBridgeCallbacks.add(request)
+        requestPendingJsBridgeCallbackPump()
 
         return try {
             request.future.get(30, TimeUnit.SECONDS)
@@ -1394,13 +1437,72 @@ class JsEngine(private val context: Context) {
 
         private fun createSuspendJavaBridgeResultCallback(callbackId: String): (String) -> Unit {
             return { resultJson ->
-                val (error, data) = splitBridgeResult(resultJson)
-                invokeJavaBridgeJsObjectCallbackSync(
-                    jsObjectId = callbackId,
-                    methodName = "",
-                    argsJson = JSONArray().put(error).put(data).toString()
-                )
+                ensureQuickJs()
+                try {
+                    launchQuickJsEvaluation(
+                        script = buildSuspendJavaBridgeCallbackScript(
+                            callbackId = callbackId,
+                            resultJson = resultJson
+                        ),
+                        fileName = "quickjs/runtime/java-bridge-suspend-callback.js",
+                        onError = { error ->
+                            AppLogger.e(
+                                TAG,
+                                "Error delivering suspend bridge callback to JavaScript: ${error.message}",
+                                error
+                            )
+                        }
+                    )
+                } catch (error: Exception) {
+                    AppLogger.e(
+                        TAG,
+                        "Error scheduling suspend bridge callback delivery: ${error.message}",
+                        error
+                    )
+                }
             }
+        }
+
+        private fun buildSuspendJavaBridgeCallbackScript(
+            callbackId: String,
+            resultJson: String
+        ): String {
+            val safeCallbackId = JSONObject.quote(callbackId.trim())
+            val safeResultJson = JSONObject.quote(resultJson)
+            return """
+                (function() {
+                    var root = typeof globalThis !== 'undefined'
+                        ? globalThis
+                        : (typeof window !== 'undefined' ? window : this);
+                    var invoke =
+                        root && typeof root.__operitJavaBridgeInvokeJsObject === 'function'
+                            ? root.__operitJavaBridgeInvokeJsObject
+                            : undefined;
+                    if (typeof invoke !== 'function') {
+                        throw new Error('Java bridge callback entry is unavailable');
+                    }
+
+                    var parsed;
+                    try {
+                        parsed = JSON.parse($safeResultJson);
+                    } catch (error) {
+                        return invoke($safeCallbackId, '', [
+                            'failed to parse bridge response: ' + String(error && error.message ? error.message : error),
+                            null
+                        ]);
+                    }
+
+                    if (parsed && parsed.success === true) {
+                        return invoke($safeCallbackId, '', [null, parsed.data]);
+                    }
+
+                    var message =
+                        parsed && typeof parsed.error === 'string' && parsed.error.length > 0
+                            ? parsed.error
+                            : 'bridge call failed';
+                    return invoke($safeCallbackId, '', [message, null]);
+                })();
+            """.trimIndent()
         }
 
         @JavascriptInterface

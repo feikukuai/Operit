@@ -291,6 +291,7 @@ export namespace ToolPkg {
     }
 
     export interface MessageProcessingEventPayload extends JsonObject {
+        chatId?: string;
         messageContent?: string;
         chatHistory?: PromptTurn[];
         workspacePath?: string;

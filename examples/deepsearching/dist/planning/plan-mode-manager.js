@@ -5,8 +5,6 @@ const plan_parser_1 = require("./plan-parser");
 const task_executor_1 = require("./task-executor");
 const i18n_1 = require("../i18n");
 const prompt_turns_1 = require("../prompt-turns");
-const FunctionType = Java.com.ai.assistance.operit.data.model.FunctionType;
-const PromptFunctionType = Java.com.ai.assistance.operit.data.model.PromptFunctionType;
 const Unit = Java.kotlin.Unit;
 const InputProcessingStateBase = "com.ai.assistance.operit.data.model.InputProcessingState$";
 const TAG = "PlanModeManager";
@@ -73,10 +71,16 @@ function newInputProcessingState(kind, message) {
     return Java.newInstance(base + kind, String(message ?? ""));
 }
 async function sendPlanningMessage(enhancedAIService, chatHistory, maxTokens, tokenUsageThreshold) {
-    const onNonFatalError = (_value) => Unit.INSTANCE;
-    const enableMemoryAutoUpdate = false;
     console.log(`${TAG} sendPlanningMessage start historySize=${chatHistory.length} maxTokens=${maxTokens} tokenUsageThreshold=${tokenUsageThreshold} ${describeBridgeCapabilities(enhancedAIService, ["callSuspend", "sendMessage", "getModelConfigForFunction"])}`);
-    const stream = await enhancedAIService.callSuspend("sendMessage", getI18n().planGenerateDetailedPlan, null, (0, prompt_turns_1.toKotlinPromptTurnList)(chatHistory), null, null, FunctionType.CHAT, PromptFunctionType.CHAT, false, enableMemoryAutoUpdate, maxTokens, tokenUsageThreshold, onNonFatalError, null, null, true, null, null, null, false, null, "DeepSearch Planner", null, null, null, true, false);
+    const stream = await enhancedAIService.callSuspend("sendMessage", (0, prompt_turns_1.createSendMessageOptions)({
+        message: getI18n().planGenerateDetailedPlan,
+        chatHistory,
+        maxTokens,
+        tokenUsageThreshold,
+        enableMemoryAutoUpdate: false,
+        isSubTask: true,
+        proxySenderName: "DeepSearch Planner"
+    }));
     return collectStreamToString(stream);
 }
 class PlanModeManager {

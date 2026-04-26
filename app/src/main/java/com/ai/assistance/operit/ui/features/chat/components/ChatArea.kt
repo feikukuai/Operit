@@ -1,9 +1,5 @@
 package com.ai.assistance.operit.ui.features.chat.components
 
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.content.Context
-import android.widget.Toast
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.StartOffset
 import androidx.compose.animation.core.animateFloat
@@ -23,12 +19,14 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -41,10 +39,13 @@ import androidx.compose.material.icons.automirrored.rounded.VolumeUp
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -730,10 +731,10 @@ private fun MessageItem(
     bubbleAiContentPaddingLeft: Float = 12f,
     bubbleAiContentPaddingRight: Float = 12f,
 ) {
-    val context = LocalContext.current
     var showContextMenu by remember { mutableStateOf(false) }
     var showMessageInfoDialog by remember { mutableStateOf(false) }
     var showHiddenUserMessageDialog by remember { mutableStateOf(false) }
+    var copyPreviewText by remember { mutableStateOf<String?>(null) }
 
 
     // 只有用户和AI的消息才能被操作
@@ -867,16 +868,8 @@ private fun MessageItem(
                         )
                     },
                     onClick = {
-                        val clipboardManager =
-                            context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                         val cleanContent = cleanXmlTags(message.content)
-                        val clipData =
-                            ClipData.newPlainText(
-                                context.getString(R.string.chat_clipboard_label_message),
-                                cleanContent
-                            )
-                        clipboardManager.setPrimaryClip(clipData)
-                        Toast.makeText(context, context.getString(R.string.message_copied), Toast.LENGTH_SHORT).show()
+                        copyPreviewText = cleanContent
                         onCopyMessage?.invoke(message)
                         showContextMenu = false
                     },
@@ -1210,6 +1203,51 @@ private fun MessageItem(
             MessageInfoDialog(
                 message = message,
                 onDismiss = { showMessageInfoDialog = false }
+            )
+        }
+
+        copyPreviewText?.let { previewText ->
+            MessageCopyPreviewBottomSheet(
+                text = previewText,
+                onDismiss = { copyPreviewText = null }
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun MessageCopyPreviewBottomSheet(
+    text: String,
+    onDismiss: () -> Unit,
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 20.dp, end = 20.dp, bottom = 24.dp)
+        ) {
+            Text(
+                text = stringResource(id = R.string.copy_message),
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.padding(bottom = 12.dp)
+            )
+            BasicTextField(
+                value = text,
+                onValueChange = {},
+                readOnly = true,
+                textStyle = MaterialTheme.typography.bodyMedium.copy(
+                    color = MaterialTheme.colorScheme.onSurface
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 520.dp)
+                    .padding(bottom = 12.dp)
             )
         }
     }

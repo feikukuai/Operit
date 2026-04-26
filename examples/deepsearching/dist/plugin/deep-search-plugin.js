@@ -113,8 +113,11 @@ async function onMessageProcessing(input) {
             return { matched: false };
         }
         const getServiceStartTime = Date.now();
-        enhancedAIService = EnhancedAIService.getInstance(context);
-        logProbe(`EnhancedAIService.getInstance elapsedMs=${Date.now() - getServiceStartTime}`);
+        const chatId = String(payload.chatId ?? "").trim();
+        enhancedAIService = chatId
+            ? EnhancedAIService.getChatInstance(context, chatId)
+            : EnhancedAIService.getInstance(context);
+        logProbe(`${chatId ? "EnhancedAIService.getChatInstance" : "EnhancedAIService.getInstance"} elapsedMs=${Date.now() - getServiceStartTime} chatId=${chatId || "none"}`);
         const createManagerStartTime = Date.now();
         manager = new plan_mode_manager_1.PlanModeManager(context, enhancedAIService);
         logProbe(`PlanModeManager ctor elapsedMs=${Date.now() - createManagerStartTime}`);

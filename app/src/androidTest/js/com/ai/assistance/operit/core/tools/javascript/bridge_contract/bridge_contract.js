@@ -5,6 +5,7 @@ const hostRuntime = require('./host_runtime');
 const interfaces = require('./interfaces');
 const javaToJs = require('./java_to_js');
 const jsToJava = require('./js_to_java');
+const suspendAwait = require('./suspend_await');
 
 function summarizeSuites(suites) {
   const summary = {
@@ -46,6 +47,7 @@ exports.runHostRuntime = hostRuntime.run;
 exports.runInterfaces = interfaces.run;
 exports.runJavaToJs = javaToJs.run;
 exports.runJsToJava = jsToJava.run;
+exports.runSuspendAwait = suspendAwait.run;
 
 exports.run = async function run() {
   const basic = await basicSyntax.run();
@@ -53,11 +55,13 @@ exports.run = async function run() {
   const iface = await interfaces.run();
   const inbound = await javaToJs.run();
   const outbound = await jsToJava.run();
+  const suspend = await suspendAwait.run();
   return summarizeSuites([
     { name: 'basic_syntax', result: basic },
     { name: 'host_runtime', result: runtime },
     { name: 'interfaces', result: iface },
     { name: 'java_to_js', result: inbound },
     { name: 'js_to_java', result: outbound },
+    { name: 'suspend_await', result: suspend },
   ]);
 };

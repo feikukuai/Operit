@@ -1394,6 +1394,8 @@
     <string name="disable_status_tags">Desativar rótulo de status</string>
     <string name="disable_status_tags_desc">Após a desativação, a palavra do prompt do sistema não terá mais uma regra que exige que a resposta termine com o rótulo de status "Tarefa concluída/aguardando resposta".</string>
     <string name="reply_message">responder</string>
+    <string name="pause_reading">pausar leitura</string>
+    <string name="resume_reading">continuar leitura</string>
     <string name="stop_reading">pare de ler</string>
     <string name="edit_and_resend">Editar e repassar</string>
     <string name="rollback_to_here">Volte aqui</string>
@@ -6703,4 +6705,11 @@ Agora é possível usar o modo AutoGLM na interface de diálogo.</string>
     <string name="chat_delete_single_variant">Excluir mensagem única</string>
     <string name="chat_delete_single_variant_unavailable">A mensagem atual não possui candidatos únicos para exclusão</string>
     <string name="chat_delete_single_variant_failed">Falha ao excluir mensagem única: %1$s</string>
+    <string name="share_preview_title">Pré-visualização de compartilhamento</string>
+    <string name="share_preview_image_content_description">Pré-visualização da imagem compartilhada</string>
+    <string name="share_preview_generating">Gerando pré-visualização...</string>
+    <string name="share_preview_expand_thinking">Expandir raciocínio</string>
+    <string name="share_preview_expand_tools_groups">Expandir ferramentas e grupos de raciocínio</string>
+    <string name="share_preview_include_background">Incluir plano de fundo</string>
+    <string name="share_preview_border_width">Borda: %1$.1f dp</string>
 </resources>

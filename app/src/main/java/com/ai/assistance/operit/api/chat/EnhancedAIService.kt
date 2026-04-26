@@ -299,6 +299,45 @@ class EnhancedAIService private constructor(private val context: Context) {
         }
     }
 
+    interface SendMessageCallbacks {
+        fun onNonFatalError(error: String) {}
+
+        fun onTokenLimitExceeded() {}
+
+        fun onToolInvocation(toolName: String) {}
+    }
+
+    data class SendMessageOptions(
+        var message: String = "",
+        var maxTokens: Int = 0,
+        var tokenUsageThreshold: Double = 0.0,
+        var chatId: String? = null,
+        var chatHistory: List<PromptTurn> = emptyList(),
+        var workspacePath: String? = null,
+        var workspaceEnv: String? = null,
+        var functionType: FunctionType = FunctionType.CHAT,
+        var promptFunctionType: PromptFunctionType = PromptFunctionType.CHAT,
+        var enableThinking: Boolean = false,
+        var enableMemoryAutoUpdate: Boolean = true,
+        var onNonFatalError: suspend (error: String) -> Unit = {},
+        var onTokenLimitExceeded: (suspend () -> Unit)? = null,
+        var customSystemPromptTemplate: String? = null,
+        var isSubTask: Boolean = false,
+        var characterName: String? = null,
+        var avatarUri: String? = null,
+        var roleCardId: String? = null,
+        var enableGroupOrchestrationHint: Boolean = false,
+        var groupParticipantNamesText: String? = null,
+        var proxySenderName: String? = null,
+        var callbacks: SendMessageCallbacks? = null,
+        var onToolInvocation: (suspend (String) -> Unit)? = null,
+        var notifyReplyOverride: Boolean? = null,
+        var chatModelConfigIdOverride: String? = null,
+        var chatModelIndexOverride: Int? = null,
+        var stream: Boolean = true,
+        var disableWarning: Boolean = false
+    )
+
     // MultiServiceManager 管理不同功能的 AIService 实例
     private val multiServiceManager = MultiServiceManager(context)
 
@@ -724,35 +763,57 @@ class EnhancedAIService private constructor(private val context: Context) {
 
     /** Send a message to the AI service */
     suspend fun sendMessage(
-        message: String,
-        chatId: String? = null,
-        chatHistory: List<PromptTurn> = emptyList(),
-        workspacePath: String? = null,
-        workspaceEnv: String? = null,
-        functionType: FunctionType = FunctionType.CHAT,
-        promptFunctionType: PromptFunctionType = PromptFunctionType.CHAT,
-        enableThinking: Boolean = false,
-        enableMemoryAutoUpdate: Boolean = true,
-        maxTokens: Int,
-        tokenUsageThreshold: Double,
-        onNonFatalError: suspend (error: String) -> Unit = {},
-        onTokenLimitExceeded: (suspend () -> Unit)? = null,
-        customSystemPromptTemplate: String? = null,
-        isSubTask: Boolean = false,
-        characterName: String? = null,
-        avatarUri: String? = null,
-        roleCardId: String? = null,
-        enableGroupOrchestrationHint: Boolean = false,
-        groupParticipantNamesText: String? = null,
-        proxySenderName: String? = null,
-        onToolInvocation: (suspend (String) -> Unit)? = null,
-        notifyReplyOverride: Boolean? = null,
-        chatModelConfigIdOverride: String? = null,
-        chatModelIndexOverride: Int? = null,
-        stream: Boolean = true,
-        disableWarning: Boolean = false
+        options: SendMessageOptions
     ): Stream<String> {
-            AppLogger.d(TAG, "sendMessage调用开始: 功能类型=$functionType, 提示词类型=$promptFunctionType")
+        val message = options.message
+        val chatId = options.chatId
+        val chatHistory = options.chatHistory
+        val workspacePath = options.workspacePath
+        val workspaceEnv = options.workspaceEnv
+        val functionType = options.functionType
+        val promptFunctionType = options.promptFunctionType
+        val enableThinking = options.enableThinking
+        val enableMemoryAutoUpdate = options.enableMemoryAutoUpdate
+        val maxTokens = options.maxTokens
+        val tokenUsageThreshold = options.tokenUsageThreshold
+        val customSystemPromptTemplate = options.customSystemPromptTemplate
+        val isSubTask = options.isSubTask
+        val characterName = options.characterName
+        val avatarUri = options.avatarUri
+        val roleCardId = options.roleCardId
+        val enableGroupOrchestrationHint = options.enableGroupOrchestrationHint
+        val groupParticipantNamesText = options.groupParticipantNamesText
+        val proxySenderName = options.proxySenderName
+        val callbacks = options.callbacks
+        val notifyReplyOverride = options.notifyReplyOverride
+        val chatModelConfigIdOverride = options.chatModelConfigIdOverride
+        val chatModelIndexOverride = options.chatModelIndexOverride
+        val stream = options.stream
+        val disableWarning = options.disableWarning
+        val onNonFatalError: suspend (error: String) -> Unit = { error ->
+            options.onNonFatalError(error)
+            callbacks?.onNonFatalError(error)
+        }
+        val onTokenLimitExceeded: (suspend () -> Unit)? =
+            if (options.onTokenLimitExceeded != null || callbacks != null) {
+                suspend {
+                    options.onTokenLimitExceeded?.invoke()
+                    callbacks?.onTokenLimitExceeded()
+                }
+            } else {
+                null
+            }
+        val onToolInvocation: (suspend (String) -> Unit)? =
+            if (options.onToolInvocation != null || callbacks != null) {
+                { toolName ->
+                    options.onToolInvocation?.invoke(toolName)
+                    callbacks?.onToolInvocation(toolName)
+                }
+            } else {
+                null
+            }
+
+        AppLogger.d(TAG, "sendMessage调用开始: 功能类型=$functionType, 提示词类型=$promptFunctionType")
         accumulatedInputTokenCount = 0
         accumulatedOutputTokenCount = 0
         accumulatedCachedInputTokenCount = 0
@@ -960,7 +1021,7 @@ class EnhancedAIService private constructor(private val context: Context) {
                                     }
                                 }
                             }
-
+ 
                         try {
                             responseStream.collect { content ->
                                 // 第一次收到响应，更新状态
