@@ -44,6 +44,7 @@ function toKotlinPromptTurnList(history) {
 function createSendMessageOptions(options) {
     const javaOptions = new SendMessageOptionsClass();
     javaOptions.message = String(options.message ?? "");
+    javaOptions.chatId = options.chatId ?? null;
     javaOptions.chatHistory = toKotlinPromptTurnList(options.chatHistory || []);
     javaOptions.maxTokens = Number(options.maxTokens);
     javaOptions.tokenUsageThreshold = Number(options.tokenUsageThreshold);

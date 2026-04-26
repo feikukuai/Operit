@@ -131,6 +131,23 @@ class IssueInteractionController(
                             }
                         }
 
+                        scope.launch {
+                            marketService.unsubscribeFromIssueNotifications(issueNumber).fold(
+                                onSuccess = {
+                                    AppLogger.d(
+                                        logTag,
+                                        "Automatically unsubscribed from notifications for issue #$issueNumber"
+                                    )
+                                },
+                                onFailure = { error ->
+                                    AppLogger.w(
+                                        logTag,
+                                        "Failed to unsubscribe from notifications for issue #$issueNumber: ${error.message}"
+                                    )
+                                }
+                            )
+                        }
+
                         messages.commentPostSuccess?.let { message ->
                             Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
                         }

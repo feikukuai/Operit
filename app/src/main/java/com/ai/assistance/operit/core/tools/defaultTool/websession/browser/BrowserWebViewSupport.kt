@@ -42,7 +42,7 @@ internal fun StandardBrowserSessionTools.createSessionOnMain(
     sessionName: String?,
     customUserAgent: String?
 ): BrowserToolSession {
-    val webView = WebView(appContext)
+    val webView = WebView(resolveWebViewContext(appContext))
     val session =
         BrowserToolSession(
             id = sessionId,
@@ -53,6 +53,15 @@ internal fun StandardBrowserSessionTools.createSessionOnMain(
     configureWebView(session, resolveUserAgent(customUserAgent))
     userscriptManager.attachSession(session.id, session.webView)
     return session
+}
+
+internal fun StandardBrowserSessionTools.resolveWebViewContext(fallbackContext: Context): Context {
+    val currentActivity = ActivityLifecycleManager.getCurrentActivity()
+    return if (currentActivity != null && !currentActivity.isFinishing && !currentActivity.isDestroyed) {
+        currentActivity
+    } else {
+        fallbackContext
+    }
 }
 
 internal fun StandardBrowserSessionTools.configureWebView(
@@ -928,7 +937,7 @@ internal fun StandardBrowserSessionTools.createPopupSessionOnMain(
 ): BrowserToolSession {
     val popupSession =
         createSessionOnMain(
-            appContext = context.applicationContext,
+            appContext = parentSession.webView.context ?: context.applicationContext,
             sessionId = UUID.randomUUID().toString(),
             sessionName = parentSession.sessionName,
             customUserAgent = parentSession.customUserAgent

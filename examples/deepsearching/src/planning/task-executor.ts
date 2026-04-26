@@ -82,6 +82,7 @@ async function sendMessage(
   enhancedAIService: unknown,
   options: {
     message: string;
+    chatId?: string | null;
     chatHistory: PromptTurn[];
     workspacePath?: string | null;
     maxTokens: number;
@@ -89,6 +90,7 @@ async function sendMessage(
     customSystemPromptTemplate?: string | null;
     isSubTask: boolean;
     proxySenderName?: string | null;
+    enableMemoryAutoUpdate?: boolean;
     onToolInvocation?: (toolName: string) => void;
     onChunk?: (chunk: string) => void;
   }
@@ -97,6 +99,7 @@ async function sendMessage(
     "sendMessage",
     createSendMessageOptions({
       message: options.message,
+      chatId: options.chatId ?? null,
       chatHistory: options.chatHistory,
       workspacePath: options.workspacePath ?? null,
       maxTokens: options.maxTokens,
@@ -104,7 +107,7 @@ async function sendMessage(
       customSystemPromptTemplate: options.customSystemPromptTemplate ?? null,
       isSubTask: options.isSubTask,
       proxySenderName: options.proxySenderName ?? null,
-      enableMemoryAutoUpdate: false,
+      enableMemoryAutoUpdate: options.enableMemoryAutoUpdate ?? false,
       callbacks: options.onToolInvocation
         ? {
           onToolInvocation(toolName: string) {
@@ -118,17 +121,32 @@ async function sendMessage(
   return collectStreamToString(stream, options.onChunk);
 }
 
+export type ScopedTaskMessageOptions = Parameters<typeof sendMessage>[1];
+export type ScopedTaskMessageSender = (
+  scopeKey: string,
+  options: ScopedTaskMessageOptions
+) => Promise<string>;
+
 export class TaskExecutor {
   private taskResults: Record<string, string> = {};
   private isCancelled = false;
   private context: unknown;
   private enhancedAIService: unknown;
   private onChunk?: (chunk: string) => void;
+  private sendMessageWithScope: ScopedTaskMessageSender;
 
-  constructor(context: unknown, enhancedAIService: unknown, onChunk?: (chunk: string) => void) {
+  constructor(
+    context: unknown,
+    enhancedAIService: unknown,
+    onChunk?: (chunk: string) => void,
+    sendMessageWithScope?: ScopedTaskMessageSender
+  ) {
     this.context = context;
     this.enhancedAIService = enhancedAIService;
     this.onChunk = onChunk;
+    this.sendMessageWithScope =
+      sendMessageWithScope ??
+      (async (_scopeKey, options) => sendMessage(this.enhancedAIService, options));
   }
 
   setChunkEmitter(onChunk?: (chunk: string) => void) {
@@ -259,7 +277,7 @@ export class TaskExecutor {
     const fullInstruction = this.buildFullInstruction(task, contextInfo);
 
     try {
-      const raw = await sendMessage(this.enhancedAIService, {
+      const raw = await this.sendMessageWithScope(`task:${task.id}`, {
         message: fullInstruction,
         chatHistory: [],
         workspacePath: workspacePath ?? null,
@@ -336,7 +354,7 @@ export class TaskExecutor {
     const i18n = getI18n();
     const fullSummaryInstruction = `${summaryContext}\n\n${i18n.finalSummaryInstructionPrefix}\n${graph.finalSummaryInstruction}\n\n${i18n.finalSummaryInstructionSuffix}`;
 
-    return sendMessage(this.enhancedAIService, {
+    return this.sendMessageWithScope("summary", {
       message: fullSummaryInstruction,
       chatHistory,
       workspacePath: workspacePath ?? null,

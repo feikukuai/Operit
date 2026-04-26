@@ -44,7 +44,8 @@ class GitHubAuthPreferences(private val context: Context) {
         // GitHub OAuth相关配置
         val GITHUB_CLIENT_ID = BuildConfig.GITHUB_CLIENT_ID
         val GITHUB_CLIENT_SECRET = BuildConfig.GITHUB_CLIENT_SECRET
-        const val GITHUB_SCOPE = "public_repo,user:email,read:user"
+        const val GITHUB_SCOPE = "notifications,public_repo,user:email,read:user"
+        private const val REQUIRED_AUTH_VERSION = 2
         private const val GITHUB_REDIRECT_SCHEME = "operit"
         private const val GITHUB_REDIRECT_HOST = "github-oauth-callback"
         const val GITHUB_REDIRECT_URI = "$GITHUB_REDIRECT_SCHEME://$GITHUB_REDIRECT_HOST"
@@ -57,6 +58,8 @@ class GitHubAuthPreferences(private val context: Context) {
         private val REFRESH_TOKEN = stringPreferencesKey("refresh_token")
         private val USER_INFO = stringPreferencesKey("user_info")
         private val LAST_LOGIN_TIME = longPreferencesKey("last_login_time")
+        private val AUTH_VERSION = longPreferencesKey("auth_version")
+        private val GRANTED_SCOPE = stringPreferencesKey("granted_scope")
         
         @Volatile
         private var INSTANCE: GitHubAuthPreferences? = null
@@ -84,18 +87,42 @@ class GitHubAuthPreferences(private val context: Context) {
         isLenient = true
     }
 
+    private val requiredScopes: Set<String> =
+        GITHUB_SCOPE.split(",")
+            .map { it.trim().lowercase() }
+            .filter { it.isNotEmpty() }
+            .toSet()
+
+    private fun parseScopeSet(scope: String?): Set<String> {
+        return scope
+            ?.split(",")
+            ?.map { it.trim().lowercase() }
+            ?.filter { it.isNotEmpty() }
+            ?.toSet()
+            .orEmpty()
+    }
+
+    private fun isAuthSessionCurrent(preferences: Preferences): Boolean {
+        val grantedScopes = parseScopeSet(preferences[GRANTED_SCOPE])
+        val authVersion = preferences[AUTH_VERSION] ?: 0L
+        return authVersion >= REQUIRED_AUTH_VERSION && grantedScopes.containsAll(requiredScopes)
+    }
+
     // 登录状态Flow
     val isLoggedInFlow: Flow<Boolean> = context.githubAuthDataStore.data.map { preferences ->
-        preferences[IS_LOGGED_IN] ?: false
+        (preferences[IS_LOGGED_IN] ?: false) && isAuthSessionCurrent(preferences)
     }
 
     // 访问令牌Flow
     val accessTokenFlow: Flow<String?> = context.githubAuthDataStore.data.map { preferences ->
-        preferences[ACCESS_TOKEN]
+        if (isAuthSessionCurrent(preferences)) preferences[ACCESS_TOKEN] else null
     }
 
     // 用户信息Flow
     val userInfoFlow: Flow<GitHubUser?> = context.githubAuthDataStore.data.map { preferences ->
+        if (!isAuthSessionCurrent(preferences)) {
+            return@map null
+        }
         val userInfoJson = preferences[USER_INFO]
         if (userInfoJson != null) {
             try {
@@ -121,7 +148,8 @@ class GitHubAuthPreferences(private val context: Context) {
         tokenType: String = "bearer",
         expiresIn: Long? = null,
         refreshToken: String? = null,
-        userInfo: GitHubUser
+        userInfo: GitHubUser,
+        grantedScope: String? = null
     ) {
         context.githubAuthDataStore.edit { preferences ->
             preferences[IS_LOGGED_IN] = true
@@ -129,6 +157,8 @@ class GitHubAuthPreferences(private val context: Context) {
             preferences[TOKEN_TYPE] = tokenType
             preferences[USER_INFO] = json.encodeToString(userInfo)
             preferences[LAST_LOGIN_TIME] = System.currentTimeMillis()
+            preferences[AUTH_VERSION] = REQUIRED_AUTH_VERSION.toLong()
+            preferences[GRANTED_SCOPE] = grantedScope.orEmpty()
             
             expiresIn?.let {
                 preferences[TOKEN_EXPIRES_AT] = System.currentTimeMillis() + (it * 1000)
@@ -155,11 +185,14 @@ class GitHubAuthPreferences(private val context: Context) {
     suspend fun updateAccessToken(
         accessToken: String,
         tokenType: String = "bearer",
-        expiresIn: Long? = null
+        expiresIn: Long? = null,
+        grantedScope: String? = null
     ) {
         context.githubAuthDataStore.edit { preferences ->
             preferences[ACCESS_TOKEN] = accessToken
             preferences[TOKEN_TYPE] = tokenType
+            preferences[AUTH_VERSION] = REQUIRED_AUTH_VERSION.toLong()
+            preferences[GRANTED_SCOPE] = grantedScope.orEmpty()
             
             expiresIn?.let {
                 preferences[TOKEN_EXPIRES_AT] = System.currentTimeMillis() + (it * 1000)
@@ -181,6 +214,9 @@ class GitHubAuthPreferences(private val context: Context) {
      */
     suspend fun getCurrentAccessToken(): String? {
         val preferences = context.githubAuthDataStore.data.first()
+        if (!isAuthSessionCurrent(preferences)) {
+            return null
+        }
         return preferences[ACCESS_TOKEN]
     }
 
@@ -189,6 +225,9 @@ class GitHubAuthPreferences(private val context: Context) {
      */
     suspend fun getCurrentUserInfo(): GitHubUser? {
         val preferences = context.githubAuthDataStore.data.first()
+        if (!isAuthSessionCurrent(preferences)) {
+            return null
+        }
         val userInfoJson = preferences[USER_INFO]
         return if (userInfoJson != null) {
             try {
@@ -206,7 +245,7 @@ class GitHubAuthPreferences(private val context: Context) {
      */
     suspend fun isLoggedIn(): Boolean {
         val preferences = context.githubAuthDataStore.data.first()
-        return preferences[IS_LOGGED_IN] ?: false
+        return (preferences[IS_LOGGED_IN] ?: false) && isAuthSessionCurrent(preferences)
     }
 
     /**

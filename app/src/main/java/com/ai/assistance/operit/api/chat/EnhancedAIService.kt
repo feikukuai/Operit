@@ -2414,6 +2414,22 @@ class EnhancedAIService private constructor(private val context: Context) {
         return accumulatedCachedInputTokenCount
     }
 
+    fun setCurrentTurnTokenCounts(
+        inputTokens: Int,
+        outputTokens: Int,
+        cachedInputTokens: Int = 0
+    ) {
+        accumulatedInputTokenCount = inputTokens.coerceAtLeast(0)
+        accumulatedOutputTokenCount = outputTokens.coerceAtLeast(0)
+        accumulatedCachedInputTokenCount = cachedInputTokens.coerceAtLeast(0)
+        _perRequestTokenCounts.value =
+            Pair(accumulatedInputTokenCount, accumulatedOutputTokenCount)
+        AppLogger.d(
+            TAG,
+            "Current turn token counts overridden. Input: $accumulatedInputTokenCount, Output: $accumulatedOutputTokenCount, CachedInput: $accumulatedCachedInputTokenCount"
+        )
+    }
+
     /** Reset token counters to zero Use this when starting a new conversation */
     fun resetTokenCounters() {
         Companion.resetTokenCounters(context)

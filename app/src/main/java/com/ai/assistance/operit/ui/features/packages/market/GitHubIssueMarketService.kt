@@ -175,6 +175,14 @@ class GitHubIssueMarketService(
         )
     }
 
+    suspend fun unsubscribeFromIssueNotifications(issueNumber: Int): Result<Boolean> {
+        return githubApiService.unsubscribeFromIssueNotifications(
+            owner = definition.owner,
+            repo = definition.repo,
+            issueNumber = issueNumber
+        )
+    }
+
     suspend fun getIssueReactions(issueNumber: Int): Result<List<GitHubReaction>> {
         return githubApiService.getIssueReactions(
             owner = definition.owner,

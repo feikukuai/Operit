@@ -71,6 +71,7 @@ async function collectStreamToString(stream, onChunk) {
 async function sendMessage(enhancedAIService, options) {
     const stream = await enhancedAIService.callSuspend("sendMessage", (0, prompt_turns_1.createSendMessageOptions)({
         message: options.message,
+        chatId: options.chatId ?? null,
         chatHistory: options.chatHistory,
         workspacePath: options.workspacePath ?? null,
         maxTokens: options.maxTokens,
@@ -78,7 +79,7 @@ async function sendMessage(enhancedAIService, options) {
         customSystemPromptTemplate: options.customSystemPromptTemplate ?? null,
         isSubTask: options.isSubTask,
         proxySenderName: options.proxySenderName ?? null,
-        enableMemoryAutoUpdate: false,
+        enableMemoryAutoUpdate: options.enableMemoryAutoUpdate ?? false,
         callbacks: options.onToolInvocation
             ? {
                 onToolInvocation(toolName) {
@@ -91,12 +92,15 @@ async function sendMessage(enhancedAIService, options) {
     return collectStreamToString(stream, options.onChunk);
 }
 class TaskExecutor {
-    constructor(context, enhancedAIService, onChunk) {
+    constructor(context, enhancedAIService, onChunk, sendMessageWithScope) {
         this.taskResults = {};
         this.isCancelled = false;
         this.context = context;
         this.enhancedAIService = enhancedAIService;
         this.onChunk = onChunk;
+        this.sendMessageWithScope =
+            sendMessageWithScope ??
+                (async (_scopeKey, options) => sendMessage(this.enhancedAIService, options));
     }
     setChunkEmitter(onChunk) {
         this.onChunk = onChunk;
@@ -178,7 +182,7 @@ class TaskExecutor {
         const contextInfo = this.buildTaskContext(task, originalMessage);
         const fullInstruction = this.buildFullInstruction(task, contextInfo);
         try {
-            const raw = await sendMessage(this.enhancedAIService, {
+            const raw = await this.sendMessageWithScope(`task:${task.id}`, {
                 message: fullInstruction,
                 chatHistory: [],
                 workspacePath: workspacePath ?? null,
@@ -239,7 +243,7 @@ class TaskExecutor {
         const summaryContext = this.buildSummaryContext(originalMessage, graph);
         const i18n = getI18n();
         const fullSummaryInstruction = `${summaryContext}\n\n${i18n.finalSummaryInstructionPrefix}\n${graph.finalSummaryInstruction}\n\n${i18n.finalSummaryInstructionSuffix}`;
-        return sendMessage(this.enhancedAIService, {
+        return this.sendMessageWithScope("summary", {
             message: fullSummaryInstruction,
             chatHistory,
             workspacePath: workspacePath ?? null,

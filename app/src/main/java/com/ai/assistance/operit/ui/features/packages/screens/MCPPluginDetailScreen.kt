@@ -40,6 +40,7 @@ import com.ai.assistance.operit.ui.features.packages.market.UnifiedMarketDetailR
 import com.ai.assistance.operit.ui.features.packages.market.UnifiedMarketDetailReactionsState
 import com.ai.assistance.operit.ui.features.packages.market.UnifiedMarketDetailScreen
 import com.ai.assistance.operit.ui.features.packages.market.UnifiedMarketDetailSection
+import com.ai.assistance.operit.ui.features.packages.market.buildMarketCommentReplyDraft
 import com.ai.assistance.operit.ui.features.packages.market.formatMarketDetailCompactDate
 import com.ai.assistance.operit.ui.features.packages.market.formatMarketDetailDate
 import com.ai.assistance.operit.ui.features.packages.market.marketDetailInitial
@@ -278,7 +279,11 @@ fun MCPPluginDetailScreen(
             canPost = currentUser != null,
             postHint = if (currentUser == null) stringResource(R.string.mcp_plugin_login_required) else null,
             onRefresh = { viewModel.loadIssueComments(issue.number) },
-            onRequestPost = { showCommentDialog = true }
+            onRequestPost = { showCommentDialog = true },
+            onReplyToComment = { comment ->
+                commentText = buildMarketCommentReplyDraft(comment)
+                showCommentDialog = true
+            }
         )
 
     UnifiedMarketDetailScreen(

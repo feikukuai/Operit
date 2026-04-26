@@ -18,6 +18,7 @@ prepare_sources() {
   enable_default_android_libraries
   enable_main_build
   optimize_for_speed
+  no_link_time_optimization
 
   disable_arch arm-v7a
   disable_arch arm-v7a-neon
@@ -176,7 +177,9 @@ if [[ -d "${FFMPEG_KIT_DIR}/src/gnutls" ]]; then
   fi
 fi
 
-# Match the currently vendored ffmpeg-kit feature set as closely as possible.
+# Match the currently vendored ffmpeg-kit feature set as closely as possible,
+# but keep LTO disabled because the current arm64 libavfilter crashes inside
+# avfilter_inout_free while parsing complex filter graphs.
 exec ./android.sh \
   -f \
   -s \

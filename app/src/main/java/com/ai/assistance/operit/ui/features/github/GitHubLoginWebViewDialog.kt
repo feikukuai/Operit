@@ -88,7 +88,11 @@ fun GitHubLoginWebViewDialog(
                 val tokenResponse = githubApiService.getAccessToken(code).getOrElse { error ->
                     throw error
                 }
-                githubAuth.updateAccessToken(tokenResponse.access_token, tokenResponse.token_type)
+                githubAuth.updateAccessToken(
+                    accessToken = tokenResponse.access_token,
+                    tokenType = tokenResponse.token_type,
+                    grantedScope = tokenResponse.scope
+                )
 
                 val user = githubApiService.getCurrentUser().getOrElse { error ->
                     throw error
@@ -97,7 +101,8 @@ fun GitHubLoginWebViewDialog(
                 githubAuth.saveAuthInfo(
                     accessToken = tokenResponse.access_token,
                     tokenType = tokenResponse.token_type,
-                    userInfo = user
+                    userInfo = user,
+                    grantedScope = tokenResponse.scope
                 )
 
                 Toast.makeText(

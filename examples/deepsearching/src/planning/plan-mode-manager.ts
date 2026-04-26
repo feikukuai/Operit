@@ -1,10 +1,15 @@
 import type { ExecutionGraph } from "./plan-models";
 import { parseExecutionGraph } from "./plan-parser";
-import { TaskExecutor } from "./task-executor";
+import {
+  TaskExecutor,
+  type ScopedTaskMessageOptions,
+  type ScopedTaskMessageSender
+} from "./task-executor";
 import { resolveDeepSearchI18n } from "../i18n";
 import { createPromptTurn, createSendMessageOptions, type PromptTurn } from "../prompt-turns";
 
 const Unit = Java.kotlin.Unit;
+const EnhancedAIServiceClass = Java.com.ai.assistance.operit.api.chat.EnhancedAIService;
 const InputProcessingStateBase = "com.ai.assistance.operit.data.model.InputProcessingState$";
 
 const TAG = "PlanModeManager";
@@ -50,7 +55,10 @@ function toErrorDetail(error: unknown): string {
   return stack ? `${text} stack=${stack}` : text;
 }
 
-async function collectStreamToString(stream: unknown): Promise<string> {
+async function collectStreamToString(
+  stream: unknown,
+  onChunk?: (chunk: string) => void
+): Promise<string> {
   let buffer = "";
   let chunkCount = 0;
   console.log(
@@ -59,7 +67,13 @@ async function collectStreamToString(stream: unknown): Promise<string> {
   const collector = {
     emit: function (value: string) {
       chunkCount += 1;
-      buffer += String(value ?? "");
+      const chunk = String(value ?? "");
+      buffer += chunk;
+      if (onChunk) {
+        try {
+          onChunk(chunk);
+        } catch (_e) {}
+      }
       return Unit.INSTANCE;
     }
   };
@@ -88,26 +102,68 @@ function newInputProcessingState(kind: string, message?: string) {
 
 async function sendPlanningMessage(
   enhancedAIService: unknown,
-  chatHistory: PromptTurn[],
-  maxTokens: number,
-  tokenUsageThreshold: number
+  options: ScopedTaskMessageOptions
 ): Promise<string> {
   console.log(
-    `${TAG} sendPlanningMessage start historySize=${chatHistory.length} maxTokens=${maxTokens} tokenUsageThreshold=${tokenUsageThreshold} ${describeBridgeCapabilities(enhancedAIService, ["callSuspend", "sendMessage", "getModelConfigForFunction"])}`
+    `${TAG} sendPlanningMessage start historySize=${options.chatHistory.length} maxTokens=${options.maxTokens} tokenUsageThreshold=${options.tokenUsageThreshold} ${describeBridgeCapabilities(enhancedAIService, ["callSuspend", "sendMessage", "getModelConfigForFunction"])}`
   );
   const stream = await (enhancedAIService as { callSuspend: (...args: unknown[]) => Promise<unknown> }).callSuspend(
     "sendMessage",
     createSendMessageOptions({
-      message: getI18n().planGenerateDetailedPlan,
-      chatHistory,
-      maxTokens,
-      tokenUsageThreshold,
-      enableMemoryAutoUpdate: false,
-      isSubTask: true,
-      proxySenderName: "DeepSearch Planner"
+      message: options.message,
+      chatId: options.chatId ?? null,
+      chatHistory: options.chatHistory,
+      workspacePath: options.workspacePath ?? null,
+      maxTokens: options.maxTokens,
+      tokenUsageThreshold: options.tokenUsageThreshold,
+      customSystemPromptTemplate: options.customSystemPromptTemplate ?? null,
+      isSubTask: options.isSubTask,
+      proxySenderName: options.proxySenderName ?? null,
+      enableMemoryAutoUpdate: options.enableMemoryAutoUpdate ?? false,
+      callbacks: options.onToolInvocation
+        ? {
+          onToolInvocation(toolName: string) {
+            options.onToolInvocation?.(toolName);
+            return Unit.INSTANCE;
+          }
+        }
+        : null
     })
   );
-  return collectStreamToString(stream);
+  return collectStreamToString(stream, options.onChunk);
+}
+
+interface TokenUsageTotals {
+  input: number;
+  output: number;
+  cachedInput: number;
+}
+
+function createEmptyTokenUsageTotals(): TokenUsageTotals {
+  return {
+    input: 0,
+    output: 0,
+    cachedInput: 0
+  };
+}
+
+function readServiceTokenUsage(service: unknown): TokenUsageTotals {
+  const bridge = service as {
+    getCurrentInputTokenCount?: () => unknown;
+    getCurrentOutputTokenCount?: () => unknown;
+    getCurrentCachedInputTokenCount?: () => unknown;
+  } | null;
+  return {
+    input: Number(bridge?.getCurrentInputTokenCount?.() ?? 0),
+    output: Number(bridge?.getCurrentOutputTokenCount?.() ?? 0),
+    cachedInput: Number(bridge?.getCurrentCachedInputTokenCount?.() ?? 0)
+  };
+}
+
+function addTokenUsageTotals(target: TokenUsageTotals, usage: TokenUsageTotals) {
+  target.input += usage.input;
+  target.output += usage.output;
+  target.cachedInput += usage.cachedInput;
 }
 
 export class PlanModeManager {
@@ -115,11 +171,20 @@ export class PlanModeManager {
   private isCancelled = false;
   private context: unknown;
   private enhancedAIService: unknown;
+  private internalTokenUsage = createEmptyTokenUsageTotals();
+  private internalRequestCount = 0;
+  private internalServiceSequence = 0;
+  private activeInternalChatIds = new Set<string>();
 
   constructor(context: unknown, enhancedAIService: unknown) {
     this.context = context;
     this.enhancedAIService = enhancedAIService;
-    this.taskExecutor = new TaskExecutor(context, enhancedAIService);
+    this.taskExecutor = new TaskExecutor(
+      context,
+      enhancedAIService,
+      undefined,
+      this.sendMessageWithScopedService
+    );
   }
 
   cancel() {
@@ -128,6 +193,15 @@ export class PlanModeManager {
     try {
       (this.enhancedAIService as { cancelConversation: () => void }).cancelConversation();
     } catch (_e) {}
+    for (const internalChatId of Array.from(this.activeInternalChatIds)) {
+      try {
+        (
+          EnhancedAIServiceClass.getChatInstance(this.context, internalChatId) as {
+            cancelConversation?: () => void;
+          }
+        ).cancelConversation?.();
+      } catch (_e) {}
+    }
     console.log(`${TAG} cancel called`);
   }
 
@@ -153,6 +227,8 @@ export class PlanModeManager {
     onChunk?: (chunk: string) => void
   ): Promise<string> {
     this.isCancelled = false;
+    this.internalTokenUsage = createEmptyTokenUsageTotals();
+    this.internalRequestCount = 0;
     let output = "";
     const append = (chunk: string) => {
       output += chunk;
@@ -255,9 +331,56 @@ export class PlanModeManager {
         .setInputProcessingState(idleState);
       return output;
     } finally {
+      this.applyAggregatedTokenUsage();
       this.isCancelled = false;
       this.taskExecutor.setChunkEmitter(undefined);
     }
+  }
+
+  private readonly sendMessageWithScopedService: ScopedTaskMessageSender =
+    async (scopeKey: string, options: ScopedTaskMessageOptions): Promise<string> => {
+      const internalChatId = this.createInternalChatId(scopeKey);
+      this.internalRequestCount += 1;
+      this.activeInternalChatIds.add(internalChatId);
+      const service = EnhancedAIServiceClass.getChatInstance(this.context, internalChatId);
+      try {
+        return await sendPlanningMessage(
+          service,
+          {
+            ...options,
+            chatId: internalChatId
+          }
+        );
+      } finally {
+        this.activeInternalChatIds.delete(internalChatId);
+        addTokenUsageTotals(this.internalTokenUsage, readServiceTokenUsage(service));
+        try {
+          EnhancedAIServiceClass.releaseChatInstance(internalChatId);
+        } catch (_e) {}
+      }
+    };
+
+  private createInternalChatId(scopeKey: string): string {
+    this.internalServiceSequence += 1;
+    const normalizedScope = String(scopeKey || "request").replace(/[^a-zA-Z0-9:_-]/g, "_");
+    return `__deepsearch_internal__:${Date.now()}:${this.internalServiceSequence}:${normalizedScope}`;
+  }
+
+  private applyAggregatedTokenUsage() {
+    if (this.internalRequestCount <= 0) {
+      return;
+    }
+    const bridge = this.enhancedAIService as {
+      setCurrentTurnTokenCounts?: (inputTokens: number, outputTokens: number, cachedInputTokens: number) => void;
+    } | null;
+    bridge?.setCurrentTurnTokenCounts?.(
+      this.internalTokenUsage.input,
+      this.internalTokenUsage.output,
+      this.internalTokenUsage.cachedInput
+    );
+    console.log(
+      `${TAG} aggregatedTokenUsage requests=${this.internalRequestCount} input=${this.internalTokenUsage.input} output=${this.internalTokenUsage.output} cachedInput=${this.internalTokenUsage.cachedInput}`
+    );
   }
 
   private buildPlanningRequest(userMessage: string): string {
@@ -287,12 +410,15 @@ export class PlanModeManager {
         `${TAG} generateExecutionPlan planningHistoryBuilt turns=${planningHistory.length} requestLength=${planningRequest.length} requestPreview=${clipLogText(planningRequest)}`
       );
       currentStep = "send_planning_message";
-      const planResponseRaw = await sendPlanningMessage(
-        this.enhancedAIService,
-        planningHistory,
+      const planResponseRaw = await this.sendMessageWithScopedService("planner", {
+        message: getI18n().planGenerateDetailedPlan,
+        chatHistory: planningHistory,
         maxTokens,
-        tokenUsageThreshold
-      );
+        tokenUsageThreshold,
+        enableMemoryAutoUpdate: false,
+        isSubTask: true,
+        proxySenderName: "DeepSearch Planner"
+      });
       console.log(
         `${TAG} generateExecutionPlan rawResponse length=${planResponseRaw.length} preview=${clipLogText(planResponseRaw)}`
       );

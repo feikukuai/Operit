@@ -1286,10 +1286,10 @@ private fun MessageFooterBar(
     val context = LocalContext.current
     val tokenSummary =
         remember(message.inputTokens, message.cachedInputTokens, message.outputTokens) {
-            val totalInputTokens = message.inputTokens + message.cachedInputTokens
+            val totalTokens = message.inputTokens + message.outputTokens
             context.getString(
                 R.string.chat_message_token_stats_compact,
-                totalInputTokens,
+                totalTokens,
                 message.cachedInputTokens,
                 message.inputTokens,
                 message.outputTokens,

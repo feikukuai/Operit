@@ -1,6 +1,8 @@
 package com.ai.assistance.operit.ui.features.packages.dialogs
 
 import com.ai.assistance.operit.util.AppLogger
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -107,6 +109,7 @@ fun PackageDetailsDialog(
     val states = (toolPackage ?: resolvedPackage)?.states.orEmpty()
     val hasStates = states.isNotEmpty()
     val baseTools = (toolPackage ?: resolvedPackage)?.tools.orEmpty()
+    val contentScrollState = rememberScrollState()
 
     var selectedTabIndex by remember(packageName, activeStateId, hasStates) {
         val initialIndex = if (!hasStates) {
@@ -221,36 +224,46 @@ fun PackageDetailsDialog(
                 val resolvedDescription =
                     toolPkgDetails?.description?.takeIf { it.isNotBlank() } ?: packageDescription
 
-                if (resolvedDescription.isNotBlank()) {
-                    Spacer(modifier = Modifier.height(12.dp))
+                Column(
+                    modifier =
+                        Modifier
+                            .weight(1f)
+                            .verticalScroll(contentScrollState)
+                ) {
+                    if (resolvedDescription.isNotBlank()) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            text = resolvedDescription,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
                     Text(
-                        text = resolvedDescription,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        text = if (isToolPkgContainer) {
+                            stringResource(R.string.pkg_toolpkg_subpackages)
+                        } else {
+                            stringResource(R.string.pkg_tool_list)
+                        },
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
                     )
-                }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
 
-                Text(
-                    text = if (isToolPkgContainer) {
-                        stringResource(R.string.pkg_toolpkg_subpackages)
-                    } else {
-                        stringResource(R.string.pkg_tool_list)
-                    },
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                Box(modifier = Modifier.weight(1f)) {
                     if (isToolPkgContainer) {
                         val details = toolPkgDetails
                         if (details == null) {
-                            CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
+                            Box(
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                CircularProgressIndicator()
+                            }
                         } else {
-                            Column(modifier = Modifier.fillMaxSize()) {
+                            Column(modifier = Modifier.fillMaxWidth()) {
                                 Card(
                                     modifier = Modifier.fillMaxWidth(),
                                     colors = CardDefaults.cardColors(
@@ -300,11 +313,11 @@ fun PackageDetailsDialog(
                                 if (details.subpackages.isEmpty()) {
                                     EmptyToolsCard(message = stringResource(R.string.pkg_toolpkg_empty_subpackages))
                                 } else {
-                                    LazyColumn(
-                                        modifier = Modifier.fillMaxSize(),
+                                    Column(
+                                        modifier = Modifier.fillMaxWidth(),
                                         verticalArrangement = Arrangement.spacedBy(6.dp)
                                     ) {
-                                        items(items = details.subpackages, key = { it.packageName }) { subpackage ->
+                                        details.subpackages.forEach { subpackage ->
                                             fun applySubpackageToggle(enabled: Boolean) {
                                                 toolPkgToggleError = null
                                                 val fallbackDetails = details
@@ -413,11 +426,11 @@ fun PackageDetailsDialog(
                         if (tools.isEmpty()) {
                             EmptyToolsCard(message = stringResource(R.string.pkg_no_tools))
                         } else {
-                            LazyColumn(
-                                modifier = Modifier.fillMaxSize(),
+                            Column(
+                                modifier = Modifier.fillMaxWidth(),
                                 verticalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
-                                items(items = tools, key = { tool -> tool.name }) { tool ->
+                                tools.forEach { tool ->
                                     ToolCard(
                                         tool = tool,
                                         toolIdPrefix = packageName,
@@ -427,7 +440,7 @@ fun PackageDetailsDialog(
                             }
                         }
                     } else {
-                        Column(modifier = Modifier.fillMaxSize()) {
+                        Column(modifier = Modifier.fillMaxWidth()) {
                             ScrollableTabRow(
                                 selectedTabIndex = selectedTabIndex,
                                 edgePadding = 0.dp
@@ -501,11 +514,11 @@ fun PackageDetailsDialog(
                             if (toolsForTab.isEmpty()) {
                                 EmptyToolsCard(message = stringResource(R.string.mcp_no_available_tools))
                             } else {
-                                LazyColumn(
-                                    modifier = Modifier.fillMaxSize(),
+                                Column(
+                                    modifier = Modifier.fillMaxWidth(),
                                     verticalArrangement = Arrangement.spacedBy(6.dp)
                                 ) {
-                                    items(items = toolsForTab, key = { tool -> tool.name }) { tool ->
+                                    toolsForTab.forEach { tool ->
                                         ToolCard(
                                             tool = tool,
                                             toolIdPrefix = packageName,
@@ -516,6 +529,8 @@ fun PackageDetailsDialog(
                             }
                         }
                     }
+
+                    Spacer(modifier = Modifier.height(8.dp))
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))

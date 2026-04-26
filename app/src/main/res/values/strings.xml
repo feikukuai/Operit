@@ -4293,7 +4293,7 @@
     <string name="updated_at_label">更新时间</string>
     <string name="source_file_label">源文件</string>
     <string name="reactions_title">反应</string>
-    <string name="comments_with_count">评论 (%1$d)</string>
+    <string name="comments_with_count">评论(%1$d)</string>
     <string name="no_comments_yet">还没有评论</string>
     <string name="be_first_comment_here">来留下第一条反馈吧。</string>
     <string name="market_detail_about_title">简介</string>
@@ -4443,6 +4443,7 @@
     <string name="mcp_plugin_author">作者: %1$s</string>
     <string name="mcp_plugin_shared_by">分享者: %1$s</string>
     <string name="mcp_plugin_repository">查看仓库</string>
+    <string name="mcp_plugin_comment_view_thread">查看楼层</string>
     <string name="mcp_plugin_install">安装插件</string>
     <string name="mcp_plugin_installed">已安装</string>
     <string name="mcp_plugin_description_title">插件描述</string>
@@ -4454,7 +4455,8 @@
     <string name="mcp_plugin_updated_at">更新于: %1$s</string>
     <string name="mcp_plugin_community_feedback">社区反馈</string>
     <string name="mcp_plugin_login_required">请先登录GitHub账号以参与点赞</string>
-    <string name="mcp_plugin_comments">评论 (%1$d)</string>
+    <string name="mcp_plugin_comments">评论(%1$d)</string>
+    <string name="mcp_plugin_user_comments">用户评论</string>
     <string name="mcp_plugin_no_comments">暂无评论</string>
     <string name="mcp_plugin_be_first_comment">成为第一个评论的人吧！</string>
     <string name="mcp_plugin_add_comment">添加评论</string>
@@ -7453,6 +7455,9 @@
     <string name="web_session_userscript_notification_channel">Userscript 通知</string>
     <string name="web_session_userscript_notification_denied">通知权限未授予，脚本通知无法显示</string>
     <string name="web_session_userscript_download_failed">脚本下载失败</string>
+    <string name="web_session_shortcut_label">浏览器</string>
+    <string name="web_session_shortcut_long_label">快捷启动浏览器</string>
+    <string name="web_session_shortcut_open_failed">浏览器快捷启动失败</string>
 
     <string name="tool_windows_control_one_click">Windows 一键配置</string>
     <string name="tool_windows_control_one_click_desc">一键导出电脑端代理包，配置 HTTP Agent 环境变量并启用 windows_control</string>

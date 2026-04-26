@@ -70,6 +70,7 @@ export function toKotlinPromptTurnList(history: PromptTurn[]): JavaBridgeValue[]
 
 export interface SendMessageBridgeOptions {
   message: string;
+  chatId?: string | null;
   chatHistory: PromptTurn[];
   maxTokens: number;
   tokenUsageThreshold: number;
@@ -90,6 +91,7 @@ export function createSendMessageOptions(
 ): JavaBridgeValue {
   const javaOptions = new SendMessageOptionsClass();
   javaOptions.message = String(options.message ?? "");
+  javaOptions.chatId = options.chatId ?? null;
   javaOptions.chatHistory = toKotlinPromptTurnList(options.chatHistory || []);
   javaOptions.maxTokens = Number(options.maxTokens);
   javaOptions.tokenUsageThreshold = Number(options.tokenUsageThreshold);

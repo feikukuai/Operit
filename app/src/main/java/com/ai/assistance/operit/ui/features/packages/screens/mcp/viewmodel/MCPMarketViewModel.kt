@@ -683,7 +683,11 @@ class MCPMarketViewModel(
                 }
 
                 AppLogger.d(TAG, "Successfully obtained access token.")
-                githubAuth.updateAccessToken(tokenResponse.access_token, tokenResponse.token_type)
+                githubAuth.updateAccessToken(
+                    accessToken = tokenResponse.access_token,
+                    tokenType = tokenResponse.token_type,
+                    grantedScope = tokenResponse.scope
+                )
 
                 val userResult = githubApiService.getCurrentUser()
                 val user = userResult.getOrElse { error ->
@@ -696,7 +700,8 @@ class MCPMarketViewModel(
                 githubAuth.saveAuthInfo(
                     accessToken = tokenResponse.access_token,
                     tokenType = tokenResponse.token_type,
-                    userInfo = user
+                    userInfo = user,
+                    grantedScope = tokenResponse.scope
                 )
 
                 Toast.makeText(

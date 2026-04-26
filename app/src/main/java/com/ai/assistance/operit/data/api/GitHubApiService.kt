@@ -5,6 +5,7 @@ import android.os.SystemClock
 import com.ai.assistance.operit.data.preferences.GitHubAuthPreferences
 import com.ai.assistance.operit.data.preferences.GitHubUser
 import com.ai.assistance.operit.util.AppLogger
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -150,6 +151,30 @@ data class GitHubComment(
 @Serializable
 data class CreateCommentRequest(
     val body: String
+)
+
+@Serializable
+data class GitHubNotificationSubject(
+    val title: String,
+    val url: String? = null,
+    val latest_comment_url: String? = null,
+    val type: String
+)
+
+@Serializable
+data class GitHubNotificationThread(
+    val id: String,
+    val unread: Boolean = false,
+    val reason: String? = null,
+    val updated_at: String? = null,
+    val last_read_at: String? = null,
+    val subject: GitHubNotificationSubject
+)
+
+@Serializable
+data class UpdateThreadSubscriptionRequest(
+    val subscribed: Boolean,
+    val ignored: Boolean = false
 )
 
 @Serializable
@@ -790,6 +815,131 @@ class GitHubApiService(private val context: Context) {
         } catch (e: Exception) {
             Result.failure(e)
         }
+    }
+
+    suspend fun listRepositoryNotificationThreads(
+        owner: String,
+        repo: String,
+        all: Boolean = true,
+        participating: Boolean = true,
+        perPage: Int = 50
+    ): Result<List<GitHubNotificationThread>> = withContext(Dispatchers.IO) {
+        try {
+            val authHeader = authPreferences.getAuthorizationHeader()
+                ?: return@withContext Result.failure(Exception("No access token available"))
+
+            val url = HttpUrl.Builder()
+                .scheme("https")
+                .host("api.github.com")
+                .addPathSegment("repos")
+                .addPathSegment(owner)
+                .addPathSegment(repo)
+                .addPathSegment("notifications")
+                .addQueryParameter("all", all.toString())
+                .addQueryParameter("participating", participating.toString())
+                .addQueryParameter("per_page", perPage.toString())
+                .build()
+
+            val request = Request.Builder()
+                .url(url)
+                .addHeader("Authorization", authHeader)
+                .addHeader("Accept", "application/vnd.github+json")
+                .build()
+
+            val response = client.newCall(request).execute()
+
+            if (response.isSuccessful) {
+                val responseBody = response.body?.string()
+                if (responseBody != null) {
+                    val threads =
+                        json.decodeFromString<List<GitHubNotificationThread>>(responseBody)
+                    Result.success(threads)
+                } else {
+                    Result.failure(Exception("Empty response body"))
+                }
+            } else {
+                val errorBody = response.body?.string()
+                Result.failure(Exception("HTTP ${response.code}: ${response.message}\n$errorBody"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun disableNotificationThreadSubscription(
+        threadId: String
+    ): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            val authHeader = authPreferences.getAuthorizationHeader()
+                ?: return@withContext Result.failure(Exception("No access token available"))
+
+            val requestBody =
+                json.encodeToString(
+                    UpdateThreadSubscriptionRequest.serializer(),
+                    UpdateThreadSubscriptionRequest(subscribed = false, ignored = false)
+                )
+
+            val request = Request.Builder()
+                .url("$GITHUB_API_BASE/notifications/threads/$threadId/subscription")
+                .put(requestBody.toRequestBody("application/json".toMediaType()))
+                .addHeader("Authorization", authHeader)
+                .addHeader("Accept", "application/vnd.github+json")
+                .build()
+
+            val response = client.newCall(request).execute()
+
+            if (response.isSuccessful) {
+                Result.success(Unit)
+            } else {
+                val errorBody = response.body?.string()
+                Result.failure(Exception("HTTP ${response.code}: ${response.message}\n$errorBody"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun unsubscribeFromIssueNotifications(
+        owner: String,
+        repo: String,
+        issueNumber: Int,
+        maxAttempts: Int = 5,
+        attemptDelayMs: Long = 1200L
+    ): Result<Boolean> = withContext(Dispatchers.IO) {
+        val issueSubjectUrl = "$GITHUB_API_BASE/repos/$owner/$repo/issues/$issueNumber"
+
+        repeat(maxAttempts) { attempt ->
+            val threadsResult =
+                listRepositoryNotificationThreads(
+                    owner = owner,
+                    repo = repo,
+                    all = true,
+                    participating = true,
+                    perPage = 50
+                )
+
+            val threads = threadsResult.getOrElse { return@withContext Result.failure(it) }
+            val targetThread =
+                threads.firstOrNull { thread ->
+                    thread.subject.type.equals("Issue", ignoreCase = true) &&
+                        thread.subject.url?.trimEnd('/') == issueSubjectUrl
+                }
+
+            if (targetThread != null) {
+                return@withContext disableNotificationThreadSubscription(targetThread.id).fold(
+                    onSuccess = { Result.success(true) },
+                    onFailure = { Result.failure(it) }
+                )
+            }
+
+            if (attempt < maxAttempts - 1) {
+                delay(attemptDelayMs)
+            }
+        }
+
+        Result.failure(
+            Exception("No notification thread found for issue #$issueNumber in $owner/$repo")
+        )
     }
 
     /**
