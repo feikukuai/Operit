@@ -6694,8 +6694,6 @@ Agora é possível usar o modo AutoGLM na interface de diálogo.</string>
     <string name="hide_runtime_task_view_description">Quando a IA está processando mensagens ou executando ferramentas, oculta o cartão de tarefa do aplicativo da lista de tarefas recentes do sistema, evitando que seja fechado acidentalmente ao deslizar.</string>
     <string name="confirm_delete_chat">Confirmar exclusão do chat</string>
     <string name="delete_chat_confirmation">Tem certeza de que deseja excluir o chat "%1$s"?\n\nEsta ação não pode ser desfeita.</string>
-    <string name="enable_new_sidebar">Nova barra lateral</string>
-    <string name="enable_new_sidebar_description">Quando ativado, habilita a entrada da nova barra lateral. As próximas grandes reformulações da barra lateral também serão baseadas nisso.</string>
     <string name="chat_auto_update_memory_failed">Falha ao atualizar memória automaticamente: %1$s</string>
 
     <string name="nav_group_plugins">Plugins</string>

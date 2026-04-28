@@ -58,8 +58,6 @@ class DisplayPreferencesManager private constructor(private val context: Context
         private val KEY_ENABLE_REPLY_NOTIFICATION_VIBRATION =
             booleanPreferencesKey("enable_reply_notification_vibration")
         private val KEY_ENABLE_ENTER_TO_SEND = booleanPreferencesKey("enable_enter_to_send")
-        private val KEY_ENABLE_NEW_SIDEBAR =
-            booleanPreferencesKey("enable_new_sidebar")
         private val KEY_ENABLE_NAVIGATION_ANIMATION =
             booleanPreferencesKey("enable_navigation_animation")
 
@@ -199,15 +197,6 @@ class DisplayPreferencesManager private constructor(private val context: Context
         }
 
     /**
-     * 是否启用新版侧边栏
-     * 默认值：true
-     */
-    val enableNewSidebar: Flow<Boolean> =
-        context.displayPreferencesDataStore.data.map { preferences ->
-            preferences[KEY_ENABLE_NEW_SIDEBAR] ?: true
-        }
-
-    /**
      * 是否启用新版导航动画
      * 默认值：true
      */
@@ -278,7 +267,6 @@ class DisplayPreferencesManager private constructor(private val context: Context
         enableReplyNotificationSound: Boolean? = null,
         enableReplyNotificationVibration: Boolean? = null,
         enableEnterToSend: Boolean? = null,
-        enableNewSidebar: Boolean? = null,
         enableNavigationAnimation: Boolean? = null,
         enableBackgroundKeepAlive: Boolean? = null,
         enableExperimentalVirtualDisplay: Boolean? = null,
@@ -308,7 +296,6 @@ class DisplayPreferencesManager private constructor(private val context: Context
                 preferences[KEY_ENABLE_REPLY_NOTIFICATION_VIBRATION] = it
             }
             enableEnterToSend?.let { preferences[KEY_ENABLE_ENTER_TO_SEND] = it }
-            enableNewSidebar?.let { preferences[KEY_ENABLE_NEW_SIDEBAR] = it }
             enableNavigationAnimation?.let {
                 preferences[KEY_ENABLE_NAVIGATION_ANIMATION] = it
             }
@@ -384,7 +371,6 @@ class DisplayPreferencesManager private constructor(private val context: Context
             preferences[KEY_ENABLE_REPLY_NOTIFICATION_SOUND] = false
             preferences[KEY_ENABLE_REPLY_NOTIFICATION_VIBRATION] = false
             preferences[KEY_ENABLE_ENTER_TO_SEND] = false
-            preferences.remove(KEY_ENABLE_NEW_SIDEBAR)
             preferences.remove(KEY_ENABLE_NAVIGATION_ANIMATION)
             preferences[KEY_ENABLE_BACKGROUND_KEEP_ALIVE] = false
             preferences[KEY_ENABLE_EXPERIMENTAL_VIRTUAL_DISPLAY] = true

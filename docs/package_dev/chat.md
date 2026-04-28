@@ -19,13 +19,27 @@ Tools.Chat
 
 ## 主要 API
 
-### `startService()`
+### `startService(options?)`
 
 ```ts
-startService(): Promise<ChatServiceStartResultData>
+startService(options?: {
+  initial_mode?: 'WINDOW' | 'BALL' | 'VOICE_BALL' | 'FULLSCREEN' | 'RESULT_DISPLAY' | 'SCREEN_OCR'
+  auto_enter_voice_chat?: boolean
+  wake_launched?: boolean
+  timeout_ms?: number
+  keep_if_exists?: boolean
+}): Promise<ChatServiceStartResultData>
 ```
 
 启动聊天服务或浮窗。
+
+可选参数：
+
+- `initial_mode?`
+- `auto_enter_voice_chat?`
+- `wake_launched?`
+- `timeout_ms?`
+- `keep_if_exists?`
 
 ### `createNew(group?, setAsCurrentChat?, characterCardId?)`
 

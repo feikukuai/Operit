@@ -7405,8 +7405,6 @@
     <string name="screen_title_package_market">Package Market</string>
     <string name="screen_title_package_manage">Manage Packages</string>
     <string name="screen_title_package_publish">Publish Package</string>
-    <string name="enable_new_sidebar">New sidebar</string>
-    <string name="enable_new_sidebar_description">When enabled, the new sidebar entry will be activated. Future major sidebar redesigns will also iterate based on this.</string>
 
     <string name="sidebar_permission_short">Permissions</string>
     <string name="sidebar_status_normal">Normal</string>

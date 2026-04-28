@@ -25,7 +25,9 @@ import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.Executors
+import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.asCoroutineDispatcher
@@ -68,6 +70,7 @@ class JsEngine(private val context: Context) {
     private val quickJsDispatcher = quickJsExecutor.asCoroutineDispatcher()
     private val engineScope = CoroutineScope(SupervisorJob() + quickJsDispatcher)
     private val quickJsInitLock = Any()
+    private val destroyed = AtomicBoolean(false)
 
     @Volatile
     private var quickJs: OperitQuickJsEngine? = null
@@ -97,6 +100,10 @@ class JsEngine(private val context: Context) {
 
     private val toolPkgExecutionContext = JsToolPkgExecutionContext()
     private val toolPkgRegistrationSession = JsToolPkgRegistrationSession()
+
+    private fun canScheduleQuickJsWork(): Boolean {
+        return !destroyed.get() && !quickJsExecutor.isShutdown && !quickJsExecutor.isTerminated
+    }
 
     fun <T> withTemporaryToolPkgTextResourceResolver(
         resolver: (String, String) -> String?,
@@ -136,7 +143,11 @@ class JsEngine(private val context: Context) {
         return externalJavaCodeLoader.getEffectiveClassLoader(getJavaBridgeBaseClassLoader())
     }
 
-    private fun <T> runOnQuickJsThreadBlocking(block: () -> T): T {
+    private fun <T> runOnQuickJsThreadBlocking(
+        allowWhenDestroyed: Boolean = false,
+        block: () -> T
+    ): T {
+        check(allowWhenDestroyed || !destroyed.get()) { "JsEngine already destroyed" }
         return if (Thread.currentThread() === quickJsThread) {
             block()
         } else {
@@ -147,10 +158,12 @@ class JsEngine(private val context: Context) {
     }
 
     private fun ensureQuickJs() {
+        check(!destroyed.get()) { "JsEngine already destroyed" }
         if (quickJs != null) {
             return
         }
         synchronized(quickJsInitLock) {
+            check(!destroyed.get()) { "JsEngine already destroyed" }
             if (quickJs != null) {
                 return
             }
@@ -207,17 +220,27 @@ class JsEngine(private val context: Context) {
         fileName: String = "<eval>",
         onError: ((Exception) -> Unit)? = null
     ) {
+        if (!canScheduleQuickJsWork()) {
+            return
+        }
         val engine = quickJs ?: return
-        engineScope.launch {
-            try {
-                engine.evaluate<Any?>(script, fileName)
-            } catch (e: Exception) {
-                if (onError != null) {
-                    onError(e)
-                } else {
-                    AppLogger.e(TAG, "QuickJS evaluation failed: ${e.message}", e)
+        try {
+            engineScope.launch {
+                try {
+                    if (!canScheduleQuickJsWork()) {
+                        return@launch
+                    }
+                    engine.evaluate<Any?>(script, fileName)
+                } catch (e: Exception) {
+                    if (onError != null) {
+                        onError(e)
+                    } else {
+                        AppLogger.e(TAG, "QuickJS evaluation failed: ${e.message}", e)
+                    }
                 }
             }
+        } catch (e: RejectedExecutionException) {
+            AppLogger.d(TAG, "Skip QuickJS evaluation after executor shutdown: $fileName")
         }
     }
 
@@ -227,17 +250,27 @@ class JsEngine(private val context: Context) {
         callSite: String = "<call:$functionName>",
         onError: ((Exception) -> Unit)? = null
     ) {
+        if (!canScheduleQuickJsWork()) {
+            return
+        }
         val engine = quickJs ?: return
-        engineScope.launch {
-            try {
-                engine.callFunction<Any?>(functionName, argsJson, callSite)
-            } catch (e: Exception) {
-                if (onError != null) {
-                    onError(e)
-                } else {
-                    AppLogger.e(TAG, "QuickJS function call failed: ${e.message}", e)
+        try {
+            engineScope.launch {
+                try {
+                    if (!canScheduleQuickJsWork()) {
+                        return@launch
+                    }
+                    engine.callFunction<Any?>(functionName, argsJson, callSite)
+                } catch (e: Exception) {
+                    if (onError != null) {
+                        onError(e)
+                    } else {
+                        AppLogger.e(TAG, "QuickJS function call failed: ${e.message}", e)
+                    }
                 }
             }
+        } catch (e: RejectedExecutionException) {
+            AppLogger.d(TAG, "Skip QuickJS function call after executor shutdown: $callSite")
         }
     }
 
@@ -957,6 +990,7 @@ class JsEngine(private val context: Context) {
             runtimeOptions: Map<String, Any?> = emptyMap(),
             envOverrides: Map<String, String> = emptyMap(),
             onIntermediateResult: ((Any?) -> Unit)? = null,
+            onFinalResult: ((Any?) -> Unit)? = null,
             onComplete: (() -> Unit)? = null,
             onError: ((String) -> Unit)? = null
     ): Boolean {
@@ -1001,7 +1035,7 @@ class JsEngine(private val context: Context) {
                     )
                     onError?.invoke(errorText)
                 } else if (result != null) {
-                    onIntermediateResult?.invoke(result)
+                    onFinalResult?.invoke(result)
                 }
                 onComplete?.invoke()
             }
@@ -1853,8 +1887,12 @@ class JsEngine(private val context: Context) {
 
         /** 向JavaScript发送工具调用结果 */
         private fun sendToolResult(callbackId: String, result: String, isError: Boolean) {
-            ensureQuickJs()
+            if (!canScheduleQuickJsWork()) {
+                AppLogger.d(TAG, "Drop tool result after JsEngine destroyed: callbackId=$callbackId")
+                return
+            }
             try {
+                ensureQuickJs()
                 val jsCode =
                     JsNativeInterfaceDelegates.buildToolResultCallbackScript(
                         callbackId = callbackId,
@@ -2049,6 +2087,9 @@ class JsEngine(private val context: Context) {
 
     /** 销毁引擎资源 */
     fun destroy() {
+        if (!destroyed.compareAndSet(false, true)) {
+            return
+        }
         try {
             // 确保任何挂起的回调被完成
             cancelAllExecutionSessions("Engine destroyed")
@@ -2066,7 +2107,7 @@ class JsEngine(private val context: Context) {
             try {
                 val engine = quickJs
                 if (engine != null) {
-                    runOnQuickJsThreadBlocking {
+                    runOnQuickJsThreadBlocking(allowWhenDestroyed = true) {
                         engine.close()
                     }
                 }

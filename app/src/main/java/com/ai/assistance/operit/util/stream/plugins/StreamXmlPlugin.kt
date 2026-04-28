@@ -27,7 +27,7 @@ class StreamXmlPlugin(private val includeTagsInOutput: Boolean = true) : StreamP
     private var lastChar: Char = '\u0000'
 
     private val punctuationTriggers =
-            setOf('，', '。', '？', '！', '：', '（', '）', '【', '】', '《', '》', ':', ',', '.', '?', '!', '~', '～', '>', '＞')
+            setOf('，', '。', '？', '！', '：', '（', '）', '【', '】', '《', '》', ':', ',', '.', '?', '!', '~', '～')
     private val emojiContinuationChars = setOf('\u200D', '\uFE0E', '\uFE0F', '\u20E3')
 
     init {

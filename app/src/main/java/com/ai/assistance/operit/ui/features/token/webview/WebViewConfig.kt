@@ -78,6 +78,10 @@ object WebViewConfig {
 
             // 为了确保正确处理滚动，设置嵌套滚动启用
             isNestedScrollingEnabled = true
+            isFocusable = true
+            isFocusableInTouchMode = true
+            isClickable = true
+            isLongClickable = true
 
             // 设置WebView布局参数，确保它可以正常滚动
             layoutParams =
@@ -89,9 +93,13 @@ object WebViewConfig {
             // 解决WebView和父布局之间的触摸冲突
             setOnTouchListener {
                 v, event ->
-                when (event.action) {
-                    MotionEvent.ACTION_DOWN -> requestDisallowInterceptTouchEvent(true)
-                    MotionEvent.ACTION_UP -> requestDisallowInterceptTouchEvent(false)
+                when (event.actionMasked) {
+                    MotionEvent.ACTION_DOWN -> {
+                        v.parent?.requestDisallowInterceptTouchEvent(true)
+                    }
+                    MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                        v.parent?.requestDisallowInterceptTouchEvent(false)
+                    }
                 }
                 false
             }

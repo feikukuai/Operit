@@ -24,6 +24,14 @@ import {
  * Provides methods for managing chat conversations
  */
 export namespace Chat {
+    interface StartServiceOptions {
+        initial_mode?: 'WINDOW' | 'BALL' | 'VOICE_BALL' | 'FULLSCREEN' | 'RESULT_DISPLAY' | 'SCREEN_OCR';
+        auto_enter_voice_chat?: boolean;
+        wake_launched?: boolean;
+        timeout_ms?: number;
+        keep_if_exists?: boolean;
+    }
+
     interface SendMessageOptions {
         persist_turn?: boolean;
         notify_reply?: boolean;
@@ -34,9 +42,10 @@ export namespace Chat {
 
     /**
      * Start the chat service (floating window)
+     * @param options - Optional service startup options
      * @returns Promise resolving to service start result
      */
-    function startService(): Promise<ChatServiceStartResultData>;
+    function startService(options?: StartServiceOptions): Promise<ChatServiceStartResultData>;
 
     /**
      * Create a new chat conversation

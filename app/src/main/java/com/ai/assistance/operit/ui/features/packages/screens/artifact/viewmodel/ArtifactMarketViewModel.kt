@@ -48,6 +48,7 @@ import com.ai.assistance.operit.ui.features.packages.market.toMarketEntryStats
 import com.ai.assistance.operit.ui.features.packages.market.toArtifactMarketItem
 import com.ai.assistance.operit.ui.features.packages.market.updateMarketEntryStats
 import com.ai.assistance.operit.ui.features.packages.utils.ArtifactIssueParser
+import com.ai.assistance.operit.ui.features.github.GitHubOAuthCoordinator
 import com.ai.assistance.operit.util.AppLogger
 import java.io.File
 import java.io.InputStream
@@ -214,14 +215,16 @@ class ArtifactMarketViewModel(
         get() = BuildConfig.VERSION_NAME.trim().ifBlank { "unknown" }
 
     fun initiateGitHubLogin(context: Context) {
-        try {
-            val authUrl = githubAuth.getAuthorizationUrl()
-            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(authUrl))
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            context.startActivity(intent)
-        } catch (e: Exception) {
-            _errorMessage.value = e.message ?: "Failed to open GitHub login"
-            AppLogger.e(TAG, "Failed to initiate GitHub login", e)
+        viewModelScope.launch {
+            try {
+                val authUrl = GitHubOAuthCoordinator(context).createExternalAuthorizationUrl()
+                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(authUrl))
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                context.startActivity(intent)
+            } catch (e: Exception) {
+                _errorMessage.value = e.message ?: "Failed to open GitHub login"
+                AppLogger.e(TAG, "Failed to initiate GitHub login", e)
+            }
         }
     }
 

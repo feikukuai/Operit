@@ -51,6 +51,7 @@ import com.ai.assistance.operit.ui.features.packages.market.toRankMetric
 import com.ai.assistance.operit.ui.features.packages.market.toSkillMarketBrowseItem
 import com.ai.assistance.operit.ui.features.packages.market.updateMarketEntryStats
 import com.ai.assistance.operit.ui.features.packages.utils.SkillIssueParser
+import com.ai.assistance.operit.ui.features.github.GitHubOAuthCoordinator
 
 class SkillMarketViewModel(
     private val context: Context,
@@ -322,14 +323,16 @@ class SkillMarketViewModel(
     }
 
     fun initiateGitHubLogin(context: Context) {
-        try {
-            val authUrl = githubAuth.getAuthorizationUrl()
-            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(authUrl))
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            context.startActivity(intent)
-        } catch (e: Exception) {
-            _errorMessage.value = context.getString(R.string.skillmarket_login_failed, e.message ?: "")
-            AppLogger.e(TAG, "Failed to initiate GitHub login", e)
+        viewModelScope.launch {
+            try {
+                val authUrl = GitHubOAuthCoordinator(context).createExternalAuthorizationUrl()
+                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(authUrl))
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                context.startActivity(intent)
+            } catch (e: Exception) {
+                _errorMessage.value = context.getString(R.string.skillmarket_login_failed, e.message ?: "")
+                AppLogger.e(TAG, "Failed to initiate GitHub login", e)
+            }
         }
     }
 

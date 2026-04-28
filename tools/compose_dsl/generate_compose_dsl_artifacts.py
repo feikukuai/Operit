@@ -354,6 +354,12 @@ def map_param_to_ts(component: str, param: Param) -> Optional[Tuple[str, str, bo
         return ("contentAlignment", "ComposeAlignment", False)
     if "DpOffset" in type_name:
         return (name, "number", False)
+    if "PopupProperties" in type_name:
+        return (
+            name,
+            "{ focusable?: boolean; dismissOnBackPress?: boolean; dismissOnClickOutside?: boolean; clippingEnabled?: boolean; usePlatformDefaultWidth?: boolean; }",
+            False,
+        )
 
     if "Dp" in type_name:
         return (name, "number", False)
@@ -856,6 +862,48 @@ def build_component_renderer_function(spec: ComponentSpec, params: Sequence[Para
                         applyScopedCommonModifier(Modifier, props, modifierResolver)
                             .width(props.dp("width"))
                             .height(props.dp("height"))
+                )
+            }
+            """
+        ).strip()
+
+    if component == "Surface":
+        return textwrap.dedent(
+            """
+            @Composable
+            internal fun renderSurfaceNode(
+                node: ToolPkgComposeDslNode,
+                onAction: (String, Any?) -> Unit,
+                nodePath: String,
+                modifierResolver: ComposeDslModifierResolver
+            ) {
+                val props = node.props
+                val onClick = ToolPkgComposeDslParser.extractActionId(props["onClick"])
+                val resolvedModifier =
+                    applyScopedCommonModifier(Modifier, props, modifierResolver).let { modifier ->
+                        if (!onClick.isNullOrBlank()) {
+                            modifier.clickable { onAction(onClick, null) }
+                        } else {
+                            modifier
+                        }
+                    }
+                androidx.compose.material3.Surface(
+                    modifier = resolvedModifier,
+                    shape = props.shapeOrNull() ?: androidx.compose.foundation.shape.RoundedCornerShape(0.dp),
+                    color = (props.colorOrNull("color") ?: props.colorOrNull("containerColor")).let { baseColor -> baseColor?.let { color -> props.floatOrNull("alpha")?.let { color.copy(alpha = it) } ?: color } ?: Color.Transparent },
+                    contentColor = props.colorOrNull("contentColor") ?: Color.Unspecified,
+                    tonalElevation = props.dp("tonalElevation"),
+                    shadowElevation = props.dp("shadowElevation"),
+                    content = {
+                        renderSlotChildren(
+                            node = node,
+                            slotName = "content",
+                            onAction = onAction,
+                            nodePath = nodePath,
+                            modifierResolver = { base, slotProps -> defaultComposeDslModifierResolver(base, slotProps) },
+                            fallbackToChildren = true
+                        )
+                    }
                 )
             }
             """
@@ -1440,6 +1488,8 @@ def _generic_default_value_expr(component: str, param: Param) -> Optional[str]:
         return 'props.boxAlignment("contentAlignment")'
     if "DpOffset" in type_name:
         return f'DpOffset(props.dp("{name}"), 0.dp)'
+    if "PopupProperties" in type_name:
+        return f'popupPropertiesFromValue(props["{name}"])'
     if "TextStyle" in type_name:
         return 'props.textStyle("style")'
     if "FontWeight" in type_name:
@@ -1697,6 +1747,7 @@ def build_ts_generated_file(
         iface = f"ComposeGenerated{component}Props"
         lines.append(f"export interface {iface} extends ComposeCommonProps {{")
         emitted: Dict[str, Tuple[str, bool]] = {}
+        emitted.setdefault("zIndex", ("number", False))
         for param in component_params.get(component, []):
             mapped = map_param_to_ts(component, param)
             if mapped is None:
@@ -1756,6 +1807,7 @@ def build_ts_generated_file(
             emitted.setdefault("contentColor", ("ComposeColor", False))
             emitted.setdefault("shape", ("ComposeShape", False))
             emitted.setdefault("alpha", ("number", False))
+            emitted.setdefault("onClick", ("() => void | Promise<void>", False))
 
         if component == "Icon":
             emitted.setdefault("size", ("number", False))
@@ -1782,6 +1834,7 @@ def build_ts_generated_file(
     if extra_ts_components:
         for component, props in extra_ts_components.items():
             lines.append(f"export interface ComposeGenerated{component}Props extends ComposeCommonProps {{")
+            lines.append("  zIndex?: number;")
             for prop_name, ts_type, required in props:
                 opt = "" if required else "?"
                 lines.append(f"  {prop_name}{opt}: {ts_type};")

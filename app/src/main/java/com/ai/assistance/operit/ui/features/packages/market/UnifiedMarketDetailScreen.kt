@@ -349,7 +349,7 @@ private fun UnifiedMarketDetailStickyTabs(
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        color = Color.Transparent
+        color = MaterialTheme.colorScheme.surface
     ) {
         Box(
             modifier = Modifier.fillMaxWidth(),
@@ -364,7 +364,7 @@ private fun UnifiedMarketDetailStickyTabs(
             TabRow(
                 selectedTabIndex = selectedTabIndex,
                 modifier = Modifier.widthIn(max = 240.dp),
-                containerColor = Color.Transparent,
+                containerColor = MaterialTheme.colorScheme.surface,
                 divider = {},
                 indicator = { tabPositions ->
                     if (selectedTabIndex < tabPositions.size) {

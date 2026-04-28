@@ -28,6 +28,7 @@ import kotlin.math.ceil
 
 private const val TAG = "MarkdownInlineSpannable"
 private const val INLINE_LATEX_PLACEHOLDER = '\uFFFC'
+private const val MAX_INLINE_RENDER_DEPTH = 24
 
 private object NestedInlineNodeCache {
     private const val MAX_ENTRIES = 256
@@ -175,7 +176,23 @@ private fun resolveNestedInlineChildren(node: MarkdownNodeStable): List<Markdown
         return node.children
     }
 
-    return NestedInlineNodeCache.getOrParse(resolveNestedInlineText(node))
+    val resolvedText = resolveNestedInlineText(node)
+    val parsedChildren = NestedInlineNodeCache.getOrParse(resolvedText)
+    if (parsedChildren.isSingleSelfReferenceOf(node, resolvedText)) {
+        return emptyList()
+    }
+    return parsedChildren
+}
+
+private fun List<MarkdownNodeStable>.isSingleSelfReferenceOf(
+    node: MarkdownNodeStable,
+    resolvedText: String
+): Boolean {
+    if (size != 1) return false
+    val onlyChild = first()
+    return onlyChild.type == node.type &&
+        onlyChild.content == resolvedText &&
+        onlyChild.children.isEmpty()
 }
 
 private fun appendInlineNode(
@@ -184,8 +201,21 @@ private fun appendInlineNode(
     textColor: Color,
     primaryColor: Color,
     density: Density? = null,
-    fontSize: TextUnit? = null
+    fontSize: TextUnit? = null,
+    visitedNodes: Set<MarkdownNodeStable> = emptySet(),
+    depth: Int = 0
 ) {
+    if (depth >= MAX_INLINE_RENDER_DEPTH) {
+        builder.append(resolveNestedInlineText(child))
+        return
+    }
+    if (child in visitedNodes) {
+        builder.append(resolveNestedInlineText(child))
+        return
+    }
+    val nextVisitedNodes = visitedNodes + child
+    val nextDepth = depth + 1
+
     val content = child.content
 
     when (child.type) {
@@ -196,7 +226,16 @@ private fun appendInlineNode(
             val start = builder.length
             if (nestedChildren.isNotEmpty()) {
                 nestedChildren.forEach {
-                    appendInlineNode(builder, it, textColor, primaryColor, density, fontSize)
+                    appendInlineNode(
+                        builder,
+                        it,
+                        textColor,
+                        primaryColor,
+                        density,
+                        fontSize,
+                        nextVisitedNodes,
+                        nextDepth
+                    )
                 }
             } else {
                 builder.append(linkText)
@@ -223,7 +262,16 @@ private fun appendInlineNode(
             val start = builder.length
             if (nestedChildren.isNotEmpty()) {
                 nestedChildren.forEach {
-                    appendInlineNode(builder, it, textColor, primaryColor, density, fontSize)
+                    appendInlineNode(
+                        builder,
+                        it,
+                        textColor,
+                        primaryColor,
+                        density,
+                        fontSize,
+                        nextVisitedNodes,
+                        nextDepth
+                    )
                 }
             } else {
                 builder.append(fallbackText)

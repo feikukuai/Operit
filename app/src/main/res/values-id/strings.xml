@@ -6859,8 +6859,6 @@ Sekarang Anda dapat menggunakan mode AutoGLM di antarmuka percakapan.</string>
     <string name="software_identity_description">Ubah identitas perangkat lunak yang ditampilkan di bagian atas sidebar.</string>
     <string name="software_identity_option_operit">Operit AI</string>
     <string name="software_identity_option_lingshu">Lingshu AI</string>
-    <string name="enable_new_sidebar">Sidebar Baru</string>
-    <string name="enable_new_sidebar_description">Aktifkan untuk mengaktifkan pintu masuk sidebar baru, perubahan besar sidebar selanjutnya juga akan didasarkan pada ini.</string>
     <string name="chat_auto_update_memory_failed">Gagal memperbarui memori otomatis: %1$s</string>
 
     <string name="nav_group_plugins">Plugin</string>

@@ -22,6 +22,7 @@ export interface ComposeGeneratedColumnProps extends ComposeCommonProps {
   content?: ComposeChildren;
   horizontalAlignment?: ComposeAlignment;
   verticalArrangement?: ComposeArrangement;
+  zIndex?: number;
 }
 
 export interface ComposeGeneratedRowProps extends ComposeCommonProps {
@@ -29,15 +30,18 @@ export interface ComposeGeneratedRowProps extends ComposeCommonProps {
   horizontalArrangement?: ComposeArrangement;
   onClick?: () => void | Promise<void>;
   verticalAlignment?: ComposeAlignment;
+  zIndex?: number;
 }
 
 export interface ComposeGeneratedBoxProps extends ComposeCommonProps {
   content?: ComposeChildren;
   contentAlignment?: ComposeAlignment;
   propagateMinConstraints?: boolean;
+  zIndex?: number;
 }
 
 export interface ComposeGeneratedSpacerProps extends ComposeCommonProps {
+  zIndex?: number;
 }
 
 export interface ComposeGeneratedLazyColumnProps extends ComposeCommonProps {
@@ -47,6 +51,7 @@ export interface ComposeGeneratedLazyColumnProps extends ComposeCommonProps {
   reverseLayout?: boolean;
   spacing?: number;
   verticalArrangement?: ComposeArrangement;
+  zIndex?: number;
 }
 
 export interface ComposeGeneratedLazyRowProps extends ComposeCommonProps {
@@ -54,6 +59,7 @@ export interface ComposeGeneratedLazyRowProps extends ComposeCommonProps {
   horizontalArrangement?: ComposeArrangement;
   reverseLayout?: boolean;
   verticalAlignment?: ComposeAlignment;
+  zIndex?: number;
 }
 
 export interface ComposeGeneratedTextProps extends ComposeCommonProps {
@@ -64,6 +70,7 @@ export interface ComposeGeneratedTextProps extends ComposeCommonProps {
   softWrap?: boolean;
   style?: ComposeTextStyle;
   text: string;
+  zIndex?: number;
 }
 
 export interface ComposeGeneratedTextFieldProps extends ComposeCommonProps {
@@ -84,6 +91,7 @@ export interface ComposeGeneratedTextFieldProps extends ComposeCommonProps {
   supportingText?: ComposeChildren;
   trailingIcon?: ComposeChildren;
   value: string;
+  zIndex?: number;
 }
 
 export interface ComposeGeneratedSwitchProps extends ComposeCommonProps {
@@ -95,12 +103,14 @@ export interface ComposeGeneratedSwitchProps extends ComposeCommonProps {
   thumbContent?: ComposeChildren;
   uncheckedThumbColor?: ComposeColor;
   uncheckedTrackColor?: ComposeColor;
+  zIndex?: number;
 }
 
 export interface ComposeGeneratedCheckboxProps extends ComposeCommonProps {
   checked: boolean;
   enabled?: boolean;
   onCheckedChange: (checked: boolean) => void;
+  zIndex?: number;
 }
 
 export interface ComposeGeneratedButtonProps extends ComposeCommonProps {
@@ -110,6 +120,7 @@ export interface ComposeGeneratedButtonProps extends ComposeCommonProps {
   onClick: () => void | Promise<void>;
   shape?: ComposeShape;
   text?: string;
+  zIndex?: number;
 }
 
 export interface ComposeGeneratedIconButtonProps extends ComposeCommonProps {
@@ -118,6 +129,7 @@ export interface ComposeGeneratedIconButtonProps extends ComposeCommonProps {
   icon?: string;
   onClick: () => void | Promise<void>;
   shape?: ComposeShape;
+  zIndex?: number;
 }
 
 export interface ComposeGeneratedCardProps extends ComposeCommonProps {
@@ -127,10 +139,12 @@ export interface ComposeGeneratedCardProps extends ComposeCommonProps {
   contentColor?: ComposeColor;
   elevation?: number;
   shape?: ComposeShape;
+  zIndex?: number;
 }
 
 export interface ComposeGeneratedMaterialThemeProps extends ComposeCommonProps {
   content?: ComposeChildren;
+  zIndex?: number;
 }
 
 export interface ComposeGeneratedSurfaceProps extends ComposeCommonProps {
@@ -139,9 +153,11 @@ export interface ComposeGeneratedSurfaceProps extends ComposeCommonProps {
   containerColor?: ComposeColor;
   content?: ComposeChildren;
   contentColor?: ComposeColor;
+  onClick?: () => void | Promise<void>;
   shadowElevation?: number;
   shape?: ComposeShape;
   tonalElevation?: number;
+  zIndex?: number;
 }
 
 export interface ComposeGeneratedIconProps extends ComposeCommonProps {
@@ -149,19 +165,23 @@ export interface ComposeGeneratedIconProps extends ComposeCommonProps {
   name?: string;
   size?: number;
   tint?: ComposeColor;
+  zIndex?: number;
 }
 
 export interface ComposeGeneratedLinearProgressIndicatorProps extends ComposeCommonProps {
   color?: ComposeColor;
   progress?: number;
+  zIndex?: number;
 }
 
 export interface ComposeGeneratedCircularProgressIndicatorProps extends ComposeCommonProps {
   color?: ComposeColor;
   strokeWidth?: number;
+  zIndex?: number;
 }
 
 export interface ComposeGeneratedSnackbarHostProps extends ComposeCommonProps {
+  zIndex?: number;
 }
 
 export interface ComposeGeneratedAssistChipProps extends ComposeCommonProps {
@@ -170,32 +190,38 @@ export interface ComposeGeneratedAssistChipProps extends ComposeCommonProps {
   leadingIcon?: ComposeChildren;
   onClick: () => void | Promise<void>;
   trailingIcon?: ComposeChildren;
+  zIndex?: number;
 }
 
 export interface ComposeGeneratedBadgeProps extends ComposeCommonProps {
   content?: ComposeChildren;
   contentColor?: ComposeColor;
+  zIndex?: number;
 }
 
 export interface ComposeGeneratedBadgedBoxProps extends ComposeCommonProps {
   badge: ComposeChildren;
   content?: ComposeChildren;
+  zIndex?: number;
 }
 
 export interface ComposeGeneratedDismissibleDrawerSheetProps extends ComposeCommonProps {
   content?: ComposeChildren;
   drawerTonalElevation?: number;
+  zIndex?: number;
 }
 
 export interface ComposeGeneratedDismissibleNavigationDrawerProps extends ComposeCommonProps {
   content?: ComposeChildren;
   drawerContent: ComposeChildren;
   gesturesEnabled?: boolean;
+  zIndex?: number;
 }
 
 export interface ComposeGeneratedDividerProps extends ComposeCommonProps {
   color?: ComposeColor;
   thickness?: number;
+  zIndex?: number;
 }
 
 export interface ComposeGeneratedDropdownMenuProps extends ComposeCommonProps {
@@ -203,6 +229,8 @@ export interface ComposeGeneratedDropdownMenuProps extends ComposeCommonProps {
   expanded: boolean;
   offset?: number;
   onDismissRequest: () => void | Promise<void>;
+  properties?: { focusable?: boolean; dismissOnBackPress?: boolean; dismissOnClickOutside?: boolean; clippingEnabled?: boolean; usePlatformDefaultWidth?: boolean; };
+  zIndex?: number;
 }
 
 export interface ComposeGeneratedElevatedAssistChipProps extends ComposeCommonProps {
@@ -211,6 +239,7 @@ export interface ComposeGeneratedElevatedAssistChipProps extends ComposeCommonPr
   leadingIcon?: ComposeChildren;
   onClick: () => void | Promise<void>;
   trailingIcon?: ComposeChildren;
+  zIndex?: number;
 }
 
 export interface ComposeGeneratedElevatedButtonProps extends ComposeCommonProps {
@@ -218,6 +247,7 @@ export interface ComposeGeneratedElevatedButtonProps extends ComposeCommonProps 
   enabled?: boolean;
   onClick: () => void | Promise<void>;
   shape?: ComposeShape;
+  zIndex?: number;
 }
 
 export interface ComposeGeneratedElevatedCardProps extends ComposeCommonProps {
@@ -227,6 +257,7 @@ export interface ComposeGeneratedElevatedCardProps extends ComposeCommonProps {
   contentColor?: ComposeColor;
   elevation?: number;
   shape?: ComposeShape;
+  zIndex?: number;
 }
 
 export interface ComposeGeneratedElevatedFilterChipProps extends ComposeCommonProps {
@@ -236,6 +267,7 @@ export interface ComposeGeneratedElevatedFilterChipProps extends ComposeCommonPr
   onClick: () => void | Promise<void>;
   selected: boolean;
   trailingIcon?: ComposeChildren;
+  zIndex?: number;
 }
 
 export interface ComposeGeneratedElevatedSuggestionChipProps extends ComposeCommonProps {
@@ -243,6 +275,7 @@ export interface ComposeGeneratedElevatedSuggestionChipProps extends ComposeComm
   icon?: ComposeChildren;
   label: ComposeChildren;
   onClick: () => void | Promise<void>;
+  zIndex?: number;
 }
 
 export interface ComposeGeneratedExtendedFloatingActionButtonProps extends ComposeCommonProps {
@@ -250,6 +283,7 @@ export interface ComposeGeneratedExtendedFloatingActionButtonProps extends Compo
   contentColor?: ComposeColor;
   onClick: () => void | Promise<void>;
   shape?: ComposeShape;
+  zIndex?: number;
 }
 
 export interface ComposeGeneratedFilledIconButtonProps extends ComposeCommonProps {
@@ -258,6 +292,7 @@ export interface ComposeGeneratedFilledIconButtonProps extends ComposeCommonProp
   icon?: string;
   onClick: () => void | Promise<void>;
   shape?: ComposeShape;
+  zIndex?: number;
 }
 
 export interface ComposeGeneratedFilledIconToggleButtonProps extends ComposeCommonProps {
@@ -266,6 +301,7 @@ export interface ComposeGeneratedFilledIconToggleButtonProps extends ComposeComm
   enabled?: boolean;
   onCheckedChange: (checked: boolean) => void;
   shape?: ComposeShape;
+  zIndex?: number;
 }
 
 export interface ComposeGeneratedFilledTonalButtonProps extends ComposeCommonProps {
@@ -274,6 +310,7 @@ export interface ComposeGeneratedFilledTonalButtonProps extends ComposeCommonPro
   enabled?: boolean;
   onClick: () => void | Promise<void>;
   shape?: ComposeShape;
+  zIndex?: number;
 }
 
 export interface ComposeGeneratedFilledTonalIconButtonProps extends ComposeCommonProps {
@@ -282,6 +319,7 @@ export interface ComposeGeneratedFilledTonalIconButtonProps extends ComposeCommo
   icon?: string;
   onClick: () => void | Promise<void>;
   shape?: ComposeShape;
+  zIndex?: number;
 }
 
 export interface ComposeGeneratedFilledTonalIconToggleButtonProps extends ComposeCommonProps {
@@ -290,6 +328,7 @@ export interface ComposeGeneratedFilledTonalIconToggleButtonProps extends Compos
   enabled?: boolean;
   onCheckedChange: (checked: boolean) => void;
   shape?: ComposeShape;
+  zIndex?: number;
 }
 
 export interface ComposeGeneratedFilterChipProps extends ComposeCommonProps {
@@ -299,6 +338,7 @@ export interface ComposeGeneratedFilterChipProps extends ComposeCommonProps {
   onClick: () => void | Promise<void>;
   selected: boolean;
   trailingIcon?: ComposeChildren;
+  zIndex?: number;
 }
 
 export interface ComposeGeneratedFloatingActionButtonProps extends ComposeCommonProps {
@@ -306,11 +346,13 @@ export interface ComposeGeneratedFloatingActionButtonProps extends ComposeCommon
   contentColor?: ComposeColor;
   onClick: () => void | Promise<void>;
   shape?: ComposeShape;
+  zIndex?: number;
 }
 
 export interface ComposeGeneratedHorizontalDividerProps extends ComposeCommonProps {
   color?: ComposeColor;
   thickness?: number;
+  zIndex?: number;
 }
 
 export interface ComposeGeneratedIconToggleButtonProps extends ComposeCommonProps {
@@ -320,6 +362,7 @@ export interface ComposeGeneratedIconToggleButtonProps extends ComposeCommonProp
   icon?: string;
   onCheckedChange: (checked: boolean) => void;
   shape?: ComposeShape;
+  zIndex?: number;
 }
 
 export interface ComposeGeneratedInputChipProps extends ComposeCommonProps {
@@ -330,6 +373,7 @@ export interface ComposeGeneratedInputChipProps extends ComposeCommonProps {
   onClick: () => void | Promise<void>;
   selected: boolean;
   trailingIcon?: ComposeChildren;
+  zIndex?: number;
 }
 
 export interface ComposeGeneratedLargeFloatingActionButtonProps extends ComposeCommonProps {
@@ -337,6 +381,7 @@ export interface ComposeGeneratedLargeFloatingActionButtonProps extends ComposeC
   contentColor?: ComposeColor;
   onClick: () => void | Promise<void>;
   shape?: ComposeShape;
+  zIndex?: number;
 }
 
 export interface ComposeGeneratedLeadingIconTabProps extends ComposeCommonProps {
@@ -345,6 +390,7 @@ export interface ComposeGeneratedLeadingIconTabProps extends ComposeCommonProps 
   onClick: () => void | Promise<void>;
   selected: boolean;
   text: ComposeChildren;
+  zIndex?: number;
 }
 
 export interface ComposeGeneratedListItemProps extends ComposeCommonProps {
@@ -355,17 +401,20 @@ export interface ComposeGeneratedListItemProps extends ComposeCommonProps {
   supportingContent?: ComposeChildren;
   tonalElevation?: number;
   trailingContent?: ComposeChildren;
+  zIndex?: number;
 }
 
 export interface ComposeGeneratedModalDrawerSheetProps extends ComposeCommonProps {
   content?: ComposeChildren;
   drawerTonalElevation?: number;
+  zIndex?: number;
 }
 
 export interface ComposeGeneratedModalNavigationDrawerProps extends ComposeCommonProps {
   content?: ComposeChildren;
   drawerContent: ComposeChildren;
   gesturesEnabled?: boolean;
+  zIndex?: number;
 }
 
 export interface ComposeGeneratedModalWideNavigationRailProps extends ComposeCommonProps {
@@ -374,12 +423,14 @@ export interface ComposeGeneratedModalWideNavigationRailProps extends ComposeCom
   header?: ComposeChildren;
   hideOnCollapse?: boolean;
   verticalArrangement?: ComposeArrangement;
+  zIndex?: number;
 }
 
 export interface ComposeGeneratedNavigationBarProps extends ComposeCommonProps {
   content?: ComposeChildren;
   contentColor?: ComposeColor;
   tonalElevation?: number;
+  zIndex?: number;
 }
 
 export interface ComposeGeneratedNavigationDrawerItemProps extends ComposeCommonProps {
@@ -388,12 +439,14 @@ export interface ComposeGeneratedNavigationDrawerItemProps extends ComposeCommon
   label: ComposeChildren;
   onClick: () => void | Promise<void>;
   selected: boolean;
+  zIndex?: number;
 }
 
 export interface ComposeGeneratedNavigationRailProps extends ComposeCommonProps {
   content?: ComposeChildren;
   contentColor?: ComposeColor;
   header?: ComposeChildren;
+  zIndex?: number;
 }
 
 export interface ComposeGeneratedNavigationRailItemProps extends ComposeCommonProps {
@@ -403,6 +456,7 @@ export interface ComposeGeneratedNavigationRailItemProps extends ComposeCommonPr
   label?: ComposeChildren;
   onClick: () => void | Promise<void>;
   selected: boolean;
+  zIndex?: number;
 }
 
 export interface ComposeGeneratedOutlinedButtonProps extends ComposeCommonProps {
@@ -411,6 +465,7 @@ export interface ComposeGeneratedOutlinedButtonProps extends ComposeCommonProps 
   enabled?: boolean;
   onClick: () => void | Promise<void>;
   shape?: ComposeShape;
+  zIndex?: number;
 }
 
 export interface ComposeGeneratedOutlinedCardProps extends ComposeCommonProps {
@@ -420,6 +475,7 @@ export interface ComposeGeneratedOutlinedCardProps extends ComposeCommonProps {
   contentColor?: ComposeColor;
   elevation?: number;
   shape?: ComposeShape;
+  zIndex?: number;
 }
 
 export interface ComposeGeneratedOutlinedIconButtonProps extends ComposeCommonProps {
@@ -428,6 +484,7 @@ export interface ComposeGeneratedOutlinedIconButtonProps extends ComposeCommonPr
   icon?: string;
   onClick: () => void | Promise<void>;
   shape?: ComposeShape;
+  zIndex?: number;
 }
 
 export interface ComposeGeneratedOutlinedIconToggleButtonProps extends ComposeCommonProps {
@@ -436,16 +493,19 @@ export interface ComposeGeneratedOutlinedIconToggleButtonProps extends ComposeCo
   enabled?: boolean;
   onCheckedChange: (checked: boolean) => void;
   shape?: ComposeShape;
+  zIndex?: number;
 }
 
 export interface ComposeGeneratedPermanentDrawerSheetProps extends ComposeCommonProps {
   content?: ComposeChildren;
   drawerTonalElevation?: number;
+  zIndex?: number;
 }
 
 export interface ComposeGeneratedPermanentNavigationDrawerProps extends ComposeCommonProps {
   content?: ComposeChildren;
   drawerContent: ComposeChildren;
+  zIndex?: number;
 }
 
 export interface ComposeGeneratedPrimaryScrollableTabRowProps extends ComposeCommonProps {
@@ -455,6 +515,7 @@ export interface ComposeGeneratedPrimaryScrollableTabRowProps extends ComposeCom
   indicator?: ComposeChildren;
   selectedTabIndex: number;
   tabs: ComposeChildren;
+  zIndex?: number;
 }
 
 export interface ComposeGeneratedPrimaryTabRowProps extends ComposeCommonProps {
@@ -463,11 +524,13 @@ export interface ComposeGeneratedPrimaryTabRowProps extends ComposeCommonProps {
   indicator?: ComposeChildren;
   selectedTabIndex: number;
   tabs: ComposeChildren;
+  zIndex?: number;
 }
 
 export interface ComposeGeneratedProvideTextStyleProps extends ComposeCommonProps {
   content?: ComposeChildren;
   style?: ComposeTextStyle;
+  zIndex?: number;
 }
 
 export interface ComposeGeneratedPullToRefreshBoxProps extends ComposeCommonProps {
@@ -476,6 +539,7 @@ export interface ComposeGeneratedPullToRefreshBoxProps extends ComposeCommonProp
   indicator?: ComposeChildren;
   isRefreshing: boolean;
   onRefresh: () => void | Promise<void>;
+  zIndex?: number;
 }
 
 export interface ComposeGeneratedRadioButtonProps extends ComposeCommonProps {
@@ -483,6 +547,7 @@ export interface ComposeGeneratedRadioButtonProps extends ComposeCommonProps {
   onClick: () => void | Promise<void>;
   selected: boolean;
   shape?: ComposeShape;
+  zIndex?: number;
 }
 
 export interface ComposeGeneratedScaffoldProps extends ComposeCommonProps {
@@ -493,6 +558,7 @@ export interface ComposeGeneratedScaffoldProps extends ComposeCommonProps {
   floatingActionButton?: ComposeChildren;
   snackbarHost?: ComposeChildren;
   topBar?: ComposeChildren;
+  zIndex?: number;
 }
 
 export interface ComposeGeneratedSecondaryScrollableTabRowProps extends ComposeCommonProps {
@@ -502,6 +568,7 @@ export interface ComposeGeneratedSecondaryScrollableTabRowProps extends ComposeC
   indicator?: ComposeChildren;
   selectedTabIndex: number;
   tabs: ComposeChildren;
+  zIndex?: number;
 }
 
 export interface ComposeGeneratedSecondaryTabRowProps extends ComposeCommonProps {
@@ -510,11 +577,13 @@ export interface ComposeGeneratedSecondaryTabRowProps extends ComposeCommonProps
   indicator?: ComposeChildren;
   selectedTabIndex: number;
   tabs: ComposeChildren;
+  zIndex?: number;
 }
 
 export interface ComposeGeneratedShortNavigationBarProps extends ComposeCommonProps {
   content?: ComposeChildren;
   contentColor?: ComposeColor;
+  zIndex?: number;
 }
 
 export interface ComposeGeneratedShortNavigationBarItemProps extends ComposeCommonProps {
@@ -523,6 +592,7 @@ export interface ComposeGeneratedShortNavigationBarItemProps extends ComposeComm
   label: ComposeChildren;
   onClick: () => void | Promise<void>;
   selected: boolean;
+  zIndex?: number;
 }
 
 export interface ComposeGeneratedSmallFloatingActionButtonProps extends ComposeCommonProps {
@@ -530,6 +600,7 @@ export interface ComposeGeneratedSmallFloatingActionButtonProps extends ComposeC
   contentColor?: ComposeColor;
   onClick: () => void | Promise<void>;
   shape?: ComposeShape;
+  zIndex?: number;
 }
 
 export interface ComposeGeneratedSnackbarProps extends ComposeCommonProps {
@@ -538,6 +609,7 @@ export interface ComposeGeneratedSnackbarProps extends ComposeCommonProps {
   content?: ComposeChildren;
   contentColor?: ComposeColor;
   dismissAction?: ComposeChildren;
+  zIndex?: number;
 }
 
 export interface ComposeGeneratedSuggestionChipProps extends ComposeCommonProps {
@@ -545,6 +617,7 @@ export interface ComposeGeneratedSuggestionChipProps extends ComposeCommonProps 
   icon?: ComposeChildren;
   label: ComposeChildren;
   onClick: () => void | Promise<void>;
+  zIndex?: number;
 }
 
 export interface ComposeGeneratedTabProps extends ComposeCommonProps {
@@ -552,6 +625,7 @@ export interface ComposeGeneratedTabProps extends ComposeCommonProps {
   enabled?: boolean;
   onClick: () => void | Promise<void>;
   selected: boolean;
+  zIndex?: number;
 }
 
 export interface ComposeGeneratedTextButtonProps extends ComposeCommonProps {
@@ -559,6 +633,7 @@ export interface ComposeGeneratedTextButtonProps extends ComposeCommonProps {
   enabled?: boolean;
   onClick: () => void | Promise<void>;
   shape?: ComposeShape;
+  zIndex?: number;
 }
 
 export interface ComposeGeneratedTimePickerDialogProps extends ComposeCommonProps {
@@ -568,20 +643,24 @@ export interface ComposeGeneratedTimePickerDialogProps extends ComposeCommonProp
   modeToggleButton?: ComposeChildren;
   onDismissRequest: () => void | Promise<void>;
   title: ComposeChildren;
+  zIndex?: number;
 }
 
 export interface ComposeGeneratedVerticalDividerProps extends ComposeCommonProps {
   color?: ComposeColor;
   thickness?: number;
+  zIndex?: number;
 }
 
 export interface ComposeGeneratedVerticalDragHandleProps extends ComposeCommonProps {
+  zIndex?: number;
 }
 
 export interface ComposeGeneratedWideNavigationRailProps extends ComposeCommonProps {
   content?: ComposeChildren;
   header?: ComposeChildren;
   verticalArrangement?: ComposeArrangement;
+  zIndex?: number;
 }
 
 export interface ComposeGeneratedWideNavigationRailItemProps extends ComposeCommonProps {
@@ -591,12 +670,14 @@ export interface ComposeGeneratedWideNavigationRailItemProps extends ComposeComm
   onClick: () => void | Promise<void>;
   railExpanded: boolean;
   selected: boolean;
+  zIndex?: number;
 }
 
 export interface ComposeGeneratedBoxWithConstraintsProps extends ComposeCommonProps {
   content?: ComposeChildren;
   contentAlignment?: ComposeAlignment;
   propagateMinConstraints?: boolean;
+  zIndex?: number;
 }
 
 export interface ComposeGeneratedBasicTextProps extends ComposeCommonProps {
@@ -605,10 +686,12 @@ export interface ComposeGeneratedBasicTextProps extends ComposeCommonProps {
   softWrap?: boolean;
   style?: ComposeTextStyle;
   text: string;
+  zIndex?: number;
 }
 
 export interface ComposeGeneratedDisableSelectionProps extends ComposeCommonProps {
   content?: ComposeChildren;
+  zIndex?: number;
 }
 
 export interface ComposeGeneratedImageProps extends ComposeCommonProps {
@@ -616,13 +699,16 @@ export interface ComposeGeneratedImageProps extends ComposeCommonProps {
   contentAlignment?: ComposeAlignment;
   contentDescription: string;
   name?: string;
+  zIndex?: number;
 }
 
 export interface ComposeGeneratedSelectionContainerProps extends ComposeCommonProps {
   content?: ComposeChildren;
+  zIndex?: number;
 }
 
 export interface ComposeGeneratedCanvasProps extends ComposeCommonProps {
+  zIndex?: number;
   commands?: ComposeCanvasCommand[];
 }
 

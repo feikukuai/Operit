@@ -95,7 +95,8 @@ typealias ScreenNavigationHandler = (Screen) -> Unit
 
 // 重构的Screen类，添加了路由相关属性和内容渲染函数
 sealed class Screen(
-        // 对应的导航项，用于侧边栏高亮显示
+        // 对应的导航项，仅用于侧边栏高亮归属。
+        // 它不再承担“这个 nav item 默认打开哪个页面”的职责。
         open val navItem: NavItem? = null,
         // 屏幕标题资源ID
         open val titleRes: Int? = null,
@@ -1054,7 +1055,7 @@ sealed class Screen(
         val containerPackageName: String,
         val uiModuleId: String,
         val title: String
-    ) : Screen(navItem = NavItem.Toolbox) {
+    ) : Screen() {
         @Composable
         override fun Content(
                 navController: NavController,

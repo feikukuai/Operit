@@ -43,11 +43,12 @@ private object Unconvertible
 private data class HostNavigationEntryDefinition(
     val entryId: String,
     val screen: Screen,
-    val surface: NavigationSurface,
+    val surface: NavigationSurface? = null,
+    val launchNavItem: NavItem? = null,
     @StringRes val titleResId: Int? = null,
     @StringRes val descriptionResId: Int? = null,
-    val icon: ImageVector,
-    val order: Int
+    val icon: ImageVector? = null,
+    val order: Int = 0
 )
 
 private fun camelToSnakeCase(name: String): String {
@@ -95,28 +96,16 @@ object ScreenRouteRegistry {
 
     private val nativeRouteIds: List<String> = routeTypeById.keys.sorted()
 
-    private val defaultScreenByNavItem: Map<NavItem, Screen> =
-        defaultScreensByRouteId
-            .values
-            .filter { it.navItem != null }
-            .groupBy { requireNotNull(it.navItem) }
-            .mapValues { (navItem, candidates) ->
-                candidates.minWith(
-                    compareByDescending<Screen> {
-                        it::class.simpleName == navItem::class.simpleName
-                    }
-                        .thenByDescending { it::class.objectInstance === it }
-                        .thenBy { requiredValueParameterCount(it::class) }
-                        .thenBy(::routeIdOf)
-                )
-            }
-
-    private val mainSidebarEntryDefinitions: List<HostNavigationEntryDefinition> =
+    // Host navigation is declared in one place.
+    // `surface != null` means the entry is visible in navigation UI.
+    // `launchNavItem != null` means the nav item can use this screen as its default entry.
+    private val hostEntryDefinitions: List<HostNavigationEntryDefinition> =
         listOf(
             hostEntryDefinition(
                 entryId = "main.ai_chat",
                 screen = Screen.AiChat,
                 surface = NavigationSurface.MAIN_SIDEBAR_AI,
+                launchNavItem = NavItem.AiChat,
                 icon = NavItem.AiChat.icon,
                 order = 10
             ),
@@ -124,6 +113,7 @@ object ScreenRouteRegistry {
                 entryId = "main.assistant_config",
                 screen = Screen.AssistantConfig,
                 surface = NavigationSurface.MAIN_SIDEBAR_AI,
+                launchNavItem = NavItem.AssistantConfig,
                 icon = NavItem.AssistantConfig.icon,
                 order = 20
             ),
@@ -131,6 +121,7 @@ object ScreenRouteRegistry {
                 entryId = "main.memory_base",
                 screen = Screen.MemoryBase,
                 surface = NavigationSurface.MAIN_SIDEBAR_AI,
+                launchNavItem = NavItem.MemoryBase,
                 icon = NavItem.MemoryBase.icon,
                 order = 30
             ),
@@ -138,6 +129,7 @@ object ScreenRouteRegistry {
                 entryId = "main.packages",
                 screen = Screen.Packages,
                 surface = NavigationSurface.MAIN_SIDEBAR_TOOLS,
+                launchNavItem = NavItem.Packages,
                 icon = NavItem.Packages.icon,
                 order = 10
             ),
@@ -145,6 +137,7 @@ object ScreenRouteRegistry {
                 entryId = "main.shizuku_commands",
                 screen = Screen.ShizukuCommands,
                 surface = NavigationSurface.MAIN_SIDEBAR_TOOLS,
+                launchNavItem = NavItem.ShizukuCommands,
                 icon = NavItem.ShizukuCommands.icon,
                 order = 20
             ),
@@ -152,6 +145,7 @@ object ScreenRouteRegistry {
                 entryId = "main.workflow",
                 screen = Screen.Workflow,
                 surface = NavigationSurface.MAIN_SIDEBAR_TOOLS,
+                launchNavItem = NavItem.Workflow,
                 icon = NavItem.Workflow.icon,
                 order = 30
             ),
@@ -159,6 +153,7 @@ object ScreenRouteRegistry {
                 entryId = "main.settings",
                 screen = Screen.Settings,
                 surface = NavigationSurface.MAIN_SIDEBAR_SYSTEM,
+                launchNavItem = NavItem.Settings,
                 icon = NavItem.Settings.icon,
                 order = 10
             ),
@@ -166,6 +161,7 @@ object ScreenRouteRegistry {
                 entryId = "main.help",
                 screen = Screen.Help,
                 surface = NavigationSurface.MAIN_SIDEBAR_SYSTEM,
+                launchNavItem = NavItem.Help,
                 icon = NavItem.Help.icon,
                 order = 20
             ),
@@ -173,13 +169,10 @@ object ScreenRouteRegistry {
                 entryId = "main.about",
                 screen = Screen.About,
                 surface = NavigationSurface.MAIN_SIDEBAR_SYSTEM,
+                launchNavItem = NavItem.About,
                 icon = NavItem.About.icon,
                 order = 30
-            )
-        )
-
-    private val toolboxEntryDefinitions: List<HostNavigationEntryDefinition> =
-        listOf(
+            ),
             hostEntryDefinition(
                 entryId = "toolbox.tool_tester",
                 screen = Screen.ToolTester,
@@ -229,6 +222,7 @@ object ScreenRouteRegistry {
                 entryId = "toolbox.agreement",
                 screen = Screen.Agreement,
                 surface = NavigationSurface.TOOLBOX,
+                launchNavItem = NavItem.Agreement,
                 titleResId = R.string.tool_user_agreement,
                 descriptionResId = R.string.tool_user_agreement_desc,
                 icon = Icons.Default.Policy,
@@ -247,6 +241,7 @@ object ScreenRouteRegistry {
                 entryId = "toolbox.terminal",
                 screen = Screen.Terminal,
                 surface = NavigationSurface.TOOLBOX,
+                launchNavItem = NavItem.Terminal,
                 titleResId = R.string.tool_terminal,
                 descriptionResId = R.string.tool_terminal_desc,
                 icon = Icons.Default.Terminal,
@@ -301,6 +296,7 @@ object ScreenRouteRegistry {
                 entryId = "toolbox.token_config",
                 screen = Screen.TokenConfig,
                 surface = NavigationSurface.TOOLBOX,
+                launchNavItem = NavItem.TokenConfig,
                 titleResId = R.string.token_config,
                 descriptionResId = R.string.tool_token_config_desc,
                 icon = Icons.Default.Token,
@@ -341,8 +337,40 @@ object ScreenRouteRegistry {
                 descriptionResId = R.string.tool_autoglm_tool_desc,
                 icon = Icons.Default.AutoMode,
                 order = 180
+            ),
+            hostEntryDefinition(
+                entryId = "hidden.toolbox",
+                screen = Screen.Toolbox,
+                launchNavItem = NavItem.Toolbox
+            ),
+            hostEntryDefinition(
+                entryId = "hidden.tool_permissions",
+                screen = Screen.ToolPermission,
+                launchNavItem = NavItem.ToolPermissions
+            ),
+            hostEntryDefinition(
+                entryId = "hidden.user_preferences_guide",
+                screen = Screen.UserPreferencesGuide(),
+                launchNavItem = NavItem.UserPreferencesGuide
+            ),
+            hostEntryDefinition(
+                entryId = "hidden.user_preferences_settings",
+                screen = Screen.UserPreferencesSettings,
+                launchNavItem = NavItem.UserPreferencesSettings
+            ),
+            hostEntryDefinition(
+                entryId = "hidden.chat_history_settings",
+                screen = Screen.ChatHistorySettings,
+                launchNavItem = NavItem.ChatHistorySettings
             )
         )
+
+    private val defaultScreenByNavItem: Map<NavItem, Screen> =
+        hostEntryDefinitions
+            .mapNotNull { definition ->
+                definition.launchNavItem?.let { navItem -> navItem to definition.screen }
+            }
+            .toMap()
 
     fun hostRouteSpecs(context: Context): List<RouteSpec> =
         nativeRouteIds.map { routeId ->
@@ -355,14 +383,20 @@ object ScreenRouteRegistry {
         }
 
     fun mainSidebarEntries(context: Context): List<NavigationEntrySpec> =
-        mainSidebarEntryDefinitions.map { definition ->
+        hostEntryDefinitions
+            .filter { definition ->
+                definition.surface != null && definition.surface != NavigationSurface.TOOLBOX
+            }
+            .map { definition ->
             definition.toNavigationEntry(context)
-        }
+            }
 
     fun toolboxEntries(context: Context): List<NavigationEntrySpec> =
-        toolboxEntryDefinitions.map { definition ->
+        hostEntryDefinitions
+            .filter { definition -> definition.surface == NavigationSurface.TOOLBOX }
+            .map { definition ->
             definition.toNavigationEntry(context)
-        }
+            }
 
     fun defaultScreenForNavItem(navItem: NavItem): Screen {
         return requireNotNull(defaultScreenByNavItem[navItem]) {
@@ -521,15 +555,6 @@ object ScreenRouteRegistry {
         return runCatching { constructor.callBy(callArgs) }.getOrNull()
     }
 
-    private fun requiredValueParameterCount(type: KClass<out Screen>): Int {
-        val constructor = type.primaryConstructor ?: return 0
-        return constructor.parameters.count { parameter ->
-            parameter.kind == KParameter.Kind.VALUE &&
-                !parameter.isOptional &&
-                !parameter.type.isMarkedNullable
-        }
-    }
-
     private fun hostSpec(
         routeId: String,
         title: String? = null,
@@ -540,16 +565,18 @@ object ScreenRouteRegistry {
     private fun hostEntryDefinition(
         entryId: String,
         screen: Screen,
-        surface: NavigationSurface,
+        surface: NavigationSurface? = null,
+        launchNavItem: NavItem? = null,
         @StringRes titleResId: Int? = null,
         @StringRes descriptionResId: Int? = null,
-        icon: ImageVector,
-        order: Int
+        icon: ImageVector? = null,
+        order: Int = 0
     ): HostNavigationEntryDefinition =
         HostNavigationEntryDefinition(
             entryId = entryId,
             screen = screen,
             surface = surface,
+            launchNavItem = launchNavItem,
             titleResId = titleResId,
             descriptionResId = descriptionResId,
             icon = icon,
@@ -560,10 +587,14 @@ object ScreenRouteRegistry {
         NavigationEntrySpec(
             entryId = entryId,
             routeId = routeIdOf(screen),
-            surface = surface,
+            surface = requireNotNull(surface) {
+                "Missing navigation surface for visible host navigation entry $entryId"
+            },
             title = resolveRequiredTitle(context, entryId, titleResId ?: defaultTitleResId(screen)),
             description = resolveOptionalTitle(context, descriptionResId),
-            icon = icon,
+            icon = requireNotNull(icon) {
+                "Missing icon for visible host navigation entry $entryId"
+            },
             order = order
         )
 

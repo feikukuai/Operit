@@ -60,7 +60,6 @@ fun GlobalDisplaySettingsScreen(
     val enableReplyNotificationSound by displayPreferencesManager.enableReplyNotificationSound.collectAsState(initial = false)
     val enableReplyNotificationVibration by displayPreferencesManager.enableReplyNotificationVibration.collectAsState(initial = false)
     val enableEnterToSend by displayPreferencesManager.enableEnterToSend.collectAsState(initial = false)
-    val enableNewSidebar by displayPreferencesManager.enableNewSidebar.collectAsState(initial = true)
     val enableNavigationAnimation by displayPreferencesManager.enableNavigationAnimation.collectAsState(initial = true)
     val enableBackgroundKeepAlive by displayPreferencesManager.enableBackgroundKeepAlive.collectAsState(initial = false)
     val enableExperimentalVirtualDisplay by displayPreferencesManager.enableExperimentalVirtualDisplay.collectAsState(initial = true)
@@ -403,18 +402,6 @@ fun GlobalDisplaySettingsScreen(
                 onCheckedChange = {
                     scope.launch {
                         displayPreferencesManager.saveDisplaySettings(enableEnterToSend = it)
-                    }
-                },
-                backgroundColor = componentBackgroundColor
-            )
-
-            DisplayToggleItem(
-                title = stringResource(R.string.enable_new_sidebar),
-                subtitle = stringResource(R.string.enable_new_sidebar_description),
-                checked = enableNewSidebar,
-                onCheckedChange = {
-                    scope.launch {
-                        displayPreferencesManager.saveDisplaySettings(enableNewSidebar = it)
                     }
                 },
                 backgroundColor = componentBackgroundColor

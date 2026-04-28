@@ -26,6 +26,9 @@ import com.ai.assistance.operit.util.LocaleUtils
 import com.ai.assistance.operit.data.converter.*
 import com.ai.assistance.operit.data.exporter.*
 import com.google.gson.GsonBuilder
+import com.google.gson.internal.Streams
+import com.google.gson.stream.JsonReader
+import com.google.gson.stream.JsonToken
 import com.google.gson.reflect.TypeToken
 import java.io.File
 import java.io.IOException
@@ -35,6 +38,7 @@ import java.time.LocalDateTime
 import java.time.ZoneId
 import java.util.Date
 import java.util.Locale
+import java.io.BufferedWriter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -54,6 +58,10 @@ import kotlinx.serialization.json.Json
 import java.io.BufferedOutputStream
 import java.io.ByteArrayOutputStream
 import java.io.FileOutputStream
+import java.io.OutputStreamWriter
+import java.nio.charset.StandardCharsets
+import java.io.InputStream
+import java.io.InputStreamReader
 import java.util.concurrent.ConcurrentHashMap
 import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
@@ -92,10 +100,16 @@ class ChatHistoryManager private constructor(private val context: Context) {
             isLenient = true
         }
 
-    private sealed interface OperitImportPayload {
-        data class Archive(val chats: List<OperitArchivedChat>) : OperitImportPayload
+    private data class ImportCounters(
+        var newCount: Int = 0,
+        var updatedCount: Int = 0,
+        var skippedCount: Int = 0,
+    )
 
-        data class Legacy(val histories: List<ChatHistory>) : OperitImportPayload
+    private sealed interface StreamImportedChat {
+        data class Archive(val chat: OperitArchivedChat) : StreamImportedChat
+
+        data class Legacy(val history: ChatHistory) : StreamImportedChat
     }
 
     private fun hydrateMessages(
@@ -165,14 +179,190 @@ class ChatHistoryManager private constructor(private val context: Context) {
         return OperitArchivedChat.fromChatHistory(chatHistory, archivedMessages)
     }
 
-    private suspend fun buildOperitArchivedChats(
+    private suspend fun exportOperitArchiveJsonStream(
+        file: File,
         chatHistories: List<ChatHistory>,
-    ): List<OperitArchivedChat> {
-        val archivedChats = mutableListOf<OperitArchivedChat>()
-        for (chatHistory in chatHistories) {
-            archivedChats.add(buildOperitArchivedChat(chatHistory))
+    ) {
+        AppLogger.d(TAG, "开始流式导出 Operit 聊天记录，共 ${chatHistories.size} 个会话，目标=${file.absolutePath}")
+        BufferedWriter(
+            OutputStreamWriter(FileOutputStream(file), StandardCharsets.UTF_8),
+        ).use { writer ->
+            writer.append("{\n")
+            writer.append("  \"archiveType\": ")
+            writer.append(operitArchiveJson.encodeToString(OperitChatArchive.ARCHIVE_TYPE))
+            writer.append(",\n")
+            writer.append("  \"formatVersion\": ${OperitChatArchive.CURRENT_FORMAT_VERSION},\n")
+            writer.append("  \"exportedAt\": ${System.currentTimeMillis()},\n")
+            writer.append("  \"chats\": [")
+
+            chatHistories.forEachIndexed { index, chatHistory ->
+                val archivedChat = buildOperitArchivedChat(chatHistory)
+                if (index == 0) {
+                    writer.append('\n')
+                } else {
+                    writer.append(",\n")
+                }
+                writer.append(operitArchiveJson.encodeToString(archivedChat))
+                writer.flush()
+                if ((index + 1) % 20 == 0 || index == chatHistories.lastIndex) {
+                    AppLogger.d(
+                        TAG,
+                        "流式导出进度: ${index + 1}/${chatHistories.size}，chatId=${archivedChat.id}，messages=${archivedChat.messages.size}",
+                    )
+                }
+            }
+
+            if (chatHistories.isNotEmpty()) {
+                writer.append('\n')
+            }
+            writer.append("  ]\n")
+            writer.append("}\n")
         }
-        return archivedChats
+        AppLogger.d(TAG, "流式导出 Operit 聊天记录完成，共 ${chatHistories.size} 个会话，目标=${file.absolutePath}")
+    }
+
+    private fun <T> decodeStreamElement(
+        reader: JsonReader,
+        decode: (String) -> T,
+    ): T {
+        val element = Streams.parse(reader)
+        return decode(element.toString())
+    }
+
+    private suspend fun consumeImportedChat(
+        imported: StreamImportedChat,
+        existingIds: MutableSet<String>,
+        counters: ImportCounters,
+        importedIndex: Int,
+    ) {
+        when (imported) {
+            is StreamImportedChat.Archive -> {
+                val archivedChat = imported.chat
+                if (archivedChat.messages.isEmpty()) {
+                    counters.skippedCount++
+                    AppLogger.w(TAG, "流式导入跳过空归档会话: index=$importedIndex, chatId=${archivedChat.id}")
+                    return
+                }
+
+                val existed = existingIds.contains(archivedChat.id)
+                if (existed) {
+                    counters.updatedCount++
+                } else {
+                    counters.newCount++
+                    existingIds.add(archivedChat.id)
+                }
+
+                saveArchivedChat(archivedChat)
+
+                if (importedIndex % 20 == 0) {
+                    AppLogger.d(
+                        TAG,
+                        "流式导入进度: index=$importedIndex, archive chatId=${archivedChat.id}, messages=${archivedChat.messages.size}, new=${counters.newCount}, updated=${counters.updatedCount}, skipped=${counters.skippedCount}",
+                    )
+                }
+            }
+
+            is StreamImportedChat.Legacy -> {
+                val chatHistory = imported.history
+                if (chatHistory.messages.isEmpty()) {
+                    counters.skippedCount++
+                    AppLogger.w(TAG, "流式导入跳过空会话: index=$importedIndex, chatId=${chatHistory.id}")
+                    return
+                }
+
+                val existed = existingIds.contains(chatHistory.id)
+                if (existed) {
+                    counters.updatedCount++
+                } else {
+                    counters.newCount++
+                    existingIds.add(chatHistory.id)
+                }
+
+                saveChatHistory(chatHistory)
+
+                if (importedIndex % 20 == 0) {
+                    AppLogger.d(
+                        TAG,
+                        "流式导入进度: index=$importedIndex, legacy chatId=${chatHistory.id}, messages=${chatHistory.messages.size}, new=${counters.newCount}, updated=${counters.updatedCount}, skipped=${counters.skippedCount}",
+                    )
+                }
+            }
+        }
+    }
+
+    private suspend fun importOperitChatHistoriesStream(
+        inputStream: InputStream,
+        existingIds: MutableSet<String>,
+    ): ChatImportResult {
+        val counters = ImportCounters()
+        var importedIndex = 0
+
+        JsonReader(InputStreamReader(inputStream, StandardCharsets.UTF_8)).use { reader ->
+            reader.isLenient = true
+            when (reader.peek()) {
+                JsonToken.END_DOCUMENT -> {
+                    throw Exception(context.getString(R.string.chat_history_imported_file_empty))
+                }
+
+                JsonToken.BEGIN_OBJECT -> {
+                    AppLogger.d(TAG, "检测到 Operit 归档对象，开始流式导入")
+                    reader.beginObject()
+                    while (reader.hasNext()) {
+                        when (reader.nextName()) {
+                            "chats" -> {
+                                reader.beginArray()
+                                while (reader.hasNext()) {
+                                    importedIndex++
+                                    val archivedChat =
+                                        decodeStreamElement(reader) {
+                                            operitArchiveJson.decodeFromString<OperitArchivedChat>(it)
+                                        }
+                                    consumeImportedChat(
+                                        StreamImportedChat.Archive(archivedChat),
+                                        existingIds,
+                                        counters,
+                                        importedIndex,
+                                    )
+                                }
+                                reader.endArray()
+                            }
+
+                            else -> reader.skipValue()
+                        }
+                    }
+                    reader.endObject()
+                }
+
+                JsonToken.BEGIN_ARRAY -> {
+                    AppLogger.d(TAG, "检测到旧版聊天数组，开始流式导入")
+                    reader.beginArray()
+                    while (reader.hasNext()) {
+                        importedIndex++
+                        val chatHistory =
+                            decodeStreamElement(reader) {
+                                operitArchiveJson.decodeFromString<ChatHistory>(it)
+                            }
+                        consumeImportedChat(
+                            StreamImportedChat.Legacy(chatHistory),
+                            existingIds,
+                            counters,
+                            importedIndex,
+                        )
+                    }
+                    reader.endArray()
+                }
+
+                else -> {
+                    throw Exception(context.getString(R.string.chat_history_parse_backup_failed, "unexpected json token"))
+                }
+            }
+        }
+
+        AppLogger.d(
+            TAG,
+            "流式导入完成: total=$importedIndex, new=${counters.newCount}, updated=${counters.updatedCount}, skipped=${counters.skippedCount}",
+        )
+        return ChatImportResult(counters.newCount, counters.updatedCount, counters.skippedCount)
     }
 
     init {
@@ -1517,12 +1707,8 @@ class ChatHistoryManager private constructor(private val context: Context) {
                     }
 
                     ExportFormat.JSON -> {
-                        val archive =
-                            OperitChatArchive(
-                                chats = buildOperitArchivedChats(chatHistoriesBasic),
-                            )
                         val file = File(exportDir, "chat_backup_$timestamp.json")
-                        file.writeText(operitArchiveJson.encodeToString(archive))
+                        exportOperitArchiveJsonStream(file, chatHistoriesBasic)
                         file
                     }
 
@@ -1541,12 +1727,8 @@ class ChatHistoryManager private constructor(private val context: Context) {
                     }
 
                     ExportFormat.CSV -> {
-                        val archive =
-                            OperitChatArchive(
-                                chats = buildOperitArchivedChats(chatHistoriesBasic),
-                            )
                         val file = File(exportDir, "chat_backup_$timestamp.json")
-                        file.writeText(operitArchiveJson.encodeToString(archive))
+                        exportOperitArchiveJsonStream(file, chatHistoriesBasic)
                         file
                     }
                 }
@@ -1568,7 +1750,6 @@ class ChatHistoryManager private constructor(private val context: Context) {
         withContext(Dispatchers.IO) {
             try {
                 val chatHistories = mutableListOf<ChatHistory>()
-                val archivedChats = mutableListOf<OperitArchivedChat>()
                 var isZipProcessed = false
 
                 // 如果是 Markdown 格式，尝试作为 Zip 处理
@@ -1607,52 +1788,40 @@ class ChatHistoryManager private constructor(private val context: Context) {
                 }
 
                 if (!isZipProcessed) {
-                    val inputStream = context.contentResolver.openInputStream(uri)
-                        ?: return@withContext ChatImportResult(0, 0, 0)
-                    val content = inputStream.bufferedReader().use { it.readText() }
-
-                    if (content.isBlank()) {
-                        throw Exception(context.getString(R.string.chat_history_imported_file_empty))
-                    }
-
                     AppLogger.d(TAG, "使用指定格式导入: $format")
-
                     if (format == ChatFormat.OPERIT) {
-                        when (val payload = parseOperitImportPayload(content)) {
-                            is OperitImportPayload.Archive -> archivedChats.addAll(payload.chats)
-                            is OperitImportPayload.Legacy -> chatHistories.addAll(payload.histories)
+                        val existingIds = chatHistoriesFlow.first().map { it.id }.toMutableSet()
+                        val inputStream =
+                            context.contentResolver.openInputStream(uri)
+                                ?: return@withContext ChatImportResult(0, 0, 0)
+                        inputStream.use { stream ->
+                            AppLogger.d(TAG, "开始流式导入 Operit JSON: uri=$uri")
+                            return@withContext importOperitChatHistoriesStream(stream, existingIds)
                         }
                     } else {
+                        val inputStream = context.contentResolver.openInputStream(uri)
+                            ?: return@withContext ChatImportResult(0, 0, 0)
+                        val content = inputStream.bufferedReader().use { it.readText() }
+
+                        if (content.isBlank()) {
+                            throw Exception(context.getString(R.string.chat_history_imported_file_empty))
+                        }
+
                         // 转换为 ChatHistory 列表
                         chatHistories.addAll(convertToOperitFormat(content, format))
                     }
                 }
 
-                if (chatHistories.isEmpty() && archivedChats.isEmpty()) {
+                if (chatHistories.isEmpty()) {
                     return@withContext ChatImportResult(0, 0, 0)
                 }
 
                 // 保存导入的对话
-                val existingIds = chatHistoriesFlow.first().map { it.id }.toSet()
+                val existingIds = chatHistoriesFlow.first().map { it.id }.toMutableSet()
 
                 var newCount = 0
                 var updatedCount = 0
                 var skippedCount = 0
-
-                for (archivedChat in archivedChats) {
-                    if (archivedChat.messages.isEmpty()) {
-                        skippedCount++
-                        continue
-                    }
-
-                    if (existingIds.contains(archivedChat.id)) {
-                        updatedCount++
-                    } else {
-                        newCount++
-                    }
-
-                    saveArchivedChat(archivedChat)
-                }
 
                 for (chatHistory in chatHistories) {
                     if (chatHistory.messages.isEmpty()) {
@@ -1664,6 +1833,7 @@ class ChatHistoryManager private constructor(private val context: Context) {
                         updatedCount++
                     } else {
                         newCount++
+                        existingIds.add(chatHistory.id)
                     }
 
                     saveChatHistory(chatHistory)
@@ -1687,15 +1857,6 @@ class ChatHistoryManager private constructor(private val context: Context) {
                     .create()
             val type = object : TypeToken<List<ChatHistory>>() {}.type
             return gson.fromJson<List<ChatHistory>>(content, type)
-        }
-    }
-
-    private fun parseOperitImportPayload(content: String): OperitImportPayload {
-        return try {
-            val archive = operitArchiveJson.decodeFromString<OperitChatArchive>(content)
-            OperitImportPayload.Archive(archive.chats)
-        } catch (_: Exception) {
-            OperitImportPayload.Legacy(parseLegacyOperitChatHistories(content))
         }
     }
 

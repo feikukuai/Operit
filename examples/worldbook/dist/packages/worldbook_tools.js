@@ -124,6 +124,24 @@
           },
           "type": "number",
           "required": false
+        },
+        {
+          "name": "inject_target",
+          "description": {
+            "zh": "注入目标，可选 system 或 user，默认 system",
+            "en": "Injection target: system or user (default system)"
+          },
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "character_card_id",
+          "description": {
+            "zh": "绑定角色卡 ID；填写后仅在对应角色卡会话中生效",
+            "en": "Bound character card ID; when set, the entry only works for that character card"
+          },
+          "type": "string",
+          "required": false
         }
       ]
     },
@@ -223,6 +241,24 @@
           },
           "type": "number",
           "required": false
+        },
+        {
+          "name": "inject_target",
+          "description": {
+            "zh": "注入目标，可选 system 或 user",
+            "en": "Injection target: system or user"
+          },
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "character_card_id",
+          "description": {
+            "zh": "绑定角色卡 ID；填写后仅在对应角色卡会话中生效",
+            "en": "Bound character card ID; when set, the entry only works for that character card"
+          },
+          "type": "string",
+          "required": false
         }
       ]
     },
@@ -261,6 +297,14 @@
           "required": true
         }
       ]
+    },
+    {
+      "name": "list_character_cards_proxy",
+      "description": {
+        "zh": "通过代理列出所有角色卡，用于世界书 UI 选择角色卡。",
+        "en": "List all character cards through a proxy for world book UI selection."
+      },
+      "parameters": []
     }
   ]
 }
@@ -336,7 +380,9 @@ async function listEntries() {
         priority: entry.priority,
         keywords: entry.keywords || [],
         is_regex: entry.is_regex || false,
-        scan_depth: entry.scan_depth ?? 5
+        scan_depth: entry.scan_depth ?? 0,
+        inject_target: entry.inject_target || "system",
+        character_card_id: entry.character_card_id || ""
     }))
         .sort((left, right) => right.priority - left.priority);
     return { success: true, count: summary.length, entries: summary };
@@ -362,7 +408,9 @@ async function createEntry(params) {
         always_active: params.always_active === true,
         enabled: params.enabled !== false,
         priority: params.priority ?? 50,
-        scan_depth: params.scan_depth ?? 5,
+        scan_depth: params.scan_depth ?? 0,
+        inject_target: params.inject_target === "user" ? "user" : "system",
+        character_card_id: (params.character_card_id || "").trim(),
         created_at: now,
         updated_at: now
     };
@@ -404,6 +452,12 @@ async function updateEntry(params) {
     if (params.scan_depth != null) {
         nextEntry.scan_depth = params.scan_depth;
     }
+    if (params.inject_target != null) {
+        nextEntry.inject_target = params.inject_target === "user" ? "user" : "system";
+    }
+    if (params.character_card_id != null) {
+        nextEntry.character_card_id = String(params.character_card_id || "").trim();
+    }
     nextEntry.updated_at = new Date().toISOString();
     entries[index] = nextEntry;
     await saveEntries(entries);
@@ -442,9 +496,32 @@ async function toggleEntry(params) {
         }
     };
 }
+async function listCharacterCardsProxy() {
+    try {
+        const result = await Tools.Chat.listCharacterCards();
+        const cards = Array.isArray(result?.cards)
+            ? result.cards
+            : [];
+        return {
+            success: true,
+            totalCount: result?.totalCount ?? cards.length,
+            cards: cards.map((card) => ({
+                id: card.id,
+                name: card.name,
+                description: card.description || "",
+                isDefault: card.isDefault === true
+            }))
+        };
+    }
+    catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        return { success: false, message: `角色卡列表获取失败: ${message}`, cards: [] };
+    }
+}
 exports.list_entries = (params) => wrap(listEntries, params);
 exports.get_entry = (params) => wrap(getEntry, params);
 exports.create_entry = (params) => wrap(createEntry, params);
 exports.update_entry = (params) => wrap(updateEntry, params);
 exports.delete_entry = (params) => wrap(deleteEntry, params);
 exports.toggle_entry = (params) => wrap(toggleEntry, params);
+exports.list_character_cards_proxy = (params) => wrap(listCharacterCardsProxy, params);

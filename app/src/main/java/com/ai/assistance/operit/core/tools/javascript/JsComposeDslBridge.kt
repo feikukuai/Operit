@@ -153,7 +153,10 @@ internal fun buildComposeDslContextBridgeDefinition(): String {
                             : null,
                     actionStore: {},
                     actionCounter: 0,
-                    stateChangeListeners: []
+                    stateChangeListeners: [],
+                    stateChangeScheduled: false,
+                    stateDirty: false,
+                    pendingStateChangePromise: null
                 };
 
                 function registerAction(handler) {
@@ -164,6 +167,26 @@ internal fun buildComposeDslContextBridgeDefinition(): String {
                 }
 
                 function notifyStateChanged() {
+                    runtime.stateDirty = true;
+                    if (runtime.stateChangeScheduled) {
+                        return;
+                    }
+                    runtime.stateChangeScheduled = true;
+                    runtime.pendingStateChangePromise = Promise.resolve().then(function() {
+                        try {
+                            runtime.stateChangeScheduled = false;
+                            if (!runtime.stateDirty) {
+                                return;
+                            }
+                            runtime.stateDirty = false;
+                            flushStateChangeListeners();
+                        } finally {
+                            runtime.pendingStateChangePromise = null;
+                        }
+                    });
+                }
+
+                function flushStateChangeListeners() {
                     if (!runtime.stateChangeListeners || runtime.stateChangeListeners.length <= 0) {
                         return;
                     }
@@ -196,6 +219,13 @@ internal fun buildComposeDslContextBridgeDefinition(): String {
                             runtime.stateChangeListeners.splice(index, 1);
                         }
                     };
+                }
+
+                function flushPendingStateChanges() {
+                    if (runtime.pendingStateChangePromise && typeof runtime.pendingStateChangePromise.then === 'function') {
+                        return runtime.pendingStateChangePromise;
+                    }
+                    return Promise.resolve();
                 }
 
                 function normalizePropValue(value) {
@@ -589,7 +619,8 @@ internal fun buildComposeDslContextBridgeDefinition(): String {
                         }
                         return handler(payload);
                     },
-                    subscribeStateChange: subscribeStateChange
+                    subscribeStateChange: subscribeStateChange,
+                    flushStateChanges: flushPendingStateChanges
                 };
             }
 

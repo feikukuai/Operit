@@ -838,8 +838,17 @@ internal fun renderSurfaceNode(
     modifierResolver: ComposeDslModifierResolver
 ) {
     val props = node.props
+    val onClick = ToolPkgComposeDslParser.extractActionId(props["onClick"])
+    val resolvedModifier =
+        applyScopedCommonModifier(Modifier, props, modifierResolver).let { modifier ->
+            if (!onClick.isNullOrBlank()) {
+                modifier.clickable { onAction(onClick, null) }
+            } else {
+                modifier
+            }
+        }
     androidx.compose.material3.Surface(
-        modifier = applyScopedCommonModifier(Modifier, props, modifierResolver),
+        modifier = resolvedModifier,
         shape = props.shapeOrNull() ?: androidx.compose.foundation.shape.RoundedCornerShape(0.dp),
         color = (props.colorOrNull("color") ?: props.colorOrNull("containerColor")).let { baseColor -> baseColor?.let { color -> props.floatOrNull("alpha")?.let { color.copy(alpha = it) } ?: color } ?: Color.Transparent },
         contentColor = props.colorOrNull("contentColor") ?: Color.Unspecified,
@@ -1131,6 +1140,7 @@ internal fun renderDropdownMenuNode(
         },
         modifier = applyScopedCommonModifier(Modifier, props, modifierResolver),
         offset = DpOffset(props.dp("offset"), 0.dp),
+        properties = popupPropertiesFromValue(props["properties"]),
         content = {
             renderSlotChildren(
                 node = node,

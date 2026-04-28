@@ -111,6 +111,31 @@ export interface ComposeCanvasSizeEvent {
   height: number;
 }
 
+export interface ComposeWebViewPageEvent {
+  url?: string | null;
+  title?: string | null;
+  canGoBack?: boolean;
+  canGoForward?: boolean;
+}
+
+export interface ComposeWebViewNavigationEvent {
+  url?: string | null;
+  isMainFrame?: boolean;
+  method?: string | null;
+}
+
+export interface ComposeWebViewProgressEvent {
+  progress: number;
+  url?: string | null;
+  title?: string | null;
+}
+
+export interface ComposeWebViewErrorEvent {
+  errorCode: number;
+  description?: string | null;
+  url?: string | null;
+}
+
 declare global {
   interface Number {
     readonly px: ComposeUnitValue;
@@ -322,6 +347,7 @@ export interface ComposeCommonProps {
   key?: string;
   onLoad?: () => void | Promise<void>;
   modifier?: ComposeModifierValue;
+  zIndex?: number;
   weight?: number;
   weightFill?: boolean;
   width?: number;
@@ -441,12 +467,15 @@ export interface SurfaceProps extends ComposeCommonProps {
   contentColor?: ComposeColor;
   shape?: ComposeShape;
   alpha?: number;
+  onClick?: () => void | Promise<void>;
 }
 
 export interface IconProps extends ComposeCommonProps {
   name?: string;
   tint?: ComposeColor;
   size?: number;
+  spin?: boolean;
+  spinDurationMs?: number;
 }
 
 export interface LazyColumnProps extends ComposeCommonProps {
@@ -470,6 +499,29 @@ export interface CanvasProps extends ComposeCommonProps {
   transform?: ComposeCanvasTransform;
   onTransform?: (event: ComposeCanvasTransformEvent) => void;
   onSizeChanged?: (event: ComposeCanvasSizeEvent) => void;
+}
+
+export interface WebViewProps extends ComposeCommonProps {
+  url?: string;
+  html?: string;
+  baseUrl?: string;
+  mimeType?: string;
+  encoding?: string;
+  headers?: Record<string, string>;
+  javaScriptEnabled?: boolean;
+  domStorageEnabled?: boolean;
+  allowFileAccess?: boolean;
+  allowContentAccess?: boolean;
+  userAgent?: string;
+  nestedScrollInterop?: boolean;
+  supportZoom?: boolean;
+  useWideViewPort?: boolean;
+  loadWithOverviewMode?: boolean;
+  onPageStarted?: (event: ComposeWebViewPageEvent) => void | Promise<void>;
+  onPageFinished?: (event: ComposeWebViewPageEvent) => void | Promise<void>;
+  onReceivedError?: (event: ComposeWebViewErrorEvent) => void | Promise<void>;
+  onUrlChanged?: (event: ComposeWebViewNavigationEvent) => void | Promise<void>;
+  onProgressChanged?: (event: ComposeWebViewProgressEvent) => void | Promise<void>;
 }
 
 export interface ComposeNode {
@@ -504,6 +556,7 @@ export interface ComposeUiFactoryRegistry {
   CircularProgressIndicator: ComposeNodeFactory<CircularProgressIndicatorProps>;
   SnackbarHost: ComposeNodeFactory<SnackbarHostProps>;
   Canvas: ComposeNodeFactory<CanvasProps>;
+  WebView: ComposeNodeFactory<WebViewProps>;
 }
 
 export interface ComposeTemplateValues {

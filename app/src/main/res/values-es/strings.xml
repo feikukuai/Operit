@@ -6579,8 +6579,6 @@ Ahora puede usar el modo AutoGLM en la interfaz de conversación.</string>
     <string name="visit_web_wait_time_value">%1$d segundos</string>
     <string name="enable_enter_to_send">Enviar con Enter</string>
     <string name="enable_enter_to_send_description">Al activarlo, al presionar Enter en el campo de entrada del chat se enviará directamente, y la tecla de envío del teclado también se mostrará como enviar.</string>
-    <string name="enable_new_sidebar">Nueva barra lateral</string>
-    <string name="enable_new_sidebar_description">Al activarlo, se habilita la entrada de la nueva barra lateral. Las futuras revisiones importantes de la barra lateral también se basarán en esta.</string>
     <string name="tool_collapse_mode_title">Colapsar herramientas</string>
     <string name="tool_collapse_mode_desc">Establece el rango de colapso predeterminado para los grupos de llamadas a herramientas en los mensajes</string>
     <string name="tool_collapse_mode_read_only">Colapsar múltiples herramientas de solo lectura</string>

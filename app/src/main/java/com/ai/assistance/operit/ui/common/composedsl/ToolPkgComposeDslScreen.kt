@@ -1,6 +1,26 @@
 package com.ai.assistance.operit.ui.common.composedsl
 
 import android.graphics.Color as AndroidColor
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
+import android.content.Intent
+import android.content.pm.PackageManager as AndroidPackageManager
+import android.net.Uri
+import android.os.Build
+import android.view.WindowManager
+import android.webkit.ConsoleMessage
+import android.webkit.GeolocationPermissions
+import android.webkit.PermissionRequest
+import android.webkit.ValueCallback
+import android.webkit.WebChromeClient
+import android.webkit.WebResourceError
+import android.webkit.WebResourceRequest
+import android.webkit.WebSettings
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
@@ -22,9 +42,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.material.icons.Icons
@@ -47,6 +65,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -68,11 +87,13 @@ import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.rememberNestedScrollInteropConnection
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -84,6 +105,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.window.PopupProperties
 import androidx.compose.ui.zIndex
 import androidx.navigation.NavController
 import com.ai.assistance.operit.core.tools.AIToolHandler
@@ -92,13 +115,14 @@ import com.ai.assistance.operit.core.tools.packTool.ToolPkgComposeDslNode
 import com.ai.assistance.operit.core.tools.packTool.ToolPkgComposeDslParser
 import com.ai.assistance.operit.core.tools.packTool.ToolPkgComposeDslRenderResult
 import com.ai.assistance.operit.ui.components.CustomScaffold
+import com.ai.assistance.operit.ui.main.components.LocalIsCurrentScreen
+import com.ai.assistance.operit.ui.features.token.webview.WebViewConfig
 import com.ai.assistance.operit.util.AppLogger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import android.os.Build
 import java.util.Locale
 
 private const val TAG = "ToolPkgComposeDslScreen"
@@ -115,6 +139,36 @@ internal fun normalizeToken(raw: String): String =
         .replace("-", "")
         .replace("_", "")
         .trim()
+
+private tailrec fun Context.findActivity(): Activity? =
+    when (this) {
+        is Activity -> this
+        is ContextWrapper -> baseContext.findActivity()
+        else -> null
+    }
+
+private fun Activity.manifestSoftInputMode(): Int =
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        packageManager.getActivityInfo(
+            componentName,
+            AndroidPackageManager.ComponentInfoFlags.of(0)
+        ).softInputMode
+    } else {
+        @Suppress("DEPRECATION")
+        packageManager.getActivityInfo(componentName, 0).softInputMode
+    }
+
+private fun composeDslTreeContainsWebView(node: ToolPkgComposeDslNode): Boolean {
+    if (normalizeToken(node.type) == "webview") {
+        return true
+    }
+    if (node.children.any(::composeDslTreeContainsWebView)) {
+        return true
+    }
+    return node.slots.values.any { slotChildren ->
+        slotChildren.any(::composeDslTreeContainsWebView)
+    }
+}
 
 private fun buildZeroArgGetterByToken(
     ownerClass: Class<*>,
@@ -184,6 +238,9 @@ fun ToolPkgComposeDslToolScreen(
     fallbackTitle: String
 ) {
     val context = LocalContext.current
+    val isCurrentScreen = LocalIsCurrentScreen.current
+    val hostActivity = remember(context) { context.findActivity() }
+    val manifestSoftInputMode = remember(hostActivity) { hostActivity?.manifestSoftInputMode() }
     val scope = rememberCoroutineScope()
     val renderMutex = remember { Mutex() }
     val currentLanguage =
@@ -311,6 +368,23 @@ fun ToolPkgComposeDslToolScreen(
                             phase = "dispatch_intermediate",
                             rawRenderResult = intermediateResult,
                             parsedRenderResult = parsedIntermediate,
+                            error = null
+                        )
+                    }
+                },
+                onFinalResult = { finalResult ->
+                    if (settledDispatchTickets.contains(dispatchTicket)) {
+                        return@dispatchComposeDslActionAsync
+                    }
+                    val parsedFinal =
+                        ToolPkgComposeDslParser.parseRenderResult(finalResult)
+                    if (parsedFinal != null) {
+                        renderResult = parsedFinal
+                        errorMessage = null
+                        updateDebugSnapshot(
+                            phase = "dispatch_final",
+                            rawRenderResult = finalResult,
+                            parsedRenderResult = parsedFinal,
                             error = null
                         )
                     }
@@ -481,6 +555,21 @@ fun ToolPkgComposeDslToolScreen(
         }
     }
 
+    val shouldUseResizeIme = renderResult?.tree?.let(::composeDslTreeContainsWebView) == true
+    LaunchedEffect(shouldUseResizeIme, hostActivity, isCurrentScreen) {
+        if (!isCurrentScreen) {
+            return@LaunchedEffect
+        }
+        val window = hostActivity?.window ?: return@LaunchedEffect
+        window.setSoftInputMode(
+            if (shouldUseResizeIme) {
+                WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
+            } else {
+                manifestSoftInputMode ?: WindowManager.LayoutParams.SOFT_INPUT_ADJUST_PAN
+            }
+        )
+    }
+
     DisposableEffect(executionContextKey) {
         onDispose {
             ToolPkgComposeDslDebugSnapshotStore.clear(routeInstanceId)
@@ -490,18 +579,10 @@ fun ToolPkgComposeDslToolScreen(
 
     CustomScaffold { paddingValues ->
         val rootNode = renderResult?.tree
-        val useOuterScroll = rootNode?.type?.equals("LazyColumn", ignoreCase = true) != true
         val contentModifier =
             Modifier
                 .padding(paddingValues)
                 .fillMaxSize()
-                .let { modifier ->
-                    if (useOuterScroll) {
-                        modifier.verticalScroll(rememberScrollState())
-                    } else {
-                        modifier
-                    }
-                }
 
         Box(modifier = Modifier.fillMaxSize()) {
             when {
@@ -534,6 +615,9 @@ fun ToolPkgComposeDslToolScreen(
                 }
                 rootNode != null -> {
                     CompositionLocalProvider(LocalComposeDslRouteInstanceId provides routeInstanceId) {
+                        // Let compose_dsl content own its own scrolling behavior.
+                        // Wrapping the whole screen in an outer verticalScroll changes
+                        // root measurement semantics and breaks full-screen layouts.
                         Box(modifier = contentModifier) {
                             renderComposeDslNode(
                                 node = rootNode,
@@ -545,13 +629,6 @@ fun ToolPkgComposeDslToolScreen(
                 }
             }
 
-            if (isDispatching) {
-                LinearProgressIndicator(
-                    modifier =
-                        Modifier.align(Alignment.TopCenter)
-                            .fillMaxWidth()
-                )
-            }
         }
     }
 }
@@ -620,6 +697,10 @@ internal fun renderComposeDslNode(
             renderCanvasNode(node, onAction, modifierResolver)
             return@CompositionLocalProvider
         }
+        if (normalizedType == "webview") {
+            renderWebViewNode(node, onAction, modifierResolver)
+            return@CompositionLocalProvider
+        }
         val renderer = composeDslGeneratedNodeRendererRegistry[normalizedType]
         if (renderer != null) {
             renderer(node, onAction, nodePath, modifierResolver)
@@ -672,6 +753,23 @@ private data class CanvasCommand(
     val strokeWidth: Float
 )
 
+private data class ComposeDslWebViewRequest(
+    val url: String?,
+    val html: String?,
+    val baseUrl: String?,
+    val mimeType: String,
+    val encoding: String,
+    val headers: Map<String, String>
+)
+
+private data class ComposeDslWebViewCallbackIds(
+    val onPageStarted: String?,
+    val onPageFinished: String?,
+    val onReceivedError: String?,
+    val onUrlChanged: String?,
+    val onProgressChanged: String?
+)
+
 private fun canvasNumberFromValue(value: Any?): Float? {
     return when (value) {
         is Number -> value.toFloat()
@@ -692,6 +790,35 @@ private fun canvasUnitFromValue(value: Any?): String? {
         map["unit"]?.toString()
             ?: map["__unit"]?.toString()
     return token?.trim()?.lowercase(Locale.ROOT).orEmpty().ifBlank { null }
+}
+
+private fun buildComposeDslWebViewRequest(props: Map<String, Any?>): ComposeDslWebViewRequest {
+    val url = props.stringOrNull("url")
+    val html = props.stringOrNull("html")
+    require(url != null || html != null) {
+        "WebView requires either 'url' or 'html'."
+    }
+    val headers =
+        (props["headers"] as? Map<*, *>)
+            ?.entries
+            ?.mapNotNull { (key, value) ->
+                val normalizedKey = key?.toString()?.trim().orEmpty()
+                if (normalizedKey.isBlank() || value == null) {
+                    null
+                } else {
+                    normalizedKey to value.toString()
+                }
+            }
+            ?.toMap()
+            .orEmpty()
+    return ComposeDslWebViewRequest(
+        url = url,
+        html = html,
+        baseUrl = props.stringOrNull("baseUrl"),
+        mimeType = props.string("mimeType", "text/html"),
+        encoding = props.string("encoding", "UTF-8"),
+        headers = headers
+    )
 }
 
 
@@ -1088,6 +1215,350 @@ private fun renderCanvasNode(
     }
 }
 
+@Composable
+private fun renderWebViewNode(
+    node: ToolPkgComposeDslNode,
+    onAction: (String, Any?) -> Unit,
+    modifierResolver: ComposeDslModifierResolver
+) {
+    val props = node.props
+    val request = buildComposeDslWebViewRequest(props)
+    val context = LocalContext.current
+    val nestedScrollInterop = rememberNestedScrollInteropConnection()
+    val modifier =
+        applyScopedCommonModifier(Modifier, props, modifierResolver).let { base ->
+            if (props.bool("nestedScrollInterop", false)) {
+                base.nestedScroll(nestedScrollInterop)
+            } else {
+                base
+            }
+        }
+    val callbackIdsState =
+        rememberUpdatedState(
+            ComposeDslWebViewCallbackIds(
+                onPageStarted = ToolPkgComposeDslParser.extractActionId(props["onPageStarted"]),
+                onPageFinished = ToolPkgComposeDslParser.extractActionId(props["onPageFinished"]),
+                onReceivedError = ToolPkgComposeDslParser.extractActionId(props["onReceivedError"]),
+                onUrlChanged = ToolPkgComposeDslParser.extractActionId(props["onUrlChanged"]),
+                onProgressChanged = ToolPkgComposeDslParser.extractActionId(props["onProgressChanged"])
+            )
+        )
+    val onActionState = rememberUpdatedState(onAction)
+    var pendingFileChooserCallback by remember { mutableStateOf<ValueCallback<Array<Uri>>?>(null) }
+    val fileChooserLauncher =
+        rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            val callback = pendingFileChooserCallback
+            pendingFileChooserCallback = null
+            if (callback == null) {
+                return@rememberLauncherForActivityResult
+            }
+            val uris =
+                WebChromeClient.FileChooserParams.parseResult(result.resultCode, result.data)
+                    ?: run {
+                        val intent = result.data
+                        val directData = intent?.data?.let { arrayOf(it) }
+                        val clipData =
+                            intent?.clipData?.let { clip ->
+                                Array(clip.itemCount) { index -> clip.getItemAt(index).uri }
+                            }
+                        directData ?: clipData
+                    }
+            callback.onReceiveValue(uris)
+        }
+
+    val webView = remember(context) {
+        WebViewConfig.createWebView(context).apply {
+            webViewClient =
+                object : WebViewClient() {
+                    override fun shouldOverrideUrlLoading(
+                        view: WebView?,
+                        request: WebResourceRequest?
+                    ): Boolean {
+                        val callbackIds = callbackIdsState.value
+                        val url = request?.url?.toString()
+                        val actionId = callbackIds.onUrlChanged
+                        if (!actionId.isNullOrBlank() && !url.isNullOrBlank()) {
+                            onActionState.value(
+                                actionId,
+                                mapOf(
+                                    "url" to url,
+                                    "isMainFrame" to (request?.isForMainFrame ?: true),
+                                    "method" to request?.method
+                                )
+                            )
+                        }
+                        return false
+                    }
+
+                    override fun onPageStarted(
+                        view: WebView?,
+                        url: String?,
+                        favicon: android.graphics.Bitmap?
+                    ) {
+                        super.onPageStarted(view, url, favicon)
+                        val callbackIds = callbackIdsState.value
+                        val actionId = callbackIds.onPageStarted
+                        if (!actionId.isNullOrBlank()) {
+                            onActionState.value(
+                                actionId,
+                                mapOf(
+                                    "url" to url,
+                                    "title" to view?.title,
+                                    "canGoBack" to (view?.canGoBack() ?: false),
+                                    "canGoForward" to (view?.canGoForward() ?: false)
+                                )
+                            )
+                        }
+                    }
+
+                    override fun onPageFinished(view: WebView?, url: String?) {
+                        super.onPageFinished(view, url)
+                        val callbackIds = callbackIdsState.value
+                        val actionId = callbackIds.onPageFinished
+                        if (!actionId.isNullOrBlank()) {
+                            onActionState.value(
+                                actionId,
+                                mapOf(
+                                    "url" to url,
+                                    "title" to view?.title,
+                                    "canGoBack" to (view?.canGoBack() ?: false),
+                                    "canGoForward" to (view?.canGoForward() ?: false)
+                                )
+                            )
+                        }
+                    }
+
+                    override fun onReceivedError(
+                        view: WebView?,
+                        errorCode: Int,
+                        description: String?,
+                        failingUrl: String?
+                    ) {
+                        super.onReceivedError(view, errorCode, description, failingUrl)
+                        val callbackIds = callbackIdsState.value
+                        val actionId = callbackIds.onReceivedError
+                        if (!actionId.isNullOrBlank()) {
+                            onActionState.value(
+                                actionId,
+                                mapOf(
+                                    "errorCode" to errorCode,
+                                    "description" to description,
+                                    "url" to failingUrl
+                                )
+                            )
+                        }
+                    }
+
+                    override fun onReceivedError(
+                        view: WebView?,
+                        request: WebResourceRequest?,
+                        error: WebResourceError?
+                    ) {
+                        super.onReceivedError(view, request, error)
+                        val callbackIds = callbackIdsState.value
+                        val actionId = callbackIds.onReceivedError
+                        if (!actionId.isNullOrBlank()) {
+                            onActionState.value(
+                                actionId,
+                                mapOf(
+                                    "errorCode" to error?.errorCode,
+                                    "description" to error?.description?.toString(),
+                                    "url" to request?.url?.toString(),
+                                    "isMainFrame" to (request?.isForMainFrame ?: true)
+                                )
+                            )
+                        }
+                    }
+                }
+
+            webChromeClient =
+                object : WebChromeClient() {
+                    override fun onCreateWindow(
+                        view: WebView?,
+                        isDialog: Boolean,
+                        isUserGesture: Boolean,
+                        resultMsg: android.os.Message?
+                    ): Boolean {
+                        val message = resultMsg ?: return false
+                        val transport = message.obj as? WebView.WebViewTransport ?: return false
+                        transport.webView = view
+                        message.sendToTarget()
+                        return true
+                    }
+
+                    override fun onConsoleMessage(consoleMessage: ConsoleMessage?): Boolean {
+                        return super.onConsoleMessage(consoleMessage)
+                    }
+
+                    override fun onProgressChanged(view: WebView?, newProgress: Int) {
+                        super.onProgressChanged(view, newProgress)
+                        val callbackIds = callbackIdsState.value
+                        val actionId = callbackIds.onProgressChanged
+                        if (!actionId.isNullOrBlank()) {
+                            onActionState.value(
+                                actionId,
+                                mapOf(
+                                    "progress" to newProgress,
+                                    "url" to view?.url,
+                                    "title" to view?.title
+                                )
+                            )
+                        }
+                    }
+
+                    override fun onShowFileChooser(
+                        webView: WebView?,
+                        filePathCallback: ValueCallback<Array<Uri>>?,
+                        fileChooserParams: FileChooserParams?
+                    ): Boolean {
+                        if (filePathCallback == null) {
+                            return false
+                        }
+                        pendingFileChooserCallback?.onReceiveValue(null)
+                        pendingFileChooserCallback = filePathCallback
+                        return try {
+                            val intent =
+                                fileChooserParams?.createIntent()
+                                    ?: Intent(Intent.ACTION_GET_CONTENT).apply {
+                                        addCategory(Intent.CATEGORY_OPENABLE)
+                                        type = "*/*"
+                                    }
+                            if (fileChooserParams?.mode == FileChooserParams.MODE_OPEN_MULTIPLE) {
+                                intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+                            }
+                            fileChooserLauncher.launch(intent)
+                            true
+                        } catch (_: Throwable) {
+                            pendingFileChooserCallback?.onReceiveValue(null)
+                            pendingFileChooserCallback = null
+                            false
+                        }
+                    }
+
+                    override fun onPermissionRequest(request: PermissionRequest?) {
+                        request?.grant(request.resources)
+                    }
+
+                    override fun onGeolocationPermissionsShowPrompt(
+                        origin: String?,
+                        callback: GeolocationPermissions.Callback?
+                    ) {
+                        callback?.invoke(origin.orEmpty(), true, false)
+                    }
+
+                    override fun onJsAlert(
+                        view: WebView?,
+                        url: String?,
+                        message: String?,
+                        result: android.webkit.JsResult?
+                    ): Boolean {
+                        result?.confirm()
+                        return true
+                    }
+
+                    override fun onJsConfirm(
+                        view: WebView?,
+                        url: String?,
+                        message: String?,
+                        result: android.webkit.JsResult?
+                    ): Boolean {
+                        result?.confirm()
+                        return true
+                    }
+
+                    override fun onJsPrompt(
+                        view: WebView?,
+                        url: String?,
+                        message: String?,
+                        defaultValue: String?,
+                        result: android.webkit.JsPromptResult?
+                    ): Boolean {
+                        result?.confirm(defaultValue)
+                        return true
+                    }
+                }
+        }
+    }
+
+    DisposableEffect(webView) {
+        webView.post {
+            webView.requestFocus()
+        }
+        onDispose {
+            try {
+                webView.stopLoading()
+                webView.loadUrl("about:blank")
+                webView.clearHistory()
+                webView.removeAllViews()
+                webView.destroy()
+            } catch (_: Throwable) {
+            }
+        }
+    }
+
+    LaunchedEffect(
+        webView,
+        request.url,
+        request.html,
+        request.baseUrl,
+        request.mimeType,
+        request.encoding,
+        request.headers,
+        props.bool("javaScriptEnabled", true),
+        props.bool("domStorageEnabled", true),
+        props.bool("allowFileAccess", true),
+        props.bool("allowContentAccess", true),
+        props.bool("supportZoom", true),
+        props.bool("useWideViewPort", true),
+        props.bool("loadWithOverviewMode", true),
+        props.stringOrNull("userAgent")
+    ) {
+        webView.settings.apply {
+            javaScriptEnabled = props.bool("javaScriptEnabled", true)
+            domStorageEnabled = props.bool("domStorageEnabled", true)
+            databaseEnabled = true
+            javaScriptCanOpenWindowsAutomatically = true
+            setSupportMultipleWindows(true)
+            allowFileAccess = props.bool("allowFileAccess", true)
+            allowContentAccess = props.bool("allowContentAccess", true)
+            allowFileAccessFromFileURLs = true
+            allowUniversalAccessFromFileURLs = true
+            val supportZoom = props.bool("supportZoom", true)
+            setSupportZoom(supportZoom)
+            builtInZoomControls = supportZoom
+            displayZoomControls = false
+            loadWithOverviewMode = props.bool("loadWithOverviewMode", true)
+            useWideViewPort = props.bool("useWideViewPort", true)
+            cacheMode = WebSettings.LOAD_DEFAULT
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+            }
+            props.stringOrNull("userAgent")?.let { userAgentString = it }
+        }
+        val url = request.url
+        if (url != null) {
+            if (request.headers.isEmpty()) {
+                webView.loadUrl(url)
+            } else {
+                webView.loadUrl(url, request.headers)
+            }
+        } else {
+            webView.loadDataWithBaseURL(
+                request.baseUrl,
+                request.html.orEmpty(),
+                request.mimeType,
+                request.encoding,
+                null
+            )
+        }
+    }
+
+    AndroidView(
+        modifier = modifier,
+        factory = { webView }
+    )
+}
+
 
 @Composable
 internal fun applyCommonModifier(
@@ -1148,6 +1619,11 @@ internal fun applyCommonModifier(
                 modifier = modifier.background(brush)
             }
         }
+    }
+
+    val zIndex = props.floatOrNull("zIndex")
+    if (zIndex != null) {
+        modifier = modifier.zIndex(zIndex)
     }
 
     modifier = applyProxyModifierOps(modifier, props["modifier"])
@@ -1444,6 +1920,17 @@ internal fun Map<String, Any?>.floatOrNull(key: String): Float? {
 
 internal fun Map<String, Any?>.dp(key: String, defaultValue: Dp = 0.dp): Dp {
     return (floatOrNull(key) ?: defaultValue.value).dp
+}
+
+internal fun popupPropertiesFromValue(value: Any?): PopupProperties {
+    val map = value as? Map<*, *> ?: return PopupProperties()
+    return PopupProperties(
+        focusable = (map["focusable"] as? Boolean) ?: false,
+        dismissOnBackPress = (map["dismissOnBackPress"] as? Boolean) ?: true,
+        dismissOnClickOutside = (map["dismissOnClickOutside"] as? Boolean) ?: true,
+        clippingEnabled = (map["clippingEnabled"] as? Boolean) ?: true,
+        usePlatformDefaultWidth = (map["usePlatformDefaultWidth"] as? Boolean) ?: false
+    )
 }
 
 @Composable

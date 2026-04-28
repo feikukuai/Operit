@@ -59,8 +59,6 @@ bool StreamXmlPlugin::isPunctuationTrigger(char16_t c) {
         case u'!':
         case u'~':
         case u'\uFF5E': // ～
-        case u'>':
-        case u'\uFF1E': // ＞
             return true;
         default:
             return false;

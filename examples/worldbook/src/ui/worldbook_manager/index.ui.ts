@@ -1,3 +1,4 @@
+import { resolveWorldBookI18n, type WorldBookI18n } from "../../i18n";
 import type { ComposeColor, ComposeDslContext, ComposeNode } from "../../../../types/compose-dsl";
 
 interface WorldBookListEntry {
@@ -9,11 +10,20 @@ interface WorldBookListEntry {
   keywords?: string[];
   is_regex?: boolean;
   scan_depth?: number;
+  inject_target?: "system" | "user";
+  character_card_id?: string;
 }
 
 interface WorldBookDetailEntry extends WorldBookListEntry {
   content?: string;
   case_sensitive?: boolean;
+}
+
+interface CharacterCardOption {
+  id: string;
+  name: string;
+  description?: string;
+  isDefault?: boolean;
 }
 
 function parseToolResult<T>(value: unknown): T | null {
@@ -30,6 +40,13 @@ function parseToolResult<T>(value: unknown): T | null {
   return value as T;
 }
 
+function resolveText(): WorldBookI18n {
+  const rawLocale = getLang();
+  const locale = String(rawLocale || "").trim().toLowerCase();
+  const preferredLocale = locale.startsWith("en") ? "en-US" : "zh-CN";
+  return resolveWorldBookI18n(preferredLocale);
+}
+
 export default function Screen(ctx: ComposeDslContext): ComposeNode {
   const [entries, setEntries] = ctx.useState<WorldBookListEntry[]>("entries", []);
   const [loading, setLoading] = ctx.useState("loading", true);
@@ -44,8 +61,20 @@ export default function Screen(ctx: ComposeDslContext): ComposeNode {
   const [formAlwaysActive, setFormAlwaysActive] = ctx.useState("formAlwaysActive", false);
   const [formEnabled, setFormEnabled] = ctx.useState("formEnabled", true);
   const [formPriority, setFormPriority] = ctx.useState("formPriority", "50");
-  const [formScanDepth, setFormScanDepth] = ctx.useState("formScanDepth", "5");
+  const [formScanDepth, setFormScanDepth] = ctx.useState("formScanDepth", "0");
+  const [formInjectTarget, setFormInjectTarget] = ctx.useState<"system" | "user">(
+    "formInjectTarget",
+    "system"
+  );
+  const [formCharacterCardId, setFormCharacterCardId] = ctx.useState("formCharacterCardId", "");
+  const [showCardPicker, setShowCardPicker] = ctx.useState("showCardPicker", false);
+  const [loadingCards, setLoadingCards] = ctx.useState("loadingCards", false);
+  const [availableCards, setAvailableCards] = ctx.useState<CharacterCardOption[]>(
+    "availableCards",
+    []
+  );
 
+  const t = resolveText();
   const colors = ctx.MaterialTheme.colorScheme;
   const { UI } = ctx;
 
@@ -59,7 +88,12 @@ export default function Screen(ctx: ComposeDslContext): ComposeNode {
     setFormAlwaysActive(false);
     setFormEnabled(true);
     setFormPriority("50");
-    setFormScanDepth("5");
+    setFormScanDepth("0");
+    setFormInjectTarget("system");
+    setFormCharacterCardId("");
+    setShowCardPicker(false);
+    setLoadingCards(false);
+    setAvailableCards([]);
   }
 
   async function loadEntries() {
@@ -72,7 +106,7 @@ export default function Screen(ctx: ComposeDslContext): ComposeNode {
         setEntries(result.entries || []);
       }
     } catch (error) {
-      ctx.showToast(`加载失败: ${String(error)}`);
+      ctx.showToast(`${t.toastLoadFailedPrefix}${String(error)}`);
     } finally {
       setLoading(false);
       setHasLoadedOnce(true);
@@ -82,20 +116,20 @@ export default function Screen(ctx: ComposeDslContext): ComposeNode {
   async function doToggle(id: string) {
     try {
       await ctx.callTool("worldbook_tools:toggle_entry", { id });
-      ctx.showToast("已切换");
+      ctx.showToast(t.toastToggleDone);
       await loadEntries();
     } catch (error) {
-      ctx.showToast(`操作失败: ${String(error)}`);
+      ctx.showToast(`${t.toastActionFailedPrefix}${String(error)}`);
     }
   }
 
   async function doDelete(id: string, name: string) {
     try {
       await ctx.callTool("worldbook_tools:delete_entry", { id });
-      ctx.showToast(`已删除: ${name}`);
+      ctx.showToast(`${t.toastDeletedPrefix}${name}`);
       await loadEntries();
     } catch (error) {
-      ctx.showToast(`删除失败: ${String(error)}`);
+      ctx.showToast(`${t.toastDeleteFailedPrefix}${String(error)}`);
     }
   }
 
@@ -115,12 +149,79 @@ export default function Screen(ctx: ComposeDslContext): ComposeNode {
         setFormAlwaysActive(entry.always_active === true);
         setFormEnabled(entry.enabled !== false);
         setFormPriority(String(entry.priority ?? 50));
-        setFormScanDepth(String(entry.scan_depth ?? 5));
+        setFormScanDepth(String(entry.scan_depth ?? 0));
+        setFormInjectTarget(entry.inject_target || "system");
+        setFormCharacterCardId(entry.character_card_id || "");
+        setShowCardPicker(false);
+        setLoadingCards(false);
+        setAvailableCards([]);
         setView("edit");
       }
     } catch (error) {
-      ctx.showToast(`加载失败: ${String(error)}`);
+      ctx.showToast(`${t.toastLoadFailedPrefix}${String(error)}`);
     }
+  }
+
+  async function loadCardPicker() {
+    if (showCardPicker) {
+      setShowCardPicker(false);
+      setLoadingCards(false);
+      return;
+    }
+
+    setShowCardPicker(true);
+    setLoadingCards(true);
+    try {
+      const result = parseToolResult<{
+        success?: boolean;
+        message?: string;
+        cards?: CharacterCardOption[];
+      }>(await ctx.callTool("worldbook_tools:list_character_cards_proxy", {}));
+
+      if (result?.success) {
+        const cards = Array.isArray(result.cards) ? result.cards : [];
+        setAvailableCards(cards);
+        setLoadingCards(false);
+        return;
+      }
+
+      ctx.showToast(result?.message || t.toastRoleCardLoadFailed);
+      setAvailableCards([]);
+      setLoadingCards(false);
+      setShowCardPicker(false);
+    } catch (error) {
+      ctx.showToast(`${t.toastRoleCardLoadFailedPrefix}${String(error)}`);
+      setAvailableCards([]);
+      setLoadingCards(false);
+      setShowCardPicker(false);
+    }
+  }
+
+  function doPickCard(cardId: string) {
+    setFormCharacterCardId(cardId || "");
+    setShowCardPicker(false);
+    setLoadingCards(false);
+  }
+
+  function doClearCardBinding() {
+    setFormCharacterCardId("");
+    setShowCardPicker(false);
+    setLoadingCards(false);
+  }
+
+  function getSelectedCardLabel(): string {
+    if (!formCharacterCardId) {
+      return t.dropdownNoCharacterCard;
+    }
+    const matchedCard = availableCards.find((card) => card.id === formCharacterCardId);
+    if (matchedCard?.name) {
+      return matchedCard.name;
+    }
+    return formCharacterCardId;
+  }
+
+  function toggleCardPicker() {
+    return loadCardPicker();
   }
 
   function doCreate() {
@@ -130,11 +231,11 @@ export default function Screen(ctx: ComposeDslContext): ComposeNode {
 
   async function doSave() {
     if (!formName.trim()) {
-      ctx.showToast("请输入条目名称");
+      ctx.showToast(t.toastNameRequired);
       return;
     }
     if (!formContent.trim()) {
-      ctx.showToast("请输入注入内容");
+      ctx.showToast(t.toastContentRequired);
       return;
     }
 
@@ -149,7 +250,9 @@ export default function Screen(ctx: ComposeDslContext): ComposeNode {
       always_active: formAlwaysActive,
       enabled: formEnabled,
       priority: Number.parseInt(formPriority, 10) || 50,
-      scan_depth: Number.parseInt(formScanDepth, 10) || 5
+      scan_depth: Number.parseInt(formScanDepth, 10) || 0,
+      inject_target: formInjectTarget,
+      character_card_id: formCharacterCardId.trim()
     };
 
     if (isEdit) {
@@ -161,24 +264,22 @@ export default function Screen(ctx: ComposeDslContext): ComposeNode {
         await ctx.callTool(action, payload)
       );
       if (result?.success) {
-        ctx.showToast(isEdit ? "已更新" : "已创建");
+        ctx.showToast(isEdit ? t.toastUpdated : t.toastCreated);
         setView("list");
         resetForm();
         await loadEntries();
         return;
       }
-      ctx.showToast(`失败: ${result?.message || "未知结果"}`);
+      ctx.showToast(`${t.toastFailedPrefix}${result?.message || t.toastUnknownResult}`);
     } catch (error) {
-      ctx.showToast(`保存失败: ${String(error)}`);
+      ctx.showToast(`${t.toastSaveFailedPrefix}${String(error)}`);
     }
   }
 
   function renderTag(label: string, backgroundColor: ComposeColor, textColor: ComposeColor): ComposeNode {
     return UI.Box(
       {
-        modifier: ctx.Modifier
-          .clip({ cornerRadius: 8 })
-          .background(backgroundColor)
+        modifier: ctx.Modifier.clip({ cornerRadius: 8 }).background(backgroundColor)
       },
       [
         UI.Text({
@@ -193,7 +294,11 @@ export default function Screen(ctx: ComposeDslContext): ComposeNode {
     );
   }
 
-  function renderHeaderTag(label: string, backgroundColor: ComposeColor, textColor: ComposeColor): ComposeNode {
+  function renderHeaderTag(
+    label: string,
+    backgroundColor: ComposeColor,
+    textColor: ComposeColor
+  ): ComposeNode {
     return UI.Surface(
       {
         shape: { cornerRadius: 8 },
@@ -253,9 +358,7 @@ export default function Screen(ctx: ComposeDslContext): ComposeNode {
 
   function renderCard(entry: WorldBookListEntry): ComposeNode {
     const keywordText =
-      entry.keywords && entry.keywords.length > 0
-        ? entry.keywords.join("、")
-        : "未设置关键词";
+      entry.keywords && entry.keywords.length > 0 ? entry.keywords.join("、") : t.keywordEmpty;
     const infoPills: ComposeNode[] = [
       renderTag(
         keywordText,
@@ -263,30 +366,46 @@ export default function Screen(ctx: ComposeDslContext): ComposeNode {
         colors.onSecondaryContainer
       ),
       renderTag(
-        entry.always_active ? "常驻注入" : "关键词触发",
+        entry.always_active ? t.tagAlwaysActive : t.tagKeywordTrigger,
         colors.secondaryContainer.copy({ alpha: 0.6 }),
         colors.onSecondaryContainer
       ),
       renderTag(
-        `优先级 ${entry.priority ?? 50}`,
+        t.tagPriority(entry.priority ?? 50),
         colors.secondaryContainer.copy({ alpha: 0.6 }),
         colors.onSecondaryContainer
       ),
       renderTag(
-        `扫描 ${entry.scan_depth ?? 5}`,
+        t.tagScanDepth(entry.scan_depth ?? 0),
         colors.secondaryContainer.copy({ alpha: 0.6 }),
         colors.onSecondaryContainer
-      )
-    ];
+      ),
+      entry.inject_target === "user"
+        ? renderTag(
+            t.tagInjectUser,
+            colors.tertiaryContainer.copy({ alpha: 0.7 }),
+            colors.onTertiaryContainer
+          )
+        : renderTag(
+            t.tagInjectSystem,
+            colors.tertiaryContainer.copy({ alpha: 0.7 }),
+            colors.onTertiaryContainer
+          ),
+      entry.character_card_id
+        ? renderTag(
+            t.tagCharacterCard(entry.character_card_id),
+            colors.primaryContainer.copy({ alpha: 0.7 }),
+            colors.onPrimaryContainer
+          )
+        : null
+    ].filter(Boolean) as ComposeNode[];
 
     return UI.Card(
       {
         key: entry.id,
         containerColor: colors.surface,
         elevation: 1,
-        modifier: ctx.Modifier
-          .fillMaxWidth()
-          .clickable(() => doEdit(entry.id))
+        modifier: ctx.Modifier.fillMaxWidth().clickable(() => doEdit(entry.id))
       },
       [
         UI.Column(
@@ -312,11 +431,11 @@ export default function Screen(ctx: ComposeDslContext): ComposeNode {
                   },
                   [
                     UI.Icon({
-                      name: "book",
+                      name: "extension",
                       tint: colors.onPrimaryContainer,
                       size: 16
                     })
-                  ].filter(Boolean) as ComposeNode[]
+                  ]
                 ),
                 UI.Spacer({ width: 10 }),
                 UI.Column(
@@ -338,22 +457,18 @@ export default function Screen(ctx: ComposeDslContext): ComposeNode {
                           weight: 1,
                           weightFill: false
                         }),
-                        entry.always_active
-                          ? UI.Spacer({ width: 6 })
-                          : null,
+                        entry.always_active ? UI.Spacer({ width: 6 }) : null,
                         entry.always_active
                           ? renderHeaderTag(
-                              "常驻",
+                              t.tagPinned,
                               colors.primary.copy({ alpha: 0.1 }),
                               colors.primary
                             )
                           : null,
-                        entry.is_regex
-                          ? UI.Spacer({ width: 6 })
-                          : null,
+                        entry.is_regex ? UI.Spacer({ width: 6 }) : null,
                         entry.is_regex
                           ? renderHeaderTag(
-                              "正则",
+                              t.tagRegex,
                               colors.secondary.copy({ alpha: 0.1 }),
                               colors.secondary
                             )
@@ -424,7 +539,7 @@ export default function Screen(ctx: ComposeDslContext): ComposeNode {
                   },
                   [
                     UI.Text({
-                      text: "编辑",
+                      text: t.buttonEdit,
                       style: "labelMedium",
                       fontSize: 12
                     })
@@ -439,7 +554,7 @@ export default function Screen(ctx: ComposeDslContext): ComposeNode {
                   },
                   [
                     UI.Text({
-                      text: "删除",
+                      text: t.buttonDelete,
                       style: "labelMedium",
                       fontSize: 12
                     })
@@ -485,7 +600,7 @@ export default function Screen(ctx: ComposeDslContext): ComposeNode {
                       tint: colors.onSurface
                     }),
                     UI.Text({
-                      text: "返回",
+                      text: t.buttonBack,
                       color: colors.onSurface,
                       fontWeight: "bold"
                     })
@@ -510,40 +625,209 @@ export default function Screen(ctx: ComposeDslContext): ComposeNode {
               },
               [
                 UI.Text({
-                  text: "基础信息",
+                  text: t.sectionBasicInfo,
                   style: "titleMedium",
                   fontWeight: "bold",
                   color: colors.onSurface
                 }),
                 UI.Text({
-                  text: "定义条目名称、触发关键词和注入内容。",
+                  text: t.sectionBasicInfoDesc,
                   style: "bodySmall",
                   color: colors.onSurfaceVariant
                 }),
                 UI.TextField({
-                  label: "条目名称",
-                  placeholder: "例如：魔法体系",
+                  label: t.fieldEntryName,
+                  placeholder: t.fieldEntryNamePlaceholder,
                   value: formName,
                   onValueChange: setFormName,
                   singleLine: true,
                   fillMaxWidth: true
                 }),
                 UI.TextField({
-                  label: "关键词（逗号分隔）",
-                  placeholder: "魔法, 法术",
+                  label: t.fieldKeywords,
+                  placeholder: t.fieldKeywordsPlaceholder,
                   value: formKeywords,
                   onValueChange: setFormKeywords,
                   singleLine: true,
                   fillMaxWidth: true
                 }),
                 UI.TextField({
-                  label: "注入内容",
-                  placeholder: "触发时注入到系统提示词...",
+                  label: t.fieldContent,
+                  placeholder: t.fieldContentPlaceholder,
                   value: formContent,
                   onValueChange: setFormContent,
                   singleLine: false,
                   minLines: 5,
                   fillMaxWidth: true
+                }),
+                UI.Text({
+                  text: t.fieldCharacterCard,
+                  style: "labelMedium",
+                  fontWeight: "bold",
+                  color: colors.onSurface
+                }),
+                UI.Box(
+                  {
+                    fillMaxWidth: true
+                  },
+                  [
+                    UI.OutlinedButton(
+                      {
+                        onClick: () => toggleCardPicker(),
+                        fillMaxWidth: true,
+                        shape: { cornerRadius: 14 }
+                      },
+                      [
+                        UI.Row(
+                          {
+                            fillMaxWidth: true,
+                            horizontalArrangement: "spaceBetween",
+                            verticalAlignment: "center"
+                          },
+                          [
+                            UI.Column({ weight: 1, spacing: 2 }, [
+                              UI.Text({
+                                text: getSelectedCardLabel(),
+                                color: colors.onSurface,
+                                fontWeight: "medium",
+                                maxLines: 1,
+                                overflow: "ellipsis"
+                              }),
+                              UI.Text({
+                                text: formCharacterCardId ? t.dropdownBoundCard : t.dropdownGlobalEffective,
+                                style: "bodySmall",
+                                color: colors.onSurfaceVariant
+                              })
+                            ]),
+                            UI.Icon({
+                              name: showCardPicker ? "arrowDropUp" : "arrowDropDown",
+                              tint: colors.onSurfaceVariant,
+                              size: 20
+                            })
+                          ]
+                        )
+                      ]
+                    ),
+                    UI.DropdownMenu(
+                      {
+                        expanded: showCardPicker,
+                        properties: {
+                          focusable: true
+                        },
+                        onDismissRequest: () => {
+                          setShowCardPicker(false);
+                          setLoadingCards(false);
+                        }
+                      },
+                      [
+                        UI.Box(
+                          {
+                            modifier: ctx.Modifier
+                              .fillMaxWidth()
+                              .clickable(() => doClearCardBinding())
+                              .padding({ horizontal: 16, vertical: 12 })
+                          },
+                          [
+                            UI.Text({
+                              text: t.dropdownNoCharacterCard,
+                              color: colors.onSurface,
+                              fontWeight: !formCharacterCardId ? "bold" : "normal"
+                            })
+                          ]
+                        ),
+                        UI.HorizontalDivider({
+                          color: colors.outlineVariant,
+                          thickness: 1
+                        }),
+                        ...(loadingCards
+                          ? [
+                              UI.Box(
+                                {
+                                  modifier: ctx.Modifier
+                                    .fillMaxWidth()
+                                    .padding({ horizontal: 16, vertical: 12 })
+                                },
+                                [
+                                  UI.Text({
+                                    text: t.dropdownLoading,
+                                    color: colors.onSurfaceVariant
+                                  })
+                                ]
+                              )
+                            ]
+                          : availableCards.length === 0
+                            ? [
+                                UI.Box(
+                                  {
+                                    modifier: ctx.Modifier
+                                      .fillMaxWidth()
+                                      .padding({ horizontal: 16, vertical: 12 })
+                                  },
+                                  [
+                                    UI.Text({
+                                      text: t.dropdownNoCards,
+                                      color: colors.onSurfaceVariant
+                                    })
+                                  ]
+                                )
+                              ]
+                            : availableCards.map((card) =>
+                                UI.Box(
+                                  {
+                                    modifier: ctx.Modifier
+                                      .fillMaxWidth()
+                                      .clickable(() => doPickCard(card.id))
+                                      .padding({ horizontal: 16, vertical: 12 })
+                                  },
+                                  [
+                                    UI.Row(
+                                      {
+                                        fillMaxWidth: true,
+                                        horizontalArrangement: "spaceBetween",
+                                        verticalAlignment: "center"
+                                      },
+                                      [
+                                        UI.Column({ weight: 1, spacing: 2 }, [
+                                          UI.Text({
+                                            text: card.name,
+                                            color: colors.onSurface,
+                                            fontWeight:
+                                              card.id === formCharacterCardId ? "bold" : "normal",
+                                            maxLines: 1,
+                                            overflow: "ellipsis"
+                                          }),
+                                          ...(card.description
+                                            ? [
+                                                UI.Text({
+                                                  text: card.description,
+                                                  style: "bodySmall",
+                                                  color: colors.onSurfaceVariant,
+                                                  maxLines: 1,
+                                                  overflow: "ellipsis"
+                                                })
+                                              ]
+                                            : [])
+                                        ]),
+                                        card.id === formCharacterCardId
+                                          ? UI.Icon({
+                                              name: "check",
+                                              tint: colors.primary,
+                                              size: 18
+                                            })
+                                          : UI.Spacer({ width: 18 })
+                                      ]
+                                    )
+                                  ]
+                                )
+                              ))
+                      ]
+                    )
+                  ]
+                ),
+                UI.Text({
+                  text: t.dropdownHint,
+                  style: "bodySmall",
+                  color: colors.onSurfaceVariant
                 })
               ]
             )
@@ -564,14 +848,14 @@ export default function Screen(ctx: ComposeDslContext): ComposeNode {
               },
               [
                 UI.Text({
-                  text: "匹配与启用",
+                  text: t.sectionMatchAndEnable,
                   style: "titleMedium",
                   fontWeight: "bold",
                   color: colors.onSurface
                 }),
                 renderSettingRow(
-                  "启用条目",
-                  "关闭后会保留条目，但不会参与注入。",
+                  t.settingEnabledTitle,
+                  t.settingEnabledDesc,
                   formEnabled,
                   setFormEnabled
                 ),
@@ -580,8 +864,8 @@ export default function Screen(ctx: ComposeDslContext): ComposeNode {
                   thickness: 1
                 }),
                 renderSettingRow(
-                  "常驻激活",
-                  "无需关键词，始终注入到提示词。",
+                  t.settingAlwaysActiveTitle,
+                  t.settingAlwaysActiveDesc,
                   formAlwaysActive,
                   setFormAlwaysActive
                 ),
@@ -590,8 +874,8 @@ export default function Screen(ctx: ComposeDslContext): ComposeNode {
                   thickness: 1
                 }),
                 renderSettingRow(
-                  "正则表达式",
-                  "将关键词作为正则表达式匹配。",
+                  t.settingRegexTitle,
+                  t.settingRegexDesc,
                   formIsRegex,
                   setFormIsRegex
                 ),
@@ -600,8 +884,8 @@ export default function Screen(ctx: ComposeDslContext): ComposeNode {
                   thickness: 1
                 }),
                 renderSettingRow(
-                  "大小写敏感",
-                  "匹配关键词时区分大小写。",
+                  t.settingCaseSensitiveTitle,
+                  t.settingCaseSensitiveDesc,
                   formCaseSensitive,
                   setFormCaseSensitive
                 )
@@ -624,13 +908,13 @@ export default function Screen(ctx: ComposeDslContext): ComposeNode {
               },
               [
                 UI.Text({
-                  text: "注入策略",
+                  text: t.sectionInjectStrategy,
                   style: "titleMedium",
                   fontWeight: "bold",
                   color: colors.onSurface
                 }),
                 UI.Text({
-                  text: "优先级越高越先参与；扫描深度决定向上读取多少条历史消息。",
+                  text: t.sectionInjectStrategyDesc,
                   style: "bodySmall",
                   color: colors.onSurfaceVariant
                 }),
@@ -641,8 +925,8 @@ export default function Screen(ctx: ComposeDslContext): ComposeNode {
                       { weight: 1 },
                       [
                         UI.TextField({
-                          label: "优先级",
-                          placeholder: "50",
+                          label: t.fieldPriority,
+                          placeholder: t.fieldPriorityPlaceholder,
                           value: formPriority,
                           onValueChange: setFormPriority,
                           singleLine: true,
@@ -654,8 +938,8 @@ export default function Screen(ctx: ComposeDslContext): ComposeNode {
                       { weight: 1 },
                       [
                         UI.TextField({
-                          label: "扫描深度",
-                          placeholder: "5",
+                          label: t.fieldScanDepth,
+                          placeholder: t.fieldScanDepthPlaceholder,
                           value: formScanDepth,
                           onValueChange: setFormScanDepth,
                           singleLine: true,
@@ -666,16 +950,49 @@ export default function Screen(ctx: ComposeDslContext): ComposeNode {
                   ]
                 ),
                 UI.Text({
-                  text: "扫描深度：扫描最近 N 条历史消息。0 = 仅当前输入",
+                  text: t.scanDepthHint,
                   style: "bodySmall",
                   color: colors.onSurfaceVariant
-                })
+                }),
+                UI.Spacer({ height: 8 }),
+                UI.Text({
+                  text: t.injectTargetTitle,
+                  style: "labelMedium",
+                  fontWeight: "bold",
+                  color: colors.onSurface
+                }),
+                UI.Row({ fillMaxWidth: true, spacing: 8 }, [
+                  UI.FilledTonalButton(
+                    {
+                      onClick: () => setFormInjectTarget("system"),
+                      weight: 1
+                    },
+                    [
+                      UI.Text({
+                        text: formInjectTarget === "system" ? `✓ ${t.injectTargetSystem}` : t.injectTargetSystem,
+                        fontWeight: formInjectTarget === "system" ? "bold" : "normal"
+                      })
+                    ]
+                  ),
+                  UI.FilledTonalButton(
+                    {
+                      onClick: () => setFormInjectTarget("user"),
+                      weight: 1
+                    },
+                    [
+                      UI.Text({
+                        text: formInjectTarget === "user" ? `✓ ${t.injectTargetUser}` : t.injectTargetUser,
+                        fontWeight: formInjectTarget === "user" ? "bold" : "normal"
+                      })
+                    ]
+                  )
+                ])
               ]
             )
           ]
         ),
         UI.Button({
-          text: isEdit ? "保存修改" : "创建条目",
+          text: isEdit ? t.saveEditButton : t.createEntryButton,
           onClick: () => doSave(),
           fillMaxWidth: true,
           shape: { cornerRadius: 14 }
@@ -694,29 +1011,32 @@ export default function Screen(ctx: ComposeDslContext): ComposeNode {
         padding: { horizontal: 4, vertical: 4 }
       },
       [
-        UI.FilledTonalButton({
-          onClick: doCreate,
-          height: 36
-        }, [
-          UI.Row(
-            {
-              spacing: 6,
-              verticalAlignment: "center"
-            },
-            [
-              UI.Icon({
-                name: "add",
-                tint: colors.onSecondaryContainer,
-                size: 18
-              }),
-              UI.Text({
-                text: "新建条目",
-                color: colors.onSecondaryContainer,
-                fontWeight: "bold"
-              })
-            ]
-          )
-        ])
+        UI.FilledTonalButton(
+          {
+            onClick: doCreate,
+            height: 36
+          },
+          [
+            UI.Row(
+              {
+                spacing: 6,
+                verticalAlignment: "center"
+              },
+              [
+                UI.Icon({
+                  name: "add",
+                  tint: colors.onSecondaryContainer,
+                  size: 18
+                }),
+                UI.Text({
+                text: t.newEntryButton,
+                  color: colors.onSecondaryContainer,
+                  fontWeight: "bold"
+                })
+              ]
+            )
+          ]
+        )
       ]
     )
   ];
@@ -745,7 +1065,7 @@ export default function Screen(ctx: ComposeDslContext): ComposeNode {
           UI.CircularProgressIndicator({}),
           UI.Spacer({ height: 8 }),
           UI.Text({
-            text: "加载中...",
+            text: t.listLoading,
             color: colors.onSurfaceVariant
           })
         ]
@@ -770,25 +1090,28 @@ export default function Screen(ctx: ComposeDslContext): ComposeNode {
             },
             [
               UI.Text({
-                text: "还没有世界书条目",
+                text: t.emptyTitle,
                 style: "titleMedium",
                 color: colors.onSurface
               }),
               UI.Text({
-                text: "点击右上角新建，创建第一个条目。",
+                text: t.emptyDesc,
                 style: "bodySmall",
                 color: colors.onSurfaceVariant
               }),
-              UI.FilledTonalButton({
-                onClick: doCreate,
-                height: 36
-              }, [
-                UI.Text({
-                  text: "新建第一个条目",
-                  color: colors.onSecondaryContainer,
-                  fontWeight: "bold"
-                })
-              ])
+              UI.FilledTonalButton(
+                {
+                  onClick: doCreate,
+                  height: 36
+                },
+                [
+                  UI.Text({
+                    text: t.emptyAction,
+                    color: colors.onSecondaryContainer,
+                    fontWeight: "bold"
+                  })
+                ]
+              )
             ]
           )
         ]

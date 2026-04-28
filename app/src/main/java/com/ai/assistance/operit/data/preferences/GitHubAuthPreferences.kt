@@ -60,6 +60,7 @@ class GitHubAuthPreferences(private val context: Context) {
         private val LAST_LOGIN_TIME = longPreferencesKey("last_login_time")
         private val AUTH_VERSION = longPreferencesKey("auth_version")
         private val GRANTED_SCOPE = stringPreferencesKey("granted_scope")
+        private val PENDING_OAUTH_STATE = stringPreferencesKey("pending_oauth_state")
         
         @Volatile
         private var INSTANCE: GitHubAuthPreferences? = null
@@ -255,6 +256,21 @@ class GitHubAuthPreferences(private val context: Context) {
         context.githubAuthDataStore.edit { preferences ->
             preferences.clear()
         }
+    }
+
+    suspend fun setPendingOAuthState(state: String) {
+        context.githubAuthDataStore.edit { preferences ->
+            preferences[PENDING_OAUTH_STATE] = state
+        }
+    }
+
+    suspend fun consumePendingOAuthState(): String? {
+        val preferences = context.githubAuthDataStore.data.first()
+        val state = preferences[PENDING_OAUTH_STATE]
+        context.githubAuthDataStore.edit { mutablePreferences ->
+            mutablePreferences.remove(PENDING_OAUTH_STATE)
+        }
+        return state
     }
 
     /**

@@ -26,23 +26,18 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
-import com.ai.assistance.operit.data.preferences.DisplayPreferencesManager
 import com.ai.assistance.operit.ui.common.NavItem
-import com.ai.assistance.operit.ui.main.NavGroup
 import com.ai.assistance.operit.ui.main.NavigationTransitionSource
 import com.ai.assistance.operit.ui.main.TopBarTitleContent
 import com.ai.assistance.operit.ui.main.navigation.NavigationEntrySpec
@@ -61,9 +56,9 @@ import kotlinx.coroutines.launch
 fun PhoneLayout(
         currentRouteEntry: RouteEntry,
         currentScreen: Screen,
-        selectedItem: NavItem,
+        selectedItem: NavItem?,
         isLoading: Boolean,
-        navGroups: List<NavGroup>,
+        navItems: List<NavItem>,
         pluginSidebarEntries: List<NavigationEntrySpec>,
         selectedRouteId: String,
         isNetworkAvailable: Boolean,
@@ -87,9 +82,6 @@ fun PhoneLayout(
 ) {
         // 使用 updateTransition 来创建更复杂的动画
         val transition = updateTransition(drawerState.targetValue, label = "drawer_transition")
-        val context = LocalContext.current
-        val displayPreferencesManager = remember(context) { DisplayPreferencesManager.getInstance(context) }
-        val enableNewSidebar by displayPreferencesManager.enableNewSidebar.collectAsState(initial = true)
         val drawerTopInset = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
 
         val drawerProgress by
@@ -157,40 +149,6 @@ fun PhoneLayout(
                         topStart = CornerSize(0.dp),
                         bottomStart = CornerSize(0.dp)
                 )
-
-        // 缓存抽屉内容以避免重组
-        var cachedDrawerContent by remember { mutableStateOf<@Composable () -> Unit>({}) }
-
-        // 仅在相关数据变化时更新抽屉内容
-        LaunchedEffect(
-                navGroups,
-                pluginSidebarEntries,
-                currentScreen,
-                selectedItem,
-                selectedRouteId,
-                isNetworkAvailable,
-                networkType,
-                drawerAppearance,
-                enableNewSidebar,
-                drawerTopInset
-        ) {
-                cachedDrawerContent = {
-                        DrawerContent(
-                                navGroups = navGroups,
-                                pluginEntries = pluginSidebarEntries,
-                                selectedItem = selectedItem,
-                                selectedRouteId = selectedRouteId,
-                                isNetworkAvailable = isNetworkAvailable,
-                                networkType = networkType,
-                                appearance = drawerAppearance,
-                                topContentPadding = if (enableNewSidebar) 0.dp else drawerTopInset,
-                                scope = scope,
-                                drawerState = drawerState,
-                                onScreenSelected = onDrawerItemSelected,
-                                onNavigationEntrySelected = onNavigationEntrySelected
-                        )
-                }
-        }
 
         // 拖拽状态 - 用于控制抽屉拉出和关闭
         val draggableState = rememberDraggableState { delta ->
@@ -302,7 +260,7 @@ fun PhoneLayout(
                 Surface(
                         modifier =
                                 Modifier.width(drawerWidth)
-                                        .padding(top = if (enableNewSidebar) drawerTopInset else 0.dp)
+                                        .padding(top = drawerTopInset)
                                         .fillMaxHeight()
                                         .graphicsLayer {
                                                 translationX = drawerOffset.toPx()
@@ -328,8 +286,20 @@ fun PhoneLayout(
                                 else drawerAppearance.containerColor,
                         shadowElevation = if (drawerAppearance.waterGlassEnabled) 0.dp else sidebarElevation
                 ) {
-                        // 使用缓存的抽屉内容
-                        Box(modifier = Modifier.fillMaxSize()) { cachedDrawerContent() }
+                        DrawerContent(
+                                navItems = navItems,
+                                pluginEntries = pluginSidebarEntries,
+                                selectedItem = selectedItem,
+                                selectedRouteId = selectedRouteId,
+                                isNetworkAvailable = isNetworkAvailable,
+                                networkType = networkType,
+                                appearance = drawerAppearance,
+                                topContentPadding = 0.dp,
+                                scope = scope,
+                                drawerState = drawerState,
+                                onScreenSelected = onDrawerItemSelected,
+                                onNavigationEntrySelected = onNavigationEntrySelected
+                        )
                 }
 
                 // 在主内容上方放置遮罩层，阻止右侧内容继续响应点击

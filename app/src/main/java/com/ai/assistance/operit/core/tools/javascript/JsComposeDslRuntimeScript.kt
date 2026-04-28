@@ -214,6 +214,33 @@ internal fun buildComposeDslRuntimeWrappedScript(script: String): String {
                     });
                 }
 
+                function __operit_flush_state_changes() {
+                    if (!__bundle || typeof __bundle.flushStateChanges !== 'function') {
+                        return Promise.resolve();
+                    }
+                    try {
+                        var __flushResult = __bundle.flushStateChanges();
+                        if (__operit_is_promise(__flushResult)) {
+                            return __flushResult;
+                        }
+                    } catch (__flushError) {
+                        try {
+                            console.warn('compose state flush failed:', __flushError);
+                        } catch (__ignore) {
+                        }
+                    }
+                    return Promise.resolve();
+                }
+
+                function __operit_build_final_response() {
+                    return __operit_flush_state_changes().then(function() {
+                        if (__noRender) {
+                            return null;
+                        }
+                        return __operit_build_compose_response(__bundle, __entry);
+                    });
+                }
+
                 if (typeof __bundle.subscribeStateChange === 'function') {
                     if (!__noRender) {
                         __unsubscribeStateChange = __bundle.subscribeStateChange(function() {
@@ -236,21 +263,19 @@ internal fun buildComposeDslRuntimeWrappedScript(script: String): String {
                         __operit_schedule_intermediate_render();
                     }
                     return __maybePromise.then(function() {
-                        __operit_finalize_action();
-                        if (__noRender) {
-                            return null;
-                        }
-                        return __operit_build_compose_response(__bundle, __entry);
+                        return __operit_build_final_response().then(function(__finalResponse) {
+                            __operit_finalize_action();
+                            return __finalResponse;
+                        });
                     }, function(__actionError) {
                         __operit_finalize_action();
                         throw __actionError;
                     });
                 }
-                __operit_finalize_action();
-                if (__noRender) {
-                    return null;
-                }
-                return __operit_build_compose_response(__bundle, __entry);
+                return __operit_build_final_response().then(function(__finalResponse) {
+                    __operit_finalize_action();
+                    return __finalResponse;
+                });
             }
 
             if (typeof exports !== 'undefined' && exports) {

@@ -59,6 +59,8 @@ import com.ai.assistance.operit.data.mcp.MCPRepository
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.ui.res.stringResource
+import com.ai.assistance.operit.data.preferences.GitHubAuthPreferences
+import com.ai.assistance.operit.ui.features.github.GitHubOAuthCoordinator
 
 class MainActivity : ComponentActivity() {
     companion object {
@@ -104,6 +106,7 @@ class MainActivity : ComponentActivity() {
     private var pendingSharedFileUris: List<Uri>? = null
 
     private var pendingSharedLinks: List<String>? = null
+    private var pendingGitHubAuthUri: Uri? = null
     private var pendingShortcutNavItem: NavItem? = null
     private var pendingShortcutRequestId: Long = 0L
 
@@ -220,6 +223,7 @@ class MainActivity : ComponentActivity() {
 
         // 设置初始界面 - 显示加载占位符
         setAppContent()
+        processPendingGitHubAuth()
 
         // 初始化并设置更新管理器
         setupUpdateManager()
@@ -245,6 +249,7 @@ class MainActivity : ComponentActivity() {
         val handledShortcutIntent = handleIntent(intent)
 
         if (handledShortcutIntent) {
+            processPendingGitHubAuth()
             setAppContent()
             return
         }
@@ -264,6 +269,13 @@ class MainActivity : ComponentActivity() {
             pendingShortcutNavItem = NavItem.Settings
             pendingShortcutRequestId = System.currentTimeMillis()
             AppLogger.d(TAG, "Shortcut requested opening settings")
+            return true
+        }
+
+        val intentUri = intent?.data
+        if (GitHubAuthPreferences.isOAuthRedirectUri(intentUri)) {
+            pendingGitHubAuthUri = intentUri
+            AppLogger.d(TAG, "Received GitHub OAuth redirect: $intentUri")
             return true
         }
         
@@ -327,6 +339,42 @@ class MainActivity : ComponentActivity() {
             }
         }
         return false
+    }
+
+    private fun processPendingGitHubAuth() {
+        val authUri = pendingGitHubAuthUri ?: return
+        pendingGitHubAuthUri = null
+
+        lifecycleScope.launch {
+            val coordinator = GitHubOAuthCoordinator(this@MainActivity)
+            val result = coordinator.completeExternalLogin(authUri)
+            result.fold(
+                onSuccess = { user ->
+                    Toast.makeText(
+                        this@MainActivity,
+                        getString(R.string.main_github_login_success, user.login),
+                        Toast.LENGTH_LONG
+                    ).show()
+                },
+                onFailure = { error ->
+                    val message = error.message.orEmpty()
+                    if (authUri.getQueryParameter("error") == "access_denied") {
+                        Toast.makeText(
+                            this@MainActivity,
+                            getString(R.string.github_login_external_cancelled),
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    } else {
+                        Toast.makeText(
+                            this@MainActivity,
+                            getString(R.string.main_github_login_failed, message),
+                            Toast.LENGTH_LONG
+                        ).show()
+                    }
+                    AppLogger.e(TAG, "Failed to complete external GitHub login", error)
+                }
+            )
+        }
     }
 
     private fun extractHttpUrls(text: String): List<String> {

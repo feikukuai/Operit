@@ -296,6 +296,13 @@ object XmlRenderPluginRegistry {
                         errorMessage = null
                     }
                 },
+                onFinalResult = { finalResult ->
+                    val parsed = ToolPkgComposeDslParser.parseRenderResult(finalResult)
+                    if (parsed != null) {
+                        renderResult = parsed
+                        errorMessage = null
+                    }
+                },
                 onComplete = {},
                 onError = { error ->
                     errorMessage = "compose_dsl runtime error: $error"

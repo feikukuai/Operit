@@ -50,6 +50,48 @@ function buildInjection(entries) {
     parts.push("</worldbook>");
     return parts.join("\n");
 }
+function matchesCharacterCard(entry, callerCardId) {
+    const targetCardId = (entry.character_card_id || "").trim();
+    if (!targetCardId) {
+        return true;
+    }
+    return !!callerCardId && callerCardId === targetCardId;
+}
+async function resolveCurrentCharacterCardId(event) {
+    try {
+        const directCardId = typeof getCallerCardId === "function" ? getCallerCardId() : undefined;
+        if (directCardId && String(directCardId).trim()) {
+            return String(directCardId).trim();
+        }
+    }
+    catch (_error) {
+        // Ignore direct getter failure and fall back to chat lookup.
+    }
+    try {
+        const chatId = event?.eventPayload?.chatId;
+        if (!chatId) {
+            return "";
+        }
+        const chatResult = await Tools.Chat.findChat({
+            query: String(chatId),
+            match: "exact",
+            index: 0
+        });
+        const cardName = String(chatResult?.chat?.characterCardName || "").trim();
+        if (!cardName) {
+            return "";
+        }
+        const cardResult = await Tools.Chat.listCharacterCards();
+        const cards = Array.isArray(cardResult?.cards)
+            ? cardResult.cards
+            : [];
+        const matchedCard = cards.find((card) => String(card?.name || "").trim() === cardName);
+        return matchedCard?.id ? String(matchedCard.id).trim() : "";
+    }
+    catch (_error) {
+        return "";
+    }
+}
 async function ensureWorldBookFile() {
     await Tools.Files.mkdir(WORLD_BOOK_DIR, true);
     const existsResult = await Tools.Files.exists(WORLD_BOOK_FILE);
@@ -83,7 +125,10 @@ async function systemPromptHook(event) {
         return null;
     }
     const enabledEntries = await readEnabledEntries();
-    const hitEntries = enabledEntries.filter((entry) => entry.always_active);
+    const callerCardId = await resolveCurrentCharacterCardId(event);
+    const hitEntries = enabledEntries.filter((entry) => entry.always_active &&
+        entry.inject_target !== "user" &&
+        matchesCharacterCard(entry, callerCardId));
     if (hitEntries.length === 0) {
         return null;
     }
@@ -96,14 +141,25 @@ async function finalizeHook(event) {
         return null;
     }
     const enabledEntries = await readEnabledEntries();
+    const promptEntries = enabledEntries.filter((entry) => entry.inject_target === "user");
     const keywordEntries = enabledEntries.filter((entry) => !entry.always_active);
-    if (keywordEntries.length === 0) {
-        return null;
-    }
     const payload = event.eventPayload || {};
     const history = (payload.preparedHistory || payload.chatHistory || []);
-    const hitEntries = [];
+    const callerCardId = await resolveCurrentCharacterCardId(event);
+    const hitSystemEntries = [];
+    const hitUserEntries = [];
+    for (const entry of promptEntries) {
+        if (!matchesCharacterCard(entry, callerCardId)) {
+            continue;
+        }
+        if (entry.always_active) {
+            hitUserEntries.push(entry);
+        }
+    }
     for (const entry of keywordEntries) {
+        if (!matchesCharacterCard(entry, callerCardId)) {
+            continue;
+        }
         const texts = [];
         if (payload.rawInput) {
             texts.push(payload.rawInput);
@@ -111,11 +167,12 @@ async function finalizeHook(event) {
         if (payload.processedInput && payload.processedInput !== payload.rawInput) {
             texts.push(payload.processedInput);
         }
-        const depth = entry.scan_depth != null ? entry.scan_depth : 5;
+        const depth = entry.scan_depth != null ? entry.scan_depth : 0;
         if (depth > 0) {
-            const startIndex = Math.max(0, history.length - depth);
-            for (let index = startIndex; index < history.length; index += 1) {
-                const turn = history[index];
+            const userTurns = history.filter((turn) => turn && turn.kind === "USER" && turn.content);
+            const startIndex = Math.max(0, userTurns.length - depth);
+            for (let index = startIndex; index < userTurns.length; index += 1) {
+                const turn = userTurns[index];
                 if (turn?.content) {
                     texts.push(turn.content);
                 }
@@ -123,31 +180,53 @@ async function finalizeHook(event) {
         }
         const scanText = texts.join("\n");
         if (scanText && matchesEntry(entry, scanText)) {
-            hitEntries.push(entry);
+            if (entry.inject_target === "user") {
+                hitUserEntries.push(entry);
+            }
+            else {
+                hitSystemEntries.push(entry);
+            }
         }
     }
-    if (hitEntries.length === 0) {
+    if (hitSystemEntries.length === 0 && hitUserEntries.length === 0) {
         return null;
     }
-    const injection = `\n${buildInjection(hitEntries)}`;
-    const nextHistory = [];
-    let injected = false;
-    for (const turn of history) {
-        if (!injected && turn.kind === "SYSTEM") {
-            nextHistory.push({
-                ...turn,
-                content: `${turn.content}${injection}`
-            });
-            injected = true;
-            continue;
+    let nextHistory = [...history];
+    if (hitSystemEntries.length > 0) {
+        const sysInjection = buildInjection(hitSystemEntries);
+        let injected = false;
+        const sysNext = [];
+        for (const turn of nextHistory) {
+            if (!injected && turn.kind === "SYSTEM") {
+                const nextContent = turn.content ? `${turn.content}\n${sysInjection}` : sysInjection;
+                sysNext.push({ ...turn, content: nextContent });
+                injected = true;
+                continue;
+            }
+            sysNext.push(turn);
         }
-        nextHistory.push(turn);
+        if (!injected) {
+            sysNext.unshift({ kind: "SYSTEM", content: sysInjection });
+        }
+        nextHistory = sysNext;
     }
-    if (!injected) {
-        nextHistory.unshift({
-            kind: "SYSTEM",
-            content: injection
-        });
+    if (hitUserEntries.length > 0) {
+        const userInjection = `${buildInjection(hitUserEntries)}\n`;
+        let injected = false;
+        for (let i = nextHistory.length - 1; i >= 0; i -= 1) {
+            const turn = nextHistory[i];
+            if (!injected && turn.kind === "USER") {
+                nextHistory[i] = {
+                    ...turn,
+                    content: userInjection + turn.content
+                };
+                injected = true;
+                break;
+            }
+        }
+        if (!injected) {
+            nextHistory.push({ kind: "USER", content: userInjection });
+        }
     }
     return { preparedHistory: nextHistory };
 }

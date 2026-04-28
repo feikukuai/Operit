@@ -1,5 +1,7 @@
 import worldbookManagerScreen from "./ui/worldbook_manager/index.ui.js";
 
+declare function getCallerCardId(): string | undefined;
+
 const WORLD_BOOK_DIR = "/sdcard/Download/Operit/worldbook";
 const WORLD_BOOK_FILE = "/sdcard/Download/Operit/worldbook/entries.json";
 const WORLDBOOK_ROUTE = "toolpkg:com.operit.worldbook:ui:worldbook_manager";
@@ -15,6 +17,13 @@ interface WorldBookEntry {
   enabled?: boolean;
   priority?: number;
   scan_depth?: number;
+  inject_target?: "system" | "user";
+  character_card_id?: string;
+}
+
+interface CharacterCardSummary {
+  id?: string;
+  name?: string;
 }
 
 function matchesEntry(entry: WorldBookEntry, text: string): boolean {
@@ -59,6 +68,53 @@ function buildInjection(entries: WorldBookEntry[]): string {
   return parts.join("\n");
 }
 
+function matchesCharacterCard(entry: WorldBookEntry, callerCardId: string): boolean {
+  const targetCardId = (entry.character_card_id || "").trim();
+  if (!targetCardId) {
+    return true;
+  }
+  return !!callerCardId && callerCardId === targetCardId;
+}
+
+async function resolveCurrentCharacterCardId(
+  event: ToolPkg.SystemPromptComposeHookEvent | ToolPkg.PromptFinalizeHookEvent
+): Promise<string> {
+  try {
+    const directCardId = typeof getCallerCardId === "function" ? getCallerCardId() : undefined;
+    if (directCardId && String(directCardId).trim()) {
+      return String(directCardId).trim();
+    }
+  } catch (_error) {
+    // Ignore direct getter failure and fall back to chat lookup.
+  }
+
+  try {
+    const chatId = event?.eventPayload?.chatId;
+    if (!chatId) {
+      return "";
+    }
+
+    const chatResult = await Tools.Chat.findChat({
+      query: String(chatId),
+      match: "exact",
+      index: 0
+    });
+    const cardName = String(chatResult?.chat?.characterCardName || "").trim();
+    if (!cardName) {
+      return "";
+    }
+
+    const cardResult = await Tools.Chat.listCharacterCards();
+    const cards = Array.isArray(cardResult?.cards)
+      ? (cardResult.cards as CharacterCardSummary[])
+      : [];
+    const matchedCard = cards.find((card) => String(card?.name || "").trim() === cardName);
+    return matchedCard?.id ? String(matchedCard.id).trim() : "";
+  } catch (_error) {
+    return "";
+  }
+}
+
 async function ensureWorldBookFile(): Promise<void> {
   await Tools.Files.mkdir(WORLD_BOOK_DIR, true);
   const existsResult = await Tools.Files.exists(WORLD_BOOK_FILE);
@@ -98,7 +154,13 @@ export async function systemPromptHook(
   }
 
   const enabledEntries = await readEnabledEntries();
-  const hitEntries = enabledEntries.filter((entry) => entry.always_active);
+  const callerCardId = await resolveCurrentCharacterCardId(event);
+  const hitEntries = enabledEntries.filter(
+    (entry) =>
+      entry.always_active &&
+      entry.inject_target !== "user" &&
+      matchesCharacterCard(entry, callerCardId)
+  );
   if (hitEntries.length === 0) {
     return null;
   }
@@ -116,16 +178,29 @@ export async function finalizeHook(
   }
 
   const enabledEntries = await readEnabledEntries();
+  const promptEntries = enabledEntries.filter((entry) => entry.inject_target === "user");
   const keywordEntries = enabledEntries.filter((entry) => !entry.always_active);
-  if (keywordEntries.length === 0) {
-    return null;
-  }
-
   const payload = event.eventPayload || {};
   const history = (payload.preparedHistory || payload.chatHistory || []) as ToolPkg.PromptTurn[];
+  const callerCardId = await resolveCurrentCharacterCardId(event);
 
-  const hitEntries: WorldBookEntry[] = [];
+  const hitSystemEntries: WorldBookEntry[] = [];
+  const hitUserEntries: WorldBookEntry[] = [];
+
+  for (const entry of promptEntries) {
+    if (!matchesCharacterCard(entry, callerCardId)) {
+      continue;
+    }
+    if (entry.always_active) {
+      hitUserEntries.push(entry);
+    }
+  }
+
   for (const entry of keywordEntries) {
+    if (!matchesCharacterCard(entry, callerCardId)) {
+      continue;
+    }
+
     const texts: string[] = [];
     if (payload.rawInput) {
       texts.push(payload.rawInput);
@@ -134,11 +209,12 @@ export async function finalizeHook(
       texts.push(payload.processedInput);
     }
 
-    const depth = entry.scan_depth != null ? entry.scan_depth : 5;
+    const depth = entry.scan_depth != null ? entry.scan_depth : 0;
     if (depth > 0) {
-      const startIndex = Math.max(0, history.length - depth);
-      for (let index = startIndex; index < history.length; index += 1) {
-        const turn = history[index];
+      const userTurns = history.filter((turn) => turn && turn.kind === "USER" && turn.content);
+      const startIndex = Math.max(0, userTurns.length - depth);
+      for (let index = startIndex; index < userTurns.length; index += 1) {
+        const turn = userTurns[index];
         if (turn?.content) {
           texts.push(turn.content);
         }
@@ -147,35 +223,60 @@ export async function finalizeHook(
 
     const scanText = texts.join("\n");
     if (scanText && matchesEntry(entry, scanText)) {
-      hitEntries.push(entry);
+      if (entry.inject_target === "user") {
+        hitUserEntries.push(entry);
+      } else {
+        hitSystemEntries.push(entry);
+      }
     }
   }
 
-  if (hitEntries.length === 0) {
+  if (hitSystemEntries.length === 0 && hitUserEntries.length === 0) {
     return null;
   }
 
-  const injection = `\n${buildInjection(hitEntries)}`;
-  const nextHistory: ToolPkg.PromptTurn[] = [];
-  let injected = false;
+  let nextHistory = [...history];
 
-  for (const turn of history) {
-    if (!injected && turn.kind === "SYSTEM") {
-      nextHistory.push({
-        ...turn,
-        content: `${turn.content}${injection}`
-      });
-      injected = true;
-      continue;
+  if (hitSystemEntries.length > 0) {
+    const sysInjection = buildInjection(hitSystemEntries);
+    let injected = false;
+    const sysNext: ToolPkg.PromptTurn[] = [];
+
+    for (const turn of nextHistory) {
+      if (!injected && turn.kind === "SYSTEM") {
+        const nextContent = turn.content ? `${turn.content}\n${sysInjection}` : sysInjection;
+        sysNext.push({ ...turn, content: nextContent });
+        injected = true;
+        continue;
+      }
+      sysNext.push(turn);
     }
-    nextHistory.push(turn);
+
+    if (!injected) {
+      sysNext.unshift({ kind: "SYSTEM", content: sysInjection });
+    }
+    nextHistory = sysNext;
   }
 
-  if (!injected) {
-    nextHistory.unshift({
-      kind: "SYSTEM",
-      content: injection
-    });
+  if (hitUserEntries.length > 0) {
+    const userInjection = `${buildInjection(hitUserEntries)}\n`;
+    let injected = false;
+
+    for (let i = nextHistory.length - 1; i >= 0; i -= 1) {
+      const turn = nextHistory[i];
+      if (!injected && turn.kind === "USER") {
+        nextHistory[i] = {
+          ...turn,
+          content: userInjection + turn.content
+        };
+        injected = true;
+        break;
+      }
+    }
+
+    if (!injected) {
+      nextHistory.push({ kind: "USER", content: userInjection });
+    }
   }
 
   return { preparedHistory: nextHistory };

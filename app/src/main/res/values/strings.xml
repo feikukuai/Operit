@@ -4168,6 +4168,11 @@
 
     <string name="github_account">GitHub 账户</string>
     <string name="login_github">登录 GitHub</string>
+    <string name="github_login_method_description">请选择 GitHub 登录方式。内嵌模式适合无法调起外部浏览器的设备，外部浏览器模式兼容性更好。</string>
+    <string name="github_login_method_embedded">使用内嵌页面登录</string>
+    <string name="github_login_method_external">使用外部浏览器登录</string>
+    <string name="github_login_external_waiting">已打开浏览器，请在完成授权后返回应用。</string>
+    <string name="github_login_external_cancelled">已取消 GitHub 授权</string>
     <string name="publish_mcp_plugins_to_market">• 发布您的 MCP 插件到市场</string>
     <string name="manage_published_plugins">• 管理您已发布的插件</string>
     <string name="better_installation_experience">• 获得更好的安装体验</string>
@@ -6641,8 +6646,6 @@
     <string name="visit_web_wait_time_value">%1$d 秒</string>
     <string name="enable_enter_to_send">回车发送</string>
     <string name="enable_enter_to_send_description">开启后，聊天输入框按回车会直接发送，键盘发送键也会显示为发送。</string>
-    <string name="enable_new_sidebar">新版侧边栏</string>
-    <string name="enable_new_sidebar_description">开启后启用新版侧边栏入口，后续侧边栏的大改版也会基于这里继续迭代。</string>
     <string name="tool_collapse_mode_title">折叠工具</string>
     <string name="tool_collapse_mode_desc">设置消息中工具调用分组的默认折叠范围</string>
     <string name="tool_collapse_mode_read_only">折叠多个只读工具</string>

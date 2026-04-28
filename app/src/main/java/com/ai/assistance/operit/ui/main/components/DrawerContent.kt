@@ -54,15 +54,13 @@ import com.ai.assistance.operit.core.tools.packTool.PackageManager
 import com.ai.assistance.operit.core.tools.system.AndroidPermissionLevel
 import com.ai.assistance.operit.core.tools.system.ShizukuAuthorizer
 import com.ai.assistance.operit.core.tools.system.action.ActionListenerFactory
-import com.ai.assistance.operit.data.preferences.DisplayPreferencesManager
 import com.ai.assistance.operit.data.preferences.UserPreferencesManager
 import com.ai.assistance.operit.data.preferences.androidPermissionPreferences
 import com.ai.assistance.operit.data.repository.WorkflowRepository
 import com.ai.assistance.operit.ui.common.NavItem
-import com.ai.assistance.operit.ui.main.NavGroup
-import com.ai.assistance.operit.ui.main.screens.Screen
 import com.ai.assistance.operit.ui.main.screens.ScreenRouteRegistry
 import com.ai.assistance.operit.ui.main.navigation.NavigationEntrySpec
+import com.ai.assistance.operit.ui.main.screens.Screen
 import com.ai.assistance.operit.ui.theme.liquidGlass
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -123,9 +121,9 @@ private suspend fun resolveSidebarPermissionStatus(
 /** Content for the expanded navigation drawer */
 @Composable
 fun DrawerContent(
-        navGroups: List<NavGroup>,
+        navItems: List<NavItem>,
         pluginEntries: List<NavigationEntrySpec>,
-        selectedItem: NavItem,
+        selectedItem: NavItem?,
         selectedRouteId: String,
         isNetworkAvailable: Boolean,
         networkType: String,
@@ -137,9 +135,7 @@ fun DrawerContent(
         onNavigationEntrySelected: (NavigationEntrySpec) -> Unit
 ) {
         val context = LocalContext.current
-        val displayPreferencesManager = remember(context) { DisplayPreferencesManager.getInstance(context) }
         val userPreferencesManager = remember(context) { UserPreferencesManager.getInstance(context) }
-        val enableNewSidebar by displayPreferencesManager.enableNewSidebar.collectAsState(initial = true)
         val softwareIdentity by
                 userPreferencesManager.softwareIdentity.collectAsState(
                         initial = UserPreferencesManager.SOFTWARE_IDENTITY_OPERIT
@@ -168,14 +164,14 @@ fun DrawerContent(
         }
         val workflowRepository = remember(context) { WorkflowRepository(context) }
         val activePackageCount by
-                produceState(initialValue = 0, selectedRouteId, enableNewSidebar) {
+                produceState(initialValue = 0, selectedRouteId) {
                         value =
                                 withContext(Dispatchers.IO) {
                                         packageManager.getEnabledPackageNames().size
                                 }
                 }
         val workflowCount by
-                produceState(initialValue = 0, selectedRouteId, enableNewSidebar) {
+                produceState(initialValue = 0, selectedRouteId) {
                         value =
                                 withContext(Dispatchers.IO) {
                                         workflowRepository.getAllWorkflows().getOrDefault(emptyList()).size
@@ -188,7 +184,6 @@ fun DrawerContent(
                                         badgeTextResId = R.string.sidebar_status_normal
                                 ),
                         selectedRouteId,
-                        enableNewSidebar,
                         preferredPermissionLevel
                 ) {
                         value =
@@ -199,15 +194,13 @@ fun DrawerContent(
                                         )
                                 }
                 }
-        val oldModeNavGroups = navGroups
-        val newModeFlatItems =
-                remember(navGroups) {
-                        navGroups.flatMap { it.items }
-                                .filterNot {
-                                        it in fixedBottomItems ||
-                                                it in quickActionItems ||
-                                                it == NavItem.ShizukuCommands
-                                }
+        val primaryNavItems =
+                remember(navItems) {
+                        navItems.filterNot {
+                                it in fixedBottomItems ||
+                                        it in quickActionItems ||
+                                        it == NavItem.ShizukuCommands
+                        }
                 }
         val handleScreenSelection: (Screen) -> Unit = { screen ->
                 val shouldCloseBeforeNavigate =
@@ -236,30 +229,6 @@ fun DrawerContent(
                 }
         }
 
-        if (!enableNewSidebar) {
-                Column(
-                        modifier =
-                                Modifier.fillMaxHeight()
-                                        .verticalScroll(rememberScrollState())
-                                        .padding(end = 8.dp, bottom = bottomInset)
-                ) {
-                        DrawerTopContent(
-                                navGroups = oldModeNavGroups,
-                                pluginEntries = pluginEntries,
-                                selectedItem = selectedItem,
-                                selectedRouteId = selectedRouteId,
-                                brandName = drawerBrandName,
-                                isNetworkAvailable = isNetworkAvailable,
-                                networkType = networkType,
-                                appearance = appearance,
-                                onNavItemClick = handleNavItemClick,
-                                onNavigationEntryClick = handleNavigationEntryClick
-                        )
-                        Spacer(modifier = Modifier.height(16.dp))
-                }
-                return
-        }
-
         Column(
                 modifier =
                         Modifier.fillMaxHeight()
@@ -280,7 +249,7 @@ fun DrawerContent(
                                 isNetworkAvailable = isNetworkAvailable,
                                 networkType = networkType,
                                 appearance = appearance,
-                                navItems = newModeFlatItems,
+                                navItems = primaryNavItems,
                                 activePackageCount = activePackageCount,
                                 workflowCount = workflowCount,
                                 permissionStatus = permissionStatus,
@@ -310,7 +279,7 @@ fun DrawerContent(
 fun CollapsedDrawerContent(
         navItems: List<NavItem>,
         pluginEntries: List<NavigationEntrySpec>,
-        selectedItem: NavItem,
+        selectedItem: NavItem?,
         selectedRouteId: String,
         isNetworkAvailable: Boolean,
         appearance: NavigationDrawerAppearance,
@@ -476,88 +445,8 @@ fun CollapsedDrawerContent(
 }
 
 @Composable
-private fun DrawerTopContent(
-        navGroups: List<NavGroup>,
-        pluginEntries: List<NavigationEntrySpec>,
-        selectedItem: NavItem,
-        selectedRouteId: String,
-        brandName: String,
-        isNetworkAvailable: Boolean,
-        networkType: String,
-        appearance: NavigationDrawerAppearance,
-        onNavItemClick: (NavItem) -> Unit,
-        onNavigationEntryClick: (NavigationEntrySpec) -> Unit
-) {
-        Spacer(modifier = Modifier.height(54.dp))
-        Text(
-                text = brandName,
-                style = MaterialTheme.typography.headlineMedium,
-                color = appearance.titleColor,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)
-        )
-
-        Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)
-        ) {
-                Icon(
-                        imageVector =
-                                if (isNetworkAvailable) Icons.Default.Wifi else Icons.Default.WifiOff,
-                        contentDescription = stringResource(id = R.string.network_status_label),
-                        tint = appearance.statusAvailableColor,
-                        modifier = Modifier.size(20.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                        text = networkType,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = appearance.statusAvailableColor
-                )
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-        HorizontalDivider(
-                modifier = Modifier.padding(horizontal = 16.dp),
-                color = appearance.dividerColor
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-
-        navGroups.forEach { group ->
-                if (group.titleResId == R.string.nav_group_system && pluginEntries.isNotEmpty()) {
-                        NavigationDrawerItemHeader(
-                                title = stringResource(id = R.string.nav_group_plugins),
-                                appearance = appearance
-                        )
-                        pluginEntries.forEach { entry ->
-                                CompactNavigationDrawerItem(
-                                        icon = entry.icon,
-                                        label = entry.title,
-                                        selected = selectedRouteId == entry.routeId,
-                                        appearance = appearance,
-                                        onClick = { onNavigationEntryClick(entry) }
-                                )
-                        }
-                }
-                NavigationDrawerItemHeader(
-                        title = stringResource(id = group.titleResId),
-                        appearance = appearance
-                )
-                group.items.forEach { item ->
-                        CompactNavigationDrawerItem(
-                                icon = item.icon,
-                                label = stringResource(id = item.titleResId),
-                                selected = selectedItem == item,
-                                appearance = appearance,
-                                onClick = { onNavItemClick(item) }
-                        )
-                }
-        }
-}
-
-@Composable
 private fun NewSidebarTopContent(
-        selectedItem: NavItem,
+        selectedItem: NavItem?,
         pluginEntries: List<NavigationEntrySpec>,
         selectedRouteId: String,
         brandName: String,
@@ -848,7 +737,7 @@ private fun SidebarQuickActionBadge(
 
 @Composable
 private fun DrawerBottomShortcutRow(
-        selectedItem: NavItem,
+        selectedItem: NavItem?,
         appearance: NavigationDrawerAppearance,
         onNavItemClick: (NavItem) -> Unit
 ) {

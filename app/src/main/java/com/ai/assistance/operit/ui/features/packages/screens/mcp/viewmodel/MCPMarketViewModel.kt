@@ -49,6 +49,7 @@ import com.ai.assistance.operit.ui.features.packages.market.toMarketEntryStats
 import com.ai.assistance.operit.ui.features.packages.market.toMcpMarketBrowseItem
 import com.ai.assistance.operit.ui.features.packages.market.toRankMetric
 import com.ai.assistance.operit.ui.features.packages.market.updateMarketEntryStats
+import com.ai.assistance.operit.ui.features.github.GitHubOAuthCoordinator
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonNames
 import java.time.LocalDateTime
@@ -652,17 +653,19 @@ class MCPMarketViewModel(
      * 启动GitHub登录流程
      */
     fun initiateGitHubLogin(context: Context) {
-        try {
-            val authUrl = githubAuth.getAuthorizationUrl()
-            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(authUrl))
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            context.startActivity(intent)
-        } catch (e: Exception) {
-            _errorMessage.value = context.getString(
-                R.string.mcp_market_github_login_start_failed,
-                e.message ?: ""
-            )
-            AppLogger.e(TAG, "Failed to initiate GitHub login", e)
+        viewModelScope.launch {
+            try {
+                val authUrl = GitHubOAuthCoordinator(context).createExternalAuthorizationUrl()
+                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(authUrl))
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                context.startActivity(intent)
+            } catch (e: Exception) {
+                _errorMessage.value = context.getString(
+                    R.string.mcp_market_github_login_start_failed,
+                    e.message ?: ""
+                )
+                AppLogger.e(TAG, "Failed to initiate GitHub login", e)
+            }
         }
     }
 

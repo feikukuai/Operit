@@ -1,7 +1,6 @@
 package com.ai.assistance.operit.ui.main
 
 import androidx.activity.compose.BackHandler
-import androidx.annotation.StringRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -65,8 +64,6 @@ class TopBarTitleContent(val content: @Composable () -> Unit)
 val LocalTopBarTitleContent = compositionLocalOf<(TopBarTitleContent?) -> Unit> { {} }
 val LocalAppNavigationModel = compositionLocalOf<AppNavigationModel?> { null }
 
-data class NavGroup(@StringRes val titleResId: Int, val items: List<NavItem>)
-
 enum class NavigationTransitionSource {
     DEFAULT,
     DRAWER
@@ -100,7 +97,7 @@ fun OperitApp(
     }
     val currentRouteEntry = routerState.currentEntry
     val currentScreen = AppRouteCatalog.resolveScreen(navigationModel, currentRouteEntry) ?: Screen.AiChat
-    val selectedItem = currentScreen.navItem ?: initialNavItem
+    val selectedItem = currentScreen.navItem
     val pluginSidebarEntries =
         remember(navigationModel) {
             navigationModel.navigationEntries.filter {
@@ -261,37 +258,18 @@ fun OperitApp(
         remoteAnnouncement = null
     }
 
-    // Navigation items grouped by category
-    val navGroups = listOf(
-        NavGroup(
-            R.string.nav_group_ai_features,
-            listOf(
-                NavItem.AiChat,
-                NavItem.AssistantConfig,
-                NavItem.Packages,
-                NavItem.MemoryBase
-            )
-        ),
-        NavGroup(
-            R.string.nav_group_tools,
-            listOf(
-                NavItem.Toolbox,
-                NavItem.ShizukuCommands,
-                NavItem.Workflow,
-            )
-        ),
-        NavGroup(
-            R.string.nav_group_system,
-            listOfNotNull(
-                NavItem.Settings,
-                NavItem.Help,
-                NavItem.About
-            )
-        )
+    val navItems = listOf(
+        NavItem.AiChat,
+        NavItem.AssistantConfig,
+        NavItem.Packages,
+        NavItem.MemoryBase,
+        NavItem.Toolbox,
+        NavItem.ShizukuCommands,
+        NavItem.Workflow,
+        NavItem.Settings,
+        NavItem.Help,
+        NavItem.About
     )
-
-    // Flattened list for components that need it
-    val navItems = navGroups.flatMap { it.items }
 
     // Network state monitoring
     var isNetworkAvailable by remember { mutableStateOf(NetworkUtils.isNetworkAvailable(context)) }
@@ -399,7 +377,6 @@ fun OperitApp(
                     selectedItem = selectedItem,
                     isTabletSidebarExpanded = isTabletSidebarExpanded,
                     isLoading = isLoading,
-                    navGroups = navGroups,
                     navItems = navItems,
                     pluginSidebarEntries = pluginSidebarEntries,
                     selectedRouteId = currentRouteEntry.routeId,
@@ -435,7 +412,7 @@ fun OperitApp(
                     currentScreen = currentScreen,
                     selectedItem = selectedItem,
                     isLoading = isLoading,
-                    navGroups = navGroups,
+                    navItems = navItems,
                     pluginSidebarEntries = pluginSidebarEntries,
                     selectedRouteId = currentRouteEntry.routeId,
                     isNetworkAvailable = isNetworkAvailable,

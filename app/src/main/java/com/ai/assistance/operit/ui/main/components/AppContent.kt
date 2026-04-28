@@ -95,7 +95,7 @@ private enum class ScreenVisibility {
 fun AppContent(
         currentRouteEntry: RouteEntry,
         currentScreen: Screen,
-        selectedItem: NavItem,
+        selectedItem: NavItem?,
         useTabletLayout: Boolean,
         isTabletSidebarExpanded: Boolean,
         isLoading: Boolean,
@@ -217,7 +217,8 @@ fun AppContent(
                                         currentScreen.getTitle().isNotBlank() ->
                                             currentScreen.getTitle()
                                         // 回退到导航项的标题资源
-                                        selectedItem.titleResId != 0 ->
+                                        selectedItem?.titleResId != null &&
+                                            selectedItem.titleResId != 0 ->
                                             stringResource(id = selectedItem.titleResId)
                                         // 最后的默认值
                                         else -> ""

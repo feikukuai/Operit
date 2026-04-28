@@ -1044,7 +1044,25 @@ fun getJsToolsDefinition(): String {
             // 对话管理工具
             Chat: {
                 // 启动对话服务
-                startService: () => toolCall("start_chat_service", {}),
+                startService: (options = {}) => {
+                    const params = {};
+                    if (options.initial_mode !== undefined && options.initial_mode !== null && String(options.initial_mode).trim() !== "") {
+                        params.initial_mode = String(options.initial_mode);
+                    }
+                    if (options.auto_enter_voice_chat !== undefined && options.auto_enter_voice_chat !== null) {
+                        params.auto_enter_voice_chat = options.auto_enter_voice_chat;
+                    }
+                    if (options.wake_launched !== undefined && options.wake_launched !== null) {
+                        params.wake_launched = options.wake_launched;
+                    }
+                    if (options.timeout_ms !== undefined && options.timeout_ms !== null && !isNaN(Number(options.timeout_ms))) {
+                        params.timeout_ms = String(options.timeout_ms);
+                    }
+                    if (options.keep_if_exists !== undefined && options.keep_if_exists !== null) {
+                        params.keep_if_exists = options.keep_if_exists;
+                    }
+                    return toolCall("start_chat_service", params);
+                },
                 // 创建新对话
                 createNew: (group, setAsCurrentChat, characterCardId) => {
                     const params = {};

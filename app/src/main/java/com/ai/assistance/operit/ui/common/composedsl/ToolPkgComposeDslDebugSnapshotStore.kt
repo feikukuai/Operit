@@ -55,6 +55,12 @@ object ToolPkgComposeDslDebugSnapshotStore {
     fun update(snapshot: ToolPkgComposeDslDebugSnapshot) {
         synchronized(lock) {
             snapshots[snapshot.routeInstanceId] = snapshot
+            val validNodePaths = snapshot.renderResult?.let { collectNodePaths(it.tree, "0") }
+            if (validNodePaths != null) {
+                layoutSnapshots[snapshot.routeInstanceId]?.entries?.removeAll { (nodePath, _) ->
+                    nodePath !in validNodePaths
+                }
+            }
             activeRouteInstanceId = snapshot.routeInstanceId
             latestRouteInstanceId = snapshot.routeInstanceId
         }
@@ -189,6 +195,39 @@ object ToolPkgComposeDslDebugSnapshotStore {
     private fun writeText(file: File, content: String) {
         file.parentFile?.mkdirs()
         file.writeText(content, StandardCharsets.UTF_8)
+    }
+
+    private fun collectNodePaths(
+        node: ToolPkgComposeDslNode,
+        nodePath: String
+    ): Set<String> {
+        val paths = LinkedHashSet<String>()
+        collectNodePathsInto(node = node, nodePath = nodePath, sink = paths)
+        return paths
+    }
+
+    private fun collectNodePathsInto(
+        node: ToolPkgComposeDslNode,
+        nodePath: String,
+        sink: MutableSet<String>
+    ) {
+        sink += nodePath
+        node.children.forEachIndexed { index, child ->
+            collectNodePathsInto(
+                node = child,
+                nodePath = "$nodePath/$index",
+                sink = sink
+            )
+        }
+        node.slots.forEach { (slotName, slotChildren) ->
+            slotChildren.forEachIndexed { index, child ->
+                collectNodePathsInto(
+                    node = child,
+                    nodePath = "$nodePath:$slotName/$index",
+                    sink = sink
+                )
+            }
+        }
     }
 
     private fun parseJsonString(raw: String): Any? {

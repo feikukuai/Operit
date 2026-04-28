@@ -16,7 +16,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import com.ai.assistance.operit.ui.common.NavItem
-import com.ai.assistance.operit.ui.main.NavGroup
 import com.ai.assistance.operit.ui.main.NavigationTransitionSource
 import com.ai.assistance.operit.ui.main.TopBarTitleContent
 import com.ai.assistance.operit.ui.main.navigation.NavigationEntrySpec
@@ -35,10 +34,9 @@ import androidx.compose.foundation.layout.RowScope
 fun TabletLayout(
         currentRouteEntry: RouteEntry,
         currentScreen: Screen,
-        selectedItem: NavItem,
+        selectedItem: NavItem?,
         isTabletSidebarExpanded: Boolean,
         isLoading: Boolean,
-        navGroups: List<NavGroup>,
         navItems: List<NavItem>,
         pluginSidebarEntries: List<NavigationEntrySpec>,
         selectedRouteId: String,
@@ -117,7 +115,7 @@ fun TabletLayout(
                         // 根据展开状态显示不同内容，保持原有逻辑稳定性
                         if (isTabletSidebarExpanded) {
                                 DrawerContent(
-                                        navGroups = navGroups,
+                                        navItems = navItems,
                                         pluginEntries = pluginSidebarEntries,
                                         selectedItem = selectedItem,
                                         selectedRouteId = selectedRouteId,
