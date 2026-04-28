@@ -346,6 +346,7 @@ export interface ComposeTextFieldStyle {
 export interface ComposeCommonProps {
   key?: string;
   onLoad?: () => void | Promise<void>;
+  topBarTitle?: ComposeChildren;
   modifier?: ComposeModifierValue;
   zIndex?: number;
   weight?: number;

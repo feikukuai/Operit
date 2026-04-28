@@ -48,6 +48,7 @@ import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.sp
 import com.ai.assistance.operit.core.tools.packTool.ToolPkgComposeDslNode
 import com.ai.assistance.operit.core.tools.packTool.ToolPkgComposeDslParser
+import com.ai.assistance.operit.ui.common.input.bringIntoViewOnImeFocus
 
 /**
  * AUTO-GENERATED from Compose Material3/Foundation component bindings.
@@ -604,7 +605,12 @@ internal fun renderTextFieldNode(
         } else {
             androidx.compose.ui.text.input.VisualTransformation.None
         },
-        modifier = applyScopedCommonModifier(Modifier.fillMaxWidth(), props, modifierResolver)
+        modifier =
+            applyScopedCommonModifier(
+                Modifier.fillMaxWidth().bringIntoViewOnImeFocus(),
+                props,
+                modifierResolver,
+            )
     )
 }
 
