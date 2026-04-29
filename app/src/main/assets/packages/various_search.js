@@ -126,6 +126,54 @@
       ]
     },
     {
+      name: search
+      description: { zh: "兼容工具名：等同于 combined_search。用于处理模型误调用 search 的情况。", en: "Compatibility alias: equivalent to combined_search. Helps when models call search by mistake." }
+      parameters: [
+        {
+          name: query
+          description: { zh: "搜索查询关键词", en: "Search query keywords." }
+          type: string
+          required: true
+        },
+        {
+          name: platforms
+          description: { zh: "可选平台列表，默认 bing,baidu,sogou,quark", en: "Optional platform list, default bing,baidu,sogou,quark." }
+          type: string
+          required: false
+        },
+        {
+          name: includeLinks
+          description: { zh: "是否返回链接列表，默认 false", en: "Whether to include links in result, default false." }
+          type: boolean
+          required: false
+        }
+      ]
+    },
+    {
+      name: search_web
+      description: { zh: "兼容工具名：网页搜索别名。视频查询会优先走百度并返回链接；普通查询走 combined_search。", en: "Compatibility alias for web search. Video queries prioritize Baidu with links; normal queries use combined_search." }
+      parameters: [
+        {
+          name: query
+          description: { zh: "搜索查询关键词", en: "Search query keywords." }
+          type: string
+          required: true
+        },
+        {
+          name: platforms
+          description: { zh: "可选平台列表，默认 bing,baidu,sogou,quark", en: "Optional platform list, default bing,baidu,sogou,quark." }
+          type: string
+          required: false
+        },
+        {
+          name: includeLinks
+          description: { zh: "是否返回链接列表，默认 false", en: "Whether to include links in result, default false." }
+          type: boolean
+          required: false
+        }
+      ]
+    },
+    {
       name: search_bing_images
       description: { zh: "使用必应图片搜索引擎进行图片搜索。返回内容会包含 visitKey 和 Images 编号；下载图片请用 download_file 的 visit_key + image_number（不要用 link_number 乱点页面链接）。", en: "Search images using Bing Images. The result includes visitKey and indexed Images; download images via download_file with visit_key + image_number (do not follow random page links via link_number)." }
       parameters: [
@@ -200,9 +248,143 @@
   ]
 }*/
 const various_search = (function () {
+    function looksLikeBaiduHomepage(rawUrl) {
+        if (!rawUrl)
+            return false;
+        const url = String(rawUrl).trim();
+        return url === "https://www.baidu.com/" || url === "http://www.baidu.com/" || url === "https://baidu.com/" || url === "http://baidu.com/";
+    }
+    function normalizeUrl(rawUrl, baseUrl) {
+        if (!rawUrl)
+            return "";
+        const text = String(rawUrl).trim();
+        if (!text)
+            return "";
+        if (text.startsWith("http://") || text.startsWith("https://"))
+            return text;
+        if (text.startsWith("//")) {
+            return `https:${text}`;
+        }
+        if (text.startsWith("/")) {
+            try {
+                const base = new URL(baseUrl);
+                return `${base.protocol}//${base.host}${text}`;
+            }
+            catch (_a) {
+                return text;
+            }
+        }
+        return text;
+    }
+    function extractBilibiliUrlFromText(rawText) {
+        if (!rawText)
+            return "";
+        const match = String(rawText).match(/BV[0-9A-Za-z]{10}/);
+        if (!match)
+            return "";
+        return `https://www.bilibili.com/video/${match[0]}`;
+    }
+    function extractUrlsFromText(rawText) {
+        if (!rawText)
+            return [];
+        const text = String(rawText);
+        const matches = text.match(/https?:\/\/[^\s)\]>"']+/g) || [];
+        const unique = [];
+        for (const url of matches) {
+            if (!unique.includes(url)) {
+                unique.push(url);
+            }
+        }
+        return unique;
+    }
+    function normalizeText(input) {
+        if (!input)
+            return "";
+        return String(input).toLowerCase().replace(/[\s\-_.,;:!?()[\]{}"'`~@#$%^&*+=|\\/<>]+/g, "");
+    }
+    function splitQueryTokens(query) {
+        const raw = String(query || "").toLowerCase();
+        const parts = raw.split(/[\s\-_.,;:!?()[\]{}"'`~@#$%^&*+=|\\/<>]+/g).filter(Boolean);
+        const cjkChars = (raw.match(/[\u4e00-\u9fa5]/g) || []);
+        const all = [...parts, ...cjkChars].filter((item) => item.length >= 1);
+        return Array.from(new Set(all)).slice(0, 24);
+    }
+    function calculateRelevance(query, titleText, followTitle, followUrl, followContent) {
+        const tokens = splitQueryTokens(query);
+        if (tokens.length === 0)
+            return 0;
+        const titleNorm = normalizeText(titleText);
+        const followTitleNorm = normalizeText(followTitle);
+        const followUrlNorm = normalizeText(followUrl);
+        const followContentNorm = normalizeText(followContent).slice(0, 1200);
+        let score = 0;
+        for (const token of tokens) {
+            if (titleNorm.includes(token))
+                score += 1;
+            if (followTitleNorm.includes(token))
+                score += 3;
+            if (followUrlNorm.includes(token))
+                score += 2;
+            if (followContentNorm.includes(token))
+                score += 1;
+        }
+        return score;
+    }
+    async function resolveLinkUrlsByVisitKey(response, query, maxCount = 8) {
+        if (!response || !response.visitKey || !response.links || !Array.isArray(response.links)) {
+            return [];
+        }
+        const resolved = [];
+        const count = Math.min(maxCount, response.links.length);
+        for (let i = 0; i < count; i++) {
+            try {
+                const link = response.links[i];
+                const text = (link && (link.text || link.title || link.name)) ? String(link.text || link.title || link.name) : "";
+                const follow = await Tools.Net.visit({
+                    visit_key: response.visitKey,
+                    link_number: i + 1
+                });
+                const followUrl = follow && follow.url ? String(follow.url) : "";
+                const followTitle = follow && follow.title ? String(follow.title) : "";
+                const followContent = follow && follow.content ? String(follow.content) : "";
+                const score = calculateRelevance(query, text, followTitle, followUrl, followContent);
+                resolved.push({ url: followUrl, score });
+            }
+            catch (_a) {
+                resolved.push({ url: "", score: 0 });
+            }
+        }
+        return resolved;
+    }
+    function pickBestLinkUrl(platform, link, sourceUrl) {
+        const direct = link && (link.realUrl || link.real_url || link.targetUrl || link.target_url || link.originUrl || link.origin_url || link.url || link.href || link.link || link.target);
+        if (platform !== "baidu") {
+            return normalizeUrl(direct ? String(direct) : "", sourceUrl);
+        }
+        const candidates = [
+            link && link.realUrl,
+            link && link.real_url,
+            link && link.targetUrl,
+            link && link.target_url,
+            link && link.originUrl,
+            link && link.origin_url,
+            link && link.href,
+            link && link.url,
+            link && link.target,
+            link && link.rawUrl,
+            link && link.link
+        ].map((item) => normalizeUrl(item ? String(item).trim() : "", sourceUrl)).filter(Boolean);
+        const nonHomepage = candidates.find((item) => !looksLikeBaiduHomepage(item));
+        if (nonHomepage)
+            return nonHomepage;
+        const fromText = extractBilibiliUrlFromText(link && (link.text || link.title || link.name));
+        if (fromText)
+            return fromText;
+        return normalizeUrl(direct ? String(direct) : "", sourceUrl);
+    }
     async function performSearch(platform, url, query, page, includeLinks = false) {
         try {
-            const response = await Tools.Net.visit(url);
+            const response = await Tools.Net.visit({ url, include_links: includeLinks });
             if (!response) {
                 throw new Error(`无法获取 ${platform} 搜索结果`);
             }
@@ -211,10 +393,24 @@ const various_search = (function () {
             if (response.visitKey !== undefined) {
                 parts.push(String(response.visitKey));
             }
-            // links: [index] text （不包含链接本身）
+            // links: [index] text - url
             if (includeLinks && response.links && Array.isArray(response.links) && response.links.length > 0) {
-                const linksLines = response.links.map((link, index) => `[${index + 1}] ${link.text}`);
+                const resolvedUrls = await resolveLinkUrlsByVisitKey(response, query);
+                const linksLines = response.links.map((link, index) => {
+                    const text = (link && (link.text || link.title || link.name)) ? String(link.text || link.title || link.name) : "Untitled";
+                    const resolvedItem = index < resolvedUrls.length ? resolvedUrls[index] : { url: "", score: 0 };
+                    const resolvedUrl = resolvedItem.score > 0 ? resolvedItem.url : "";
+                    const linkUrl = resolvedUrl || pickBestLinkUrl(platform, link, url);
+                    return linkUrl ? `[${index + 1}] ${text} - ${linkUrl}` : `[${index + 1}] ${text}`;
+                });
                 parts.push(linksLines.join('\n'));
+            }
+            else if (includeLinks && response.content) {
+                const extractedUrls = extractUrlsFromText(response.content);
+                if (extractedUrls.length > 0) {
+                    const lines = extractedUrls.slice(0, 20).map((item, index) => `[${index + 1}] ${item}`);
+                    parts.push(lines.join('\n'));
+                }
             }
             // content
             if (response.content !== undefined) {
@@ -336,7 +532,7 @@ const various_search = (function () {
         sogou: search_sogou,
         quark: search_quark
     };
-    async function combined_search(query, platforms, includeLinks = false) {
+    async function combined_search(query, platforms, includeLinks = true) {
         const platformKeysRaw = platforms.split(',');
         const platformKeys = [];
         for (const platform of platformKeysRaw) {
@@ -363,6 +559,28 @@ const various_search = (function () {
         }
         return Promise.all(searchPromises);
     }
+    function looksLikeVideoQuery(query) {
+        const q = String(query || "").toLowerCase();
+        const hints = [
+            "视频", "movie", "mv", "av", "番剧", "剧集", "b站", "bilibili",
+            "youku", "iqiyi", "腾讯视频", "播放", "在线看", "watch", "trailer"
+        ];
+        return hints.some((item) => q.includes(item.toLowerCase()));
+    }
+    async function search(query, platforms, includeLinks = false) {
+        if (looksLikeVideoQuery(query)) {
+            // For video intent, prioritize Baidu with links to maximize resolvable jump URLs.
+            return search_baidu(query, "1", true);
+        }
+        return combined_search(query, platforms || "bing,baidu,sogou,quark", includeLinks);
+    }
+    async function search_web(query, platforms, includeLinks = true) {
+        // Treat search_web as web/video-first entrypoint: prioritize Baidu with links.
+        if (!platforms || platforms.trim().length === 0) {
+            return search_baidu(query, "1", true);
+        }
+        return search(query, platforms, includeLinks);
+    }
     async function main() {
         const result = await combined_search('如何学习编程', 'bing,baidu,sogou,quark');
         console.log(JSON.stringify(result, null, 2));
@@ -378,6 +596,8 @@ const various_search = (function () {
         search_baidu,
         search_sogou,
         search_quark,
+        search,
+        search_web,
         search_bing_images,
         search_wikimedia_images,
         search_duckduckgo_images,
@@ -393,6 +613,8 @@ exports.search_bing = various_search.wrap(various_search.search_bing, ['query', 
 exports.search_baidu = various_search.wrap(various_search.search_baidu, ['query', 'page', 'includeLinks']);
 exports.search_sogou = various_search.wrap(various_search.search_sogou, ['query', 'page', 'includeLinks']);
 exports.search_quark = various_search.wrap(various_search.search_quark, ['query', 'page', 'includeLinks']);
+exports.search = various_search.wrap(various_search.search, ['query', 'platforms', 'includeLinks']);
+exports.search_web = various_search.wrap(various_search.search_web, ['query', 'platforms', 'includeLinks']);
 exports.search_bing_images = various_search.wrap(various_search.search_bing_images, ['query']);
 exports.search_wikimedia_images = various_search.wrap(various_search.search_wikimedia_images, ['query']);
 exports.search_duckduckgo_images = various_search.wrap(various_search.search_duckduckgo_images, ['query']);
