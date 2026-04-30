@@ -122,6 +122,8 @@ import com.ai.assistance.operit.ui.main.components.LocalIsCurrentScreen
 import com.ai.assistance.operit.ui.main.components.LocalSetScreenSoftInputMode
 import com.ai.assistance.operit.ui.main.components.LocalSetUseScreenImePadding
 import com.ai.assistance.operit.ui.features.token.webview.WebViewConfig
+import com.ai.assistance.operit.ui.theme.getSystemFontFamily
+import com.ai.assistance.operit.ui.theme.loadCustomFontFamily
 import com.ai.assistance.operit.util.AppLogger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -1696,6 +1698,8 @@ internal fun applyCommonModifier(
 
     if (props.bool("fillMaxSize", false)) {
         modifier = modifier.fillMaxSize()
+    } else if (props.bool("fillMaxHeight", false)) {
+        modifier = modifier.fillMaxHeight()
     } else if (props.bool("fillMaxWidth", false)) {
         modifier = modifier.fillMaxWidth()
     }
@@ -1704,7 +1708,18 @@ internal fun applyCommonModifier(
     if (paddingValue is Map<*, *>) {
         val horizontal = (paddingValue["horizontal"] as? Number)?.toFloat()
         val vertical = (paddingValue["vertical"] as? Number)?.toFloat()
-        if (horizontal != null || vertical != null) {
+        val start = (paddingValue["start"] as? Number)?.toFloat()
+        val top = (paddingValue["top"] as? Number)?.toFloat()
+        val end = (paddingValue["end"] as? Number)?.toFloat()
+        val bottom = (paddingValue["bottom"] as? Number)?.toFloat()
+        if (start != null || top != null || end != null || bottom != null) {
+            modifier = modifier.padding(
+                start = (start ?: 0f).dp,
+                top = (top ?: 0f).dp,
+                end = (end ?: 0f).dp,
+                bottom = (bottom ?: 0f).dp
+            )
+        } else if (horizontal != null || vertical != null) {
             modifier = modifier.padding(
                 horizontal = (horizontal ?: 0f).dp,
                 vertical = (vertical ?: 0f).dp
@@ -1715,9 +1730,20 @@ internal fun applyCommonModifier(
         if (allPadding != null) {
             modifier = modifier.padding(allPadding.dp)
         } else {
+            val start = props.floatOrNull("paddingStart")
+            val top = props.floatOrNull("paddingTop")
+            val end = props.floatOrNull("paddingEnd")
+            val bottom = props.floatOrNull("paddingBottom")
             val horizontal = props.floatOrNull("paddingHorizontal")
             val vertical = props.floatOrNull("paddingVertical")
-            if (horizontal != null || vertical != null) {
+            if (start != null || top != null || end != null || bottom != null) {
+                modifier = modifier.padding(
+                    start = (start ?: 0f).dp,
+                    top = (top ?: 0f).dp,
+                    end = (end ?: 0f).dp,
+                    bottom = (bottom ?: 0f).dp
+                )
+            } else if (horizontal != null || vertical != null) {
                 modifier = modifier.padding(
                     horizontal = (horizontal ?: 0f).dp,
                     vertical = (vertical ?: 0f).dp
@@ -1736,6 +1762,24 @@ internal fun applyCommonModifier(
             } else {
                 modifier = modifier.background(brush)
             }
+        }
+    } else {
+        val backgroundColor =
+            resolveColorValue(
+                props["backgroundColor"]
+                    ?: props["background"]
+                    ?: props["containerColor"]
+            )
+        if (backgroundColor != null) {
+            val shape = shapeFromValue(props["backgroundShape"]) ?: shapeFromValue(props["shape"])
+            val alpha = props.floatOrNull("backgroundAlpha") ?: props.floatOrNull("alpha")
+            val resolvedColor = if (alpha != null) backgroundColor.copy(alpha = alpha) else backgroundColor
+            modifier =
+                if (shape != null) {
+                    modifier.background(resolvedColor, shape = shape)
+                } else {
+                    modifier.background(resolvedColor)
+                }
         }
     }
 
@@ -2206,6 +2250,69 @@ internal fun Map<String, Any?>.fontWeightOrNull(key: String): FontWeight? {
             ?: fontWeightGetterByToken[if (token == "regular") "normal" else token]
             ?: fontWeightGetterByToken[if (token == "heavy") "black" else token]
     return getter?.invoke(FontWeight.Companion) as? FontWeight
+}
+
+@Composable
+internal fun resolveComposeDslFontFamily(raw: String?): androidx.compose.ui.text.font.FontFamily? {
+    val normalized = raw?.trim().orEmpty()
+    if (normalized.isBlank()) {
+        return null
+    }
+    return when (normalizeToken(normalized)) {
+        "default" -> androidx.compose.ui.text.font.FontFamily.Default
+        "serif" -> getSystemFontFamily("serif")
+        "sansserif", "sans", "sans-serif" -> getSystemFontFamily("sans-serif")
+        "monospace", "mono" -> getSystemFontFamily("monospace")
+        "cursive" -> getSystemFontFamily("cursive")
+        else -> loadCustomFontFamily(LocalContext.current, normalized)
+    }
+}
+
+@Composable
+internal fun Map<String, Any?>.fontFamilyOrNull(key: String): androidx.compose.ui.text.font.FontFamily? {
+    return resolveComposeDslFontFamily(stringOrNull(key))
+}
+
+@Composable
+internal fun Map<String, Any?>.resolvedTextStyle(
+    key: String,
+    includeColor: Boolean = false
+): androidx.compose.ui.text.TextStyle {
+    var nextStyle = textStyle(key)
+    fontWeightOrNull("fontWeight")?.let { fontWeight ->
+        nextStyle = nextStyle.copy(fontWeight = fontWeight)
+    }
+    floatOrNull("fontSize")?.let { fontSize ->
+        nextStyle = nextStyle.copy(fontSize = fontSize.sp)
+    }
+    fontFamilyOrNull("fontFamily")?.let { fontFamily ->
+        nextStyle = nextStyle.copy(fontFamily = fontFamily)
+    }
+    if (includeColor) {
+        colorOrNull("color")?.let { color ->
+            nextStyle = nextStyle.copy(color = color)
+        }
+    }
+    return nextStyle
+}
+
+@Composable
+internal fun composeDslTextFieldStyleFromValue(value: Any?): androidx.compose.ui.text.TextStyle? {
+    val map = value as? Map<*, *> ?: return null
+    val fontSize = (map["fontSize"] as? Number)?.toFloat() ?: 14f
+    val fontWeight =
+        map["fontWeight"]?.toString()?.let { token ->
+            mapOf<String, Any?>("fontWeight" to token).fontWeightOrNull("fontWeight")
+        } ?: FontWeight.SemiBold
+    val color =
+        resolveColorValue(map["color"]) ?: MaterialTheme.colorScheme.primary
+    val fontFamily = resolveComposeDslFontFamily(map["fontFamily"]?.toString())
+    return androidx.compose.ui.text.TextStyle(
+        color = color,
+        fontSize = fontSize.sp,
+        fontWeight = fontWeight,
+        fontFamily = fontFamily
+    )
 }
 
 @Composable

@@ -321,6 +321,8 @@ def map_param_to_ts(component: str, param: Param) -> Optional[Tuple[str, str, bo
         return ("text", "string", not param.has_default)
     if component == "Icon" and name == "contentDescription":
         return ("contentDescription", "string", False)
+    if component == "Image" and name == "contentDescription":
+        return ("contentDescription", "string", False)
     if name == "checked":
         return ("checked", "boolean", not param.has_default)
     if name == "enabled":
@@ -375,6 +377,8 @@ def map_param_to_ts(component: str, param: Param) -> Optional[Tuple[str, str, bo
         return ("style", "ComposeTextStyle", False)
     if "FontWeight" in type_name:
         return ("fontWeight", "string", False)
+    if "FontFamily" in type_name:
+        return ("fontFamily", "string", False)
 
     return None
 
@@ -659,6 +663,8 @@ def _is_supported_generic_param(param: Param) -> bool:
     if "Arrangement." in type_name or "Alignment." in type_name or _is_box_alignment_type(type_name):
         return True
     if "TextStyle" in type_name or "FontWeight" in type_name:
+        return True
+    if "FontFamily" in type_name:
         return True
 
     return param.has_default
@@ -1038,21 +1044,8 @@ def build_component_renderer_function(spec: ComponentSpec, params: Sequence[Para
                 modifierResolver: ComposeDslModifierResolver
             ) {
                 val props = node.props
-                val textStyle = props.textStyle("style")
+                val resolvedStyle = props.resolvedTextStyle("style")
                 val textColor = props.colorOrNull("color")
-                val fontWeight = props.fontWeightOrNull("fontWeight")
-                val fontSize = props.floatOrNull("fontSize")
-                val resolvedStyle =
-                    textStyle.let { style ->
-                        var nextStyle = style
-                        if (fontWeight != null) {
-                            nextStyle = nextStyle.copy(fontWeight = fontWeight)
-                        }
-                        if (fontSize != null) {
-                            nextStyle = nextStyle.copy(fontSize = fontSize.sp)
-                        }
-                        nextStyle
-                    }
                 Text(
                     text = props.string("text"),
                     style = resolvedStyle,
@@ -1111,20 +1104,7 @@ def build_component_renderer_function(spec: ComponentSpec, params: Sequence[Para
                     }
                 }
                 val textStyle =
-                    styleMap?.let {
-                        val fontSize = (it["fontSize"] as? Number)?.toFloat() ?: 14f
-                        val fontWeight =
-                            it["fontWeight"]?.toString()?.let { token ->
-                                mapOf<String, Any?>("fontWeight" to token).fontWeightOrNull("fontWeight")
-                            } ?: FontWeight.SemiBold
-                        val color = it["color"]?.toString()?.let { rawColor -> resolveColorToken(rawColor) }
-                            ?: MaterialTheme.colorScheme.primary
-                        androidx.compose.ui.text.TextStyle(
-                            color = color,
-                            fontSize = fontSize.sp,
-                            fontWeight = fontWeight
-                        )
-                    }
+                    composeDslTextFieldStyleFromValue(styleMap)
 
                 OutlinedTextField(
                     value = textFieldValue,
@@ -1468,6 +1448,35 @@ def build_component_renderer_function(spec: ComponentSpec, params: Sequence[Para
             """
         ).strip()
 
+    if component == "BasicText":
+        return textwrap.dedent(
+            """
+            @Composable
+            internal fun renderBasicTextNode(
+                node: ToolPkgComposeDslNode,
+                onAction: (String, Any?) -> Unit,
+                nodePath: String,
+                modifierResolver: ComposeDslModifierResolver
+            ) {
+                val props = node.props
+                val onTextLayoutActionId = ToolPkgComposeDslParser.extractActionId(props["onTextLayout"])
+                androidx.compose.foundation.text.BasicText(
+                    text = props.string("text"),
+                    modifier = applyScopedCommonModifier(Modifier, props, modifierResolver),
+                    style = props.resolvedTextStyle("style", includeColor = true),
+                    softWrap = props.bool("softWrap", false),
+                    maxLines = props.int("maxLines", 0),
+                    overflow = props.textOverflow("overflow"),
+                    onTextLayout = {
+                        if (!onTextLayoutActionId.isNullOrBlank()) {
+                            onAction(onTextLayoutActionId, null)
+                        }
+                    }
+                )
+            }
+            """
+        ).strip()
+
     return build_generic_renderer_function(spec, params)
 
 
@@ -1533,6 +1542,8 @@ def _generic_default_value_expr(component: str, param: Param) -> Optional[str]:
         return 'props.textStyle("style")'
     if "FontWeight" in type_name:
         return 'props.fontWeightOrNull("fontWeight") ?: FontWeight.Normal'
+    if "FontFamily" in type_name:
+        return 'props.fontFamilyOrNull("fontFamily") ?: androidx.compose.ui.text.font.FontFamily.Default'
     if "Dp" in type_name:
         return f'props.dp("{name}")'
     if _is_bool_type(type_name):
@@ -1771,6 +1782,7 @@ def build_ts_generated_file(
     lines.append("  ComposePadding,")
     lines.append("  ComposeShape,")
     lines.append("  ComposeTextFieldStyle,")
+    lines.append("  ComposeTextOverflow,")
     lines.append("  ComposeTextStyle,")
     for import_name in extra_ts_imports:
         lines.append(f"  {import_name},")
@@ -1811,6 +1823,10 @@ def build_ts_generated_file(
             emitted.setdefault("value", ("string", True))
             emitted.setdefault("isPassword", ("boolean", False))
             emitted.setdefault("style", ("ComposeTextFieldStyle", False))
+
+        if component == "Text" or component == "BasicText":
+            emitted.setdefault("fontSize", ("number", False))
+            emitted.setdefault("fontFamily", ("string", False))
 
         if component == "Switch":
             emitted.setdefault("checkedThumbColor", ("ComposeColor", False))

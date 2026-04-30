@@ -46,18 +46,20 @@ import com.ai.assistance.operit.data.model.EmbeddingDimensionUsage
 import com.ai.assistance.operit.data.model.EmbeddingRebuildProgress
 import com.ai.assistance.operit.data.model.MemoryScoreMode
 import com.ai.assistance.operit.data.model.MemorySearchConfig
+import com.ai.assistance.operit.data.preferences.MemorySearchSettingsPreferences
 import kotlin.math.roundToInt
 
 @Composable
 fun MemorySearchSettingsDialog(
     currentConfig: MemorySearchConfig,
+    autoSaveIntervalMinutes: Int,
     cloudConfig: CloudEmbeddingConfig,
     dimensionUsage: EmbeddingDimensionUsage,
     rebuildProgress: EmbeddingRebuildProgress,
     error: String?,
     isRebuilding: Boolean,
     onDismiss: () -> Unit,
-    onSave: (MemorySearchConfig, CloudEmbeddingConfig) -> Unit,
+    onSave: (MemorySearchConfig, CloudEmbeddingConfig, Int) -> Unit,
     onRebuild: () -> Unit,
     onSimulateSearch: () -> Unit
 ) {
@@ -66,6 +68,9 @@ fun MemorySearchSettingsDialog(
     var vectorWeight by remember(currentConfig) { mutableFloatStateOf(currentConfig.vectorWeight) }
     var edgeWeight by remember(currentConfig) { mutableFloatStateOf(currentConfig.edgeWeight) }
     var scoreMode by remember(currentConfig) { mutableStateOf(currentConfig.scoreMode) }
+    var editedAutoSaveIntervalMinutes by remember(autoSaveIntervalMinutes) {
+        mutableFloatStateOf(autoSaveIntervalMinutes.toFloat())
+    }
 
     var cloudEnabled by remember(cloudConfig) { mutableStateOf(cloudConfig.enabled) }
     var endpoint by remember(cloudConfig) { mutableStateOf(cloudConfig.endpoint) }
@@ -126,6 +131,19 @@ fun MemorySearchSettingsDialog(
                         valueText = String.format("%.2f", edgeWeight),
                         valueRange = 0.0f..2.0f,
                         onValueChange = { edgeWeight = it }
+                    )
+                }
+
+                SettingsSection(title = stringResource(R.string.memory_auto_save_settings_title)) {
+                    SliderSettingItem(
+                        title = stringResource(R.string.memory_auto_save_interval_minutes),
+                        value = editedAutoSaveIntervalMinutes,
+                        valueText = "${editedAutoSaveIntervalMinutes.roundToInt()} min",
+                        valueRange = MemorySearchSettingsPreferences.MIN_AUTO_SAVE_INTERVAL_MINUTES.toFloat()..
+                            MemorySearchSettingsPreferences.MAX_AUTO_SAVE_INTERVAL_MINUTES.toFloat(),
+                        steps = MemorySearchSettingsPreferences.MAX_AUTO_SAVE_INTERVAL_MINUTES -
+                            MemorySearchSettingsPreferences.MIN_AUTO_SAVE_INTERVAL_MINUTES - 1,
+                        onValueChange = { editedAutoSaveIntervalMinutes = it }
                     )
                 }
 
@@ -274,7 +292,8 @@ fun MemorySearchSettingsDialog(
                             vectorWeight = vectorWeight,
                             edgeWeight = edgeWeight
                         ).normalized(),
-                        editedCloudConfig
+                        editedCloudConfig,
+                        editedAutoSaveIntervalMinutes.roundToInt()
                     )
                 }
             ) {
@@ -290,6 +309,8 @@ fun MemorySearchSettingsDialog(
                         tagWeight = 0.0f
                         vectorWeight = 0.0f
                         edgeWeight = 0.4f
+                        editedAutoSaveIntervalMinutes =
+                            MemorySearchSettingsPreferences.DEFAULT_AUTO_SAVE_INTERVAL_MINUTES.toFloat()
                     }
                 ) {
                     Text(stringResource(R.string.memory_search_reset_default))
@@ -371,6 +392,7 @@ private fun SliderSettingItem(
     value: Float,
     valueText: String,
     valueRange: ClosedFloatingPointRange<Float>,
+    steps: Int = 0,
     onValueChange: (Float) -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -389,7 +411,8 @@ private fun SliderSettingItem(
         Slider(
             value = value,
             onValueChange = onValueChange,
-            valueRange = valueRange
+            valueRange = valueRange,
+            steps = steps
         )
     }
 }

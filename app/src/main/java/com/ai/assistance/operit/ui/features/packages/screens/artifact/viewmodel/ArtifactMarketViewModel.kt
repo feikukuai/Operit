@@ -9,14 +9,17 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.ai.assistance.operit.core.tools.AIToolHandler
 import com.ai.assistance.operit.core.tools.packTool.PackageManager
+import com.ai.assistance.operit.data.api.MarketStatsApiService
 import com.ai.assistance.operit.data.api.GitHubApiService
 import com.ai.assistance.operit.data.api.GitHubIssue
 import com.ai.assistance.operit.data.preferences.GitHubAuthPreferences
 import com.ai.assistance.operit.ui.features.packages.market.ArtifactMarketScope
+import com.ai.assistance.operit.ui.features.packages.market.collectArtifactPredecessorPublisherLogins
 import com.ai.assistance.operit.ui.features.packages.market.ArtifactPublishClusterContext
 import com.ai.assistance.operit.ui.features.packages.market.ForgeRepoInfo
 import com.ai.assistance.operit.ui.features.packages.market.GitHubForgePublishService
 import com.ai.assistance.operit.ui.features.packages.market.GitHubIssueMarketService
+import com.ai.assistance.operit.ui.features.packages.market.inspectLocalArtifactAuthorDeclaration
 import com.ai.assistance.operit.ui.features.packages.market.LocalPublishableArtifact
 import com.ai.assistance.operit.ui.features.packages.market.MarketRegistrationPayload
 import com.ai.assistance.operit.ui.features.packages.market.PublishArtifactRequest
@@ -49,6 +52,7 @@ class ArtifactMarketViewModel(
     private val scope: ArtifactMarketScope
 ) : ViewModel() {
     private val githubApiService = GitHubApiService(context)
+    private val marketStatsApiService = MarketStatsApiService()
     private val githubAuth = GitHubAuthPreferences.getInstance(context)
     private val forgePublishService = GitHubForgePublishService(context, githubApiService)
     private val packageManager =
@@ -140,12 +144,15 @@ class ArtifactMarketViewModel(
                         .mapNotNull { source ->
                             val type = inferArtifactType(source.isToolPkg, source.fileExtension) ?: return@mapNotNull null
                             if (type !in supportedTypes) return@mapNotNull null
+                            val authorDeclaration = inspectLocalArtifactAuthorDeclaration(source)
                             LocalPublishableArtifact(
                                 type = type,
                                 packageName = source.packageName,
                                 displayName = source.displayName,
                                 description = source.description,
                                 sourceFile = File(source.sourcePath),
+                                hasDeclaredAuthorField = authorDeclaration.hasAuthorField,
+                                declaredAuthorSlotCount = authorDeclaration.declaredAuthorSlotCount,
                                 inferredVersion = source.inferredVersion
                             )
                         }
@@ -424,6 +431,7 @@ class ArtifactMarketViewModel(
                     displayName = resolvedRequest.displayName,
                     allowExistingOpenDuplicate = resolvedRequest.publishContext != null
                 )
+                validateContinuationAuthorDeclaration(resolvedRequest)
 
                 forgePublishService.publishArtifact(
                     request = resolvedRequest,
@@ -472,6 +480,40 @@ class ArtifactMarketViewModel(
                 _publishErrorMessage.value = e.message ?: "Failed to publish artifact"
                 AppLogger.e(TAG, "Failed to publish artifact", e)
             }
+        }
+    }
+
+    private suspend fun validateContinuationAuthorDeclaration(request: PublishArtifactRequest) {
+        val publishContext = request.publishContext ?: return
+        val parentNodeIds =
+            publishContext.parentNodeIds
+                .map(String::trim)
+                .filter(String::isNotBlank)
+        if (parentNodeIds.isEmpty()) {
+            return
+        }
+
+        if (!request.localArtifact.hasDeclaredAuthorField) {
+            return
+        }
+
+        val projectDetail =
+            marketStatsApiService.getArtifactProject(publishContext.projectId).getOrElse { error ->
+                throw error
+            }
+        val predecessorPublisherCount =
+            collectArtifactPredecessorPublisherLogins(
+                project = projectDetail,
+                parentNodeIds = parentNodeIds
+            ).size
+        if (predecessorPublisherCount <= 0) {
+            return
+        }
+
+        if (request.localArtifact.declaredAuthorSlotCount < predecessorPublisherCount) {
+            throw IllegalStateException(
+                "当前作品已声明 author，但数量不足。当前直接前驱节点的 GitHub 发布者共有 $predecessorPublisherCount 个；author 要么不写，要么至少提供 $predecessorPublisherCount 个位置。"
+            )
         }
     }
 

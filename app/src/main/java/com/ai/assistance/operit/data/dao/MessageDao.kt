@@ -24,6 +24,15 @@ interface MessageDao {
     @Query("SELECT * FROM messages WHERE chatId = :chatId ORDER BY timestamp DESC LIMIT :limit")
     suspend fun getMessagesForChatDesc(chatId: String, limit: Int): List<MessageEntity>
 
+    @Query(
+        "SELECT * FROM messages WHERE chatId = :chatId AND timestamp <= :maxTimestamp ORDER BY timestamp DESC LIMIT :limit"
+    )
+    suspend fun getMessagesForChatBeforeTimestampDesc(
+        chatId: String,
+        maxTimestamp: Long,
+        limit: Int
+    ): List<MessageEntity>
+
     @Query("SELECT chatId AS chatId, COUNT(*) AS count FROM messages GROUP BY chatId")
     suspend fun getMessageCountsByChatId(): List<ChatMessageCount>
 

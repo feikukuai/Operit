@@ -94,6 +94,16 @@ description: 用于 Operit Sandbox Package 开发。
 
 撰写 Sandbox Package 时，不要凭记忆硬写，先查本地 skill 资料。
 
+开始正式开发前，先遵守下面这些硬规则：
+
+1. 每次正式开始新的开发任务前，先按第一部分重新拉取并执行一次安装/更新脚本。
+2. 实际开发目录只能是 `/sdcard/Download/Operit/dev_package/{packageId}/`；不要去别的目录零散拉文件、改文件或做安装测试。
+3. 开发前把 `/sdcard/Download/Operit/skills/SandboxPackage_DEV/types/` 复制到对应的 `dev_package/{packageId}/` 里；如果以前复制过，也直接覆盖。
+4. 尽可能使用终端进行开发，优先撰写 `ts + js`，再通过 `ts` 编译得到最终 `js`。
+5. `tsconfig` 可以参考 `examples/` 里的现成示例，不要自己凭空乱写一套。
+6. 如果要做示范，最好做两个，第二个用自定义布局。
+7. 如果是基于已有包继续开发或合并开发，必须沿用原来的 `packageId` 和插件名字，不要改成别的 id，也不要改插件命名。
+
 ### 方案选择优先级
 
 默认优先考虑撰写普通 JS 包脚本，不要一上来就选择 `ToolPkg`。

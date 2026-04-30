@@ -9,6 +9,7 @@ import type {
   ComposePadding,
   ComposeShape,
   ComposeTextFieldStyle,
+  ComposeTextOverflow,
   ComposeTextStyle,
   ComposeCanvasCommand,
   ComposeContentScale,
@@ -65,6 +66,8 @@ export interface ComposeGeneratedLazyRowProps extends ComposeCommonProps {
 
 export interface ComposeGeneratedTextProps extends ComposeCommonProps {
   color?: ComposeColor;
+  fontFamily?: string;
+  fontSize?: number;
   fontWeight?: string;
   maxLines?: number;
   overflow?: ComposeTextOverflow;
@@ -682,6 +685,8 @@ export interface ComposeGeneratedBoxWithConstraintsProps extends ComposeCommonPr
 }
 
 export interface ComposeGeneratedBasicTextProps extends ComposeCommonProps {
+  fontFamily?: string;
+  fontSize?: number;
   maxLines?: number;
   overflow?: ComposeTextOverflow;
   softWrap?: boolean;
@@ -698,7 +703,7 @@ export interface ComposeGeneratedDisableSelectionProps extends ComposeCommonProp
 export interface ComposeGeneratedImageProps extends ComposeCommonProps {
   alpha?: number;
   contentAlignment?: ComposeAlignment;
-  contentDescription: string;
+  contentDescription?: string;
   contentScale?: ComposeContentScale;
   fileUri?: string;
   icon?: string;

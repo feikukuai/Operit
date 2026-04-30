@@ -12,36 +12,6 @@ import com.ai.assistance.operit.util.LocaleUtils
 
 object SystemPromptConfig {
 
-    private const val BEHAVIOR_GUIDELINES_CORE_EN = """
-BEHAVIOR GUIDELINES:
-- Tool Scheduling: All tools may be called either in parallel or sequentially. Choose whichever best fits the task. The tool system will decide and handle execution conflicts automatically.
-- Keep responses concise and clear. Avoid lengthy explanations unless requested.
-- Don't repeat previous conversation steps. Maintain context naturally.
-- Acknowledge your limitations honestly. If you don't know something, say so."""
-    private const val BEHAVIOR_GUIDELINES_ENDING_EN = """
-- End every response in exactly ONE of the following ways:
-  1. Tool Call: To perform an action. A tool call must be the absolute last thing in your response. Nothing can follow it.
-  2. Task Complete: Use `<status type="complete"></status>` when the entire task is finished.
-  3. Wait for User: Use `<status type="wait_for_user_need"></status>` if you need user input or are unsure how to proceed.
-- Critical Rule: The three ending methods are mutually exclusive. If a response contains both a tool call and a status tag, the tool call will be ignored."""
-    private const val BEHAVIOR_GUIDELINES_EN =
-        BEHAVIOR_GUIDELINES_CORE_EN + BEHAVIOR_GUIDELINES_ENDING_EN
-
-    private const val BEHAVIOR_GUIDELINES_CORE_CN = """
-行为准则：
-- 工具调度：所有工具都可以并行或串行调用。根据任务需要选择即可，工具系统会自行决定并处理执行冲突问题。
-- 回答应简洁明了，除非用户要求，否则避免冗长的解释。
-- 不要重复之前的对话步骤，自然地保持上下文。
-- 坦诚承认自己的局限性，如果不知道某事，就直接说明。"""
-    private const val BEHAVIOR_GUIDELINES_ENDING_CN = """
-- 每次响应都必须以以下三种方式之一结束：
-  1. 工具调用：用于执行操作。工具调用必须是响应的最后一部分，后面不能有任何内容。
-  2. 任务完成：当整个任务完成时，使用 `<status type="complete"></status>`。
-  3. 等待用户：当你需要用户输入或不确定如何继续时，使用 `<status type="wait_for_user_need"></status>`。
-- 关键规则：以上三种结束方式互斥。如果响应中同时包含工具调用和状态标签，工具调用将被忽略。"""
-    private const val BEHAVIOR_GUIDELINES_CN =
-        BEHAVIOR_GUIDELINES_CORE_CN + BEHAVIOR_GUIDELINES_ENDING_CN
-
     private const val TOOL_USAGE_GUIDELINES_EN = """
 When calling a tool, the user will see your response, and then will automatically send the tool results back to you in a follow-up message.
 
@@ -51,7 +21,7 @@ To use a tool, use this format in your response:
 <param name="parameter_name">parameter_value</param>
 </tool>
 
-When outputting XML (e.g., <tool>, <status>), insert a newline before it and ensure the opening tag starts at the beginning of a line.
+When outputting XML (e.g., <tool>), insert a newline before it and ensure the opening tag starts at the beginning of a line.
 
 Based on user needs, proactively select the most appropriate tool or combination of tools. For complex tasks, you can break down the problem and use different tools step by step to solve it. After using each tool, clearly explain the execution results and suggest the next steps."""
     private const val TOOL_USAGE_GUIDELINES_CN = """
@@ -63,32 +33,9 @@ Based on user needs, proactively select the most appropriate tool or combination
 <param name="parameter_name">parameter_value</param>
 </tool>
 
-输出XML（如 <tool>、<status>）时，必须在XML前换行，并确保起始标签位于行首。
+输出XML（如 <tool>）时，必须在XML前换行，并确保起始标签位于行首。
 
 根据用户需求，主动选择最合适的工具或工具组合。对于复杂任务，你可以分解问题并使用不同的工具逐步解决。使用每个工具后，清楚地解释执行结果并建议下一步。"""
-
-    private fun getBehaviorGuidelines(useEnglish: Boolean, disableStatusTags: Boolean): String {
-        if (disableStatusTags) return ""
-        return if (useEnglish) BEHAVIOR_GUIDELINES_EN else BEHAVIOR_GUIDELINES_CN
-    }
-
-    private fun getToolUsageGuidelines(useEnglish: Boolean, disableStatusTags: Boolean): String {
-        val guidelines = if (useEnglish) TOOL_USAGE_GUIDELINES_EN else TOOL_USAGE_GUIDELINES_CN
-        if (!disableStatusTags) {
-            return guidelines
-        }
-        return if (useEnglish) {
-            guidelines.replace(
-                "When outputting XML (e.g., <tool>, <status>), insert a newline before it and ensure the opening tag starts at the beginning of a line.",
-                "When outputting XML (e.g., <tool>), insert a newline before it and ensure the opening tag starts at the beginning of a line."
-            )
-        } else {
-            guidelines.replace(
-                "输出XML（如 <tool>、<status>）时，必须在XML前换行，并确保起始标签位于行首。",
-                "输出XML（如 <tool>）时，必须在XML前换行，并确保起始标签位于行首。"
-            )
-        }
-    }
 
     private const val PACKAGE_SYSTEM_GUIDELINES_EN = """
 PACKAGE SYSTEM
@@ -193,8 +140,6 @@ PACKAGE SYSTEM
 """
 BEGIN_SELF_INTRODUCTION_SECTION
 
-$BEHAVIOR_GUIDELINES_EN
-
 WORKSPACE_GUIDELINES_SECTION
 
 TOOL_USAGE_GUIDELINES_SECTION
@@ -211,8 +156,6 @@ AVAILABLE_TOOLS_SECTION
     val SYSTEM_PROMPT_TEMPLATE_CN =
 """
 BEGIN_SELF_INTRODUCTION_SECTION
-
-$BEHAVIOR_GUIDELINES_CN
 
 WORKSPACE_GUIDELINES_SECTION
 
@@ -236,10 +179,6 @@ AVAILABLE_TOOLS_SECTION""".trimIndent()
         - **TOOL SCHEDULING**: All tools may be called either in parallel or sequentially. Choose whichever best fits the task. The tool system will decide and handle execution conflicts automatically.
         - **Summarize and Conclude**: If the task requires using tools to gather information (e.g., reading files, searching), you **MUST** process that information and provide a concise, conclusive summary as your final output. Do not output raw data. Your final answer is the only thing passed to the next agent.
         - Be concise and factual. Avoid lengthy explanations.
-        - End every response in exactly ONE of the following ways:
-          1. Tool Call: To perform an action. A tool call must be the absolute last thing in your response.
-          2. Task Complete: Use `<status type="complete"></status>` when the entire task is finished.
-        - **CRITICAL RULE**: You are NOT allowed to use `<status type="wait_for_user_need"></status>`. If you cannot proceed without user input, you must use `<status type="complete"></status>` and the calling system will handle the user interaction.
 
         TOOL_USAGE_GUIDELINES_SECTION
 
@@ -309,7 +248,6 @@ AVAILABLE_TOOLS_SECTION""".trimIndent()
           chatModelHasDirectAudio: Boolean = false,
           chatModelHasDirectVideo: Boolean = false,
           useToolCallApi: Boolean = false,
-          disableStatusTags: Boolean = false,
           toolVisibility: Map<String, Boolean> = emptyMap(),
           allowedPackageNames: Set<String>? = null,
           allowedSkillNames: Set<String>? = null,
@@ -394,9 +332,6 @@ AVAILABLE_TOOLS_SECTION""".trimIndent()
     } else {
         if (useEnglish) SYSTEM_PROMPT_TEMPLATE else SYSTEM_PROMPT_TEMPLATE_CN
     }
-    val defaultBehaviorGuidelines = if (useEnglish) BEHAVIOR_GUIDELINES_EN else BEHAVIOR_GUIDELINES_CN
-    val behaviorGuidelines = getBehaviorGuidelines(useEnglish, disableStatusTags)
-
     val workspaceRuleFile =
         WorkspaceAttachmentProcessor.readWorkspaceRootRuleFile(
             context = context,
@@ -416,7 +351,6 @@ AVAILABLE_TOOLS_SECTION""".trimIndent()
 
     // Build prompt with appropriate sections
     var prompt = templateToUse
-        .replace(defaultBehaviorGuidelines, behaviorGuidelines)
         .replace("ACTIVE_PACKAGES_SECTION", if (enableTools) packagesSection.toString() else "")
         .replace("WORKSPACE_GUIDELINES_SECTION", workspaceGuidelines)
 
@@ -467,7 +401,7 @@ AVAILABLE_TOOLS_SECTION""".trimIndent()
                 .replace("AVAILABLE_TOOLS_SECTION", "")
         } else {
             prompt = prompt
-                .replace("TOOL_USAGE_GUIDELINES_SECTION", getToolUsageGuidelines(useEnglish, disableStatusTags))
+                .replace("TOOL_USAGE_GUIDELINES_SECTION", if (useEnglish) TOOL_USAGE_GUIDELINES_EN else TOOL_USAGE_GUIDELINES_CN)
                 .replace(
                     "PACKAGE_SYSTEM_GUIDELINES_SECTION",
                     if (packageSystemVisible) {
@@ -485,11 +419,7 @@ AVAILABLE_TOOLS_SECTION""".trimIndent()
             .replace("TOOL_USAGE_GUIDELINES_SECTION", "")
             .replace("PACKAGE_SYSTEM_GUIDELINES_SECTION", "")
             .replace("AVAILABLE_TOOLS_SECTION", "")
-            .replace(defaultBehaviorGuidelines, "")
             .replace(workspaceGuidelines, "")
-        if (behaviorGuidelines.isNotEmpty()) {
-            prompt = prompt.replace(behaviorGuidelines, "")
-        }
     }
 
 
@@ -617,7 +547,6 @@ AVAILABLE_TOOLS_SECTION""".trimIndent()
           chatModelHasDirectAudio: Boolean = false,
           chatModelHasDirectVideo: Boolean = false,
           useToolCallApi: Boolean = false,
-          disableStatusTags: Boolean = false,
           toolVisibility: Map<String, Boolean> = emptyMap(),
           allowedPackageNames: Set<String>? = null,
           allowedSkillNames: Set<String>? = null,
@@ -648,7 +577,6 @@ AVAILABLE_TOOLS_SECTION""".trimIndent()
                         "chatModelHasDirectAudio" to chatModelHasDirectAudio,
                         "chatModelHasDirectVideo" to chatModelHasDirectVideo,
                         "useToolCallApi" to useToolCallApi,
-                        "disableStatusTags" to disableStatusTags,
                         "toolVisibility" to toolVisibility,
                         "allowedPackageNames" to allowedPackageNames.orEmpty().toList(),
                         "allowedSkillNames" to allowedSkillNames.orEmpty().toList(),
@@ -677,7 +605,6 @@ AVAILABLE_TOOLS_SECTION""".trimIndent()
             chatModelHasDirectAudio = chatModelHasDirectAudio,
             chatModelHasDirectVideo = chatModelHasDirectVideo,
             useToolCallApi = useToolCallApi,
-            disableStatusTags = disableStatusTags,
             toolVisibility = toolVisibility,
             allowedPackageNames = allowedPackageNames,
             allowedSkillNames = allowedSkillNames,
@@ -730,8 +657,7 @@ AVAILABLE_TOOLS_SECTION""".trimIndent()
         hasVideoRecognition = false,
         chatModelHasDirectAudio = false,
         chatModelHasDirectVideo = false,
-        useToolCallApi = false,
-        disableStatusTags = false
+        useToolCallApi = false
     )
   }
 }

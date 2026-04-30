@@ -108,6 +108,7 @@ import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
 import com.ai.assistance.operit.R
 import com.ai.assistance.operit.api.chat.EnhancedAIService
+import com.ai.assistance.operit.api.chat.library.MemoryAutoSaveScheduler
 import com.ai.assistance.operit.core.tools.ToolProgressBus
 import com.ai.assistance.operit.data.model.AttachmentInfo
 import com.ai.assistance.operit.data.model.ChatMessage
@@ -126,7 +127,9 @@ import com.ai.assistance.operit.data.preferences.ApiPreferences
 import com.ai.assistance.operit.data.preferences.FunctionConfigMapping
 import com.ai.assistance.operit.data.preferences.FunctionalConfigManager
 import com.ai.assistance.operit.data.preferences.ModelConfigManager
+import com.ai.assistance.operit.data.preferences.MemorySearchSettingsPreferences
 import com.ai.assistance.operit.data.preferences.UserPreferencesManager
+import com.ai.assistance.operit.data.repository.MemoryAutoSaveCandidateRepository
 import com.ai.assistance.operit.ui.common.animations.SimpleAnimatedVisibility
 import com.ai.assistance.operit.ui.features.chat.components.AttachmentChip
 import com.ai.assistance.operit.ui.features.chat.components.AttachmentSelectorPopupPanel
@@ -204,8 +207,6 @@ fun AgentChatInputSection(
     onToggleDisableStreamOutput: () -> Unit = {},
     disableUserPreferenceDescription: Boolean = false,
     onToggleDisableUserPreferenceDescription: () -> Unit = {},
-    disableStatusTags: Boolean = false,
-    onToggleDisableStatusTags: () -> Unit = {},
     onNavigateToUserPreferences: () -> Unit = {},
     onNavigateToPackageManager: () -> Unit = {},
     toolPromptVisibility: Map<String, Boolean> = emptyMap(),
@@ -1373,8 +1374,6 @@ fun AgentChatInputSection(
                 onToggleDisableStreamOutput = onToggleDisableStreamOutput,
                 disableUserPreferenceDescription = disableUserPreferenceDescription,
                 onToggleDisableUserPreferenceDescription = onToggleDisableUserPreferenceDescription,
-                disableStatusTags = disableStatusTags,
-                onToggleDisableStatusTags = onToggleDisableStatusTags,
                 toolPromptVisibility = toolPromptVisibility,
                 onSaveToolPromptVisibilityMap = onSaveToolPromptVisibilityMap,
                 onNavigateToPackageManager = onNavigateToPackageManager,
@@ -2188,8 +2187,6 @@ private fun AgentExtraSettingsPopup(
     onToggleDisableStreamOutput: () -> Unit,
     disableUserPreferenceDescription: Boolean,
     onToggleDisableUserPreferenceDescription: () -> Unit,
-    disableStatusTags: Boolean,
-    onToggleDisableStatusTags: () -> Unit,
     toolPromptVisibility: Map<String, Boolean>,
     onSaveToolPromptVisibilityMap: (Map<String, Boolean>) -> Unit,
     onNavigateToPackageManager: () -> Unit,
@@ -2214,6 +2211,20 @@ private fun AgentExtraSettingsPopup(
     }
     val inputMenuTogglesBySlot = inputMenuToggles.groupBy { toggle -> InputMenuToggleSlots.normalize(toggle.slot) }
     val defaultInputMenuToggles = inputMenuTogglesBySlot[InputMenuToggleSlots.DEFAULT].orEmpty()
+    val scope = rememberCoroutineScope()
+
+    val buildMemoryAutoSaveDetail: suspend () -> String = {
+        val pendingChatCount =
+            MemoryAutoSaveCandidateRepository(context, currentProfileId).countPendingAndFailedChats()
+        val minutesUntilNextSave =
+            MemoryAutoSaveScheduler.getInstance()?.getMinutesUntilNextRun(currentProfileId)
+                ?: MemorySearchSettingsPreferences(context, currentProfileId).loadAutoSaveIntervalMinutes().toLong()
+        context.getString(
+            R.string.memory_auto_update_runtime_status,
+            pendingChatCount,
+            minutesUntilNextSave
+        )
+    }
 
     Popup(
         alignment = Alignment.TopStart,
@@ -2288,9 +2299,11 @@ private fun AgentExtraSettingsPopup(
                         isChecked = enableMemoryAutoUpdate,
                         onToggle = onToggleMemoryAutoUpdate,
                         onInfoClick = {
-                            infoPopupContent =
-                                context.getString(R.string.memory_auto_update) to
-                                    context.getString(R.string.memory_auto_update_desc)
+                            scope.launch {
+                                infoPopupContent =
+                                    context.getString(R.string.memory_auto_update) to
+                                        buildMemoryAutoSaveDetail()
+                            }
                         },
                     )
 
@@ -2356,8 +2369,6 @@ private fun AgentExtraSettingsPopup(
                         onToggleDisableStreamOutput = onToggleDisableStreamOutput,
                         disableUserPreferenceDescription = disableUserPreferenceDescription,
                         onToggleDisableUserPreferenceDescription = onToggleDisableUserPreferenceDescription,
-                        disableStatusTags = disableStatusTags,
-                        onToggleDisableStatusTags = onToggleDisableStatusTags,
                         expanded = showDisableSettingsDropdown,
                         onExpandedChange = { showDisableSettingsDropdown = it },
                         onManageTools = { showToolPromptManagerDialog = true },
@@ -2380,11 +2391,6 @@ private fun AgentExtraSettingsPopup(
                             infoPopupContent =
                                 context.getString(R.string.disable_user_preference_description) to
                                     context.getString(R.string.disable_user_preference_description_desc)
-                        },
-                        onDisableStatusTagsInfoClick = {
-                            infoPopupContent =
-                                context.getString(R.string.disable_status_tags) to
-                                    context.getString(R.string.disable_status_tags_desc)
                         },
                     )
                 }
@@ -2540,8 +2546,6 @@ private fun AgentDisableSettingsGroupItem(
     onToggleDisableStreamOutput: () -> Unit,
     disableUserPreferenceDescription: Boolean,
     onToggleDisableUserPreferenceDescription: () -> Unit,
-    disableStatusTags: Boolean,
-    onToggleDisableStatusTags: () -> Unit,
     expanded: Boolean,
     onExpandedChange: (Boolean) -> Unit,
     onManageTools: () -> Unit,
@@ -2549,14 +2553,12 @@ private fun AgentDisableSettingsGroupItem(
     onDisableStreamOutputInfoClick: () -> Unit,
     onDisableToolsInfoClick: () -> Unit,
     onDisableUserPreferenceDescriptionInfoClick: () -> Unit,
-    onDisableStatusTagsInfoClick: () -> Unit,
 ) {
     val disabledStates =
         listOf(
             disableStreamOutput,
             !enableTools,
             disableUserPreferenceDescription,
-            disableStatusTags,
         )
     val disabledCount = disabledStates.count { it }
     val summaryText = "$disabledCount/${disabledStates.size}"
@@ -2635,14 +2637,6 @@ private fun AgentDisableSettingsGroupItem(
                 onToggle = onToggleDisableUserPreferenceDescription,
                 onInfoClick = onDisableUserPreferenceDescriptionInfoClick,
             )
-            AgentSimpleToggleSettingItem(
-                title = stringResource(R.string.disable_status_tags),
-                icon = Icons.Outlined.Block,
-                isChecked = disableStatusTags,
-                onToggle = onToggleDisableStatusTags,
-                onInfoClick = onDisableStatusTagsInfoClick,
-            )
-
             Box(
                 modifier =
                     Modifier

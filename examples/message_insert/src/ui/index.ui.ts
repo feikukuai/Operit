@@ -208,6 +208,11 @@ export default function Screen(ctx: ComposeDslContext): ComposeNode {
   const injectBatteryState = useStateValue(ctx, "injectBattery", initial.injectBattery);
   const injectWeatherState = useStateValue(ctx, "injectWeather", initial.injectWeather);
   const injectLocationState = useStateValue(ctx, "injectLocation", initial.injectLocation);
+  const usePreciseLocationState = useStateValue(
+    ctx,
+    "usePreciseLocation",
+    initial.usePreciseLocation
+  );
   const injectCurrentScreenAppState = useStateValue(
     ctx,
     "injectCurrentScreenApp",
@@ -247,6 +252,7 @@ export default function Screen(ctx: ComposeDslContext): ComposeNode {
     injectBatteryState.set(next.injectBattery);
     injectWeatherState.set(next.injectWeather);
     injectLocationState.set(next.injectLocation);
+    usePreciseLocationState.set(next.usePreciseLocation);
     injectCurrentScreenAppState.set(next.injectCurrentScreenApp);
     injectRecentAppUsageState.set(next.injectRecentAppUsage);
     injectScreenTextState.set(next.injectScreenText);
@@ -296,6 +302,9 @@ export default function Screen(ctx: ComposeDslContext): ComposeNode {
     injectBatteryState.value ? text.summaryBatteryEnabled : text.summaryBatteryDisabled,
     injectWeatherState.value ? text.summaryWeatherEnabled : text.summaryWeatherDisabled,
     injectLocationState.value ? text.summaryLocationEnabled : text.summaryLocationDisabled,
+    usePreciseLocationState.value
+      ? text.summaryPreciseLocationEnabled
+      : text.summaryPreciseLocationDisabled,
     injectCurrentScreenAppState.value
       ? text.summaryCurrentScreenAppEnabled
       : text.summaryCurrentScreenAppDisabled,
@@ -409,6 +418,15 @@ export default function Screen(ctx: ComposeDslContext): ComposeNode {
           checked: injectLocationState.value,
           onCheckedChange: checked => {
             persistSettings({ injectLocation: checked });
+          },
+        },
+        {
+          title: text.preciseLocationToggleTitle,
+          subtitle: text.preciseLocationToggleDescription,
+          checked: usePreciseLocationState.value,
+          enabled: injectLocationState.value,
+          onCheckedChange: checked => {
+            persistSettings({ usePreciseLocation: checked });
           },
         },
         {

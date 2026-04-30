@@ -597,7 +597,7 @@ fun ArtifactDetailScreen(
                             fontWeight = FontWeight.SemiBold
                         )
                         Text(
-                            text = "会自动带上当前项目簇、当前节点和 runtimePackageId 继续开发。",
+                            text = "会在此版本基础上继续开发，并强提醒目录限制、types 同步和编译方式。",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -623,9 +623,7 @@ fun ArtifactDetailScreen(
                         creatorSetupResult = null
                         onStartPluginCreation(
                             PluginCreationIntent.Continue(
-                                projectId = node.projectId,
                                 runtimePackageId = node.runtimePackageId,
-                                parentNodeIds = listOf(node.nodeId),
                                 requirement = requirement
                             )
                         )

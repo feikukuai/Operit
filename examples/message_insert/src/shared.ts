@@ -28,6 +28,7 @@ export type ExtraInfoInjectionSettings = {
   injectBattery: boolean;
   injectWeather: boolean;
   injectLocation: boolean;
+  usePreciseLocation: boolean;
   injectCurrentScreenApp: boolean;
   injectRecentAppUsage: boolean;
   injectScreenText: boolean;
@@ -57,6 +58,8 @@ export type ExtraInfoI18n = {
   weatherToggleDescription: string;
   locationToggleTitle: string;
   locationToggleDescription: string;
+  preciseLocationToggleTitle: string;
+  preciseLocationToggleDescription: string;
   currentScreenAppToggleTitle: string;
   currentScreenAppToggleDescription: string;
   recentAppUsageToggleTitle: string;
@@ -89,6 +92,8 @@ export type ExtraInfoI18n = {
   summaryWeatherDisabled: string;
   summaryLocationEnabled: string;
   summaryLocationDisabled: string;
+  summaryPreciseLocationEnabled: string;
+  summaryPreciseLocationDisabled: string;
   summaryCurrentScreenAppEnabled: string;
   summaryCurrentScreenAppDisabled: string;
   summaryRecentAppUsageEnabled: string;
@@ -181,6 +186,8 @@ const ZH_CN_I18N: ExtraInfoI18n = {
   weatherToggleDescription: "每次发送消息时都插入当前天气信息。",
   locationToggleTitle: "注入位置",
   locationToggleDescription: "每次发送消息时都插入当前定位信息与地址。",
+  preciseLocationToggleTitle: "精确定位",
+  preciseLocationToggleDescription: "仅在注入位置时生效；开启后使用高精度定位，可能更慢也更耗电。",
   currentScreenAppToggleTitle: "注入当前屏幕应用",
   currentScreenAppToggleDescription: "每次发送消息时都插入当前屏幕所属应用与 Activity。",
   recentAppUsageToggleTitle: "注入前几个应用使用时长",
@@ -213,6 +220,8 @@ const ZH_CN_I18N: ExtraInfoI18n = {
   summaryWeatherDisabled: "天气：已关闭",
   summaryLocationEnabled: "位置：每次发送都注入",
   summaryLocationDisabled: "位置：已关闭",
+  summaryPreciseLocationEnabled: "精确定位：注入位置时使用高精度定位",
+  summaryPreciseLocationDisabled: "精确定位：已关闭",
   summaryCurrentScreenAppEnabled: "当前屏幕应用：每次发送都注入",
   summaryCurrentScreenAppDisabled: "当前屏幕应用：已关闭",
   summaryRecentAppUsageEnabled: "应用使用时长：每次发送都注入前几个应用的使用时长",
@@ -305,6 +314,8 @@ const EN_US_I18N: ExtraInfoI18n = {
   weatherToggleDescription: "Insert current weather information on every send.",
   locationToggleTitle: "Inject Location",
   locationToggleDescription: "Insert current location and address on every send.",
+  preciseLocationToggleTitle: "Precise Location",
+  preciseLocationToggleDescription: "Only applies to location injection. When enabled, high accuracy mode is used and may be slower or use more battery.",
   currentScreenAppToggleTitle: "Inject Current Screen App",
   currentScreenAppToggleDescription: "Insert the current foreground app and activity shown on screen on every send.",
   recentAppUsageToggleTitle: "Inject Recent App Usage",
@@ -337,6 +348,8 @@ const EN_US_I18N: ExtraInfoI18n = {
   summaryWeatherDisabled: "Weather: disabled",
   summaryLocationEnabled: "Location: inject on every send",
   summaryLocationDisabled: "Location: disabled",
+  summaryPreciseLocationEnabled: "Precise location: use high accuracy mode for location injection",
+  summaryPreciseLocationDisabled: "Precise location: disabled",
   summaryCurrentScreenAppEnabled: "Current screen app: inject on every send",
   summaryCurrentScreenAppDisabled: "Current screen app: disabled",
   summaryRecentAppUsageEnabled: "App usage: inject recent top app usage on every send",
@@ -416,6 +429,7 @@ const DEFAULT_SETTINGS: ExtraInfoInjectionSettings = {
   injectBattery: false,
   injectWeather: false,
   injectLocation: false,
+  usePreciseLocation: false,
   injectCurrentScreenApp: false,
   injectRecentAppUsage: false,
   injectScreenText: false,
@@ -470,6 +484,9 @@ function sanitizeSettings(input: Partial<ExtraInfoInjectionSettings> | null | un
     injectBattery: Boolean(input?.injectBattery ?? DEFAULT_SETTINGS.injectBattery),
     injectWeather: Boolean(input?.injectWeather ?? DEFAULT_SETTINGS.injectWeather),
     injectLocation: Boolean(input?.injectLocation ?? DEFAULT_SETTINGS.injectLocation),
+    usePreciseLocation: Boolean(
+      input?.usePreciseLocation ?? DEFAULT_SETTINGS.usePreciseLocation
+    ),
     injectCurrentScreenApp: Boolean(
       input?.injectCurrentScreenApp ?? DEFAULT_SETTINGS.injectCurrentScreenApp
     ),
@@ -591,13 +608,13 @@ function buildLocationParts(location: any): string[] {
   ].map((item: unknown) => String(item || "").trim()).filter(Boolean);
 }
 
-async function readLocationSnapshot(): Promise<{
+async function readLocationSnapshot(highAccuracy = false): Promise<{
   location: any;
   latitude: number;
   longitude: number;
   addressParts: string[];
 }> {
-  const location = await Tools.System.getLocation(false, 8);
+  const location = await Tools.System.getLocation(highAccuracy, 8);
   const latitude = Number(location?.latitude);
   const longitude = Number(location?.longitude);
 
@@ -757,7 +774,7 @@ async function buildWeatherContent(): Promise<string> {
 
 async function buildLocationContent(): Promise<string> {
   const text = resolveExtraInfoI18n();
-  const locationSnapshot = await readLocationSnapshot();
+  const locationSnapshot = await readLocationSnapshot(loadSettings().usePreciseLocation);
   const { location, latitude, longitude, addressParts } = locationSnapshot;
 
   const coordinates = formatCoordinates(latitude, longitude);

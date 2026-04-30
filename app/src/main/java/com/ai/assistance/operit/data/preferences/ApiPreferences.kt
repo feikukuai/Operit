@@ -152,9 +152,6 @@ class ApiPreferences private constructor(private val context: Context) {
         // Key for Disable User Preference Description
         val DISABLE_USER_PREFERENCE_DESCRIPTION = booleanPreferencesKey("disable_user_preference_description")
 
-        // Key for Disable Status Tags
-        val DISABLE_STATUS_TAGS = booleanPreferencesKey("disable_status_tags")
-
         // Custom System Prompt Template (Advanced Configuration)
         val CUSTOM_SYSTEM_PROMPT_TEMPLATE = stringPreferencesKey("custom_system_prompt_template")
 
@@ -179,9 +176,6 @@ class ApiPreferences private constructor(private val context: Context) {
 
         // Default value for Disable User Preference Description
         const val DEFAULT_DISABLE_USER_PREFERENCE_DESCRIPTION = false
-
-        // Default value for Disable Status Tags
-        const val DEFAULT_DISABLE_STATUS_TAGS = false
 
         // Default system prompt template (empty means use built-in template)
         const val DEFAULT_SYSTEM_PROMPT_TEMPLATE = ""
@@ -328,12 +322,6 @@ class ApiPreferences private constructor(private val context: Context) {
             preferences[DISABLE_USER_PREFERENCE_DESCRIPTION] ?: DEFAULT_DISABLE_USER_PREFERENCE_DESCRIPTION
         }
 
-    // Flow for Disable Status Tags
-    val disableStatusTagsFlow: Flow<Boolean> =
-        context.apiDataStore.data.map { preferences ->
-            preferences[DISABLE_STATUS_TAGS] ?: DEFAULT_DISABLE_STATUS_TAGS
-        }
-
     // Custom System Prompt Template Flow
     val customSystemPromptTemplateFlow: Flow<String> =
             context.apiDataStore.data.map { preferences ->
@@ -447,10 +435,6 @@ class ApiPreferences private constructor(private val context: Context) {
     }
 
     // Save Disable Status Tags setting
-    suspend fun saveDisableStatusTags(isDisabled: Boolean) {
-        context.apiDataStore.edit { preferences -> preferences[DISABLE_STATUS_TAGS] = isDisabled }
-    }
-
     /**
      * 更新指定供应商:模型的token计数
      * @param providerModel 供应商:模型标识符，格式如"DEEPSEEK:deepseek-chat"

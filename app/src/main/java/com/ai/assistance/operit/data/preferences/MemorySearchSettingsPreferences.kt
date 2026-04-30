@@ -6,6 +6,7 @@ import com.ai.assistance.operit.data.model.MemoryScoreMode
 import com.ai.assistance.operit.data.model.MemorySearchConfig
 
 class MemorySearchSettingsPreferences(context: Context, profileId: String) {
+    private val profileId = profileId
     private val searchPrefs = context.applicationContext.getSharedPreferences(
         "memory_search_settings_$profileId",
         Context.MODE_PRIVATE
@@ -41,6 +42,19 @@ class MemorySearchSettingsPreferences(context: Context, profileId: String) {
         save(MemorySearchConfig())
     }
 
+    fun loadAutoSaveIntervalMinutes(): Int {
+        return searchPrefs.getInt(KEY_AUTO_SAVE_INTERVAL_MINUTES, DEFAULT_AUTO_SAVE_INTERVAL_MINUTES)
+            .coerceIn(MIN_AUTO_SAVE_INTERVAL_MINUTES, MAX_AUTO_SAVE_INTERVAL_MINUTES)
+    }
+
+    fun saveAutoSaveIntervalMinutes(minutes: Int) {
+        val normalized =
+            minutes.coerceIn(MIN_AUTO_SAVE_INTERVAL_MINUTES, MAX_AUTO_SAVE_INTERVAL_MINUTES)
+        searchPrefs.edit()
+            .putInt(KEY_AUTO_SAVE_INTERVAL_MINUTES, normalized)
+            .apply()
+    }
+
     fun loadCloudEmbedding(): CloudEmbeddingConfig {
         return CloudEmbeddingConfig(
             enabled = cloudPrefs.getBoolean(KEY_CLOUD_ENABLED, false),
@@ -70,10 +84,15 @@ class MemorySearchSettingsPreferences(context: Context, profileId: String) {
         private const val KEY_TAG_WEIGHT = "tag_weight"
         private const val KEY_VECTOR_WEIGHT = "vector_weight"
         private const val KEY_EDGE_WEIGHT = "edge_weight"
+        private const val KEY_AUTO_SAVE_INTERVAL_MINUTES = "auto_save_interval_minutes"
 
         private const val KEY_CLOUD_ENABLED = "enabled"
         private const val KEY_CLOUD_ENDPOINT = "endpoint"
         private const val KEY_CLOUD_API_KEY = "api_key"
         private const val KEY_CLOUD_MODEL = "model"
+
+        const val DEFAULT_AUTO_SAVE_INTERVAL_MINUTES = 15
+        const val MIN_AUTO_SAVE_INTERVAL_MINUTES = 1
+        const val MAX_AUTO_SAVE_INTERVAL_MINUTES = 180
     }
 }

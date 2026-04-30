@@ -35,6 +35,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -46,7 +47,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.ai.assistance.operit.R
+import com.ai.assistance.operit.data.api.ArtifactProjectDetailResponse
 import com.ai.assistance.operit.data.api.GitHubIssue
+import com.ai.assistance.operit.data.api.MarketStatsApiService
 import com.ai.assistance.operit.ui.features.packages.market.ArtifactMarketScope
 import com.ai.assistance.operit.ui.features.packages.market.ArtifactPublishClusterContext
 import com.ai.assistance.operit.ui.features.packages.market.PublishArtifactType
@@ -54,6 +57,9 @@ import com.ai.assistance.operit.ui.features.packages.market.PublishProgressStage
 import com.ai.assistance.operit.ui.features.packages.market.sameArtifactRuntimePackageId
 import com.ai.assistance.operit.ui.features.packages.screens.artifact.viewmodel.ArtifactMarketViewModel
 import com.ai.assistance.operit.ui.features.packages.utils.ArtifactIssueParser
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -64,7 +70,9 @@ fun ArtifactPublishScreen(
 ) {
     val context = LocalContext.current
     val scrollState = rememberScrollState()
+    val scope = rememberCoroutineScope()
     val isEditMode = editingIssue != null
+    val marketStatsApiService = remember { MarketStatsApiService() }
     val viewModel: ArtifactMarketViewModel =
         viewModel(
             key = "artifact-publish-all",
@@ -81,12 +89,18 @@ fun ArtifactPublishScreen(
     val isLoggedIn by viewModel.isLoggedIn.collectAsState()
 
     val initialInfo = remember(editingIssue) { editingIssue?.let { ArtifactIssueParser.parseArtifactInfo(it) } }
-    val activePublishContext = if (isEditMode) null else publishContext
+    var mutablePublishContext by remember(isEditMode, publishContext) {
+        mutableStateOf(if (isEditMode) null else publishContext)
+    }
+    val activePublishContext = if (isEditMode) null else mutablePublishContext
     val parentCount = activePublishContext?.parentNodeIds?.size ?: 0
     val isContinuationMode = activePublishContext != null
     val lockedRuntimePackageId = initialInfo?.runtimePackageId?.ifBlank { initialInfo.normalizedId }.orEmpty()
     val lockedDisplayName = activePublishContext?.lockedDisplayName?.trim().orEmpty()
     val isDisplayNameLocked = !isEditMode && lockedDisplayName.isNotBlank()
+    val continuationSelectionTitle = "选中${parentCount}个版本"
+    val continuationDescription =
+        "在基础上发布，将会为一个或者多个版本创建更新。选中一个时，将会视为某个版本的下一个版本，选中多个时，将会视为多个功能的整合的下一个版本。"
 
     val filteredArtifacts =
         remember(artifacts, activePublishContext, isEditMode, lockedRuntimePackageId) {
@@ -119,6 +133,11 @@ fun ArtifactPublishScreen(
     var selectorExpanded by remember { mutableStateOf(false) }
     var showConfirmationDialog by remember { mutableStateOf(false) }
     var showSecondForgeConfirm by remember { mutableStateOf(false) }
+    var showSelectionDialog by remember { mutableStateOf(false) }
+    var isSelectionProjectLoading by remember(activePublishContext?.projectId) { mutableStateOf(false) }
+    var selectionProject by remember(activePublishContext?.projectId) { mutableStateOf<ArtifactProjectDetailResponse?>(null) }
+    var selectionLoadError by remember(activePublishContext?.projectId) { mutableStateOf<String?>(null) }
+    var pendingSelectedNodeIds by remember { mutableStateOf<Set<String>>(emptySet()) }
 
     LaunchedEffect(Unit) {
         viewModel.refreshPublishableArtifacts()
@@ -155,10 +174,42 @@ fun ArtifactPublishScreen(
     val isPublishing = publishStage !in listOf(PublishProgressStage.IDLE, PublishProgressStage.COMPLETED)
     val selectorDisplayName =
         if (isEditMode) {
-            selectedArtifact?.displayName ?: initialInfo?.runtimePackageId.orEmpty()
+            selectedArtifact?.displayName
+                ?: initialInfo?.title.orEmpty().ifBlank {
+                    initialInfo?.sourceFileName.orEmpty().ifBlank { lockedRuntimePackageId }
+                }
         } else {
             selectedArtifact?.displayName.orEmpty()
         }
+
+    fun openSelectionEditor() {
+        val publishContextValue = activePublishContext ?: return
+        pendingSelectedNodeIds = publishContextValue.parentNodeIds.toSet()
+        selectionLoadError = null
+        val cachedProject = selectionProject
+        if (cachedProject != null && cachedProject.projectId == publishContextValue.projectId) {
+            showSelectionDialog = true
+            return
+        }
+        isSelectionProjectLoading = true
+        scope.launch {
+            val result =
+                withContext(Dispatchers.IO) {
+                    marketStatsApiService.getArtifactProject(publishContextValue.projectId)
+                }
+            isSelectionProjectLoading = false
+            result.fold(
+                onSuccess = { project ->
+                    selectionProject = project
+                    pendingSelectedNodeIds = pendingSelectedNodeIds.intersect(project.nodes.map { it.nodeId }.toSet())
+                    showSelectionDialog = true
+                },
+                onFailure = { error ->
+                    selectionLoadError = error.message ?: "加载版本选择失败"
+                }
+            )
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -180,9 +231,8 @@ fun ArtifactPublishScreen(
                 Text(
                     text =
                         when {
-                            isEditMode -> stringResource(R.string.edit_description)
-                            parentCount >= 2 -> "发布 merge 节点"
-                            isContinuationMode -> "基于节点继续发布"
+                            isEditMode -> "编辑作品"
+                            isContinuationMode -> "在此版本上发布"
                             else -> stringResource(R.string.publish_description)
                         },
                     style = MaterialTheme.typography.titleSmall,
@@ -191,10 +241,8 @@ fun ArtifactPublishScreen(
                 Text(
                     text =
                         when {
-                            isEditMode -> "这里是在修改当前已发布节点的信息，不会创建新节点；已发布节点的文件和版本号不能修改。"
-                            isDisplayNameLocked -> "这次不会覆盖旧 issue，而是会基于当前节点在原项目簇下创建一个新的后续节点；名称会强制沿用来源节点。"
-                            parentCount >= 2 -> "这次不会覆盖旧 issue，而是会在原项目簇下创建一个新的 merge 节点。"
-                            isContinuationMode -> "这次不会覆盖旧 issue，而是会基于当前节点在原项目簇下创建一个新的后续节点。"
+                            isEditMode -> "编辑作品不可修改文件、版本号和命名。如果为更新插件，请在插件详情界面点击发布新版本。你也可以为他人插件制作新版本。"
+                            isContinuationMode -> continuationDescription
                             else -> stringResource(R.string.artifact_publish_info_description)
                         },
                     style = MaterialTheme.typography.bodySmall
@@ -210,16 +258,33 @@ fun ArtifactPublishScreen(
                     modifier = Modifier.padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
+                    val artifactTypeLabel =
+                        when (initialInfo.type) {
+                            PublishArtifactType.PACKAGE -> stringResource(R.string.artifact_type_package)
+                            PublishArtifactType.SCRIPT -> stringResource(R.string.artifact_type_script)
+                            null -> ""
+                        }
+                    val summaryText =
+                        buildString {
+                            if (artifactTypeLabel.isNotBlank()) {
+                                append(artifactTypeLabel)
+                            }
+                            initialInfo.sourceFileName.takeIf { it.isNotBlank() }?.let {
+                                if (isNotBlank()) append(" · ")
+                                append("文件已锁定")
+                            }
+                        }.ifBlank { "当前只可修改简介和适配版本" }
                     Text(
-                        text = "当前编辑节点",
+                        text = "当前作品",
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.SemiBold
                     )
-                    Text("projectId: ${initialInfo.projectId.ifBlank { initialInfo.normalizedId }}")
-                    Text("nodeId: ${initialInfo.nodeId.ifBlank { "legacy-${editingIssue?.id ?: ""}" }}")
-                    Text("runtimePackageId: ${initialInfo.runtimePackageId.ifBlank { initialInfo.normalizedId }}")
-                    Text("当前版本: ${initialInfo.version.ifBlank { version }}")
-                    Text("已发布节点的文件和版本号已锁定。")
+                    Text(initialInfo.title.ifBlank { selectorDisplayName })
+                    Text(
+                        text = summaryText,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
         } else if (activePublishContext != null) {
@@ -232,21 +297,42 @@ fun ArtifactPublishScreen(
                     modifier = Modifier.padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Text(
-                        text = "当前发布上下文",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Text("projectId: ${activePublishContext.projectId}")
-                    Text("runtimePackageId: ${activePublishContext.runtimePackageId}")
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = continuationSelectionTitle,
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        TextButton(
+                            onClick = ::openSelectionEditor,
+                            enabled = !isSelectionProjectLoading
+                        ) {
+                            Text(if (isSelectionProjectLoading) "加载中" else "更改")
+                        }
+                    }
                     if (lockedDisplayName.isNotBlank()) {
-                        Text("锁定名称: $lockedDisplayName")
+                        Text(
+                            text = "插件名字将沿用 $lockedDisplayName",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                     Text(
-                        "parentNodeIds: ${
-                            activePublishContext.parentNodeIds.takeIf { it.isNotEmpty() }?.joinToString(", ") ?: "-"
-                        }"
+                        text = "包名和发布名称会自动沿用。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                    selectionLoadError?.takeIf { it.isNotBlank() }?.let { error ->
+                        Text(
+                            text = error,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
                 }
             }
         }
@@ -264,7 +350,7 @@ fun ArtifactPublishScreen(
         if (!isEditMode && activePublishContext != null && filteredArtifacts.isEmpty()) {
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)) {
                 Text(
-                    text = "当前是继续/merge 发布，但本地还没有找到 runtimePackageId 为 `${activePublishContext.runtimePackageId}` 的可发布插件。",
+                    text = "当前是基于版本发布，但本地还没有找到可发布的对应插件，请先确认本地已经有这个包。",
                     modifier = Modifier.padding(16.dp),
                     color = MaterialTheme.colorScheme.onErrorContainer
                 )
@@ -279,28 +365,14 @@ fun ArtifactPublishScreen(
                 modifier = Modifier.fillMaxWidth(),
                 readOnly = true,
                 supportingText = {
-                    val supportText =
-                        buildString {
-                            if (selectedType != null) {
-                                append(
-                                    if (selectedType == PublishArtifactType.PACKAGE) {
-                                        stringResource(R.string.publish_target_package_market)
-                                    } else {
-                                        stringResource(R.string.publish_target_script_market)
-                                    }
-                                )
+                    selectedType?.let {
+                        Text(
+                            if (it == PublishArtifactType.PACKAGE) {
+                                stringResource(R.string.publish_target_package_market)
+                            } else {
+                                stringResource(R.string.publish_target_script_market)
                             }
-                            if (lockedRuntimePackageId.isNotBlank()) {
-                                if (isNotBlank()) append(" · ")
-                                append("runtimePackageId: $lockedRuntimePackageId")
-                            }
-                            initialInfo?.sourceFileName?.takeIf { it.isNotBlank() }?.let {
-                                if (isNotBlank()) append(" · ")
-                                append("文件: $it")
-                            }
-                        }
-                    if (supportText.isNotBlank()) {
-                        Text(supportText)
+                        )
                     }
                 }
             )
@@ -377,17 +449,19 @@ fun ArtifactPublishScreen(
         OutlinedTextField(
             value = displayName,
             onValueChange = {
-                if (!isDisplayNameLocked) {
+                if (!isEditMode && !isDisplayNameLocked) {
                     displayName = it
                 }
             },
             label = { Text(stringResource(R.string.display_name_label)) },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
-            readOnly = isDisplayNameLocked,
+            readOnly = isEditMode || isDisplayNameLocked,
             supportingText = {
-                if (isDisplayNameLocked) {
-                    Text("继续发布新节点时，名称必须和来源节点保持一致")
+                if (isEditMode) {
+                    Text("已发布作品的命名不可修改")
+                } else if (isDisplayNameLocked) {
+                    Text("基于版本发布时，插件名字必须和来源版本保持一致")
                 }
             }
         )
@@ -500,9 +574,8 @@ fun ArtifactPublishScreen(
             }
             Text(
                 when {
-                    isEditMode -> "更新已发布节点"
-                    parentCount >= 2 -> "发布 merge 节点"
-                    isContinuationMode -> "继续发布到项目簇"
+                    isEditMode -> "保存作品信息"
+                    isContinuationMode -> "发布更新版本"
                     else -> stringResource(R.string.publish_to_market)
                 }
             )
@@ -510,6 +583,36 @@ fun ArtifactPublishScreen(
 
         OutlinedButton(onClick = onNavigateBack, modifier = Modifier.fillMaxWidth()) {
             Text(stringResource(R.string.cancel))
+        }
+    }
+
+    if (showSelectionDialog) {
+        selectionProject?.let { project ->
+            ArtifactProjectNodeTreeDialog(
+                project = project,
+                onDismissRequest = { showSelectionDialog = false },
+                selectedNodeIds = pendingSelectedNodeIds,
+                onToggleNodeSelection = { node ->
+                    pendingSelectedNodeIds =
+                        pendingSelectedNodeIds.toMutableSet().apply {
+                            if (!add(node.nodeId)) {
+                                remove(node.nodeId)
+                            }
+                        }
+                },
+                onConfirmSelection = {
+                    val orderedSelectedNodeIds =
+                        project.nodes
+                            .map { it.nodeId }
+                            .filter { it in pendingSelectedNodeIds }
+                    if (orderedSelectedNodeIds.isNotEmpty()) {
+                        mutablePublishContext =
+                            activePublishContext?.copy(parentNodeIds = orderedSelectedNodeIds)
+                        showSelectionDialog = false
+                    }
+                },
+                confirmSelectionEnabled = pendingSelectedNodeIds.isNotEmpty()
+            )
         }
     }
 
@@ -534,36 +637,56 @@ fun ArtifactPublishScreen(
             title = {
                 Text(
                     when {
-                        isEditMode -> stringResource(R.string.confirm_update)
-                        parentCount >= 2 -> "确认发布 merge 节点"
-                        isContinuationMode -> "确认继续发布"
+                        isEditMode -> "确认保存作品信息"
+                        isContinuationMode -> "确认发布更新版本"
                         else -> stringResource(R.string.confirm_publish)
                     }
                 )
             },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(stringResource(R.string.please_check_submitted_info))
-                    Text(stringResource(R.string.name_colon, displayName))
-                    Text(stringResource(R.string.description_colon, description))
-                    Text(stringResource(R.string.version_colon, version))
-                    Text(
-                        stringResource(
-                            R.string.artifact_type_colon,
-                            when (selectedType) {
-                                PublishArtifactType.PACKAGE -> stringResource(R.string.artifact_type_package)
-                                PublishArtifactType.SCRIPT -> stringResource(R.string.artifact_type_script)
-                                null -> "-"
+                    if (isEditMode) {
+                        Text("将更新当前作品的简介和适配版本信息。")
+                        Text(stringResource(R.string.description_colon, description))
+                        Text(
+                            stringResource(
+                                R.string.supported_app_versions_colon,
+                                minSupportedAppVersion.ifBlank { "-" },
+                                maxSupportedAppVersion.ifBlank { "-" }
+                            )
+                        )
+                    } else {
+                        Text(
+                            if (isContinuationMode) {
+                                continuationSelectionTitle
+                            } else {
+                                stringResource(R.string.please_check_submitted_info)
                             }
                         )
-                    )
-                    Text(
-                        stringResource(
-                            R.string.supported_app_versions_colon,
-                            minSupportedAppVersion.ifBlank { "-" },
-                            maxSupportedAppVersion.ifBlank { "-" }
+                        if (isContinuationMode) {
+                            Text(continuationDescription)
+                        }
+                        Text(stringResource(R.string.name_colon, displayName))
+                        Text(stringResource(R.string.description_colon, description))
+                        Text(stringResource(R.string.version_colon, version))
+                        Text(
+                            stringResource(
+                                R.string.artifact_type_colon,
+                                when (selectedType) {
+                                    PublishArtifactType.PACKAGE -> stringResource(R.string.artifact_type_package)
+                                    PublishArtifactType.SCRIPT -> stringResource(R.string.artifact_type_script)
+                                    null -> "-"
+                                }
+                            )
                         )
-                    )
+                        Text(
+                            stringResource(
+                                R.string.supported_app_versions_colon,
+                                minSupportedAppVersion.ifBlank { "-" },
+                                maxSupportedAppVersion.ifBlank { "-" }
+                            )
+                        )
+                    }
                 }
             },
             confirmButton = {
@@ -593,9 +716,8 @@ fun ArtifactPublishScreen(
                 ) {
                     Text(
                         when {
-                            isEditMode -> stringResource(R.string.confirm_update)
-                            parentCount >= 2 -> "确认发布 merge 节点"
-                            isContinuationMode -> "确认继续发布"
+                            isEditMode -> "确认保存作品信息"
+                            isContinuationMode -> "确认发布更新版本"
                             else -> stringResource(R.string.confirm_publish)
                         }
                     )
@@ -672,9 +794,8 @@ fun ArtifactPublishScreen(
             title = {
                 Text(
                     when {
-                        isEditMode -> "节点更新成功"
-                        parentCount >= 2 -> "merge 节点发布成功"
-                        isContinuationMode -> "继续发布成功"
+                        isEditMode -> "作品信息更新成功"
+                        isContinuationMode -> "更新版本发布成功"
                         else -> stringResource(R.string.publish_success)
                     }
                 )

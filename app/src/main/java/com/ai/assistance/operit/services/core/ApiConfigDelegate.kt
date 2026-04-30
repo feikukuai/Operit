@@ -112,9 +112,6 @@ class ApiConfigDelegate(
     val disableUserPreferenceDescription: StateFlow<Boolean> =
             _disableUserPreferenceDescription.asStateFlow()
 
-    private val _disableStatusTags = MutableStateFlow(ApiPreferences.DEFAULT_DISABLE_STATUS_TAGS)
-    val disableStatusTags: StateFlow<Boolean> = _disableStatusTags.asStateFlow()
-
     // 为了兼容现有代码，添加API密钥状态流
     private val _apiKey = MutableStateFlow("")
     val apiKey: StateFlow<String> = _apiKey.asStateFlow()
@@ -273,12 +270,6 @@ class ApiConfigDelegate(
             }
         }
 
-        // Collect disable status tags setting
-        coroutineScope.launch {
-            apiPreferences.disableStatusTagsFlow.collect { disabled ->
-                _disableStatusTags.value = disabled
-            }
-        }
     }
 
     /**
@@ -414,15 +405,6 @@ class ApiConfigDelegate(
             val newValue = !_disableUserPreferenceDescription.value
             apiPreferences.saveDisableUserPreferenceDescription(newValue)
             _disableUserPreferenceDescription.value = newValue
-        }
-    }
-
-    /** 切换禁用状态标签 */
-    fun toggleDisableStatusTags() {
-        coroutineScope.launch {
-            val newValue = !_disableStatusTags.value
-            apiPreferences.saveDisableStatusTags(newValue)
-            _disableStatusTags.value = newValue
         }
     }
 

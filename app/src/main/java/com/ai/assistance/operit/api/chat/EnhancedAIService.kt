@@ -75,6 +75,8 @@ import com.ai.assistance.operit.data.repository.CustomEmojiRepository
 import com.ai.assistance.operit.data.preferences.CharacterCardManager
 import com.ai.assistance.operit.data.preferences.CharacterCardToolAccessResolver
 import com.ai.assistance.operit.data.preferences.UserPreferencesManager
+import com.ai.assistance.operit.data.preferences.preferencesManager
+import com.ai.assistance.operit.data.repository.MemoryAutoSaveCandidateRepository
 import com.ai.assistance.operit.core.config.SystemToolPrompts
 import com.ai.assistance.operit.data.model.ToolPrompt
 import com.ai.assistance.operit.data.model.ToolParameterSchema
@@ -1601,10 +1603,11 @@ class EnhancedAIService private constructor(private val context: Context) {
             // We must still finalize the conversation to reset the state correctly.
             if (content.isEmpty()) {
                 AppLogger.d(TAG, "Stream content is empty. Finalizing conversation state.")
-                // We call handleTaskCompletion to properly set the conversation as inactive and update the UI state.
-                handleWaitForUserNeed(
+                finalizeAssistantResponse(
                     context = context,
                     content = content,
+                    enableMemoryAutoUpdate = enableMemoryAutoUpdate,
+                    onNonFatalError = onNonFatalError,
                     isSubTask = isSubTask,
                     chatId = chatId,
                     notifyReplyOverride = notifyReplyOverride
@@ -1622,9 +1625,11 @@ class EnhancedAIService private constructor(private val context: Context) {
             if (contentWithoutThinking.isEmpty()) {
                 if (disableWarning) {
                     AppLogger.w(TAG, "检测到纯思考输出，disableWarning=true，直接结束本轮而不注入警告")
-                    handleWaitForUserNeed(
+                    finalizeAssistantResponse(
                         context = context,
                         content = context.roundManager.getDisplayContent(),
+                        enableMemoryAutoUpdate = enableMemoryAutoUpdate,
+                        onNonFatalError = onNonFatalError,
                         isSubTask = isSubTask,
                         chatId = chatId,
                         characterName = characterName,
@@ -1697,30 +1702,13 @@ class EnhancedAIService private constructor(private val context: Context) {
                 context.roundManager.updateContent(finalContent)
             }
 
-            // 预先提取工具调用信息和完成标记，避免重复解析
+            // 预先提取工具调用信息，避免重复解析
             val extractedToolInvocations =
                     if (truncatedToolRecovery == null) {
                         ToolExecutionManager.extractToolInvocations(finalContent)
                     } else {
                         emptyList()
                     }
-            val hasTaskCompletion = ConversationMarkupManager.containsTaskCompletion(finalContent)
-
-            // 如果只有任务完成标记且没有工具调用，立即处理完成逻辑
-            if (truncatedToolRecovery == null && hasTaskCompletion && extractedToolInvocations.isEmpty()) {
-                handleTaskCompletion(
-                    context = context,
-                    content = finalContent,
-                    enableMemoryAutoUpdate = enableMemoryAutoUpdate,
-                    onNonFatalError = onNonFatalError,
-                    isSubTask = isSubTask,
-                    chatId = chatId,
-                    characterName = characterName,
-                    avatarUri = avatarUri,
-                    notifyReplyOverride = notifyReplyOverride
-                )
-                return
-            }
 
             // Check again if conversation is active
             if (!context.isConversationActive.get()) {
@@ -1751,9 +1739,11 @@ class EnhancedAIService private constructor(private val context: Context) {
                         TAG,
                         "检测到未闭合工具调用，disableWarning=true，直接结束本轮而不注入警告。invalidated=${truncatedToolRecovery.invalidatedToolNames}"
                     )
-                    handleWaitForUserNeed(
+                    finalizeAssistantResponse(
                         context = context,
                         content = context.roundManager.getDisplayContent(),
+                        enableMemoryAutoUpdate = enableMemoryAutoUpdate,
+                        onNonFatalError = onNonFatalError,
                         isSubTask = isSubTask,
                         chatId = chatId,
                         characterName = characterName,
@@ -1805,50 +1795,6 @@ class EnhancedAIService private constructor(private val context: Context) {
 
             // Main flow: Detect and process tool invocations
             if (extractedToolInvocations.isNotEmpty()) {
-                if (hasTaskCompletion) {
-                    if (disableWarning) {
-                        AppLogger.d(TAG, "检测到完成标记和工具并存，disableWarning=true，跳过 warning 注入")
-                    } else {
-                        val warning =
-                                ConversationMarkupManager.createToolsSkippedByCompletionWarning(
-                                        this@EnhancedAIService.context,
-                                        extractedToolInvocations.map { it.tool.name }
-                                )
-                        context.roundManager.appendContent(warning)
-                        collector.emit(warning)
-                        try {
-                            context.conversationHistory.add(
-                                PromptTurn(kind = PromptTurnKind.TOOL_RESULT, content = warning)
-                            )
-                        } catch (e: Exception) {
-                            AppLogger.e(TAG, "添加任务完成跳过工具警告到历史记录失败", e)
-                        }
-                    }
-                }
-
-                // Handle wait for user need marker
-                if (ConversationMarkupManager.containsWaitForUserNeed(finalContent)) {
-                    if (disableWarning) {
-                        AppLogger.d(TAG, "检测到等待用户输入标记与工具并存，disableWarning=true，跳过 warning 注入")
-                    } else {
-                        val userNeedContent =
-                                ConversationMarkupManager.createWarningStatus(
-                                        this@EnhancedAIService.context.getString(R.string.enhanced_tool_warning),
-                                )
-                        context.roundManager.appendContent(userNeedContent)
-                        collector.emit(userNeedContent)
-                        try {
-                            context.conversationHistory.add(
-                                PromptTurn(kind = PromptTurnKind.TOOL_RESULT, content = userNeedContent)
-                            )
-                        } catch (e: Exception) {
-                            AppLogger.e(TAG, "添加工具调用警告到历史记录失败", e)
-                        }
-                    }
-                }
-
-                // Add current assistant message to conversation history
-
                 logMessageTiming(
                     stage = "enhanced.processStreamCompletion.detectToolInvocations",
                     startTimeMs = startTime,
@@ -1881,18 +1827,11 @@ class EnhancedAIService private constructor(private val context: Context) {
                 return
             }
 
-            // 修改默认行为：如果没有特殊标记或工具调用，默认等待用户输入
-            // 而不是直接标记为完成
-            // 创建等待用户输入的内容
-            val userNeedContent =
-                    ConversationMarkupManager.createWaitForUserNeedContent(
-                            context.roundManager.getDisplayContent()
-                    )
-
-            // 处理为等待用户输入模式
-            handleWaitForUserNeed(
+            finalizeAssistantResponse(
                 context = context,
-                content = userNeedContent,
+                content = context.roundManager.getDisplayContent(),
+                enableMemoryAutoUpdate = enableMemoryAutoUpdate,
+                onNonFatalError = onNonFatalError,
                 isSubTask = isSubTask,
                 chatId = chatId,
                 characterName = characterName,
@@ -1912,8 +1851,8 @@ class EnhancedAIService private constructor(private val context: Context) {
         }
     }
 
-    /** Handle task completion logic - simplified version without callbacks */
-    private suspend fun handleTaskCompletion(
+    /** Finalize an assistant response without relying on status-tag control flow. */
+    private suspend fun finalizeAssistantResponse(
         context: MessageExecutionContext,
         content: String,
         enableMemoryAutoUpdate: Boolean,
@@ -1940,59 +1879,30 @@ class EnhancedAIService private constructor(private val context: Context) {
             }
         }
 
-        if (enableMemoryAutoUpdate && !isSubTask) {
-            // 保存会话记忆到记忆库
-            com.ai.assistance.operit.api.chat.library.MemoryLibrary.saveMemoryAsync(
-                this@EnhancedAIService.context,
-                toolHandler,
-                context.conversationHistory.toRoleContentPairs(),
-                content,
-                multiServiceManager.getServiceForFunction(FunctionType.MEMORY),
-                onError = { e ->
-                    AppLogger.e(TAG, "自动保存会话记忆失败", e)
-                    onNonFatalError(
-                        this@EnhancedAIService.context.getString(
-                            R.string.chat_auto_update_memory_failed,
-                            e.message ?: ""
+        if (enableMemoryAutoUpdate && !isSubTask && content.isNotBlank()) {
+            runCatching {
+                val currentChatId = chatId?.takeIf { it.isNotBlank() }
+                val profileId = preferencesManager.activeProfileIdFlow.first()
+                if (currentChatId.isNullOrBlank()) {
+                    AppLogger.w(TAG, "自动保存长期记忆入队跳过：chatId为空")
+                } else {
+                    MemoryAutoSaveCandidateRepository(this@EnhancedAIService.context, profileId)
+                        .enqueue(
+                            chatId = currentChatId,
+                            triggerMessageTimestamp = System.currentTimeMillis()
                         )
-                    )
                 }
-            )
-        }
-
-        if (!isSubTask) {
-            notifyReplyCompleted(chatId, characterName, avatarUri, notifyReplyOverride)
-            stopAiService(characterName, avatarUri)
-        }
-    }
-
-    /** Handle wait for user need logic - simplified version without callbacks */
-    private suspend fun handleWaitForUserNeed(
-        context: MessageExecutionContext,
-        content: String,
-        isSubTask: Boolean,
-        chatId: String? = null,
-        characterName: String? = null,
-        avatarUri: String? = null,
-        notifyReplyOverride: Boolean? = null
-    ) {
-        // Mark conversation as complete
-        context.isConversationActive.set(false)
-
-        // 清除内容池
-        // roundManager.clearContent()
-        
-        // 保存最后的回复内容用于通知
-        lastReplyContent = context.roundManager.getDisplayContent()
-
-        // Ensure input processing state is updated to completed
-        if (!isSubTask) {
-            withContext(Dispatchers.Main) {
-                _inputProcessingState.value = InputProcessingState.Completed
+            }.onFailure { e ->
+                AppLogger.e(TAG, "自动保存长期记忆候选入队失败", e)
+                onNonFatalError(
+                    this@EnhancedAIService.context.getString(
+                        R.string.chat_auto_update_memory_failed,
+                        e.message ?: ""
+                    )
+                )
             }
         }
 
-        AppLogger.d(TAG, "Wait for user need - skipping problem library analysis")
         if (!isSubTask) {
             notifyReplyCompleted(chatId, characterName, avatarUri, notifyReplyOverride)
             stopAiService(characterName, avatarUri)

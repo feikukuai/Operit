@@ -66,6 +66,7 @@ data class MemoryUiState(
         // --- 新增：搜索设置 ---
         val isSearchSettingsDialogVisible: Boolean = false,
         val searchConfig: MemorySearchConfig = MemorySearchConfig(),
+        val autoSaveIntervalMinutes: Int = MemorySearchSettingsPreferences.DEFAULT_AUTO_SAVE_INTERVAL_MINUTES,
         val cloudEmbeddingConfig: CloudEmbeddingConfig = CloudEmbeddingConfig(),
         val embeddingDimensionUsage: EmbeddingDimensionUsage = EmbeddingDimensionUsage(),
         val isEmbeddingRebuildRunning: Boolean = false,
@@ -257,17 +258,35 @@ class MemoryViewModel(
     }
 
     fun saveSearchSettings(newConfig: MemorySearchConfig, newCloudConfig: CloudEmbeddingConfig) {
+        saveSearchSettings(
+            newConfig = newConfig,
+            newCloudConfig = newCloudConfig,
+            autoSaveIntervalMinutes = _uiState.value.autoSaveIntervalMinutes
+        )
+    }
+
+    fun saveSearchSettings(
+        newConfig: MemorySearchConfig,
+        newCloudConfig: CloudEmbeddingConfig,
+        autoSaveIntervalMinutes: Int
+    ) {
         val normalizedSearchConfig = newConfig.normalized()
         val normalizedCloudConfig = newCloudConfig.normalized()
+        val normalizedInterval =
+            autoSaveIntervalMinutes.coerceIn(
+                MemorySearchSettingsPreferences.MIN_AUTO_SAVE_INTERVAL_MINUTES,
+                MemorySearchSettingsPreferences.MAX_AUTO_SAVE_INTERVAL_MINUTES
+            )
         _uiState.update {
             it.copy(
                 searchConfig = normalizedSearchConfig,
                 cloudEmbeddingConfig = normalizedCloudConfig,
-                isSearchSettingsDialogVisible = false
+                autoSaveIntervalMinutes = normalizedInterval
             )
         }
         viewModelScope.launch(Dispatchers.IO) {
             searchSettingsPreferences.save(normalizedSearchConfig)
+            searchSettingsPreferences.saveAutoSaveIntervalMinutes(normalizedInterval)
             repository.saveCloudEmbeddingConfig(normalizedCloudConfig)
         }
     }
@@ -280,7 +299,13 @@ class MemoryViewModel(
     private fun loadSearchSettings() {
         viewModelScope.launch(Dispatchers.IO) {
             val config = searchSettingsPreferences.load()
-            _uiState.update { it.copy(searchConfig = config) }
+            val autoSaveIntervalMinutes = searchSettingsPreferences.loadAutoSaveIntervalMinutes()
+            _uiState.update {
+                it.copy(
+                    searchConfig = config,
+                    autoSaveIntervalMinutes = autoSaveIntervalMinutes
+                )
+            }
         }
     }
 

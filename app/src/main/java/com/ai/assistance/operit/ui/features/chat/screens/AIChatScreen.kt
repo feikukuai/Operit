@@ -303,7 +303,6 @@ val actualViewModel: ChatViewModel = viewModel ?: viewModel { ChatViewModel(cont
     val disableStreamOutput by actualViewModel.disableStreamOutput.collectAsState()
     val disableUserPreferenceDescription by
             actualViewModel.disableUserPreferenceDescription.collectAsState()
-    val disableStatusTags by actualViewModel.disableStatusTags.collectAsState()
     val summaryTokenThreshold by actualViewModel.summaryTokenThreshold.collectAsState()
     val isAutoReadEnabled by actualViewModel.isAutoReadEnabled.collectAsState()
     val showChatHistorySelector by actualViewModel.showChatHistorySelector.collectAsState()
@@ -1063,10 +1062,6 @@ val actualViewModel: ChatViewModel = viewModel ?: viewModel { ChatViewModel(cont
                                     onToggleDisableUserPreferenceDescription = {
                                         actualViewModel.toggleDisableUserPreferenceDescription()
                                     },
-                                    disableStatusTags = disableStatusTags,
-                                    onToggleDisableStatusTags = {
-                                        actualViewModel.toggleDisableStatusTags()
-                                    },
                                     onManualMemoryUpdate = {
                                         actualViewModel.manuallyUpdateMemory()
                                     },
@@ -1112,7 +1107,6 @@ val actualViewModel: ChatViewModel = viewModel ?: viewModel { ChatViewModel(cont
                                 disableStreamOutput = disableStreamOutput,
                                 disableUserPreferenceDescription =
                                         disableUserPreferenceDescription,
-                                disableStatusTags = disableStatusTags,
                                 onNavigateToUserPreferences = onNavigateToUserPreferences,
                                 onNavigateToPackageManager = onNavigateToPackageManager,
                                 toolPromptVisibility = toolPromptVisibility,
@@ -1492,7 +1486,6 @@ private fun ChatInputBottomBar(
     isAutoReadEnabled: Boolean,
     disableStreamOutput: Boolean,
     disableUserPreferenceDescription: Boolean,
-    disableStatusTags: Boolean,
     onNavigateToUserPreferences: () -> Unit,
     onNavigateToPackageManager: () -> Unit,
     toolPromptVisibility: Map<String, Boolean>,
@@ -1676,8 +1669,6 @@ private fun ChatInputBottomBar(
                 disableUserPreferenceDescription = disableUserPreferenceDescription,
                 onToggleDisableUserPreferenceDescription =
                     actualViewModel::toggleDisableUserPreferenceDescription,
-                disableStatusTags = disableStatusTags,
-                onToggleDisableStatusTags = actualViewModel::toggleDisableStatusTags,
                 onNavigateToUserPreferences = onNavigateToUserPreferences,
                 onNavigateToPackageManager = onNavigateToPackageManager,
                 toolPromptVisibility = toolPromptVisibility,

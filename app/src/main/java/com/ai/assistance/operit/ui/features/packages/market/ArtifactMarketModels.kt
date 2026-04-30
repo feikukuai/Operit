@@ -118,6 +118,8 @@ data class LocalPublishableArtifact(
     val displayName: String,
     val description: String,
     val sourceFile: File,
+    val hasDeclaredAuthorField: Boolean = false,
+    val declaredAuthorSlotCount: Int = 0,
     val inferredVersion: String? = null
 )
 

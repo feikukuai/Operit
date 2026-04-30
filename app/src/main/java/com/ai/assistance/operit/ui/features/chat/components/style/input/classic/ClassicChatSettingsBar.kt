@@ -57,6 +57,7 @@ import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
 import android.widget.Toast
 import com.ai.assistance.operit.api.chat.EnhancedAIService
+import com.ai.assistance.operit.api.chat.library.MemoryAutoSaveScheduler
 import com.ai.assistance.operit.data.model.CharacterCardChatModelBindingMode
 import com.ai.assistance.operit.data.model.FunctionType
 import com.ai.assistance.operit.data.model.ModelConfigSummary
@@ -66,12 +67,14 @@ import com.ai.assistance.operit.data.preferences.ActivePromptManager
 import com.ai.assistance.operit.data.model.ActivePrompt
 import com.ai.assistance.operit.data.preferences.FunctionalConfigManager
 import com.ai.assistance.operit.data.preferences.FunctionConfigMapping
+import com.ai.assistance.operit.data.preferences.MemorySearchSettingsPreferences
 import com.ai.assistance.operit.data.preferences.ModelConfigManager
 import com.ai.assistance.operit.data.model.PromptFunctionType
 import com.ai.assistance.operit.data.model.getModelByIndex
 import com.ai.assistance.operit.data.model.getModelList
 import com.ai.assistance.operit.data.model.getValidModelIndex
 import com.ai.assistance.operit.data.preferences.UserPreferencesManager
+import com.ai.assistance.operit.data.repository.MemoryAutoSaveCandidateRepository
 import com.ai.assistance.operit.ui.features.chat.components.style.input.common.InputMenuToggleHookParams
 import com.ai.assistance.operit.ui.features.chat.components.style.input.common.InputMenuToggleDefinition
 import com.ai.assistance.operit.ui.features.chat.components.style.input.common.InputMenuTogglePluginRegistry
@@ -119,8 +122,6 @@ fun ClassicChatSettingsBar(
     onToggleDisableStreamOutput: () -> Unit,
     disableUserPreferenceDescription: Boolean,
     onToggleDisableUserPreferenceDescription: () -> Unit,
-    disableStatusTags: Boolean,
-    onToggleDisableStatusTags: () -> Unit,
     onManualMemoryUpdate: () -> Unit,
     onManualSummarizeConversation: () -> Unit,
     characterCardBoundChatModelConfigId: String? = null,
@@ -192,6 +193,19 @@ fun ClassicChatSettingsBar(
     }
     val inputMenuTogglesBySlot = inputMenuToggles.groupBy { InputMenuToggleSlots.normalize(it.slot) }
     val defaultInputMenuToggles = inputMenuTogglesBySlot[InputMenuToggleSlots.DEFAULT].orEmpty()
+
+    val buildMemoryAutoSaveDetail: suspend () -> String = {
+        val pendingChatCount =
+            MemoryAutoSaveCandidateRepository(context, activeProfileId).countPendingAndFailedChats()
+        val minutesUntilNextSave =
+            MemoryAutoSaveScheduler.getInstance()?.getMinutesUntilNextRun(activeProfileId)
+                ?: MemorySearchSettingsPreferences(context, activeProfileId).loadAutoSaveIntervalMinutes().toLong()
+        context.getString(
+            R.string.memory_auto_update_runtime_status,
+            pendingChatCount,
+            minutesUntilNextSave
+        )
+    }
 
     val onSelectModel: (String, Int) -> Unit = { selectedId, modelIndex ->
         if (isModelSelectionLockedByCharacterCard) {
@@ -404,8 +418,6 @@ fun ClassicChatSettingsBar(
                                 disableUserPreferenceDescription = disableUserPreferenceDescription,
                                 onToggleDisableUserPreferenceDescription =
                                         onToggleDisableUserPreferenceDescription,
-                                disableStatusTags = disableStatusTags,
-                                onToggleDisableStatusTags = onToggleDisableStatusTags,
                                 expanded = showDisableSettingsDropdown,
                                 onExpandedChange = { showDisableSettingsDropdown = it },
                                 onInfoClick = {
@@ -426,11 +438,6 @@ fun ClassicChatSettingsBar(
                                 onDisableUserPreferenceDescriptionInfoClick = {
                                     infoPopupContent =
                                         context.getString(R.string.disable_user_preference_description) to context.getString(R.string.disable_user_preference_description_desc)
-                                    showMenu = false
-                                },
-                                onDisableStatusTagsInfoClick = {
-                                    infoPopupContent =
-                                        context.getString(R.string.disable_status_tags) to context.getString(R.string.disable_status_tags_desc)
                                     showMenu = false
                                 },
                                 onManageToolsClick = {
@@ -502,8 +509,11 @@ fun ClassicChatSettingsBar(
                                 isChecked = enableMemoryAutoUpdate,
                                 onToggle = onToggleMemoryAutoUpdate,
                                 onInfoClick = {
+                                    scope.launch {
                                         infoPopupContent =
-                                                context.getString(R.string.memory_auto_update) to context.getString(R.string.memory_auto_update_desc)
+                                            context.getString(R.string.memory_auto_update) to
+                                                buildMemoryAutoSaveDetail()
+                                    }
                                     showMenu = false
                                 }
                             )
@@ -948,23 +958,19 @@ private fun DisableSettingsGroupItem(
     onToggleTools: () -> Unit,
     disableUserPreferenceDescription: Boolean,
     onToggleDisableUserPreferenceDescription: () -> Unit,
-    disableStatusTags: Boolean,
-    onToggleDisableStatusTags: () -> Unit,
     expanded: Boolean,
     onExpandedChange: (Boolean) -> Unit,
     onInfoClick: () -> Unit,
     onDisableStreamOutputInfoClick: () -> Unit,
     onDisableToolsInfoClick: () -> Unit,
     onDisableUserPreferenceDescriptionInfoClick: () -> Unit,
-    onDisableStatusTagsInfoClick: () -> Unit,
     onManageToolsClick: () -> Unit
 ) {
     val disabledStates =
             listOf(
                             disableStreamOutput,
                             !enableTools,
-                            disableUserPreferenceDescription,
-                            disableStatusTags
+                            disableUserPreferenceDescription
                     )
     val disabledCount = disabledStates.count { it }
     val summaryText = "$disabledCount/${disabledStates.size}"
@@ -1067,17 +1073,6 @@ private fun DisableSettingsGroupItem(
                     isChecked = disableUserPreferenceDescription,
                     onToggle = onToggleDisableUserPreferenceDescription,
                     onInfoClick = onDisableUserPreferenceDescriptionInfoClick
-                )
-
-                SettingItem(
-                    title = stringResource(R.string.disable_status_tags),
-                        icon = Icons.Outlined.Block,
-                        iconTint =
-                                if (disableStatusTags) MaterialTheme.colorScheme.error
-                                else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                    isChecked = disableStatusTags,
-                    onToggle = onToggleDisableStatusTags,
-                    onInfoClick = onDisableStatusTagsInfoClick
                 )
 
                 Box(

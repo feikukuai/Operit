@@ -286,7 +286,7 @@ object AIMessageManager {
      * @param workspacePath 当前工作区路径。
      * @param promptFunctionType 提示功能类型。
      * @param enableThinking 是否启用思考过程。
-     * @param enableMemoryAutoUpdate 是否允许任务完成后自动更新记忆。
+     * @param enableMemoryAutoUpdate 是否允许在当前轮回复结束后自动更新记忆。
      * @param maxTokens 最大token数量。
      * @param tokenUsageThreshold token使用阈值。
      * @param onNonFatalError 非致命错误回调。

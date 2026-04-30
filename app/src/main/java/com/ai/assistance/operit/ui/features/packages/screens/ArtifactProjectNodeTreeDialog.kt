@@ -2,6 +2,7 @@ package com.ai.assistance.operit.ui.features.packages.screens
 
 import android.graphics.Paint
 import android.graphics.Typeface
+import android.os.SystemClock
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -9,7 +10,6 @@ import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -55,8 +55,13 @@ import com.ai.assistance.operit.data.api.GitHubIssue
 fun ArtifactProjectNodeTreeDialog(
     project: ArtifactProjectDetailResponse,
     onDismissRequest: () -> Unit,
-    onSelectNode: (GitHubIssue) -> Unit
+    onSelectNode: (GitHubIssue) -> Unit = {},
+    selectedNodeIds: Set<String> = emptySet(),
+    onToggleNodeSelection: ((ArtifactProjectNodeResponse) -> Unit)? = null,
+    onConfirmSelection: (() -> Unit)? = null,
+    confirmSelectionEnabled: Boolean = true
 ) {
+    val isSelectionMode = onToggleNodeSelection != null || onConfirmSelection != null
     Dialog(
         onDismissRequest = onDismissRequest,
         properties =
@@ -96,12 +101,26 @@ fun ArtifactProjectNodeTreeDialog(
                                 style = MaterialTheme.typography.titleLarge,
                                 fontWeight = FontWeight.Bold
                             )
+                            if (isSelectionMode) {
+                                Text(
+                                    text = "点击节点选中，再次点击可取消。",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                         }
                         TextButton(
-                            onClick = onDismissRequest,
+                            onClick = {
+                                if (isSelectionMode) {
+                                    onConfirmSelection?.invoke()
+                                } else {
+                                    onDismissRequest()
+                                }
+                            },
+                            enabled = !isSelectionMode || confirmSelectionEnabled,
                             modifier = Modifier.align(Alignment.CenterEnd)
                         ) {
-                            Text("关闭")
+                            Text(if (isSelectionMode) "确认" else "关闭")
                         }
                     }
 
@@ -117,10 +136,17 @@ fun ArtifactProjectNodeTreeDialog(
 
                     ArtifactProjectTreeCanvas(
                         project = project,
-                        onSelectNode = { issue ->
-                            onDismissRequest()
-                            onSelectNode(issue)
-                        }
+                        onSelectNode =
+                            if (isSelectionMode) {
+                                null
+                            } else {
+                                { issue ->
+                                    onDismissRequest()
+                                    onSelectNode(issue)
+                                }
+                            },
+                        selectedNodeIds = selectedNodeIds,
+                        onToggleNodeSelection = onToggleNodeSelection
                     )
                 }
             }
@@ -131,7 +157,9 @@ fun ArtifactProjectNodeTreeDialog(
 @Composable
 private fun ArtifactProjectTreeCanvas(
     project: ArtifactProjectDetailResponse,
-    onSelectNode: (GitHubIssue) -> Unit
+    onSelectNode: ((GitHubIssue) -> Unit)?,
+    selectedNodeIds: Set<String>,
+    onToggleNodeSelection: ((ArtifactProjectNodeResponse) -> Unit)?
 ) {
     val density = LocalDensity.current
     val metrics = remember(density) { buildArtifactTreeMetrics(density) }
@@ -139,6 +167,7 @@ private fun ArtifactProjectTreeCanvas(
     var viewportSize by remember(project.projectId) { mutableStateOf(IntSize.Zero) }
     var scale by remember(project.projectId) { mutableStateOf(1f) }
     var offset by remember(project.projectId) { mutableStateOf(Offset.Zero) }
+    var lastTransformGestureAt by remember(project.projectId) { mutableStateOf(0L) }
     val viewPaddingPx = with(density) { VIEWPORT_FIT_PADDING.toPx() }
 
     LaunchedEffect(project.projectId, viewportSize, layout.totalWidth, layout.totalHeight) {
@@ -192,6 +221,8 @@ private fun ArtifactProjectTreeCanvas(
     val openBorder = MaterialTheme.colorScheme.primary.copy(alpha = 0.54f)
     val closedFill = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.52f)
     val closedBorder = MaterialTheme.colorScheme.outline.copy(alpha = 0.54f)
+    val selectedFill = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.34f)
+    val selectedBorder = MaterialTheme.colorScheme.tertiary
     val primaryText = MaterialTheme.colorScheme.onSurface
     val secondaryText = MaterialTheme.colorScheme.onSurfaceVariant
 
@@ -207,6 +238,9 @@ private fun ArtifactProjectTreeCanvas(
                 .onSizeChanged { viewportSize = it }
                 .pointerInput(project.projectId) {
                     detectTransformGestures { centroid, pan, zoom, _ ->
+                        if (zoom != 1f || pan.getDistance() > 0.5f) {
+                            lastTransformGestureAt = SystemClock.uptimeMillis()
+                        }
                         val newScale = (scale * zoom).coerceIn(MIN_CANVAS_SCALE, MAX_CANVAS_SCALE)
                         val scaleFactor = newScale / scale
                         offset = centroid - (centroid - offset) * scaleFactor + pan
@@ -216,12 +250,20 @@ private fun ArtifactProjectTreeCanvas(
                 .pointerInput(project.projectId) {
                     detectTapGestures(
                         onTap = { tapOffset ->
+                            if (SystemClock.uptimeMillis() - lastTransformGestureAt < TRANSFORM_TAP_SUPPRESSION_MS) {
+                                return@detectTapGestures
+                            }
                             val worldPoint = canvasToWorld(tapOffset, offset, scale)
                             layout.nodes
                                 .lastOrNull { it.rect.contains(worldPoint) }
                                 ?.node
-                                ?.issue
-                                ?.let(onSelectNode)
+                                ?.let { tappedNode ->
+                                    if (onToggleNodeSelection != null) {
+                                        onToggleNodeSelection(tappedNode)
+                                    } else {
+                                        onSelectNode?.invoke(tappedNode.issue)
+                                    }
+                                }
                         },
                         onDoubleTap = {
                             val availableWidth = (viewportSize.width.toFloat() - viewPaddingPx * 2f).coerceAtLeast(1f)
@@ -266,8 +308,17 @@ private fun ArtifactProjectTreeCanvas(
                 }
 
                 layout.nodes.forEach { layoutNode ->
+                    val isSelected = layoutNode.node.nodeId in selectedNodeIds
                     val palette =
                         when {
+                            isSelected ->
+                                ArtifactTreeNodePalette(
+                                    fillColor = selectedFill,
+                                    borderColor = selectedBorder,
+                                    primaryTextColor = primaryText,
+                                    secondaryTextColor = secondaryText
+                                )
+
                             layoutNode.node.nodeId == project.defaultNodeId && layoutNode.node.issue.state == "open" ->
                                 ArtifactTreeNodePalette(
                                     fillColor = defaultFill,
@@ -296,6 +347,7 @@ private fun ArtifactProjectTreeCanvas(
                         rect = layoutNode.rect,
                         node = layoutNode.node,
                         isDefault = layoutNode.node.nodeId == project.defaultNodeId,
+                        isSelected = isSelected,
                         palette = palette,
                         metrics = metrics,
                         datePaint = datePaint,
@@ -312,6 +364,7 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawArtifactNode(
     rect: Rect,
     node: ArtifactProjectNodeResponse,
     isDefault: Boolean,
+    isSelected: Boolean,
     palette: ArtifactTreeNodePalette,
     metrics: ArtifactTreeMetrics,
     datePaint: Paint,
@@ -319,7 +372,12 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawArtifactNode(
     versionPaint: Paint
 ) {
     val cornerRadius = CornerRadius(metrics.cornerRadius, metrics.cornerRadius)
-    val borderWidth = if (isDefault) metrics.borderWidth * 1.18f else metrics.borderWidth
+    val borderWidth =
+        when {
+            isSelected -> metrics.borderWidth * 1.55f
+            isDefault -> metrics.borderWidth * 1.18f
+            else -> metrics.borderWidth
+        }
     drawRoundRect(
         color = palette.fillColor,
         topLeft = rect.topLeft,
@@ -644,3 +702,4 @@ private val NODE_LINE_GAP = 2.dp
 private val VIEWPORT_FIT_PADDING = 20.dp
 private const val MIN_CANVAS_SCALE = 0.35f
 private const val MAX_CANVAS_SCALE = 2.8f
+private const val TRANSFORM_TAP_SUPPRESSION_MS = 140L

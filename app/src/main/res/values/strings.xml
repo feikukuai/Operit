@@ -1575,8 +1575,6 @@
     <string name="manage_packages">管理包</string>
     <string name="disable_user_preference_description">禁用用户偏好描述</string>
     <string name="disable_user_preference_description_desc">禁用后，系统提示词中不再附加“User preference description”段落</string>
-    <string name="disable_status_tags">禁用状态标签</string>
-    <string name="disable_status_tags_desc">禁用后，系统提示词中不再附加要求以“任务完成 / 等待响应”状态标签结束回复的规则</string>
     <string name="reply_message">回复</string>
     <string name="pause_reading">暂停朗读</string>
     <string name="resume_reading">继续朗读</string>
@@ -2973,7 +2971,7 @@
     <string name="external">外部</string>
     
     <!-- Chat Components -->
-    <string name="memory_auto_update_active">记忆自动更新已激活</string>
+    <string name="memory_auto_update_active">长期记忆自动保存已开启</string>
     <string name="thinking_mode_active">思考模式已激活</string>
     <string name="ai_planning_active">深度搜索已激活</string>
     <string name="auto_approve_active">自动批准已激活</string>
@@ -2991,8 +2989,9 @@
     <string name="prompt_desc">在这里选择一个已经配置好的提示词，或者点击下方的管理配置去新建或修改提示词</string>
     <string name="memory">记忆</string>
     <string name="memory_desc">记忆选择包括了用户偏好和该偏好下的记忆库。如果想要新的记忆库，可以去设置新建一个用户偏好并在这里选择</string>
-    <string name="memory_auto_update">记忆自动更新</string>
-    <string name="memory_auto_update_desc">开启后，当AI输出任务完成标记时，会自动把本轮对话中的有价值内容写入记忆库。</string>
+    <string name="memory_auto_update">自动保存记忆</string>
+    <string name="memory_auto_update_desc">开启后，当前轮回复结束时会先把候选内容加入长期记忆队列，并在应用存活期间由后台定时整理写入记忆库。</string>
+    <string name="memory_auto_update_runtime_status">待提取记忆的对话条数%1$d，距离下次保存%2$d分钟</string>
     <string name="chat_summarizing_memory">正在总结记忆...</string>
     <string name="chat_input_processing_collect_failed">输入处理状态收集失败: %1$s</string>
     <string name="chat_input_hint">输入消息...</string>
@@ -4527,8 +4526,8 @@
     <string name="api_key_pool_test_failed">测试失败: %1$s</string>
 
     <!-- 手动更新记忆 -->
-    <string name="manual_memory_update">手动更新记忆</string>
-    <string name="manual_memory_update_desc">当AI在任务完成后忘记总结时，手动触发记忆保存，将本次对话的有价值内容存入长期记忆库。</string>
+    <string name="manual_memory_update">手动触发记忆保存</string>
+    <string name="manual_memory_update_desc">需要立即补存本次对话的有价值内容时，可手动触发记忆保存，直接写入长期记忆库。</string>
     <string name="manual_conversation_summary">手动总结对话</string>
     <string name="manual_conversation_summary_desc">立即触发一次对话总结，帮助压缩上下文并保留双方重点内容，适用于长对话或发送前清理历史。</string>
 
@@ -5642,6 +5641,8 @@
     <string name="memory_search_settings_title">记忆搜索设置</string>
     <string name="memory_search_calc_mode">计算方式</string>
     <string name="memory_search_weight_section">权重</string>
+    <string name="memory_auto_save_settings_title">自动保存记忆</string>
+    <string name="memory_auto_save_interval_minutes">自动保存间隔（分钟）</string>
     <string name="memory_search_mode_balanced">平衡模式</string>
     <string name="memory_search_mode_keyword_first">关键词优先</string>
     <string name="memory_search_mode_semantic_first">向量优先</string>
@@ -6960,7 +6961,6 @@
     <string name="enhanced_connecting_service">正在连接AI服务...</string>
     <string name="enhanced_receiving_response">正在接收AI响应...</string>
     <string name="enhanced_error_with_message">错误: %1$s</string>
-    <string name="enhanced_tool_warning">警告：工具调用和等待用户响应不能同时存在。工具调用被处理了，但这是极具危险性的。</string>
     <string name="enhanced_pure_thinking_only_warning">警告：请输出正文内容，禁止仅输出思考内容。</string>
     <string name="enhanced_truncated_tool_call_warning">警告：检测到工具调用输出被截断。本轮所有工具调用均已作废且不会执行。请尝试减少单次输出、拆分任务，或更换更合适的模型/供应商后重试。</string>
     <string name="status_warning_ai_error_summary">AI犯了一个错误</string>
@@ -7353,8 +7353,6 @@
     <string name="conversation_markup_multiple_tools_warning">检测到多个工具调用。系统将只执行第一个工具 `%1$s`，忽略其它工具调用。请避免在单个消息中同时调用多个工具。</string>
     <string name="conversation_markup_tool_calls">工具调用</string>
     <string name="conversation_markup_tools_call">工具 `%1$s` 调用</string>
-    <string name="conversation_markup_completion_with_tools_warning">警告：检测到任务完成标记的同时存在%1$s，系统仍会执行这些工具，但这是高风险组合。</string>
-    <string name="conversation_markup_completion_with_tools_hint">请勿在发送任务完成状态的同时调用工具，以避免重复或矛盾的响应。</string>
 
     <!-- SAF Bookmark / Repository -->
     <string name="repo_bookmark_name">仓库名称</string>

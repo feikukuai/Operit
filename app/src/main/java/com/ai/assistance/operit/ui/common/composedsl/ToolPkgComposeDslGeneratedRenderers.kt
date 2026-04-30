@@ -421,21 +421,8 @@ internal fun renderTextNode(
     modifierResolver: ComposeDslModifierResolver
 ) {
     val props = node.props
-    val textStyle = props.textStyle("style")
+    val resolvedStyle = props.resolvedTextStyle("style")
     val textColor = props.colorOrNull("color")
-    val fontWeight = props.fontWeightOrNull("fontWeight")
-    val fontSize = props.floatOrNull("fontSize")
-    val resolvedStyle =
-        textStyle.let { style ->
-            var nextStyle = style
-            if (fontWeight != null) {
-                nextStyle = nextStyle.copy(fontWeight = fontWeight)
-            }
-            if (fontSize != null) {
-                nextStyle = nextStyle.copy(fontSize = fontSize.sp)
-            }
-            nextStyle
-        }
     Text(
         text = props.string("text"),
         style = resolvedStyle,
@@ -489,20 +476,7 @@ internal fun renderTextFieldNode(
         }
     }
     val textStyle =
-        styleMap?.let {
-            val fontSize = (it["fontSize"] as? Number)?.toFloat() ?: 14f
-            val fontWeight =
-                it["fontWeight"]?.toString()?.let { token ->
-                    mapOf<String, Any?>("fontWeight" to token).fontWeightOrNull("fontWeight")
-                } ?: FontWeight.SemiBold
-            val color = it["color"]?.toString()?.let { rawColor -> resolveColorToken(rawColor) }
-                ?: MaterialTheme.colorScheme.primary
-            androidx.compose.ui.text.TextStyle(
-                color = color,
-                fontSize = fontSize.sp,
-                fontWeight = fontWeight
-            )
-        }
+        composeDslTextFieldStyleFromValue(styleMap)
 
     OutlinedTextField(
         value = textFieldValue,
@@ -3156,9 +3130,15 @@ internal fun renderBasicTextNode(
     androidx.compose.foundation.text.BasicText(
         text = props.string("text"),
         modifier = applyScopedCommonModifier(Modifier, props, modifierResolver),
-        style = props.textStyle("style"),
+        style = props.resolvedTextStyle("style", includeColor = true),
         softWrap = props.bool("softWrap", false),
-        maxLines = props.int("maxLines", 0)
+        maxLines = props.int("maxLines", 0),
+        overflow = props.textOverflow("overflow"),
+        onTextLayout = {
+            if (!onTextLayoutActionId.isNullOrBlank()) {
+                onAction(onTextLayoutActionId, null)
+            }
+        }
     )
 }
 

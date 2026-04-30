@@ -1293,8 +1293,6 @@
     <string name="manage_packages">Urus Pakej</string>
     <string name="disable_user_preference_description">Lumpuhkan Penerangan Keutamaan Pengguna</string>
     <string name="disable_user_preference_description_desc">Apabila dilumpuhkan, perenggan "Penerangan Keutamaan Pengguna" tidak lagi dilampirkan pada petunjuk sistem</string>
-    <string name="disable_status_tags">Lumpuhkan Tag Status</string>
-    <string name="disable_status_tags_desc">Apabila dilumpuhkan, peraturan yang memerlukan balasan diakhiri dengan tag status "Tugas Selesai / Menunggu Respons" tidak lagi dilampirkan pada petunjuk sistem</string>
     <string name="reply_message">Balas</string>
     <string name="pause_reading">Jeda Bacaan</string>
     <string name="resume_reading">Sambung Bacaan</string>
@@ -2606,7 +2604,7 @@
     <string name="memory">Ingatan</string>
     <string name="memory_desc">Pilihan ingatan termasuk keutamaan pengguna dan pangkalan ingatan di bawah keutamaan tersebut. Jika mahukan pangkalan ingatan baharu, pergi ke tetapan untuk mencipta keutamaan pengguna baharu dan pilih di sini</string>
     <string name="memory_auto_update">Kemas Kini Ingatan Automatik</string>
-    <string name="memory_auto_update_desc">Apabila dihidupkan, selepas AI menandakan tugasan selesai, kandungan berharga daripada perbualan ini akan disimpan secara automatik ke pangkalan ingatan.</string>
+    <string name="memory_auto_update_desc">Apabila dihidupkan, selepas respons semasa selesai, kandungan berharga daripada perbualan ini akan disimpan secara automatik ke pangkalan ingatan.</string>
     <string name="chat_summarizing_memory">Sedang meringkaskan ingatan...</string>
     <string name="chat_input_processing_collect_failed">Pengumpulan status pemprosesan input gagal: %1$s</string>
     <string name="chat_input_hint">Masukkan mesej...</string>
@@ -4235,7 +4233,7 @@ Kini anda boleh menggunakan mod AutoGLM di antara muka perbualan.</string>
     <string name="api_key_pool_clear_marks">Kosongkan tanda</string>
     <string name="api_key_pool_test_failed">Ujian gagal: %1$s</string>
     <string name="manual_memory_update">Kemas kini ingatan manual</string>
-    <string name="manual_memory_update_desc">Apabila AI lupa untuk merumuskan selepas tugas selesai, picu penyimpanan ingatan secara manual untuk menyimpan kandungan berharga perbualan ini ke dalam pangkalan data ingatan jangka panjang.</string>
+    <string name="manual_memory_update_desc">Jika perlu menyimpan kandungan berharga perbualan ini dengan segera, picu penyimpanan ingatan secara manual untuk menulisnya ke dalam pangkalan data ingatan jangka panjang.</string>
     <string name="manual_conversation_summary">Rumuskan perbualan secara manual</string>
     <string name="manual_conversation_summary_desc">Segera picu satu rumusan perbualan untuk membantu memampatkan konteks dan mengekalkan kandungan penting kedua-dua pihak, sesuai untuk perbualan panjang atau membersihkan sejarah sebelum menghantar.</string>
     <string name="screen_title_context_summary_settings">Tetapan Konteks dan Rumusan</string>
@@ -6405,7 +6403,6 @@ Kini anda boleh menggunakan mod AutoGLM di antara muka perbualan.</string>
     <string name="enhanced_connecting_service">Menyambung ke perkhidmatan AI...</string>
     <string name="enhanced_receiving_response">Menerima respons AI...</string>
     <string name="enhanced_error_with_message">Ralat: %1$s</string>
-    <string name="enhanced_tool_warning">Amaran: Panggilan alat dan menunggu respons pengguna tidak boleh wujud serentak. Panggilan alat telah diproses, tetapi ini sangat berbahaya.</string>
     <string name="enhanced_pure_thinking_only_warning">Amaran: Sila keluarkan kandungan teks, dilarang hanya mengeluarkan kandungan pemikiran.</string>
     <string name="enhanced_truncated_tool_call_warning">Amaran: Pengeluaran panggilan alat dikesan dipotong. Semua panggilan alat dalam pusingan ini telah dibatalkan dan tidak akan dilaksanakan. Cuba kurangkan keluaran tunggal, pecahkan tugas, atau tukar kepada model/pembekal yang lebih sesuai dan cuba semula.</string>
     <string name="status_warning_ai_error_summary">AI melakukan kesilapan</string>
@@ -6798,8 +6795,6 @@ Kini anda boleh menggunakan mod AutoGLM di antara muka perbualan.</string>
     <string name="conversation_markup_multiple_tools_warning">Berbilang panggilan alat dikesan. Sistem hanya akan melaksanakan alat pertama `%1$s`, mengabaikan panggilan alat lain. Elakkan memanggil berbilang alat dalam satu mesej.</string>
     <string name="conversation_markup_tool_calls">Panggilan alat</string>
     <string name="conversation_markup_tools_call">Panggilan alat `%1$s`</string>
-    <string name="conversation_markup_completion_with_tools_warning">Amaran: Tanda penyiapan tugas dikesan bersama %1$s, sistem masih akan melaksanakan alat ini, tetapi ini adalah kombinasi berisiko tinggi.</string>
-    <string name="conversation_markup_completion_with_tools_hint">Jangan panggil alat serentak dengan menghantar status penyiapan tugas, untuk mengelakkan respons berulang atau bercanggah.</string>
 
     <string name="sidebar_permission_short">Kebenaran</string>
     <string name="sidebar_status_normal">Normal</string>

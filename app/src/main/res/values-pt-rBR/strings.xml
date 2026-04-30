@@ -1391,8 +1391,6 @@
     <string name="manage_packages">pacote de gerenciamento</string>
     <string name="disable_user_preference_description">Desativar descrições de preferências do usuário</string>
     <string name="disable_user_preference_description_desc">Após a desativação, o parágrafo "Descrição da preferência do usuário" não será mais anexado à palavra do prompt do sistema.</string>
-    <string name="disable_status_tags">Desativar rótulo de status</string>
-    <string name="disable_status_tags_desc">Após a desativação, a palavra do prompt do sistema não terá mais uma regra que exige que a resposta termine com o rótulo de status "Tarefa concluída/aguardando resposta".</string>
     <string name="reply_message">responder</string>
     <string name="pause_reading">pausar leitura</string>
     <string name="resume_reading">continuar leitura</string>
@@ -2656,7 +2654,7 @@ Agora é possível usar o modo AutoGLM na interface de diálogo.</string>
     <string name="memory">memória</string>
     <string name="memory_desc">A seleção de memória inclui as preferências do usuário e o banco de memória dessa preferência. Se você quiser um novo banco de memória, você pode ir nas configurações para criar uma nova preferência de usuário e selecioná-la aqui</string>
     <string name="memory_auto_update">atualização automática de memória</string>
-    <string name="memory_auto_update_desc">Quando ativado, após a IA marcar a tarefa como concluída, o conteúdo valioso desta conversa será salvo automaticamente na biblioteca de memória.</string>
+    <string name="memory_auto_update_desc">Quando ativado, após a resposta atual ser finalizada, o conteúdo valioso desta conversa será salvo automaticamente na biblioteca de memória.</string>
     <string name="chat_summarizing_memory">Resumindo memórias...</string>
     <string name="chat_input_processing_collect_failed">Falha na coleta de status de processamento de entrada: %1$s</string>
     <string name="chat_input_hint">Digite a mensagem...</string>
@@ -3908,7 +3906,7 @@ Agora é possível usar o modo AutoGLM na interface de diálogo.</string>
     <string name="api_key_pool_clear_marks">marca clara</string>
     <string name="api_key_pool_test_failed">Falha no teste: %1$s</string>
     <string name="manual_memory_update">Atualizar memória manualmente</string>
-    <string name="manual_memory_update_desc">Quando a IA se esquece de resumir após concluir a tarefa, o salvamento de memória é acionado manualmente e o conteúdo valioso dessa conversa é armazenado no banco de memória de longo prazo.</string>
+    <string name="manual_memory_update_desc">Se você precisar salvar imediatamente o conteúdo valioso desta conversa, acione manualmente o salvamento de memória para gravá-lo no banco de memória de longo prazo.</string>
     <string name="manual_conversation_summary">Resuma conversas manualmente</string>
     <string name="manual_conversation_summary_desc">Acione imediatamente um resumo da conversa para ajudar a compactar o contexto e reter o conteúdo principal de ambas as partes. É adequado para conversas longas ou para limpar o histórico antes de enviar.</string>
     <string name="screen_title_context_summary_settings">Configurações de contexto e resumo</string>
@@ -6025,7 +6023,6 @@ Agora é possível usar o modo AutoGLM na interface de diálogo.</string>
     <string name="enhanced_connecting_service">Conectando ao serviço de IA...</string>
     <string name="enhanced_receiving_response">Recebendo resposta de IA...</string>
     <string name="enhanced_error_with_message">Erro: %1$s</string>
-    <string name="enhanced_tool_warning">Atenção: A chamada da ferramenta e a espera pela resposta do usuário não podem ocorrer ao mesmo tempo. A chamada da ferramenta é controlada, mas isso é extremamente perigoso.</string>
     <string name="enhanced_pure_thinking_only_warning">Aviso: Por favor, produza o conteúdo do texto. É proibido produzir apenas o conteúdo pensante.</string>
     <string name="enhanced_truncated_tool_call_warning">Aviso: Saída de chamada de ferramenta truncada detectada. Todas as chamadas de ferramenta desta rodada foram invalidadas e não serão executadas. Tente reduzir a produção única, divida a tarefa ou tente novamente após mudar para um modelo/fornecedor mais adequado.</string>
     <string name="status_warning_ai_error_summary">IA cometeu um erro</string>
@@ -6297,8 +6294,6 @@ Agora é possível usar o modo AutoGLM na interface de diálogo.</string>
     <string name="conversation_markup_multiple_tools_warning">Várias chamadas de ferramenta detectadas. O sistema executará apenas a primeira ferramenta `%1$s` e ignorará outras chamadas de ferramenta. Evite ligar para várias ferramentas simultaneamente em uma única mensagem.</string>
     <string name="conversation_markup_tool_calls">Chamada de ferramenta</string>
     <string name="conversation_markup_tools_call">Ferramenta `%1$s` chamada</string>
-    <string name="conversation_markup_completion_with_tools_warning">Aviso: %1$s foi detectado junto com a marca de conclusão da tarefa. As ferramentas ainda serão executadas, mas esta é uma combinação de alto risco.</string>
-    <string name="conversation_markup_completion_with_tools_hint">Não chame ferramentas ao enviar o status de conclusão da tarefa para evitar respostas duplicadas ou contraditórias.</string>
     <string name="repo_bookmark_name">Nome do armazém</string>
     <string name="repo_bookmark_name_label">nome</string>
     <string name="repo_bookmark_name_empty">O nome não pode ficar vazio</string>

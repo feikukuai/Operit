@@ -24,6 +24,7 @@ import com.ai.assistance.operit.BuildConfig
 import com.ai.assistance.operit.R
 import com.ai.assistance.operit.core.chat.AIMessageManager
 import com.ai.assistance.operit.api.chat.AIForegroundService
+import com.ai.assistance.operit.api.chat.library.MemoryAutoSaveScheduler
 import com.ai.assistance.operit.plugins.PluginRegistry
 import com.ai.assistance.operit.plugins.lifecycle.AppLifecycleEvent
 import com.ai.assistance.operit.plugins.lifecycle.AppLifecycleHookParams
@@ -99,6 +100,7 @@ class OperitApplication : Application(), ImageLoaderFactory, WorkConfiguration.P
 
     // 应用级协程作用域
     private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private var memoryAutoSaveScheduler: MemoryAutoSaveScheduler? = null
 
     // 懒加载数据库实例
     private val database by lazy { AppDatabase.getDatabase(this) }
@@ -187,6 +189,10 @@ class OperitApplication : Application(), ImageLoaderFactory, WorkConfiguration.P
         val defaultProfileName = applicationContext.getString(R.string.default_profile)
         initUserPreferencesManager(applicationContext, defaultProfileName)
         AppLogger.d(TAG, "【启动计时】用户偏好管理器初始化完成 - ${System.currentTimeMillis() - startTime}ms")
+
+        memoryAutoSaveScheduler = MemoryAutoSaveScheduler(applicationContext, applicationScope)
+            .also { it.start() }
+        AppLogger.d(TAG, "【启动计时】长期记忆自动保存轮询器启动完成 - ${System.currentTimeMillis() - startTime}ms")
 
         // 初始化Android权限偏好管理器
         initAndroidPermissionPreferences(applicationContext)

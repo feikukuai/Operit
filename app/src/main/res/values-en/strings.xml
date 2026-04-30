@@ -726,8 +726,6 @@
     <string name="manage_packages">Manage Packages</string>
     <string name="disable_user_preference_description">Disable User Preference Description</string>
     <string name="disable_user_preference_description_desc">When disabled, the system prompt no longer appends the "User preference description" section</string>
-    <string name="disable_status_tags">Disable Status Tags</string>
-    <string name="disable_status_tags_desc">When disabled, the system prompt no longer appends rules that require replies to end with Task Complete / Wait for User status tags</string>
     <string name="pause_reading">Pause Reading</string>
     <string name="resume_reading">Resume Reading</string>
     <string name="stop_reading">Stop Reading</string>
@@ -1868,8 +1866,8 @@
     <string name="nav_memory_base">Memory Base</string>
     
     <!-- Manual Memory Update -->
-    <string name="manual_memory_update">Manual Memory Update</string>
-    <string name="manual_memory_update_desc">When AI forgets to summarize after task completion, manually trigger memory saving to store valuable content from this conversation into long-term memory.</string>
+    <string name="manual_memory_update">Manual Memory Save</string>
+    <string name="manual_memory_update_desc">If you need to store valuable content from this conversation immediately, manually trigger memory saving to write it directly into the long-term memory library.</string>
     <string name="manual_conversation_summary">Manual Conversation Summary</string>
     <string name="manual_conversation_summary_desc">Immediately trigger a conversation summary to compress context and keep key points from both sides. Useful for long chats or before sending new messages.</string>
     
@@ -3079,7 +3077,7 @@
     <string name="filelist_go_back">Go back to parent directory</string>
 
     <!-- Chat Components -->
-    <string name="memory_auto_update_active">Memory auto update activated</string>
+    <string name="memory_auto_update_active">Long-term memory autosave enabled</string>
     <string name="thinking_mode_active">Thinking mode activated</string>
     <string name="ai_planning_active">AI planning mode activated</string>
     <string name="auto_approve_active">Auto approve activated</string>
@@ -3097,8 +3095,9 @@
     <string name="prompt_desc">Select a configured prompt here, or click Manage Configuration below to create or modify prompts</string>
     <string name="memory">Memory</string>
     <string name="memory_desc">Memory selection includes user preferences and memory base under that preference. To create a new memory base, go to settings to create a new user preference and select it here</string>
-    <string name="memory_auto_update">Memory Auto Update</string>
-    <string name="memory_auto_update_desc">When enabled, valuable content from the current conversation is automatically saved to the memory library after AI marks the task as complete.</string>
+    <string name="memory_auto_update">Auto Save Memory</string>
+    <string name="memory_auto_update_desc">When enabled, candidate content from the current conversation is queued after the reply is finalized, then written into the memory library by periodic background processing while the app process remains alive.</string>
+    <string name="memory_auto_update_runtime_status">Pending chats for memory extraction: %1$d, next save in %2$d minute(s)</string>
     <string name="chat_summarizing_memory">Summarizing memory...</string>
     <string name="chat_input_processing_collect_failed">Failed to collect input processing state: %1$s</string>
     <string name="chat_input_hint">Type a message...</string>
@@ -5589,6 +5588,8 @@
     <string name="memory_search_settings_title">Memory Search Settings</string>
     <string name="memory_search_calc_mode">Scoring Mode</string>
     <string name="memory_search_weight_section">Weights</string>
+    <string name="memory_auto_save_settings_title">Auto Save Memory</string>
+    <string name="memory_auto_save_interval_minutes">Autosave interval (minutes)</string>
     <string name="memory_search_mode_balanced">Balanced</string>
     <string name="memory_search_mode_keyword_first">Keyword First</string>
     <string name="memory_search_mode_semantic_first">Semantic First</string>
@@ -6754,7 +6755,6 @@
     <string name="enhanced_connecting_service">Connecting to AI service...</string>
     <string name="enhanced_receiving_response">Receiving AI response...</string>
     <string name="enhanced_error_with_message">Error: %1$s</string>
-    <string name="enhanced_tool_warning">Warning: Tool calls and waiting for user response cannot exist at the same time. Tool calls were processed, but this is extremely dangerous.</string>
     <string name="enhanced_pure_thinking_only_warning">Warning: Please output main content and do not output thinking-only responses.</string>
     <string name="enhanced_truncated_tool_call_warning">Warning: A tool call was truncated by the model output limit. All tool calls in this round were invalidated and will not be executed. Try reducing single-turn output, splitting the task, or switching to a more suitable model/provider.</string>
     <string name="status_warning_ai_error_summary">The AI made an error</string>
@@ -7147,8 +7147,6 @@
     <string name="conversation_markup_multiple_tools_warning">Multiple tool calls detected. The system will only execute the first tool `%1$s` and ignore other tool calls. Please avoid calling multiple tools in a single message.</string>
     <string name="conversation_markup_tool_calls">Tool Calls</string>
     <string name="conversation_markup_tools_call">Tools `%1$s` Call</string>
-    <string name="conversation_markup_completion_with_tools_warning">Warning: Task completion marker detected while %1$s exists. The system will still execute these tools, but this is a high-risk combination.</string>
-    <string name="conversation_markup_completion_with_tools_hint">Please do not call tools while sending task completion status to avoid duplicate or conflicting responses.</string>
 
     <!-- SAF Bookmark / Repository -->
     <string name="repo_bookmark_name">Repository Name</string>

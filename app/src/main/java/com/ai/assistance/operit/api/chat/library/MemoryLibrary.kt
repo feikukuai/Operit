@@ -93,7 +93,7 @@ object MemoryLibrary {
 
         coroutineScope.launch {
             try {
-                saveMemory(
+                saveMemoryNow(
                     context,
                     toolHandler,
                     conversationHistory,
@@ -108,6 +108,24 @@ object MemoryLibrary {
                 onError?.invoke(e)
             }
         }
+    }
+
+    suspend fun saveMemoryNow(
+        context: Context,
+        toolHandler: AIToolHandler,
+        conversationHistory: List<Pair<String, String>>,
+        content: String,
+        aiService: AIService,
+        profileIdOverride: String? = null
+    ) {
+        saveMemory(
+            context = context,
+            toolHandler = toolHandler,
+            conversationHistory = conversationHistory,
+            content = content,
+            aiService = aiService,
+            profileIdOverride = profileIdOverride
+        )
     }
 
     private fun ensureInitialized(context: Context) {
@@ -251,10 +269,11 @@ object MemoryLibrary {
             toolHandler: AIToolHandler,
             conversationHistory: List<Pair<String, String>>,
             content: String,
-            aiService: AIService
+            aiService: AIService,
+            profileIdOverride: String? = null
     ) {
         mutex.withLock {
-            val profileId = preferencesManager.activeProfileIdFlow.first()
+            val profileId = profileIdOverride ?: preferencesManager.activeProfileIdFlow.first()
             val memoryRepository = MemoryRepository(context, profileId)
 
             // Prune tool results to reduce token usage
@@ -353,7 +372,11 @@ object MemoryLibrary {
             if (analysis.userPreferences.isNotEmpty()) {
                 try {
                     withContext(Dispatchers.IO) {
-                        updateUserPreferencesFromAnalysis(context, analysis.userPreferences)
+                        updateUserPreferencesFromAnalysis(
+                            context = context,
+                            preferencesText = analysis.userPreferences,
+                            profileId = profileId
+                        )
                         AppLogger.d(TAG, "用户偏好已更新")
                     }
                 } catch (e: Exception) {
@@ -485,7 +508,7 @@ object MemoryLibrary {
             val useEnglish = LocaleUtils.getCurrentLanguage(context).lowercase().startsWith("en")
             val currentPreferences = withContext(Dispatchers.IO) {
                 var preferences = ""
-                preferencesManager.getUserPreferencesFlow().take(1).collect { profile ->
+                preferencesManager.getUserPreferencesFlow(profileId).take(1).collect { profile ->
                     preferences = buildPreferencesText(context, profile)
                 }
                 preferences
@@ -866,7 +889,11 @@ object MemoryLibrary {
         return parts.joinToString("; ")
     }
 
-    private suspend fun updateUserPreferencesFromAnalysis(context: Context, preferencesText: String) {
+    private suspend fun updateUserPreferencesFromAnalysis(
+        context: Context,
+        preferencesText: String,
+        profileId: String
+    ) {
         if (preferencesText.isEmpty()) return
 
         fun extractValue(match: MatchResult?): String? {
@@ -905,6 +932,7 @@ object MemoryLibrary {
         }
 
         preferencesManager.updateProfileCategory(
+                profileId = profileId,
                 birthDate = birthDateTimestamp,
                 gender = extractValue(genderMatch),
                 personality = extractValue(personalityMatch),
