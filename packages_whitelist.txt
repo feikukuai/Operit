@@ -19,7 +19,6 @@ qwen_draw.js
 siliconflow_draw.js
 super_admin.js
 system_tools.js
-tasker.js
 tavily.js
 time.js
 various_search.js
@@ -27,7 +26,6 @@ workflow.js
 xai_draw.js
 openai_draw.js
 operit_editor.js
-vflow_trigger.js
 browser.js
 context_limiter_c
 windows_control
@@ -38,7 +36,5 @@ deepsearching
 message_insert
 apktool
 remote_operit
-pdf_vision_parser
-hex_editor.js
 worldbook
 thinking_guidance

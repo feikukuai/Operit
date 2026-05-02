@@ -56,7 +56,7 @@ android {
         minSdk = 26
         targetSdk = 34
         versionCode = 41
-        versionName = "1.10.1+8"
+        versionName = "1.10.1+9"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -64,9 +64,9 @@ android {
         }
         
         ndk {
-            // Explicitly specify the ABIs to support. This ensures that native libraries
-            // for both 32-bit and 64-bit ARM devices are included in the APK,
-            // resolving conflicts between dependencies with different native library sets.
+            // Explicitly specify the ABIs we package for the app process.
+            // terminal now also ships x86_64 runtime binaries for the Android Studio emulator,
+            // while the rest of the app remains primarily ARM-focused.
             abiFilters.addAll(listOf("arm64-v8a"))
         }
 

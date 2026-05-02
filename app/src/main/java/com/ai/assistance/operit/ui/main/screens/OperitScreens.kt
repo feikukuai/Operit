@@ -35,6 +35,7 @@ import com.ai.assistance.operit.ui.features.packages.screens.PackageManagerScree
 import com.ai.assistance.operit.ui.features.packages.screens.MCPManageScreen
 import com.ai.assistance.operit.ui.features.packages.screens.MCPPublishScreen
 import com.ai.assistance.operit.ui.features.packages.screens.MCPPluginDetailScreen
+import com.ai.assistance.operit.ui.features.packages.screens.ArtifactDetailEntryPoint
 import com.ai.assistance.operit.ui.features.packages.screens.ArtifactDetailScreen
 import com.ai.assistance.operit.ui.features.packages.screens.ArtifactManageScreen
 import com.ai.assistance.operit.ui.features.packages.screens.ArtifactPublishScreen
@@ -223,7 +224,7 @@ sealed class Screen(
                 onNavigateToArtifactPublish = { navigateTo(ArtifactPublish) },
                 onNavigateToArtifactManage = { navigateTo(ArtifactManage) },
                 onNavigateToArtifactDetail = { issue ->
-                    navigateTo(ArtifactDetail(issue))
+                    navigateTo(ArtifactDetail(issue, ArtifactDetailEntryPoint.MARKET))
                 },
                 onNavigateToSkillPublish = { navigateTo(SkillPublish) },
                 onNavigateToSkillManage = { navigateTo(SkillManage) },
@@ -257,7 +258,7 @@ sealed class Screen(
                 },
                 onNavigateToPublish = { navigateTo(ArtifactPublish) },
                 onNavigateToDetail = { issue ->
-                    navigateTo(ArtifactDetail(issue))
+                    navigateTo(ArtifactDetail(issue, ArtifactDetailEntryPoint.MANAGE))
                 }
             )
         }
@@ -317,7 +318,10 @@ sealed class Screen(
         }
     }
 
-    data class ArtifactDetail(val issue: com.ai.assistance.operit.data.api.GitHubIssue) :
+    data class ArtifactDetail(
+        val issue: com.ai.assistance.operit.data.api.GitHubIssue,
+        val entryPoint: ArtifactDetailEntryPoint = ArtifactDetailEntryPoint.MARKET
+    ) :
             Screen(navItem = NavItem.Packages) {
         @Composable
         override fun Content(
@@ -331,6 +335,7 @@ sealed class Screen(
         ) {
             ArtifactDetailScreen(
                 issue = issue,
+                entryPoint = entryPoint,
                 onNavigateBack = onGoBack,
                 onStartPluginCreation = { intent ->
                     PendingChatDraftHandler.setPendingDraft(intent.toPrompt())

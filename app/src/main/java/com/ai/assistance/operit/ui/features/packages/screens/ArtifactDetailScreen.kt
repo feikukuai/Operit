@@ -57,6 +57,7 @@ import com.ai.assistance.operit.core.tools.packTool.PackageManager
 import com.ai.assistance.operit.data.api.ArtifactProjectNodeResponse
 import com.ai.assistance.operit.data.api.GitHubIssue
 import com.ai.assistance.operit.data.model.ToolResult
+import com.ai.assistance.operit.ui.features.packages.market.ARTIFACT_MARKET_VISIBILITY_LABELS
 import com.ai.assistance.operit.ui.features.packages.market.ArtifactPublishClusterContext
 import com.ai.assistance.operit.ui.features.packages.market.LocalArtifactInstallStateKind
 import com.ai.assistance.operit.ui.features.packages.market.PluginCreationIntent
@@ -76,6 +77,7 @@ import com.ai.assistance.operit.ui.features.packages.market.UnifiedMarketDetailS
 import com.ai.assistance.operit.ui.features.packages.market.buildMarketCommentReplyDraft
 import com.ai.assistance.operit.ui.features.packages.market.formatMarketDetailCompactDate
 import com.ai.assistance.operit.ui.features.packages.market.formatMarketDetailDate
+import com.ai.assistance.operit.ui.features.packages.market.hasAnyLabelName
 import com.ai.assistance.operit.ui.features.packages.market.marketDetailInitial
 import com.ai.assistance.operit.ui.features.packages.screens.artifact.viewmodel.ArtifactProjectDetailViewModel
 import com.ai.assistance.operit.ui.features.packages.utils.ArtifactIssueParser
@@ -83,13 +85,19 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+enum class ArtifactDetailEntryPoint {
+    MARKET,
+    MANAGE
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ArtifactDetailScreen(
     issue: GitHubIssue,
     onNavigateBack: () -> Unit = {},
     onStartPluginCreation: (PluginCreationIntent) -> Unit = {},
-    onContinuePublish: (ArtifactPublishClusterContext) -> Unit = {}
+    onContinuePublish: (ArtifactPublishClusterContext) -> Unit = {},
+    entryPoint: ArtifactDetailEntryPoint = ArtifactDetailEntryPoint.MARKET
 ) {
     val info = remember(issue) { ArtifactIssueParser.parseArtifactInfo(issue) }
     val artifactType = info.type
@@ -128,6 +136,17 @@ fun ArtifactDetailScreen(
     val isReacting by viewModel.isReacting.collectAsState()
     val installingNodeIds by viewModel.installingNodeIds.collectAsState()
     val isRefreshingInstalledArtifacts by viewModel.isRefreshingInstalledArtifacts.collectAsState()
+    val isApprovedForMarket = remember(issue) { issue.hasAnyLabelName(ARTIFACT_MARKET_VISIBILITY_LABELS) }
+    val pendingPublicationMessageResId =
+        remember(entryPoint, issue.state, isApprovedForMarket, projectId, errorMessage) {
+            pendingPublicationMessageResId(
+                entryPoint = entryPoint,
+                issueState = issue.state,
+                isApprovedForMarket = isApprovedForMarket,
+                projectId = projectId,
+                errorMessage = errorMessage
+            )
+        }
 
     val node = selectedNode
     if (node == null) {
@@ -142,7 +161,9 @@ fun ArtifactDetailScreen(
                 )
             }
         } else {
-            InvalidArtifactMetadataScreen()
+            InvalidArtifactMetadataScreen(
+                messageResId = pendingPublicationMessageResId ?: R.string.invalid_artifact_metadata
+            )
         }
         return
     }
@@ -188,7 +209,7 @@ fun ArtifactDetailScreen(
         viewModel.refreshInstalledArtifacts()
     }
 
-    errorMessage?.let { error ->
+    errorMessage?.takeIf { pendingPublicationMessageResId == null }?.let { error ->
         LaunchedEffect(error) {
             Toast.makeText(context, error, Toast.LENGTH_LONG).show()
             viewModel.clearError()
@@ -712,14 +733,53 @@ private fun ArtifactNodeContinuePublishCard(
     }
 }
 
+private fun pendingPublicationMessageResId(
+    entryPoint: ArtifactDetailEntryPoint,
+    issueState: String,
+    isApprovedForMarket: Boolean,
+    projectId: String,
+    errorMessage: String?
+): Int? {
+    if (entryPoint != ArtifactDetailEntryPoint.MANAGE) {
+        return null
+    }
+    if (!issueState.equals("open", ignoreCase = true)) {
+        return null
+    }
+    if (!isMissingArtifactProjectError(projectId, errorMessage)) {
+        return null
+    }
+    return if (isApprovedForMarket) {
+        R.string.artifact_publication_approved_waiting_schedule
+    } else {
+        R.string.artifact_publication_pending_review_waiting_schedule
+    }
+}
+
+private fun isMissingArtifactProjectError(
+    projectId: String,
+    errorMessage: String?
+): Boolean {
+    val normalizedMessage = errorMessage?.lowercase().orEmpty()
+    if (!normalizedMessage.contains("http 404")) {
+        return false
+    }
+    if (!normalizedMessage.contains("/artifact-projects/")) {
+        return false
+    }
+    return normalizedMessage.contains("/${projectId.lowercase()}.json")
+}
+
 @Composable
-private fun InvalidArtifactMetadataScreen() {
+private fun InvalidArtifactMetadataScreen(
+    messageResId: Int = R.string.invalid_artifact_metadata
+) {
     Box(
         modifier = Modifier.fillMaxSize(),
         contentAlignment = Alignment.Center
     ) {
         Text(
-            text = stringResource(R.string.invalid_artifact_metadata),
+            text = stringResource(messageResId),
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }

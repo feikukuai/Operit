@@ -3802,6 +3802,7 @@
     <string name="provider_siliconflow">SiliconFlow</string>
     <string name="provider_iflow">iFlow</string>
     <string name="provider_openrouter">OpenRouter (Multi-model Hub)</string>
+    <string name="provider_4router">4Router</string>
     <string name="provider_nous_portal">Nous Portal</string>
     <string name="provider_infiniai">InfiniAI</string>
     <string name="provider_alipay_bailing">Alipay Bailing Model</string>
@@ -7395,6 +7396,8 @@
     <string name="comment_label">Comment</string>
     <string name="publish_action">Publish</string>
     <string name="invalid_artifact_metadata">The metadata for this market item is invalid and cannot display details.</string>
+    <string name="artifact_publication_pending_review_waiting_schedule">Under review. Please wait for scheduled release.</string>
+    <string name="artifact_publication_approved_waiting_schedule">Approved. Please wait for scheduled release.</string>
     <string name="confirm_remove_script_from_market">Are you sure you want to remove the script「%1$s」from the market? This will close the corresponding Issue but will not delete your publish repository.</string>
     <string name="confirm_remove_package_from_market">Are you sure you want to remove the package「%1$s」from the market? This will close the corresponding Issue but will not delete your publish repository.</string>
     <string name="script_publish_info_description">The script will first be uploaded to your own OperitForge publish repository, then the metadata will be registered to OperitScriptMarket. Please ensure the script content, version, and description are accurate.</string>

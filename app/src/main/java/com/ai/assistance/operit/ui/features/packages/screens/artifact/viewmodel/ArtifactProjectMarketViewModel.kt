@@ -272,7 +272,7 @@ class ArtifactProjectMarketViewModel(
                         if (projectId.isBlank()) return@mapNotNull null
                         browseByProject[projectId] ?: buildSearchProjectEntry(projectId, nodes)
                     }
-            prefetchProjectDetails(_searchItems.value.map { it.projectId })
+            prefetchProjectDetails(_searchItems.value)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -381,7 +381,7 @@ class ArtifactProjectMarketViewModel(
                     _browseItems.value + loadedItems
                 }
             _browseItems.value = mergedItems.distinctBy { it.projectId }
-            prefetchProjectDetails(_browseItems.value.map { it.projectId })
+            prefetchProjectDetails(_browseItems.value)
         } else if (reset) {
             _browseItems.value = emptyList()
         }
@@ -414,10 +414,11 @@ class ArtifactProjectMarketViewModel(
         )
     }
 
-    private fun prefetchProjectDetails(projectIds: Collection<String>) {
+    private fun prefetchProjectDetails(items: Collection<ArtifactProjectRankEntryResponse>) {
         val missingProjectIds =
-            projectIds
-                .map(String::trim)
+            items
+                .filter(::shouldPrefetchProjectDetail)
+                .map { it.projectId.trim() }
                 .filter { it.isNotBlank() }
                 .distinct()
                 .filter { projectId ->
@@ -461,6 +462,34 @@ class ArtifactProjectMarketViewModel(
         projectDetail: ArtifactProjectDetailResponse?,
         installedSnapshots: Map<String, LocalInstalledArtifactSnapshot>
     ): LocalArtifactInstallStateKind {
+        val inlineDefaultNode =
+            item.defaultNode
+                ?.takeIf {
+                    it.runtimePackageId.isNotBlank() && it.sha256.isNotBlank()
+                }
+        if (inlineDefaultNode != null) {
+            val relatedHashes =
+                item.runtimePackageNodeSha256s.filter { it.isNotBlank() }
+                    .ifEmpty {
+                        projectDetail
+                            ?.nodes
+                            .orEmpty()
+                            .filter {
+                                sameArtifactRuntimePackageId(
+                                    it.runtimePackageId,
+                                    inlineDefaultNode.runtimePackageId
+                                )
+                            }
+                            .map { it.sha256 }
+                    }
+            return resolveLocalArtifactInstallState(
+                installedSnapshots = installedSnapshots,
+                packageName = inlineDefaultNode.runtimePackageId,
+                targetSha256 = inlineDefaultNode.sha256,
+                projectNodeSha256s = relatedHashes
+            ).kind
+        }
+
         val defaultNode =
             resolveDefaultNode(
                 item = item,
@@ -491,6 +520,14 @@ class ArtifactProjectMarketViewModel(
             ?: nodes.firstOrNull { it.nodeId == projectDetail?.defaultNodeId }
             ?: nodes.firstOrNull { it.nodeId == item.latestOpenNodeId }
             ?: nodes.firstOrNull { it.nodeId == item.latestNodeId }
+    }
+
+    private fun shouldPrefetchProjectDetail(item: ArtifactProjectRankEntryResponse): Boolean {
+        return item.defaultNode?.let { defaultNode ->
+            defaultNode.runtimePackageId.isBlank() ||
+                defaultNode.sha256.isBlank() ||
+                item.runtimePackageNodeSha256s.none { it.isNotBlank() }
+        } ?: true
     }
 
     private suspend fun aggregateResults(

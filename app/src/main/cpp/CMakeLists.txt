@@ -10,6 +10,15 @@ function(force_release_flags_for_debug target_name)
     endif()
 endfunction()
 
+function(enable_16kb_page_alignment target_name)
+    if(TARGET ${target_name})
+        target_link_options(${target_name} PRIVATE
+                "-Wl,-z,max-page-size=16384"
+                "-Wl,-z,common-page-size=16384"
+        )
+    endif()
+endfunction()
+
 if(ANDROID)
     # Build sherpa-ncnn as part of Android Studio externalNativeBuild.
     # Use local submodules to avoid downloading a different ncnn build.
@@ -73,3 +82,5 @@ target_link_libraries(
         streamnative
         ${log-lib}
 )
+
+enable_16kb_page_alignment(streamnative)

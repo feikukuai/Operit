@@ -57,6 +57,17 @@ data class MarketRankPageResponse(
 )
 
 @Serializable
+data class ArtifactProjectRankDefaultNodeResponse(
+    val nodeId: String = "",
+    val runtimePackageId: String = "",
+    val sha256: String = "",
+    val version: String = "",
+    val downloadUrl: String = "",
+    val state: String = "open",
+    val publishedAt: String? = null
+)
+
+@Serializable
 data class ArtifactProjectRankEntryResponse(
     val projectId: String = "",
     val type: String = "",
@@ -70,7 +81,9 @@ data class ArtifactProjectRankEntryResponse(
     val latestNodeId: String = "",
     val latestOpenNodeId: String = "",
     val defaultNodeId: String = "",
-    val latestPublishedAt: String? = null
+    val latestPublishedAt: String? = null,
+    val defaultNode: ArtifactProjectRankDefaultNodeResponse? = null,
+    val runtimePackageNodeSha256s: List<String> = emptyList()
 )
 
 @Serializable

@@ -2,6 +2,7 @@ package com.ai.assistance.operit.api.chat.enhance
 
 import android.content.Context
 import com.ai.assistance.operit.R
+import com.ai.assistance.operit.core.tools.ToolExecutionLimits
 import com.ai.assistance.operit.util.ChatMarkupRegex
 import com.ai.assistance.operit.data.model.ToolResult
 
@@ -14,6 +15,9 @@ import com.ai.assistance.operit.data.model.ToolResult
 class ConversationMarkupManager {
 
     companion object {
+        private const val TOOL_RESULT_TRUNCATION_SUFFIX =
+            "\n[工具结果过长，已截断]"
+
         /**
          * Creates an 'error' status markup element for a tool.
          *
@@ -48,18 +52,47 @@ class ConversationMarkupManager {
          */
         fun formatToolResultForMessage(result: ToolResult): String {
             return if (result.success) {
-                createToolResultXml(
+                createBoundedToolResultXml(
                     toolName = result.toolName,
                     status = "success",
-                    content = "<content>${result.result}</content>"
-                )
+                    rawPayload = result.result.toString()
+                ) { payload ->
+                    "<content>$payload</content>"
+                }
             } else {
-                createToolResultXml(
+                createBoundedToolResultXml(
                     toolName = result.toolName,
                     status = "error",
-                    content = "<content><error>${result.error ?: "Unknown error"}</error></content>"
-                )
+                    rawPayload = result.error ?: "Unknown error"
+                ) { payload ->
+                    "<content><error>$payload</error></content>"
+                }
             }
+        }
+
+        fun buildBoundedToolResultMessage(results: List<ToolResult>): String {
+            if (results.isEmpty()) {
+                return ""
+            }
+
+            val maxChars = ToolExecutionLimits.MAX_FINAL_TOOL_RESULT_MESSAGE_CHARS
+            val separator = "\n"
+            val builder = StringBuilder()
+
+            for (result in results) {
+                val formatted = formatToolResultForMessage(result)
+                val additionalLength =
+                    (if (builder.isEmpty()) 0 else separator.length) + formatted.length
+                if (builder.length + additionalLength > maxChars) {
+                    break
+                }
+                if (builder.isNotEmpty()) {
+                    builder.append(separator)
+                }
+                builder.append(formatted)
+            }
+
+            return builder.toString()
         }
 
         /**
@@ -91,6 +124,44 @@ class ConversationMarkupManager {
         private fun createToolResultXml(toolName: String, status: String, content: String): String {
             val tagName = ChatMarkupRegex.generateRandomToolResultTagName()
             return """<$tagName name="$toolName" status="$status">$content</$tagName>""".trimIndent()
+        }
+
+        private fun createBoundedToolResultXml(
+            toolName: String,
+            status: String,
+            rawPayload: String,
+            bodyBuilder: (String) -> String
+        ): String {
+            val emptyXml =
+                createToolResultXml(
+                    toolName = toolName,
+                    status = status,
+                    content = bodyBuilder("")
+                )
+            val maxPayloadChars =
+                (ToolExecutionLimits.MAX_FINAL_TOOL_RESULT_MESSAGE_CHARS - emptyXml.length)
+                    .coerceAtLeast(0)
+            val boundedPayload = truncatePayload(rawPayload, maxPayloadChars)
+            return createToolResultXml(
+                toolName = toolName,
+                status = status,
+                content = bodyBuilder(boundedPayload)
+            )
+        }
+
+        private fun truncatePayload(payload: String, maxChars: Int): String {
+            if (payload.length <= maxChars) {
+                return payload
+            }
+            if (maxChars <= 0) {
+                return ""
+            }
+            if (TOOL_RESULT_TRUNCATION_SUFFIX.length >= maxChars) {
+                return TOOL_RESULT_TRUNCATION_SUFFIX.take(maxChars)
+            }
+            return payload
+                .take(maxChars - TOOL_RESULT_TRUNCATION_SUFFIX.length)
+                .trimEnd() + TOOL_RESULT_TRUNCATION_SUFFIX
         }
 
     }

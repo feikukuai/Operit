@@ -146,6 +146,11 @@ object ApiProviderConfigs {
             defaultApiEndpoint = "https://openrouter.ai/api/v1/chat/completions"
         ),
         ProviderApiConfig(
+            providerType = ApiProviderType.FOUR_ROUTER,
+            defaultModelName = "gpt-5.4-mini",
+            defaultApiEndpoint = "https://4router.net/v1/chat/completions"
+        ),
+        ProviderApiConfig(
             providerType = ApiProviderType.NOUS_PORTAL,
             defaultModelName = "",
             defaultApiEndpoint = "https://inference-api.nousresearch.com/v1/chat/completions"

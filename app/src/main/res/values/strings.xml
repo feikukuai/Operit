@@ -3736,6 +3736,7 @@
     <string name="provider_siliconflow">硅基流动</string>
     <string name="provider_iflow">iFlow</string>
     <string name="provider_openrouter">OpenRouter (多模型聚合)</string>
+    <string name="provider_4router">4Router</string>
     <string name="provider_nous_portal">Nous Portal</string>
     <string name="provider_infiniai">无问芯穹</string>
     <string name="provider_alipay_bailing">支付宝百灵大模型</string>
@@ -4336,6 +4337,8 @@
     <string name="comment_label">评论</string>
     <string name="publish_action">发布</string>
     <string name="invalid_artifact_metadata">该市场条目的元数据无效，无法展示详情。</string>
+    <string name="artifact_publication_pending_review_waiting_schedule">审核中，请等待排期发布</string>
+    <string name="artifact_publication_approved_waiting_schedule">审核通过，请等待排期发布</string>
     <string name="get_mcp">获取MCP</string>
     <string name="plugin_name_description">只允许英文字母、数字和下划线，此名称将作为插件ID使用</string>
     <string name="choose_mcp_community_to_get_plugins">选择以下优质MCP社区获取插件：</string>
