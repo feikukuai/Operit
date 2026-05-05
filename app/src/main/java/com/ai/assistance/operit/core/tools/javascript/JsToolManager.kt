@@ -107,11 +107,13 @@ class JsToolManager private constructor(
             runtimeParams["containerPackageName"] = runtime.containerPackageName
             runtimeParams["toolPkgId"] = runtime.containerPackageName
             runtimeParams["__operit_ui_package_name"] = runtime.containerPackageName
+            runtimeParams["__operit_script_screen"] = runtime.entryPath
         } ?: run {
             runtimeParams.remove("__operit_toolpkg_subpackage_id")
             runtimeParams.remove("containerPackageName")
             runtimeParams.remove("toolPkgId")
             runtimeParams.remove("__operit_ui_package_name")
+            runtimeParams.remove("__operit_script_screen")
         }
 
         return runtimeParams

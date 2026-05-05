@@ -17,5 +17,12 @@
       "id": "qqbot",
       "entry": "dist/packages/qqbot.js"
     }
+  ],
+  "resources": [
+    {
+      "key": "qqbot_terminal_service_py",
+      "path": "resources/qqbot_terminal_service.py",
+      "mime": "text/x-python"
+    }
   ]
 }

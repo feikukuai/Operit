@@ -16,9 +16,9 @@ export function registerToolPkg() {
   return true;
 }
 
-function runAutoStart(source: string, input?: ToolPkg.AppLifecycleHookEvent | unknown): any {
+async function runAutoStart(source: string, input?: ToolPkg.AppLifecycleHookEvent | unknown): Promise<any> {
   try {
-    return ensureQQBotServiceStarted({
+    return await ensureQQBotServiceStarted({
       source,
       allow_missing_config: true,
       timeout_ms: 2500,
@@ -34,10 +34,10 @@ function runAutoStart(source: string, input?: ToolPkg.AppLifecycleHookEvent | un
   }
 }
 
-export function onApplicationCreate(input?: ToolPkg.AppLifecycleHookEvent | unknown): any {
+export async function onApplicationCreate(input?: ToolPkg.AppLifecycleHookEvent | unknown): Promise<any> {
   return runAutoStart("application_on_create", input);
 }
 
-export function onApplicationForeground(input?: ToolPkg.AppLifecycleHookEvent | unknown): any {
+export async function onApplicationForeground(input?: ToolPkg.AppLifecycleHookEvent | unknown): Promise<any> {
   return runAutoStart("application_on_foreground", input);
 }

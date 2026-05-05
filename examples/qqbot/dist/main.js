@@ -17,9 +17,9 @@ function registerToolPkg() {
     });
     return true;
 }
-function runAutoStart(source, input) {
+async function runAutoStart(source, input) {
     try {
-        return (0, qqbot_runtime_1.ensureQQBotServiceStarted)({
+        return await (0, qqbot_runtime_1.ensureQQBotServiceStarted)({
             source,
             allow_missing_config: true,
             timeout_ms: 2500,
@@ -35,9 +35,9 @@ function runAutoStart(source, input) {
         };
     }
 }
-function onApplicationCreate(input) {
+async function onApplicationCreate(input) {
     return runAutoStart("application_on_create", input);
 }
-function onApplicationForeground(input) {
+async function onApplicationForeground(input) {
     return runAutoStart("application_on_foreground", input);
 }

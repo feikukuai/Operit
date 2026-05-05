@@ -102,6 +102,18 @@ class ChatHistoryDelegate(
         )
     }
 
+    private suspend fun refreshCurrentChatDisplayFlags(
+        chatId: String,
+        messages: List<ChatMessage> = _chatHistory.value,
+    ) {
+        val loadResult = buildCurrentChatLoadResult(chatId, messages)
+        setCurrentChatMessagesInMemory(
+            messages = loadResult.messages,
+            hasOlderPersistedHistory = loadResult.hasOlderPersistedHistory,
+            hasNewerPersistedHistory = loadResult.hasNewerPersistedHistory,
+        )
+    }
+
     private suspend fun buildCurrentChatLoadResult(
         chatId: String,
         messages: List<ChatMessage>,
@@ -1345,9 +1357,7 @@ class ChatHistoryDelegate(
         AppLogger.d(TAG, "向当前会话内存追加消息, ts: ${message.timestamp}")
         setCurrentChatMessagesInMemory(
             messages = windowMessages,
-            hasOlderPersistedHistory =
-                currentChatWindow.hasPersistedOlderHistoryNow() ||
-                    windowMessages.firstOrNull()?.timestamp != currentMessages.firstOrNull()?.timestamp,
+            hasOlderPersistedHistory = currentChatWindow.hasPersistedOlderHistoryNow(),
             hasNewerPersistedHistory = false,
         )
         return false
@@ -1396,6 +1406,7 @@ class ChatHistoryDelegate(
                 )
                 if (isVisibleNewMessage) {
                     chatHistoryManager.addMessage(targetChatId, message)
+                    refreshCurrentChatDisplayFlags(targetChatId)
                 } else {
                     chatHistoryManager.updateMessage(targetChatId, message)
                 }
