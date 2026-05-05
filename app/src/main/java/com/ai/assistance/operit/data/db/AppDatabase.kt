@@ -16,7 +16,7 @@ import com.ai.assistance.operit.data.model.MessageVariantEntity
 /** 应用数据库，包含聊天表和消息表 */
 @Database(
     entities = [ChatEntity::class, MessageEntity::class, MessageVariantEntity::class],
-    version = 17,
+    version = 18,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -190,6 +190,15 @@ abstract class AppDatabase : RoomDatabase() {
                 }
             }
 
+        private val MIGRATION_17_18 =
+            object : Migration(17, 18) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    db.execSQL(
+                        "ALTER TABLE messages ADD COLUMN `isFavorite` INTEGER NOT NULL DEFAULT 0"
+                    )
+                }
+            }
+
         // 定义从版本2到3的迁移
         private val MIGRATION_2_3 =
             object : Migration(2, 3) {
@@ -303,7 +312,8 @@ abstract class AppDatabase : RoomDatabase() {
                                 MIGRATION_13_14,
                                 MIGRATION_14_15,
                                 MIGRATION_15_16,
-                                MIGRATION_16_17
+                                MIGRATION_16_17,
+                                MIGRATION_17_18
                             ) // 添加新的迁移
                             .build()
                     INSTANCE = instance

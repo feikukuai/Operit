@@ -54,6 +54,7 @@ public class Main {
     private static final String TAG = "ShowerMain";
     private static final int DEFAULT_PORT = 8986;
     private static final int DEFAULT_BIT_RATE = 4_000_000;
+    private static final int CODEC_SIZE_ALIGNMENT = 16;
 
     private static final String ACTION_SHOWER_BINDER_READY = "com.ai.assistance.operit.action.SHOWER_BINDER_READY";
     private static final String EXTRA_BINDER_CONTAINER = "binder_container";
@@ -766,6 +767,10 @@ public class Main {
         }
     }
 
+    private static int alignToCodecBlockSize(int value) {
+        return ((value + CODEC_SIZE_ALIGNMENT - 1) / CODEC_SIZE_ALIGNMENT) * CODEC_SIZE_ALIGNMENT;
+    }
+
 
     private void sendBinderToApp(IShowerService service) {
         try {
@@ -814,13 +819,8 @@ public class Main {
         try {
             int actualBitRate = bitRate > 0 ? bitRate : DEFAULT_BIT_RATE;
 
-            // Alignment logic...
-            int alignedWidth = width & ~7;
-            int alignedHeight = height & ~7;
-            if (alignedWidth <= 0 || alignedHeight <= 0) {
-                alignedWidth = Math.max(2, width);
-                alignedHeight = Math.max(2, height);
-            }
+            int alignedWidth = alignToCodecBlockSize(width);
+            int alignedHeight = alignToCodecBlockSize(height);
 
             logToFile("createVirtualDisplay using aligned size: " + alignedWidth + "x" + alignedHeight, null);
 

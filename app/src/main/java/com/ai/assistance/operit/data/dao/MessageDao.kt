@@ -40,7 +40,8 @@ interface MessageDao {
                 WHEN sender = 'user' AND displayMode = 'HIDDEN_PLACEHOLDER' THEN 0
                 ELSE LENGTH(content)
             END AS contentLength,
-            displayMode AS displayMode
+            displayMode AS displayMode,
+            isFavorite AS isFavorite
         FROM messages
         WHERE chatId = :chatId
         ORDER BY timestamp ASC
@@ -195,7 +196,8 @@ interface MessageDao {
             sentAt,
             outputDurationMs,
             waitDurationMs,
-            displayMode
+            displayMode,
+            isFavorite
         )
         SELECT
             :targetChatId,
@@ -213,7 +215,8 @@ interface MessageDao {
             sentAt,
             outputDurationMs,
             waitDurationMs,
-            displayMode
+            displayMode,
+            isFavorite
         FROM messages
         WHERE chatId = :sourceChatId
             AND (:upToTimestampInclusive IS NULL OR timestamp <= :upToTimestampInclusive)
@@ -259,6 +262,15 @@ interface MessageDao {
         chatId: String,
         timestamp: Long,
         selectedVariantIndex: Int,
+    )
+
+    @Query(
+        "UPDATE messages SET isFavorite = :isFavorite WHERE chatId = :chatId AND timestamp = :timestamp"
+    )
+    suspend fun updateMessageFavorite(
+        chatId: String,
+        timestamp: Long,
+        isFavorite: Boolean,
     )
 
     /** 查找包含特定关键词的聊天ID列表（不重复） */

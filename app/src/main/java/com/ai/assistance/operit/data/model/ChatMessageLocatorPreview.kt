@@ -6,6 +6,7 @@ data class ChatMessageLocatorPreview(
     val previewContent: String,
     val contentLength: Int,
     val displayMode: String,
+    val isFavorite: Boolean,
 ) {
     val resolvedDisplayMode: ChatMessageDisplayMode
         get() =

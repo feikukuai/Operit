@@ -23,9 +23,13 @@ class ShowerController {
 
     companion object {
         private const val TAG = "ShowerController"
+        private const val CODEC_SIZE_ALIGNMENT = 16
 
         @Volatile
         private var binderService: IShowerService? = null
+
+        private fun alignToCodecBlockSize(value: Int): Int =
+            ((value + CODEC_SIZE_ALIGNMENT - 1) / CODEC_SIZE_ALIGNMENT) * CODEC_SIZE_ALIGNMENT
 
         private suspend fun getBinder(context: Context? = null): IShowerService? = withContext(Dispatchers.IO) {
             if (binderService?.asBinder()?.isBinderAlive == true) {
@@ -249,11 +253,8 @@ class ShowerController {
             return e is DeadObjectException || e is RemoteException || e.cause is DeadObjectException
         }
 
-        // Align size
-        val alignedWidth = width and -8
-        val alignedHeight = height and -8
-        val targetWidth = if (alignedWidth > 0) alignedWidth else width
-        val targetHeight = if (alignedHeight > 0) alignedHeight else height
+        val targetWidth = alignToCodecBlockSize(width)
+        val targetHeight = alignToCodecBlockSize(height)
         val bitrate = bitrateKbps ?: 0
 
         suspend fun doEnsure(service: IShowerService): Boolean {

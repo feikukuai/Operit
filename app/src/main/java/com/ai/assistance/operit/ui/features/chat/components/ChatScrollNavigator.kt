@@ -28,6 +28,11 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.outlined.StarOutline
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -90,6 +95,7 @@ internal fun ChatScrollNavigator(
     loadLocatorEntries: (suspend (String) -> List<ChatMessageLocatorPreview>)? = null,
     onJumpToMessageTimestamp: ((Long) -> Unit)? = null,
     onJumpToMessage: (Int) -> Unit,
+    onToggleFavoriteMessage: ((Long, Boolean) -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     if (chatHistory.size <= 1 || visibleMessageCount <= 0) {
@@ -273,6 +279,7 @@ internal fun ChatScrollNavigator(
             isLoading = isLoadingLocatorEntries,
             loadFailed = locatorLoadFailed,
             onDismiss = { showLocatorDialog = false },
+            onToggleFavoriteMessage = onToggleFavoriteMessage,
             onJumpToMessage = { targetTimestamp ->
                 showLocatorDialog = false
                 val targetIndex = chatHistory.indexOfFirst { it.timestamp == targetTimestamp }
@@ -296,6 +303,7 @@ internal fun ChatScrollNavigator(
     loadLocatorEntries: (suspend (String) -> List<ChatMessageLocatorPreview>)? = null,
     onJumpToMessageTimestamp: ((Long) -> Unit)? = null,
     onJumpToMessage: (Int) -> Unit,
+    onToggleFavoriteMessage: ((Long, Boolean) -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     if (chatHistory.size <= 1 || viewportHeightPx <= 0) {
@@ -485,6 +493,7 @@ internal fun ChatScrollNavigator(
             isLoading = isLoadingLocatorEntries,
             loadFailed = locatorLoadFailed,
             onDismiss = { showLocatorDialog = false },
+            onToggleFavoriteMessage = onToggleFavoriteMessage,
             onJumpToMessage = { targetTimestamp ->
                 showLocatorDialog = false
                 val targetIndex = chatHistory.indexOfFirst { it.timestamp == targetTimestamp }
@@ -505,6 +514,7 @@ private fun ChatMessageLocatorDialog(
     isLoading: Boolean,
     loadFailed: Boolean,
     onDismiss: () -> Unit,
+    onToggleFavoriteMessage: ((Long, Boolean) -> Unit)?,
     onJumpToMessage: (Long) -> Unit,
 ) {
     val currentMessageIndex = locatorEntries.indexOfFirst { it.timestamp == currentMessageTimestamp }
@@ -515,6 +525,8 @@ private fun ChatMessageLocatorDialog(
             ?: 0
     val listState = rememberLazyListState(initialFirstVisibleItemIndex = initialIndex)
     var searchQuery by remember { mutableStateOf("") }
+    var favoritesOnly by remember { mutableStateOf(false) }
+    var favoriteOverrides by remember(locatorEntries) { mutableStateOf<Map<Long, Boolean>>(emptyMap()) }
     val hiddenPlaceholderText = stringResource(R.string.chat_hidden_user_message_placeholder)
     val normalizedSearchQuery = normalizeMessageSearchText(searchQuery)
     val indexedEntries =
@@ -522,16 +534,22 @@ private fun ChatMessageLocatorDialog(
             ChatMessageLocatorEntry(index = index, preview = preview)
         }
     val filteredEntries =
-        if (normalizedSearchQuery.isBlank() || isLoading) {
+        if (isLoading) {
             indexedEntries
         } else {
             indexedEntries.filter { entry ->
-                normalizeMessageSearchText(
-                    visibleLocatorContent(entry.preview, hiddenPlaceholderText)
-                ).contains(
-                    normalizedSearchQuery,
-                    ignoreCase = true,
-                )
+                val isFavorite =
+                    favoriteOverrides[entry.preview.timestamp] ?: entry.preview.isFavorite
+                val matchesFavorite = !favoritesOnly || isFavorite
+                val matchesSearch =
+                    normalizedSearchQuery.isBlank() ||
+                        normalizeMessageSearchText(
+                            visibleLocatorContent(entry.preview, hiddenPlaceholderText)
+                        ).contains(
+                            normalizedSearchQuery,
+                            ignoreCase = true,
+                        )
+                matchesFavorite && matchesSearch
             }
         }
     val maxMessageLength =
@@ -605,23 +623,65 @@ private fun ChatMessageLocatorDialog(
                     }
                 }
 
-                Text(
-                    text = stringResource(R.string.chat_message_locator_search_label),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-
-                OutlinedTextField(
-                    value = searchQuery,
-                    onValueChange = { searchQuery = it },
+                Row(
                     modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    placeholder = {
-                        Text(text = stringResource(R.string.chat_message_locator_search_placeholder))
-                    },
-                )
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    OutlinedTextField(
+                        value = searchQuery,
+                        onValueChange = { searchQuery = it },
+                        modifier = Modifier.weight(1f),
+                        singleLine = true,
+                        label = {
+                            Text(text = stringResource(R.string.chat_message_locator_search_label))
+                        },
+                        placeholder = {
+                            Text(text = stringResource(R.string.chat_message_locator_search_placeholder))
+                        },
+                    )
 
-                if (normalizedSearchQuery.isBlank()) {
+                    Surface(
+                        modifier = Modifier.size(52.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        color =
+                            if (favoritesOnly) {
+                                MaterialTheme.colorScheme.primaryContainer
+                            } else {
+                                MaterialTheme.colorScheme.surfaceContainerLow
+                            },
+                        border =
+                            BorderStroke(
+                                width = 1.dp,
+                                color =
+                                    if (favoritesOnly) {
+                                        MaterialTheme.colorScheme.primary.copy(alpha = 0.42f)
+                                    } else {
+                                        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.32f)
+                                    },
+                            ),
+                    ) {
+                        IconButton(
+                            onClick = { favoritesOnly = !favoritesOnly },
+                            modifier = Modifier.fillMaxWidth().fillMaxHeight(),
+                        ) {
+                            Icon(
+                                imageVector =
+                                    if (favoritesOnly) Icons.Filled.Star else Icons.Outlined.StarOutline,
+                                contentDescription = stringResource(R.string.chat_message_locator_favorites_filter),
+                                tint =
+                                    if (favoritesOnly) {
+                                        MaterialTheme.colorScheme.primary
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                    },
+                                modifier = Modifier.size(21.dp),
+                            )
+                        }
+                    }
+                }
+
+                if (normalizedSearchQuery.isBlank() && !favoritesOnly) {
                     Text(
                         text = stringResource(R.string.chat_message_locator_hint),
                         style = MaterialTheme.typography.bodySmall,
@@ -692,9 +752,21 @@ private fun ChatMessageLocatorDialog(
                             ChatMessageLocatorRow(
                                 index = entry.index,
                                 preview = entry.preview,
+                                isFavorite =
+                                    favoriteOverrides[entry.preview.timestamp] ?: entry.preview.isFavorite,
                                 isCurrent = entry.index == currentMessageIndex,
                                 maxMessageLength = maxMessageLength,
                                 searchQuery = searchQuery,
+                                onToggleFavorite = {
+                                    val nextFavorite =
+                                        !(favoriteOverrides[entry.preview.timestamp]
+                                            ?: entry.preview.isFavorite)
+                                    favoriteOverrides =
+                                        favoriteOverrides.toMutableMap().apply {
+                                            put(entry.preview.timestamp, nextFavorite)
+                                        }
+                                    onToggleFavoriteMessage?.invoke(entry.preview.timestamp, nextFavorite)
+                                },
                                 onClick = { onJumpToMessage(entry.preview.timestamp) },
                             )
                         }
@@ -709,9 +781,11 @@ private fun ChatMessageLocatorDialog(
 private fun ChatMessageLocatorRow(
     index: Int,
     preview: ChatMessageLocatorPreview,
+    isFavorite: Boolean,
     isCurrent: Boolean,
     maxMessageLength: Int,
     searchQuery: String,
+    onToggleFavorite: () -> Unit,
     onClick: () -> Unit,
 ) {
     val hiddenPlaceholderText = stringResource(R.string.chat_hidden_user_message_placeholder)
@@ -828,17 +902,52 @@ private fun ChatMessageLocatorRow(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Column(modifier = Modifier.width(64.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(
-                    text = "${index + 1}",
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-                Text(
-                    text = stringResource(senderLabelRes(preview.sender)),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+            Row(
+                modifier = Modifier.width(90.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(3.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = "${index + 1}",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                        IconButton(
+                            onClick = onToggleFavorite,
+                            modifier = Modifier.size(18.dp),
+                        ) {
+                            Icon(
+                                imageVector =
+                                    if (isFavorite) Icons.Filled.Star else Icons.Outlined.StarOutline,
+                                contentDescription =
+                                    stringResource(
+                                        if (isFavorite) {
+                                            R.string.web_session_remove_bookmark
+                                        } else {
+                                            R.string.web_session_add_bookmark
+                                        }
+                                    ),
+                                tint =
+                                    if (isFavorite) {
+                                        MaterialTheme.colorScheme.primary
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f)
+                                    },
+                                modifier = Modifier.size(13.dp),
+                            )
+                        }
+                    }
+                    Text(
+                        text = stringResource(senderLabelRes(preview.sender)),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
 
             Box(
@@ -956,6 +1065,7 @@ private fun toLocatorPreview(message: ChatMessage): ChatMessageLocatorPreview {
         previewContent = previewContent,
         contentLength = contentLength,
         displayMode = message.displayMode.name,
+        isFavorite = message.isFavorite,
     )
 }
 

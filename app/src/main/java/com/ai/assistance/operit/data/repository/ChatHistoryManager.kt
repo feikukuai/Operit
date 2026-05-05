@@ -1152,6 +1152,26 @@ class ChatHistoryManager private constructor(private val context: Context) {
         }
     }
 
+    suspend fun setMessageFavorite(chatId: String, timestamp: Long, isFavorite: Boolean) {
+        chatMutex(chatId).withLock {
+            try {
+                val existingMessage =
+                    messageDao.getMessageByTimestamp(chatId, timestamp) ?: return@withLock
+                if (existingMessage.isFavorite == isFavorite) {
+                    return@withLock
+                }
+                messageDao.updateMessageFavorite(chatId, timestamp, isFavorite)
+            } catch (e: Exception) {
+                AppLogger.e(
+                    TAG,
+                    "Failed to update favorite state for message $timestamp in chat $chatId",
+                    e,
+                )
+                throw e
+            }
+        }
+    }
+
     suspend fun addMessageVariant(
         chatId: String,
         messageTimestamp: Long,

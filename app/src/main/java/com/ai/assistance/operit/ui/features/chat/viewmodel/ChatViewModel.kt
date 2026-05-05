@@ -972,6 +972,10 @@ class ChatViewModel(private val context: Context) : ViewModel() {
         }
     }
 
+    fun setMessageFavorite(timestamp: Long, isFavorite: Boolean) {
+        chatHistoryDelegate.setMessageFavorite(timestamp, isFavorite)
+    }
+
     /** 分享消息为图片 */
     fun shareMessages(
         context: Context,

@@ -1099,6 +1099,20 @@ class ChatHistoryDelegate(
         }
     }
 
+    fun setMessageFavorite(timestamp: Long, isFavorite: Boolean) {
+        coroutineScope.launch {
+            val chatId = _currentChatId.value ?: return@launch
+            val shouldReloadCurrentChat =
+                historyUpdateMutex.withLock {
+                    chatHistoryManager.setMessageFavorite(chatId, timestamp, isFavorite)
+                    chatId == _currentChatId.value
+                }
+            if (shouldReloadCurrentChat && chatId == _currentChatId.value) {
+                reloadCurrentChatDisplayHistory(chatId)
+            }
+        }
+    }
+
     suspend fun deleteMessageVariant(timestamp: Long, variantIndex: Int) {
         val chatId = _currentChatId.value ?: throw IllegalStateException("No active chat")
         val shouldReloadCurrentChat =

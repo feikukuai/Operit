@@ -171,6 +171,7 @@ fun ChatArea(
     onSpeakMessage: ((String) -> Unit)? = null, // 添加朗读回调参数
     onAutoReadMessage: ((String) -> Unit)? = null, // 添加自动朗读回调参数
     onReplyToMessage: ((ChatMessage) -> Unit)? = null, // 添加回复回调参数
+    onToggleFavoriteMessage: ((Long, Boolean) -> Unit)? = null,
     onCreateBranch: ((Long) -> Unit)? = null, // 添加创建分支回调参数
     onInsertSummary: ((ChatMessage) -> Unit)? = null, // 添加插入总结回调参数
     onMentionRoleFromAvatar: ((String) -> Unit)? = null, // 长按角色头像提及
@@ -397,6 +398,7 @@ fun ChatArea(
                             onSwitchMessageVariant = onSwitchMessageVariant,
                             onSpeakMessage = onSpeakMessage,
                             onReplyToMessage = onReplyToMessage,
+                            onToggleFavoriteMessage = onToggleFavoriteMessage,
                             onCreateBranch = onCreateBranch,
                             onInsertSummary = onInsertSummary,
                             onMentionRoleFromAvatar = onMentionRoleFromAvatar,
@@ -494,6 +496,7 @@ fun ChatArea(
             messageAnchors = messageAnchors,
             viewportHeightPx = viewportHeightPx,
             loadLocatorEntries = loadMessageLocatorEntries,
+            onToggleFavoriteMessage = onToggleFavoriteMessage,
             onJumpToMessageTimestamp = { targetTimestamp ->
                 pendingJumpToMessageTimestamp = targetTimestamp
                 val targetIndex = chatHistory.indexOfFirst { it.timestamp == targetTimestamp }
@@ -559,6 +562,7 @@ private fun MessageItem(
     onSwitchMessageVariant: ((Int, Int) -> Unit)? = null,
     onSpeakMessage: ((String) -> Unit)? = null, // 添加朗读回调
     onReplyToMessage: ((ChatMessage) -> Unit)? = null, // 添加回复回调
+    onToggleFavoriteMessage: ((Long, Boolean) -> Unit)? = null,
     onCreateBranch: ((Long) -> Unit)? = null, // 添加创建分支回调
     onInsertSummary: ((ChatMessage) -> Unit)? = null, // 添加插入总结回调
     onMentionRoleFromAvatar: ((String) -> Unit)? = null, // 长按角色头像提及

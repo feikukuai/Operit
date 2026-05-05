@@ -23,6 +23,7 @@ data class ChatMessage(
         val outputDurationMs: Long = 0L, // 本轮输出耗时
         val waitDurationMs: Long = 0L, // 本轮等待首包耗时
         val displayMode: ChatMessageDisplayMode = ChatMessageDisplayMode.NORMAL,
+        val isFavorite: Boolean = false,
         @Transient
         val isVariantPreview: Boolean = false,
         @Transient
@@ -50,7 +51,8 @@ data class ChatMessage(
         parcel.readLong(),
         parcel.readLong(),
         parcel.readLong(),
-        readDisplayModeFromParcel(parcel)
+        readDisplayModeFromParcel(parcel),
+        parcel.readInt() != 0,
     )
 
     override fun writeToParcel(parcel: Parcel, flags: Int) {
@@ -69,6 +71,7 @@ data class ChatMessage(
         parcel.writeLong(outputDurationMs)
         parcel.writeLong(waitDurationMs)
         parcel.writeString(displayMode.name)
+        parcel.writeInt(if (isFavorite) 1 else 0)
         // 不需要序列化contentStream，因为它是暂时性的
     }
 

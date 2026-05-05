@@ -253,6 +253,9 @@ fun ChatScreenContent(
                         onSpeakMessage = { content -> actualViewModel.speakMessage(content) },
                         onAutoReadMessage = { content -> actualViewModel.enableAutoReadAndSpeak(content) },
                         onReplyToMessage = { message -> actualViewModel.setReplyToMessage(message) },
+                        onToggleFavoriteMessage = { timestamp, isFavorite ->
+                            actualViewModel.setMessageFavorite(timestamp, isFavorite)
+                        },
                         onCreateBranch = { timestamp -> actualViewModel.createBranch(timestamp) },
                         onInsertSummary = { message -> actualViewModel.insertSummary(message) },
                         onMentionRoleFromAvatar = { roleName -> actualViewModel.insertRoleMention(roleName) },
@@ -366,6 +369,9 @@ fun ChatScreenContent(
                         },
                         onSpeakMessage = { content -> actualViewModel.speakMessage(content) },
                         onReplyToMessage = { message -> actualViewModel.setReplyToMessage(message) },
+                        onToggleFavoriteMessage = { timestamp, isFavorite ->
+                            actualViewModel.setMessageFavorite(timestamp, isFavorite)
+                        },
                         onCreateBranch = { timestamp -> actualViewModel.createBranch(timestamp) },
                         onInsertSummary = { message -> actualViewModel.insertSummary(message) },
                         onAutoReadMessage = { content -> actualViewModel.enableAutoReadAndSpeak(content) },
