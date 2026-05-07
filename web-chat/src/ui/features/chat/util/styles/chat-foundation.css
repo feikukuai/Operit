@@ -184,6 +184,7 @@ pre {
 }
 
 .chat-screen-frame {
+  position: relative;
   display: flex;
   flex-direction: column;
   flex: 1 1 auto;
@@ -192,6 +193,12 @@ pre {
   min-height: 0;
   margin: 0 auto;
   overflow: hidden;
+}
+
+.classic-chat-settings-layer {
+  position: absolute;
+  right: 4px;
+  z-index: 8;
 }
 
 .chat-screen-main {
@@ -257,6 +264,12 @@ pre {
 .chat-screen-header-usage-button,
 .chat-history-selector-title-actions button,
 .chat-scroll-navigator button,
+.chat-scroll-navigator-chip,
+.scroll-to-bottom-button,
+.chat-message-locator-header button,
+.chat-message-locator-favorites,
+.chat-message-locator-favorite-toggle,
+.chat-message-locator-row,
 .classic-input-fullscreen,
 .history-dialog footer button,
 .fullscreen-input-dialog footer button,

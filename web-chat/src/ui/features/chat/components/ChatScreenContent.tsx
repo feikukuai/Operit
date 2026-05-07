@@ -5,6 +5,7 @@ import { ChatHistorySelector } from './ChatHistorySelector';
 import { ChatScreenHeader } from './ChatScreenHeader';
 import { AgentChatInputSection } from './style/input/agent/AgentChatInputSection';
 import { ClassicChatInputSection } from './style/input/classic/ClassicChatInputSection';
+import { ClassicChatSettingsBar } from './style/input/classic/ClassicChatSettingsBar';
 import type { ChatViewModel } from '../viewmodel/ChatViewModel';
 import {
   getIsFloatingMode,
@@ -20,10 +21,13 @@ export function ChatScreenContent({
   const composerHostRef = useRef<HTMLDivElement | null>(null);
   const [headerHeight, setHeaderHeight] = useState(0);
   const [composerHeight, setComposerHeight] = useState(0);
+  const [bottomBarHeight, setBottomBarHeight] = useState(0);
   const [isFloatingMode, setIsFloatingMode] = useState(getIsFloatingMode());
+  const [classicSettingsOpen, setClassicSettingsOpen] = useState(false);
   const overlayMode = Boolean(viewModel.theme?.header.overlay);
   const showInputProcessingStatus =
     viewModel.theme?.show_input_processing_status ?? viewModel.boot?.show_input_processing_status ?? true;
+  const classicSettingsBottomOffset = bottomBarHeight > 36 ? bottomBarHeight - 6 : 18;
 
   useEffect(() => {
     const element = headerRef.current;
@@ -67,6 +71,46 @@ export function ChatScreenContent({
   ]);
 
   useEffect(() => {
+    const host = composerHostRef.current;
+    const element =
+      host?.querySelector<HTMLElement>('.classic-chat-input-section, .agent-chat-input-section') ?? null;
+
+    if (!element || typeof ResizeObserver === 'undefined') {
+      setBottomBarHeight(element?.getBoundingClientRect().height ?? 0);
+      return;
+    }
+
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      setBottomBarHeight(entry?.contentRect.height ?? 0);
+    });
+
+    observer.observe(element);
+    setBottomBarHeight(element.getBoundingClientRect().height);
+    return () => observer.disconnect();
+  }, [
+    viewModel.activeInputStyle,
+    viewModel.attachmentPanelOpen,
+    viewModel.inputProcessingStage,
+    viewModel.isPendingQueueExpanded,
+    viewModel.messageInput,
+    viewModel.pendingQueueMessages.length,
+    viewModel.pendingUploads.length
+  ]);
+
+  useEffect(() => {
+    if (viewModel.activeInputStyle !== 'classic') {
+      setClassicSettingsOpen(false);
+    }
+  }, [viewModel.activeInputStyle]);
+
+  useEffect(() => {
+    if (viewModel.attachmentPanelOpen) {
+      setClassicSettingsOpen(false);
+    }
+  }, [viewModel.attachmentPanelOpen]);
+
+  useEffect(() => {
     function handleFullscreenChange() {
       setIsFloatingMode(Boolean(document.fullscreenElement));
     }
@@ -79,9 +123,13 @@ export function ChatScreenContent({
     <AgentChatInputSection
       attachmentPanelOpen={viewModel.attachmentPanelOpen}
       contextPercent={viewModel.contextStats.percent}
+      contextCurrentValue={viewModel.contextStats.currentValue}
+      contextMaxValue={viewModel.contextStats.maxValue}
+      inputSettings={viewModel.inputSettings}
       inputProcessingStage={viewModel.inputProcessingStage}
       isLoading={viewModel.isStreaming || viewModel.isConnecting}
       isPendingQueueExpanded={viewModel.isPendingQueueExpanded}
+      memorySelector={viewModel.memorySelector}
       messageInput={viewModel.messageInput}
       modelSelector={viewModel.modelSelector}
       modelSelectorLoading={viewModel.modelSelectorLoading}
@@ -93,9 +141,12 @@ export function ChatScreenContent({
       onPendingQueueExpandedChange={viewModel.setPendingQueueExpanded}
       onQueueMessage={viewModel.queueDraftMessage}
       onRemovePendingUpload={viewModel.removePendingUpload}
+      onRunManualMemoryUpdate={viewModel.runManualMemoryUpdate}
       onSelectModelConfig={viewModel.selectModelConfig}
+      onSelectMemoryProfile={viewModel.selectMemoryProfile}
       onSendMessage={viewModel.sendMessage}
       onSendPendingQueueMessage={viewModel.sendPendingQueueMessage}
+      onUpdateInputSettings={viewModel.updateInputSettings}
       onUploadFiles={viewModel.uploadFiles}
       pendingQueueMessages={viewModel.pendingQueueMessages}
       pendingUploads={viewModel.pendingUploads}
@@ -105,14 +156,14 @@ export function ChatScreenContent({
   ) : (
     <ClassicChatInputSection
       attachmentPanelOpen={viewModel.attachmentPanelOpen}
-      contextPercent={viewModel.contextStats.percent}
       inputProcessingStage={viewModel.inputProcessingStage}
       isLoading={viewModel.isStreaming || viewModel.isConnecting}
       isPendingQueueExpanded={viewModel.isPendingQueueExpanded}
       messageInput={viewModel.messageInput}
-      modelSelector={viewModel.modelSelector}
-      modelSelectorLoading={viewModel.modelSelectorLoading}
-      onAttachmentPanelChange={viewModel.setAttachmentPanelOpen}
+      onAttachmentPanelChange={(value) => {
+        setClassicSettingsOpen(false);
+        viewModel.setAttachmentPanelOpen(value);
+      }}
       onCancelMessage={viewModel.cancelCurrentMessage}
       onDeletePendingQueueMessage={viewModel.deletePendingQueueMessage}
       onEditPendingQueueMessage={viewModel.editPendingQueueMessage}
@@ -120,7 +171,6 @@ export function ChatScreenContent({
       onPendingQueueExpandedChange={viewModel.setPendingQueueExpanded}
       onQueueMessage={viewModel.queueDraftMessage}
       onRemovePendingUpload={viewModel.removePendingUpload}
-      onSelectModelConfig={viewModel.selectModelConfig}
       onSendMessage={viewModel.sendMessage}
       onSendPendingQueueMessage={viewModel.sendPendingQueueMessage}
       onUploadFiles={viewModel.uploadFiles}
@@ -147,12 +197,23 @@ export function ChatScreenContent({
       <ChatHistorySelector
         busy={viewModel.isBusy || viewModel.historyLoading}
         chats={viewModel.chats}
+        characterSelector={viewModel.characterSelector}
+        historyDisplayMode={viewModel.historyDisplayMode}
+        autoSwitchCharacterCard={viewModel.autoSwitchCharacterCard}
+        autoSwitchChatOnCharacterSelect={viewModel.autoSwitchChatOnCharacterSelect}
         onClose={() => viewModel.setHistoryOpen(false)}
         onCreateChat={viewModel.createConversation}
         onDeleteChat={viewModel.deleteConversation}
+        onDeleteGroup={viewModel.deleteGroup}
         onRenameChat={viewModel.renameConversation}
+        onRenameGroup={viewModel.renameGroup}
+        onReorderChats={viewModel.reorderConversations}
         onSearchChange={viewModel.setSearch}
         onSelectChat={viewModel.selectChat}
+        onAutoSwitchCharacterCardChange={viewModel.setAutoSwitchCharacterCard}
+        onAutoSwitchChatOnCharacterSelectChange={viewModel.setAutoSwitchChatOnCharacterSelect}
+        onHistoryDisplayModeChange={viewModel.setHistoryDisplayMode}
+        onUpdateChat={viewModel.updateConversation}
         open={viewModel.historyOpen}
         search={viewModel.search}
         selectedChatId={viewModel.selectedChatId}
@@ -190,15 +251,49 @@ export function ChatScreenContent({
             chatStyle={viewModel.activeChatStyle}
             currentChatId={viewModel.selectedChatId}
             hasMoreHistoryBefore={viewModel.hasMoreHistoryBefore}
+            hasMoreHistoryAfter={viewModel.hasMoreHistoryAfter}
             isLoading={viewModel.isStreaming}
             isConversationLoading={viewModel.isConnecting}
             isLoadingHistoryBefore={viewModel.isLoadingHistoryBefore}
+            isLoadingHistoryAfter={viewModel.isLoadingHistoryAfter}
+            onJumpToLatest={viewModel.showLatestMessages}
+            onLoadNewer={viewModel.loadNewerMessages}
             onLoadOlder={viewModel.loadOlderMessages}
+            onLoadMessageLocatorEntries={viewModel.loadMessageLocatorEntries}
             onAutoScrollToBottomChange={viewModel.setAutoScrollToBottom}
+            onRevealMessageForLocator={viewModel.revealMessageForCurrentChat}
+            onToggleFavoriteMessage={viewModel.toggleMessageFavorite}
             theme={viewModel.theme}
             topPadding={overlayMode ? headerHeight + 4 : 0}
           />
         </div>
+
+        {viewModel.activeInputStyle === 'classic' ? (
+          <div
+            className="classic-chat-settings-layer"
+            style={{ bottom: `${classicSettingsBottomOffset}px` }}
+          >
+            <ClassicChatSettingsBar
+              contextPercent={viewModel.contextStats.percent}
+              contextCurrentValue={viewModel.contextStats.currentValue}
+              contextMaxValue={viewModel.contextStats.maxValue}
+              inputSettings={viewModel.inputSettings}
+              memorySelector={viewModel.memorySelector}
+              modelSelector={viewModel.modelSelector}
+              modelSelectorLoading={viewModel.modelSelectorLoading}
+              onRunManualConversationSummary={viewModel.runManualConversationSummary}
+              onRunManualMemoryUpdate={viewModel.runManualMemoryUpdate}
+              onSelectModelConfig={viewModel.selectModelConfig}
+              onSelectMemoryProfile={viewModel.selectMemoryProfile}
+              onToggleSettings={() => {
+                viewModel.setAttachmentPanelOpen(false);
+                setClassicSettingsOpen(!classicSettingsOpen);
+              }}
+              onUpdateInputSettings={viewModel.updateInputSettings}
+              settingsOpen={classicSettingsOpen}
+            />
+          </div>
+        ) : null}
 
         <div
           className={[

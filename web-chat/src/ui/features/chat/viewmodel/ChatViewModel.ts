@@ -3,16 +3,28 @@ import {
   bootstrap,
   createChat,
   deleteChat,
+  deleteGroup as deleteGroupOnServer,
   getCharacterSelector,
+  getInputSettings,
+  getMemorySelector,
+  getMessageLocatorEntries,
   getMessages,
   getModelSelector,
   getTheme,
   listChats,
-  renameChat,
+  renameGroup as renameGroupOnServer,
+  reorderChats as reorderChatsOnServer,
+  runManualConversationSummary as runManualConversationSummaryOnServer,
+  runManualMemoryUpdate as runManualMemoryUpdateOnServer,
   selectModel as selectModelOnServer,
+  selectMemoryProfile as selectMemoryProfileOnServer,
   selectChat as selectChatOnServer,
   setActivePrompt as setActivePromptOnServer,
   streamMessage,
+  revealMessageWindow,
+  toggleMessageFavorite as toggleMessageFavoriteOnServer,
+  updateChat as updateChatOnServer,
+  updateInputSettings as updateInputSettingsOnServer,
   uploadAttachment
 } from '../util/chatApi';
 import {
@@ -23,6 +35,7 @@ import {
 import type {
   ChatStyle,
   ContextStatsSnapshot,
+  HistoryDisplayMode,
   InputProcessingStage,
   InputStyle,
   PendingQueueMessageItem,
@@ -30,8 +43,12 @@ import type {
   WebActivePromptTarget,
   WebBootstrapResponse,
   WebChatMessage,
+  WebChatMessageLocatorPreview,
+  WebChatReorderItem,
   WebCharacterSelectorResponse,
   WebChatSummary,
+  WebInputSettingsState,
+  WebMemorySelectorState,
   WebModelSelectorState,
   WebSelectModelResponse,
   WebThemeSnapshot,
@@ -45,6 +62,38 @@ import {
 } from './UiStateDelegate';
 
 const INITIAL_MESSAGES_PAGE_SIZE = 24;
+const HISTORY_DISPLAY_MODE_KEY = 'web_chat_history_display_mode';
+const AUTO_SWITCH_CHARACTER_CARD_KEY = 'web_chat_auto_switch_character_card';
+const AUTO_SWITCH_CHAT_ON_CHARACTER_SELECT_KEY = 'web_chat_auto_switch_chat_on_character_select';
+
+function readStoredHistoryDisplayMode(): HistoryDisplayMode {
+  if (typeof window === 'undefined') {
+    return 'CURRENT_CHARACTER_ONLY';
+  }
+  const stored = window.localStorage.getItem(HISTORY_DISPLAY_MODE_KEY);
+  return stored === 'BY_CHARACTER_CARD' ||
+    stored === 'BY_FOLDER' ||
+    stored === 'CURRENT_CHARACTER_ONLY'
+    ? stored
+    : 'CURRENT_CHARACTER_ONLY';
+}
+
+function readStoredBoolean(key: string, fallback = false) {
+  if (typeof window === 'undefined') {
+    return fallback;
+  }
+  const stored = window.localStorage.getItem(key);
+  if (stored == null) {
+    return fallback;
+  }
+  return stored === 'true';
+}
+
+function writeStoredValue(key: string, value: string) {
+  if (typeof window !== 'undefined') {
+    window.localStorage.setItem(key, value);
+  }
+}
 
 function buildCreateChatBinding(activePrompt: WebActivePromptSnapshot | null) {
   if (!activePrompt) {
@@ -65,6 +114,53 @@ function buildCreateChatBinding(activePrompt: WebActivePromptSnapshot | null) {
     character_card_name: activePrompt.name,
     character_group_id: null
   };
+}
+
+function resolvePromptTargetForChat(
+  chat: WebChatSummary,
+  characterSelector: WebCharacterSelectorResponse | null
+): WebActivePromptTarget | null {
+  const groupId = normalizeBindingValue(chat.character_group_id);
+  if (groupId) {
+    return {
+      type: 'character_group',
+      id: groupId
+    };
+  }
+
+  const characterCardName = normalizeBindingValue(chat.character_card_name);
+  if (!characterCardName) {
+    return null;
+  }
+
+  const card = characterSelector?.cards.find((item) => item.name === characterCardName);
+  if (!card) {
+    return null;
+  }
+
+  return {
+    type: 'character_card',
+    id: card.id
+  };
+}
+
+function matchesPromptTarget(
+  chat: WebChatSummary,
+  target: WebActivePromptTarget,
+  characterSelector: WebCharacterSelectorResponse | null
+) {
+  if (target.type === 'character_group') {
+    return normalizeBindingValue(chat.character_group_id) === normalizeBindingValue(target.id);
+  }
+
+  const card = characterSelector?.cards.find((item) => item.id === target.id);
+  if (!card) {
+    return false;
+  }
+  return (
+    !normalizeBindingValue(chat.character_group_id) &&
+    normalizeBindingValue(chat.character_card_name) === normalizeBindingValue(card.name)
+  );
 }
 
 function normalizeBindingValue(value?: string | null) {
@@ -217,6 +313,28 @@ function prependOlderMessages(
     .concat(existingMessages);
 }
 
+function appendNewerMessages(
+  existingMessages: WebChatMessage[],
+  newerMessages: WebChatMessage[]
+) {
+  if (!newerMessages.length) {
+    return existingMessages;
+  }
+
+  const existingIds = new Set(existingMessages.map((message) => message.id));
+  return existingMessages.concat(newerMessages.filter((message) => !existingIds.has(message.id)));
+}
+
+function matchesActivePromptTarget(
+  activePrompt: WebActivePromptSnapshot | null | undefined,
+  target: WebActivePromptTarget
+) {
+  if (!activePrompt) {
+    return false;
+  }
+  return activePrompt.type === target.type && activePrompt.id === target.id;
+}
+
 function appendStreamingAssistantDelta(
   existingMessages: WebChatMessage[],
   assistantMessageId: string,
@@ -325,7 +443,9 @@ export interface ChatViewModelState {
   historyOpen: boolean;
   historyLoading: boolean;
   hasMoreHistoryBefore: boolean;
+  hasMoreHistoryAfter: boolean;
   isLoadingHistoryBefore: boolean;
+  isLoadingHistoryAfter: boolean;
   attachmentPanelOpen: boolean;
   inputProcessingStage: InputProcessingStage;
   activeChatStyle: ChatStyle;
@@ -336,6 +456,11 @@ export interface ChatViewModelState {
   activeStreamingCount: number;
   contextStats: ContextStatsSnapshot;
   autoScrollToBottom: boolean;
+  historyDisplayMode: HistoryDisplayMode;
+  autoSwitchCharacterCard: boolean;
+  autoSwitchChatOnCharacterSelect: boolean;
+  inputSettings: WebInputSettingsState | null;
+  memorySelector: WebMemorySelectorState | null;
 }
 
 export interface ChatViewModelActions {
@@ -360,6 +485,8 @@ export interface ChatViewModelActions {
     confirmCharacterCardSwitch?: boolean
   ) => Promise<WebSelectModelResponse | null>;
   loadOlderMessages: () => Promise<void>;
+  loadNewerMessages: () => Promise<void>;
+  showLatestMessages: () => Promise<void>;
   setAttachmentPanelOpen: (value: boolean) => void;
   queueDraftMessage: () => void;
   setPendingQueueExpanded: (value: boolean) => void;
@@ -367,6 +494,48 @@ export interface ChatViewModelActions {
   editPendingQueueMessage: (id: number) => void;
   sendPendingQueueMessage: (id: number) => Promise<void>;
   setAutoScrollToBottom: (value: boolean) => void;
+  setHistoryDisplayMode: (value: HistoryDisplayMode) => void;
+  setAutoSwitchCharacterCard: (value: boolean) => void;
+  setAutoSwitchChatOnCharacterSelect: (value: boolean) => void;
+  updateConversation: (
+    chat: WebChatSummary,
+    payload: {
+      title?: string;
+      group?: string | null;
+      update_group?: boolean;
+      locked?: boolean;
+      update_locked?: boolean;
+      character_card_name?: string | null;
+      character_group_id?: string | null;
+      update_binding?: boolean;
+    }
+  ) => Promise<WebChatSummary | null>;
+  reorderConversations: (items: WebChatReorderItem[]) => Promise<void>;
+  renameGroup: (oldName: string, newName: string, characterCardName?: string | null) => Promise<void>;
+  deleteGroup: (
+    groupName: string,
+    deleteChats: boolean,
+    characterCardName?: string | null
+  ) => Promise<void>;
+  updateInputSettings: (
+    payload: Partial<{
+      enable_thinking_mode: boolean;
+      thinking_quality_level: number;
+      enable_memory_auto_update: boolean;
+      enable_auto_read: boolean;
+      enable_max_context_mode: boolean;
+      enable_tools: boolean;
+      disable_stream_output: boolean;
+      disable_user_preference_description: boolean;
+      permission_level: string;
+    }>
+  ) => Promise<void>;
+  selectMemoryProfile: (profileId: string) => Promise<void>;
+  runManualMemoryUpdate: () => Promise<void>;
+  runManualConversationSummary: () => Promise<void>;
+  loadMessageLocatorEntries: (chatId: string) => Promise<WebChatMessageLocatorPreview[]>;
+  revealMessageForCurrentChat: (targetTimestamp: number) => Promise<boolean>;
+  toggleMessageFavorite: (timestamp: number, isFavorite: boolean) => Promise<void>;
 }
 
 export type ChatViewModel = ChatViewModelState & ChatViewModelActions;
@@ -397,10 +566,23 @@ export function useChatViewModel(): ChatViewModel {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyLoaded, setHistoryLoaded] = useState(false);
   const [hasMoreHistoryBefore, setHasMoreHistoryBefore] = useState(false);
+  const [hasMoreHistoryAfter, setHasMoreHistoryAfter] = useState(false);
   const [isLoadingHistoryBefore, setLoadingHistoryBefore] = useState(false);
+  const [isLoadingHistoryAfter, setLoadingHistoryAfter] = useState(false);
   const [attachmentPanelOpen, setAttachmentPanelOpen] = useState(false);
   const [inputProcessingStage, setInputProcessingStage] = useState<InputProcessingStage>('idle');
   const [autoScrollToBottom, setAutoScrollToBottom] = useState(true);
+  const [historyDisplayMode, setHistoryDisplayModeState] = useState<HistoryDisplayMode>(
+    readStoredHistoryDisplayMode
+  );
+  const [autoSwitchCharacterCard, setAutoSwitchCharacterCardState] = useState(() =>
+    readStoredBoolean(AUTO_SWITCH_CHARACTER_CARD_KEY, false)
+  );
+  const [autoSwitchChatOnCharacterSelect, setAutoSwitchChatOnCharacterSelectState] = useState(() =>
+    readStoredBoolean(AUTO_SWITCH_CHAT_ON_CHARACTER_SELECT_KEY, false)
+  );
+  const [inputSettings, setInputSettings] = useState<WebInputSettingsState | null>(null);
+  const [memorySelector, setMemorySelector] = useState<WebMemorySelectorState | null>(null);
   const streamAbortRef = useRef<AbortController | null>(null);
   const queueIdRef = useRef(1);
   const skipNextConversationLoadRef = useRef(false);
@@ -434,6 +616,12 @@ export function useChatViewModel(): ChatViewModel {
     }
   }
 
+  async function refreshMemorySelector(currentToken: string) {
+    const selectorData = await getMemorySelector(currentToken);
+    setMemorySelector(selectorData);
+    return selectorData;
+  }
+
   async function refreshChats(currentToken: string) {
     const chatList = await listChats(currentToken);
     setChats(chatList);
@@ -459,20 +647,26 @@ export function useChatViewModel(): ChatViewModel {
     setInputProcessingStage('connecting');
 
     try {
-      const [bootData, selectorData, modelSelectorData] = await Promise.all([
+      const [bootData, selectorData, modelSelectorData, inputSettingsData, memorySelectorData] =
+        await Promise.all([
         bootstrap(currentToken),
         getCharacterSelector(currentToken),
-        getModelSelector(currentToken)
+        getModelSelector(currentToken),
+        getInputSettings(currentToken),
+        getMemorySelector(currentToken)
       ]);
       setBoot(bootData);
       setCharacterSelector(selectorData);
       setModelSelector(modelSelectorData);
+      setInputSettings(inputSettingsData);
+      setMemorySelector(memorySelectorData);
       const nextChatId = preferredChatId ?? bootData.current_chat_id ?? null;
       setSelectedChatId(nextChatId);
       if (!nextChatId) {
         setTheme(null);
         setMessages([]);
         setHasMoreHistoryBefore(false);
+        setHasMoreHistoryAfter(false);
       }
       setError(null);
     } finally {
@@ -493,21 +687,25 @@ export function useChatViewModel(): ChatViewModel {
       if (mode === 'replace') {
         await selectChatOnServer(currentToken, chatId);
       }
-      const [themeData, messagePage, selectorData, modelSelectorData] = await Promise.all([
+      const [themeData, messagePage, selectorData, modelSelectorData, inputSettingsData] =
+        await Promise.all([
         getTheme(currentToken, chatId),
         getMessages(currentToken, chatId, { limit: INITIAL_MESSAGES_PAGE_SIZE }),
         getCharacterSelector(currentToken),
-        getModelSelector(currentToken)
+        getModelSelector(currentToken),
+        getInputSettings(currentToken)
       ]);
       setTheme(themeData);
       setCharacterSelector(selectorData);
       setModelSelector(modelSelectorData);
+      setInputSettings(inputSettingsData);
       setMessages((currentMessages) =>
         mode === 'merge-latest'
           ? mergeLatestConversationPage(currentMessages, messagePage.messages)
           : messagePage.messages
       );
       setHasMoreHistoryBefore(messagePage.has_more_before);
+      setHasMoreHistoryAfter(messagePage.has_more_after);
       setError(null);
     } finally {
       setConnecting(false);
@@ -533,7 +731,10 @@ export function useChatViewModel(): ChatViewModel {
       setHistoryLoaded(false);
       setHistoryLoading(false);
       setHasMoreHistoryBefore(false);
+      setHasMoreHistoryAfter(false);
       setLoadingHistoryBefore(false);
+      setLoadingHistoryAfter(false);
+      setInputSettings(null);
       setInputProcessingStage('idle');
       return;
     }
@@ -577,6 +778,7 @@ export function useChatViewModel(): ChatViewModel {
       });
       setMessages((currentMessages) => prependOlderMessages(currentMessages, page.messages));
       setHasMoreHistoryBefore(page.has_more_before);
+      setHasMoreHistoryAfter(page.has_more_after);
     } catch (loadError: unknown) {
       handleApiFailure(loadError);
     } finally {
@@ -584,11 +786,98 @@ export function useChatViewModel(): ChatViewModel {
     }
   }
 
+  async function loadNewerMessages() {
+    if (!token || !selectedChatId || !hasMoreHistoryAfter || isLoadingHistoryAfter) {
+      return;
+    }
+
+    const newestTimestamp = messages[messages.length - 1]?.timestamp;
+    if (!newestTimestamp) {
+      return;
+    }
+
+    setLoadingHistoryAfter(true);
+    try {
+      const page = await getMessages(token, selectedChatId, {
+        afterTimestamp: newestTimestamp,
+        limit: INITIAL_MESSAGES_PAGE_SIZE
+      });
+      setMessages((currentMessages) => appendNewerMessages(currentMessages, page.messages));
+      setHasMoreHistoryBefore(page.has_more_before);
+      setHasMoreHistoryAfter(page.has_more_after);
+    } catch (loadError: unknown) {
+      handleApiFailure(loadError);
+    } finally {
+      setLoadingHistoryAfter(false);
+    }
+  }
+
+  async function showLatestMessages() {
+    if (!token || !selectedChatId) {
+      return;
+    }
+    await loadConversation(token, selectedChatId, 'merge-latest');
+    setAutoScrollToBottom(true);
+  }
+
+  function shouldConfirmContextLimit(outgoingText: string) {
+    if (!inputSettings || inputSettings.max_window_tokens <= 0) {
+      return true;
+    }
+    const projectedTokens = inputSettings.current_window_tokens + outgoingText.trim().length;
+    if (projectedTokens <= inputSettings.max_window_tokens) {
+      return true;
+    }
+    if (typeof window === 'undefined') {
+      return true;
+    }
+    return window.confirm(
+      `当前消息可能超过上下文上限（${projectedTokens} / ${inputSettings.max_window_tokens}）。仍要发送吗？`
+    );
+  }
+
+  async function syncActivePromptForChat(currentToken: string, chat: WebChatSummary) {
+    if (!autoSwitchCharacterCard) {
+      return;
+    }
+
+    const target = resolvePromptTargetForChat(chat, characterSelector);
+    if (!target || matchesActivePromptTarget(characterSelector?.active_prompt, target)) {
+      return;
+    }
+
+    const selectorData = await setActivePromptOnServer(currentToken, target);
+    setCharacterSelector(selectorData);
+    await refreshModelSelector(currentToken);
+
+    if (selectedChatId === chat.id) {
+      const themeData = await getTheme(currentToken, chat.id);
+      setTheme(themeData);
+    }
+  }
+
+  function selectChatForPrompt(
+    target: WebActivePromptTarget,
+    selectorData: WebCharacterSelectorResponse | null
+  ) {
+    const matchedChat = chats.find((chat) => matchesPromptTarget(chat, target, selectorData));
+    if (!matchedChat || matchedChat.id === selectedChatId) {
+      return false;
+    }
+
+    setMessages([]);
+    setTheme(null);
+    setHasMoreHistoryBefore(false);
+    setHasMoreHistoryAfter(false);
+    setAutoScrollToBottom(true);
+    setSelectedChatId(matchedChat.id);
+    return true;
+  }
+
   async function sendPreparedMessage(text: string, uploadsSnapshot: WebUploadedAttachment[]) {
     if (!token || isStreaming || (!text.trim() && uploadsSnapshot.length === 0)) {
       return;
     }
-
     setBusy(true);
     setStreaming(true);
     setError(null);
@@ -736,6 +1025,7 @@ export function useChatViewModel(): ChatViewModel {
       setMessages([]);
       setTheme(null);
       setHasMoreHistoryBefore(false);
+      setHasMoreHistoryAfter(false);
       setSelectedChatId(chat.id);
       setHistoryOpenState(false);
     } catch (actionError: unknown) {
@@ -756,19 +1046,9 @@ export function useChatViewModel(): ChatViewModel {
     }
 
     try {
-      const updated = await renameChat(token, chat.id, nextTitle);
-      setChats((currentChats) =>
-        currentChats.map((item) =>
-          item.id === updated.id
-            ? {
-                ...item,
-                ...updated,
-                title: nextTitle
-              }
-            : item
-        )
-      );
-      await refreshChats(token);
+      await updateConversation(chat, {
+        title: nextTitle
+      });
     } catch (actionError: unknown) {
       handleApiFailure(actionError);
     }
@@ -800,6 +1080,7 @@ export function useChatViewModel(): ChatViewModel {
         setMessages([]);
         setTheme(null);
         setHasMoreHistoryBefore(false);
+        setHasMoreHistoryAfter(false);
         setAutoScrollToBottom(true);
 
         if (replacementChat) {
@@ -822,6 +1103,7 @@ export function useChatViewModel(): ChatViewModel {
         setMessages([]);
         setTheme(null);
         setHasMoreHistoryBefore(false);
+        setHasMoreHistoryAfter(false);
         setAutoScrollToBottom(true);
         setSelectedChatId(fallbackId);
       }
@@ -836,12 +1118,20 @@ export function useChatViewModel(): ChatViewModel {
       return;
     }
 
+    const targetChat = chats.find((item) => item.id === chatId) ?? null;
     setMessages([]);
     setTheme(null);
     setHasMoreHistoryBefore(false);
+    setHasMoreHistoryAfter(false);
     setHistoryOpenState(false);
     setAutoScrollToBottom(true);
     setSelectedChatId(chatId);
+
+    if (token && targetChat) {
+      void syncActivePromptForChat(token, targetChat).catch((actionError: unknown) => {
+        handleApiFailure(actionError);
+      });
+    }
   }
 
   async function uploadFiles(files: FileList | File[]) {
@@ -881,6 +1171,9 @@ export function useChatViewModel(): ChatViewModel {
   async function sendMessage() {
     const outgoingText = messageInput.trim();
     const uploadsSnapshot = [...pendingUploads];
+    if (!shouldConfirmContextLimit(outgoingText)) {
+      return;
+    }
     setMessageInput('');
     setPendingUploads([]);
     await sendPreparedMessage(outgoingText, uploadsSnapshot);
@@ -925,8 +1218,10 @@ export function useChatViewModel(): ChatViewModel {
     try {
       const selectorData = await setActivePromptOnServer(token, target);
       setCharacterSelector(selectorData);
+      const didSwitchChat =
+        autoSwitchChatOnCharacterSelect && selectChatForPrompt(target, selectorData);
       const requests: Array<Promise<unknown>> = [refreshModelSelector(token)];
-      if (selectedChatId) {
+      if (!didSwitchChat && selectedChatId) {
         requests.push(
           getTheme(token, selectedChatId).then((themeData) => {
             setTheme(themeData);
@@ -981,8 +1276,257 @@ export function useChatViewModel(): ChatViewModel {
       return;
     }
 
+    if (!shouldConfirmContextLimit(target.text)) {
+      return;
+    }
     setPendingQueueMessages((currentQueue) => currentQueue.filter((item) => item.id !== id));
     await sendPreparedMessage(target.text, []);
+  }
+
+  function setHistoryDisplayMode(value: HistoryDisplayMode) {
+    setHistoryDisplayModeState(value);
+    writeStoredValue(HISTORY_DISPLAY_MODE_KEY, value);
+  }
+
+  function setAutoSwitchCharacterCard(value: boolean) {
+    setAutoSwitchCharacterCardState(value);
+    writeStoredValue(AUTO_SWITCH_CHARACTER_CARD_KEY, String(value));
+
+    if (value && token && selectedChat) {
+      void syncActivePromptForChat(token, selectedChat).catch((actionError: unknown) => {
+        handleApiFailure(actionError);
+      });
+    }
+  }
+
+  function setAutoSwitchChatOnCharacterSelect(value: boolean) {
+    setAutoSwitchChatOnCharacterSelectState(value);
+    writeStoredValue(AUTO_SWITCH_CHAT_ON_CHARACTER_SELECT_KEY, String(value));
+
+    if (value && characterSelector?.active_prompt) {
+      selectChatForPrompt(characterSelector.active_prompt, characterSelector);
+    }
+  }
+
+  async function updateConversation(
+    chat: WebChatSummary,
+    payload: {
+      title?: string;
+      group?: string | null;
+      update_group?: boolean;
+      locked?: boolean;
+      update_locked?: boolean;
+      character_card_name?: string | null;
+      character_group_id?: string | null;
+      update_binding?: boolean;
+    }
+  ) {
+    if (!token) {
+      return null;
+    }
+
+    try {
+      const updated = await updateChatOnServer(token, chat.id, payload);
+      const refreshedChats = await refreshChats(token);
+      const nextChat = refreshedChats.find((item) => item.id === updated.id) ?? updated;
+
+      if (selectedChatId === updated.id && payload.update_binding) {
+        if (autoSwitchCharacterCard) {
+          await syncActivePromptForChat(token, nextChat);
+        } else {
+          await refreshCharacterSelector(token);
+        }
+      }
+
+      return nextChat;
+    } catch (actionError: unknown) {
+      handleApiFailure(actionError);
+      return null;
+    }
+  }
+
+  async function reorderConversations(items: WebChatReorderItem[]) {
+    if (!token || items.length === 0) {
+      return;
+    }
+
+    try {
+      await reorderChatsOnServer(token, items);
+      await refreshChats(token);
+    } catch (actionError: unknown) {
+      handleApiFailure(actionError);
+    }
+  }
+
+  async function renameGroup(
+    oldName: string,
+    newName: string,
+    characterCardName?: string | null
+  ) {
+    if (!token) {
+      return;
+    }
+
+    const normalizedOldName = oldName.trim();
+    const normalizedNewName = newName.trim();
+    if (!normalizedOldName || !normalizedNewName || normalizedOldName === normalizedNewName) {
+      return;
+    }
+
+    try {
+      await renameGroupOnServer(token, {
+        old_name: normalizedOldName,
+        new_name: normalizedNewName,
+        character_card_name: characterCardName ?? null
+      });
+      await refreshChats(token);
+    } catch (actionError: unknown) {
+      handleApiFailure(actionError);
+    }
+  }
+
+  async function deleteGroup(
+    groupName: string,
+    deleteChats: boolean,
+    characterCardName?: string | null
+  ) {
+    if (!token) {
+      return;
+    }
+
+    const normalizedGroupName = groupName.trim();
+    if (!normalizedGroupName) {
+      return;
+    }
+
+    try {
+      await deleteGroupOnServer(token, {
+        group_name: normalizedGroupName,
+        delete_chats: deleteChats,
+        character_card_name: characterCardName ?? null
+      });
+      const refreshedChats = await refreshChats(token);
+      if (selectedChatId && !refreshedChats.some((chat) => chat.id === selectedChatId)) {
+        const fallbackChatId = refreshedChats[0]?.id ?? null;
+        setMessages([]);
+        setTheme(null);
+        setHasMoreHistoryBefore(false);
+        setHasMoreHistoryAfter(false);
+        setAutoScrollToBottom(true);
+        setSelectedChatId(fallbackChatId);
+      }
+    } catch (actionError: unknown) {
+      handleApiFailure(actionError);
+    }
+  }
+
+  async function updateInputSettings(
+    payload: Partial<{
+      enable_thinking_mode: boolean;
+      thinking_quality_level: number;
+      enable_memory_auto_update: boolean;
+      enable_auto_read: boolean;
+      enable_max_context_mode: boolean;
+      enable_tools: boolean;
+      disable_stream_output: boolean;
+      disable_user_preference_description: boolean;
+      permission_level: string;
+    }>
+  ) {
+    if (!token) {
+      return;
+    }
+
+    try {
+      const nextSettings = await updateInputSettingsOnServer(token, payload);
+      setInputSettings(nextSettings);
+      setError(null);
+    } catch (actionError: unknown) {
+      handleApiFailure(actionError);
+    }
+  }
+
+  async function selectMemoryProfile(profileId: string) {
+    if (!token) {
+      return;
+    }
+
+    try {
+      const nextSelector = await selectMemoryProfileOnServer(token, profileId);
+      setMemorySelector(nextSelector);
+      setError(null);
+    } catch (actionError: unknown) {
+      handleApiFailure(actionError);
+    }
+  }
+
+  async function runManualMemoryUpdate() {
+    if (!token) {
+      return;
+    }
+
+    try {
+      await runManualMemoryUpdateOnServer(token);
+      setError(null);
+    } catch (actionError: unknown) {
+      handleApiFailure(actionError);
+    }
+  }
+
+  async function runManualConversationSummary() {
+    if (!token) {
+      return;
+    }
+
+    try {
+      await runManualConversationSummaryOnServer(token);
+      setError(null);
+    } catch (actionError: unknown) {
+      handleApiFailure(actionError);
+    }
+  }
+
+  async function loadMessageLocatorEntries(chatId: string) {
+    if (!token) {
+      return [];
+    }
+
+    try {
+      return await getMessageLocatorEntries(token, chatId);
+    } catch (actionError: unknown) {
+      handleApiFailure(actionError);
+      throw actionError;
+    }
+  }
+
+  async function revealMessageForCurrentChat(targetTimestamp: number) {
+    if (!token || !selectedChatId) {
+      return false;
+    }
+
+    try {
+      const page = await revealMessageWindow(token, selectedChatId, targetTimestamp);
+      setMessages(page.messages);
+      setHasMoreHistoryBefore(page.has_more_before);
+      setHasMoreHistoryAfter(page.has_more_after);
+      setAutoScrollToBottom(false);
+      return page.messages.some((message) => message.timestamp === targetTimestamp);
+    } catch (actionError: unknown) {
+      handleApiFailure(actionError);
+      return false;
+    }
+  }
+
+  async function toggleMessageFavorite(timestamp: number, isFavorite: boolean) {
+    if (!token || !selectedChatId) {
+      return;
+    }
+
+    try {
+      await toggleMessageFavoriteOnServer(token, selectedChatId, timestamp, isFavorite);
+    } catch (actionError: unknown) {
+      handleApiFailure(actionError);
+    }
   }
 
   const visibleChats = useMemo(() => {
@@ -1008,8 +1552,8 @@ export function useChatViewModel(): ChatViewModel {
   );
 
   const contextStats = useMemo<ContextStatsSnapshot>(() => {
-    return buildContextStats(messages, messageInput);
-  }, [messageInput, messages]);
+    return buildContextStats(messages, messageInput, inputSettings);
+  }, [inputSettings, messageInput, messages]);
 
   async function selectModelConfig(
     configId: string,
@@ -1065,7 +1609,9 @@ export function useChatViewModel(): ChatViewModel {
     historyOpen,
     historyLoading,
     hasMoreHistoryBefore,
+    hasMoreHistoryAfter,
     isLoadingHistoryBefore,
+    isLoadingHistoryAfter,
     attachmentPanelOpen,
     inputProcessingStage,
     activeChatStyle,
@@ -1076,6 +1622,11 @@ export function useChatViewModel(): ChatViewModel {
     activeStreamingCount,
     contextStats,
     autoScrollToBottom,
+    historyDisplayMode,
+    autoSwitchCharacterCard,
+    autoSwitchChatOnCharacterSelect,
+    inputSettings,
+    memorySelector,
     setTokenDraft,
     submitToken,
     createConversation,
@@ -1093,12 +1644,28 @@ export function useChatViewModel(): ChatViewModel {
     switchActivePrompt,
     selectModelConfig,
     loadOlderMessages,
+    loadNewerMessages,
+    showLatestMessages,
     setAttachmentPanelOpen,
     queueDraftMessage,
     setPendingQueueExpanded,
     deletePendingQueueMessage,
     editPendingQueueMessage,
     sendPendingQueueMessage,
-    setAutoScrollToBottom
+    setAutoScrollToBottom,
+    setHistoryDisplayMode,
+    setAutoSwitchCharacterCard,
+    setAutoSwitchChatOnCharacterSelect,
+    updateConversation,
+    reorderConversations,
+    renameGroup,
+    deleteGroup,
+    updateInputSettings,
+    selectMemoryProfile,
+    runManualMemoryUpdate,
+    runManualConversationSummary,
+    loadMessageLocatorEntries,
+    revealMessageForCurrentChat,
+    toggleMessageFavorite
   };
 }

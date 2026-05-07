@@ -43,6 +43,7 @@ private fun buildExecutionPreludeSource(): String {
         var done = function() { return __operitInvokeCallRuntime('done', arguments); };
         var complete = function() { return __operitInvokeCallRuntime('complete', arguments); };
         var getEnv = function() { return __operitInvokeCallRuntime('getEnv', arguments); };
+        var getPluginConfigDir = function() { return __operitInvokeCallRuntime('getPluginConfigDir', arguments); };
         var getState = function() { return __operitInvokeCallRuntime('getState', arguments); };
         var getLang = function() { return __operitInvokeCallRuntime('getLang', arguments); };
         var getCallerName = function() { return __operitInvokeCallRuntime('getCallerName', arguments); };
@@ -583,6 +584,25 @@ internal fun buildExecutionRuntimeBridgeScript(): String {
                         getEnv: function(key) {
                             var value = NativeInterface.getEnvForCall(callId, text(key).trim());
                             return value == null || value === '' ? undefined : text(value);
+                        },
+                        getPluginConfigDir: function(pluginId) {
+                            var explicitId = pluginId == null ? '' : text(pluginId).trim();
+                            var resolvedId =
+                                explicitId ||
+                                readCallValue('__operit_ui_package_name', '') ||
+                                readCallValue('toolPkgId', '') ||
+                                readCallValue('containerPackageName', '') ||
+                                readCallValue('__operit_package_name', '');
+                            if (
+                                !resolvedId ||
+                                typeof NativeInterface === 'undefined' ||
+                                !NativeInterface ||
+                                typeof NativeInterface.getPluginConfigDir !== 'function'
+                            ) {
+                                return '';
+                            }
+                            var path = NativeInterface.getPluginConfigDir(resolvedId);
+                            return typeof path === 'string' ? path : '';
                         },
                         getState: function() { return readCallValue('__operit_package_state', undefined); },
                         getLang: function() { return readCallValue('__operit_package_lang', 'en'); },

@@ -163,8 +163,28 @@ data class WebChatMessagesPage(
     val messages: List<WebChatMessage>,
     @SerialName("has_more_before")
     val hasMoreBefore: Boolean,
+    @SerialName("has_more_after")
+    val hasMoreAfter: Boolean = false,
     @SerialName("next_before_timestamp")
-    val nextBeforeTimestamp: Long? = null
+    val nextBeforeTimestamp: Long? = null,
+    @SerialName("next_after_timestamp")
+    val nextAfterTimestamp: Long? = null
+)
+
+@Serializable
+data class WebChatMessageLocatorPreview(
+    @SerialName("timestamp")
+    val timestamp: Long,
+    @SerialName("sender")
+    val sender: String,
+    @SerialName("preview_content")
+    val previewContent: String,
+    @SerialName("content_length")
+    val contentLength: Int,
+    @SerialName("display_mode")
+    val displayMode: String,
+    @SerialName("is_favorite")
+    val isFavorite: Boolean,
 )
 
 @Serializable
@@ -458,6 +478,22 @@ data class WebModelSelectorState(
 )
 
 @Serializable
+data class WebMemorySelectorState(
+    @SerialName("current_profile_id")
+    val currentProfileId: String,
+    @SerialName("profiles")
+    val profiles: List<WebMemoryProfileItem> = emptyList()
+)
+
+@Serializable
+data class WebMemoryProfileItem(
+    @SerialName("id")
+    val id: String,
+    @SerialName("name")
+    val name: String
+)
+
+@Serializable
 data class WebModelSelectorConfig(
     @SerialName("id")
     val id: String,
@@ -504,7 +540,131 @@ data class WebCreateChatRequest(
 @Serializable
 data class WebUpdateChatRequest(
     @SerialName("title")
-    val title: String? = null
+    val title: String? = null,
+    @SerialName("group")
+    val group: String? = null,
+    @SerialName("update_group")
+    val updateGroup: Boolean = false,
+    @SerialName("locked")
+    val locked: Boolean? = null,
+    @SerialName("update_locked")
+    val updateLocked: Boolean = false,
+    @SerialName("character_card_name")
+    val characterCardName: String? = null,
+    @SerialName("character_group_id")
+    val characterGroupId: String? = null,
+    @SerialName("update_binding")
+    val updateBinding: Boolean = false
+)
+
+@Serializable
+data class WebChatReorderItem(
+    @SerialName("chat_id")
+    val chatId: String,
+    @SerialName("display_order")
+    val displayOrder: Long,
+    @SerialName("group")
+    val group: String? = null
+)
+
+@Serializable
+data class WebReorderChatsRequest(
+    @SerialName("items")
+    val items: List<WebChatReorderItem> = emptyList()
+)
+
+@Serializable
+data class WebRenameGroupRequest(
+    @SerialName("old_name")
+    val oldName: String,
+    @SerialName("new_name")
+    val newName: String,
+    @SerialName("character_card_name")
+    val characterCardName: String? = null
+)
+
+@Serializable
+data class WebDeleteGroupRequest(
+    @SerialName("group_name")
+    val groupName: String,
+    @SerialName("delete_chats")
+    val deleteChats: Boolean = false,
+    @SerialName("character_card_name")
+    val characterCardName: String? = null
+)
+
+@Serializable
+data class WebRevealMessageRequest(
+    @SerialName("timestamp")
+    val timestamp: Long? = null
+)
+
+@Serializable
+data class WebToggleMessageFavoriteRequest(
+    @SerialName("timestamp")
+    val timestamp: Long? = null,
+    @SerialName("is_favorite")
+    val isFavorite: Boolean? = null
+)
+
+@Serializable
+data class WebInputSettingsState(
+    @SerialName("enable_thinking_mode")
+    val enableThinkingMode: Boolean,
+    @SerialName("thinking_quality_level")
+    val thinkingQualityLevel: Int,
+    @SerialName("enable_memory_auto_update")
+    val enableMemoryAutoUpdate: Boolean,
+    @SerialName("enable_auto_read")
+    val enableAutoRead: Boolean,
+    @SerialName("enable_max_context_mode")
+    val enableMaxContextMode: Boolean,
+    @SerialName("enable_tools")
+    val enableTools: Boolean,
+    @SerialName("disable_stream_output")
+    val disableStreamOutput: Boolean,
+    @SerialName("disable_user_preference_description")
+    val disableUserPreferenceDescription: Boolean,
+    @SerialName("permission_level")
+    val permissionLevel: String,
+    @SerialName("current_window_tokens")
+    val currentWindowTokens: Int,
+    @SerialName("base_context_length_k")
+    val baseContextLengthK: Float,
+    @SerialName("max_context_length_k")
+    val maxContextLengthK: Float,
+    @SerialName("active_context_length_k")
+    val activeContextLengthK: Float,
+    @SerialName("max_window_tokens")
+    val maxWindowTokens: Int
+)
+
+@Serializable
+data class WebUpdateInputSettingsRequest(
+    @SerialName("enable_thinking_mode")
+    val enableThinkingMode: Boolean? = null,
+    @SerialName("thinking_quality_level")
+    val thinkingQualityLevel: Int? = null,
+    @SerialName("enable_memory_auto_update")
+    val enableMemoryAutoUpdate: Boolean? = null,
+    @SerialName("enable_auto_read")
+    val enableAutoRead: Boolean? = null,
+    @SerialName("enable_max_context_mode")
+    val enableMaxContextMode: Boolean? = null,
+    @SerialName("enable_tools")
+    val enableTools: Boolean? = null,
+    @SerialName("disable_stream_output")
+    val disableStreamOutput: Boolean? = null,
+    @SerialName("disable_user_preference_description")
+    val disableUserPreferenceDescription: Boolean? = null,
+    @SerialName("permission_level")
+    val permissionLevel: String? = null
+)
+
+@Serializable
+data class WebSelectMemoryProfileRequest(
+    @SerialName("profile_id")
+    val profileId: String
 )
 
 @Serializable

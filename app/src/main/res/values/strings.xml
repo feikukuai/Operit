@@ -2570,6 +2570,7 @@
     <string name="speech_services_tts_type_minimax">MiniMax TTS</string>
     <string name="speech_services_tts_type_openai_ws">OpenAI Realtime (WebSocket)</string>
     <string name="speech_services_tts_type_openai">OpenAI 语音 (HTTP)</string>
+    <string name="speech_services_tts_type_onnx">ONNX TTS (本地)</string>
     
     <!-- STT Service Types -->
     <string name="speech_services_stt_type_sherpa">Sherpa NCNN (本地)</string>
@@ -2609,6 +2610,22 @@
     <string name="speech_services_http_content_type_placeholder">application/json</string>
     <string name="speech_services_http_request_body">请求体模板</string>
     <string name="speech_services_http_request_body_placeholder">{\"text\": \"{text}\"}</string>
+
+    <!-- ONNX TTS Configuration -->
+    <string name="speech_services_onnx_config">ONNX TTS 配置</string>
+    <string name="speech_services_onnx_model_path">ONNX 模型路径</string>
+    <string name="speech_services_onnx_model_path_placeholder">例如：/sdcard/Download/tts/model.onnx</string>
+    <string name="speech_services_onnx_model_path_hint">填写设备本地可读的 .onnx 文件路径。</string>
+    <string name="speech_services_onnx_config_path">Tokenizer/Config 路径</string>
+    <string name="speech_services_onnx_config_path_placeholder">例如：/sdcard/Download/tts/config.json</string>
+    <string name="speech_services_onnx_config_path_hint">填写包含 sample_rate 与 token/phoneme id 映射的 JSON 配置文件路径。</string>
+    <string name="speech_services_onnx_speaker_id">Speaker ID</string>
+    <string name="speech_services_onnx_speaker_id_placeholder">例如：0</string>
+    <string name="speech_services_onnx_speaker_id_hint">多说话人模型需要填写数字 speaker id；单说话人模型可留空。</string>
+    <string name="speech_services_onnx_options">ONNX 参数 (JSON)</string>
+    <string name="speech_services_onnx_options_placeholder">{\"sample_rate\":\"22050\",\"noise_scale\":\"0.667\",\"length_scale\":\"1.0\",\"noise_w\":\"0.8\"}</string>
+    <string name="speech_services_onnx_options_hint">可选：sample_rate、threads、noise_scale、length_scale、noise_w、text_mode、speaker_count、input 名称、blank/bos/eos token 等。</string>
+    <string name="speech_services_onnx_headers_error">无效的 ONNX 参数 JSON</string>
     
     <!-- SiliconFlow TTS Configuration -->
     <string name="speech_services_siliconflow_config">硅基流动 TTS 配置</string>
@@ -7053,6 +7070,34 @@
     <string name="openai_realtime_tts_error_request_failed">请求 OpenAI Realtime TTS 失败</string>
     <string name="openai_realtime_tts_error_send_failed">向 OpenAI Realtime WebSocket 发送消息失败</string>
     <string name="openai_realtime_tts_error_empty_audio">OpenAI Realtime 未返回可播放音频</string>
+
+    <!-- OnnxVoiceProvider -->
+    <string name="onnx_tts_error_model_path_not_set">ONNX TTS 模型路径未设置，请填写本地 .onnx 文件路径。</string>
+    <string name="onnx_tts_error_config_path_not_set">ONNX TTS Tokenizer/Config 路径未设置，请填写本地 JSON 配置文件路径。</string>
+    <string name="onnx_tts_error_model_file_not_found">ONNX TTS 模型文件不存在：%1$s</string>
+    <string name="onnx_tts_error_config_file_not_found">ONNX TTS 配置文件不存在：%1$s</string>
+    <string name="onnx_tts_error_config_parse_failed">ONNX TTS 配置文件解析失败</string>
+    <string name="onnx_tts_error_sample_rate_not_set">ONNX TTS sample_rate 未设置，请在配置 JSON 或 ONNX 参数中填写。</string>
+    <string name="onnx_tts_error_init_failed">初始化 ONNX TTS 服务时发生意外错误</string>
+    <string name="onnx_tts_error_request_failed">执行 ONNX TTS 推理失败</string>
+    <string name="onnx_tts_error_output_empty">ONNX TTS 未返回可播放音频</string>
+    <string name="onnx_tts_error_output_unsupported">ONNX TTS 输出格式不受支持，仅支持 float/PCM 张量。</string>
+    <string name="onnx_tts_error_playback_failed">ONNX TTS 播放失败，AudioTrack 写入错误：%1$d</string>
+    <string name="onnx_tts_error_input_not_found">ONNX TTS 模型中找不到输入：%1$s</string>
+    <string name="onnx_tts_error_input_name_not_resolved">ONNX TTS 无法识别 %1$s 输入名，模型输入包括：%2$s</string>
+    <string name="onnx_tts_error_tensor_info_missing">ONNX TTS 输入缺少 TensorInfo：%1$s</string>
+    <string name="onnx_tts_error_unsupported_input_type">ONNX TTS 输入 %1$s 的类型不受支持：%2$s</string>
+    <string name="onnx_tts_error_shape_unsupported">ONNX TTS 输入 %1$s 的 shape 与当前数据长度不匹配。</string>
+    <string name="onnx_tts_error_integer_out_of_range">ONNX TTS 输入 %1$s 的 token id 超出 INT32 范围。</string>
+    <string name="onnx_tts_error_scales_not_set">ONNX TTS 模型需要 scales 输入，请在 ONNX 参数中填写 %1$s。</string>
+    <string name="onnx_tts_error_speaker_required">ONNX TTS 模型需要 speaker id，请填写数字 Speaker ID。</string>
+    <string name="onnx_tts_error_tokenize_failed">ONNX TTS 文本转 token 失败：%1$s</string>
+    <string name="onnx_tts_error_unknown_token">ONNX TTS 配置中找不到字符或 phoneme 的 id：%1$s</string>
+    <string name="onnx_tts_error_blank_token_not_set">ONNX TTS 配置要求插入 blank token，但没有设置 blank_token_id。</string>
+    <string name="onnx_tts_error_config_invalid_id">ONNX TTS 配置中的 id 无效：%1$s</string>
+    <string name="onnx_tts_error_config_invalid_int">ONNX TTS 参数不是整数：%1$s</string>
+    <string name="onnx_tts_error_config_invalid_float">ONNX TTS 参数不是数字：%1$s</string>
+    <string name="onnx_tts_error_config_invalid_bool">ONNX TTS 参数不是布尔值：%1$s</string>
 
     <!-- ConversationService -->
     <string name="conversation_language_chinese">中文</string>

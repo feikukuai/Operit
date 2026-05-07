@@ -14,8 +14,6 @@ import { CharacterCardModelBindingSwitchConfirmDialog } from './CharacterCardMod
 
 const AUTO_GLM_WARNING =
   '禁止使用autoglm作为对话主模型。对话模型和ui控制模型是分离的，请选择任意一个别的聪明的大模型。如有疑问，请仔细阅读文档学习软件的模型配置机制。';
-const MODEL_SELECTOR_INFO =
-  '在这里选择一个已经配置好的模型，或者点击下方的管理配置去新建或修改模型';
 
 type PendingSelection = {
   configId: string;
@@ -41,6 +39,7 @@ export function ModelSelectorPanel({
   onExpandedChange,
   onSelectModel,
   allowCollapse = true,
+  onInfoClick,
   onManageModels,
   onSelectionCommitted
 }: {
@@ -54,11 +53,11 @@ export function ModelSelectorPanel({
     confirmCharacterCardSwitch?: boolean
   ) => Promise<WebSelectModelResponse | null>;
   allowCollapse?: boolean;
+  onInfoClick: () => void;
   onManageModels?: (() => void) | null;
   onSelectionCommitted?: (() => void) | null;
 }) {
   const [expandedConfigId, setExpandedConfigId] = useState<string | null>(null);
-  const [infoOpen, setInfoOpen] = useState(false);
   const [pendingSelection, setPendingSelection] = useState<PendingSelection | null>(null);
   const [localMessage, setLocalMessage] = useState<string | null>(null);
   const modelName = useMemo(() => currentModelName(selector), [selector]);
@@ -104,11 +103,12 @@ export function ModelSelectorPanel({
           </span>
           <button
             className="model-selector-info-button"
-            onClick={() => setInfoOpen(true)}
+            onClick={onInfoClick}
             type="button"
           >
             <InfoIcon size={16} />
           </button>
+          <span aria-hidden="true" className="model-selector-info-spacer" />
           <button
             className={`model-selector-summary ${allowCollapse ? 'is-clickable' : ''}`}
             onClick={() => {
@@ -118,8 +118,11 @@ export function ModelSelectorPanel({
             }}
             type="button"
           >
-            <span className="model-selector-summary-label">模型:</span>
-            <span className="model-selector-summary-value">{modelName}</span>
+            <span className="model-selector-summary-main">
+              <span className="model-selector-summary-label">模型:</span>
+              <span className="model-selector-summary-label-spacer" />
+              <span className="model-selector-summary-value">{modelName}</span>
+            </span>
             {allowCollapse ? (
               expanded ? <ChevronUpIcon size={20} /> : <ChevronDownIcon size={20} />
             ) : null}
@@ -213,26 +216,6 @@ export function ModelSelectorPanel({
           </div>
         ) : null}
       </div>
-
-      {infoOpen ? (
-        <div className="dialog-scrim" onClick={() => setInfoOpen(false)} role="presentation">
-          <div
-            className="history-dialog model-selector-info-dialog"
-            onClick={(event) => event.stopPropagation()}
-            role="dialog"
-          >
-            <header>
-              <h3>模型配置</h3>
-              <p>{MODEL_SELECTOR_INFO}</p>
-            </header>
-            <footer>
-              <button onClick={() => setInfoOpen(false)} type="button">
-                我知道了
-              </button>
-            </footer>
-          </div>
-        </div>
-      ) : null}
 
       <CharacterCardModelBindingSwitchConfirmDialog
         onConfirm={() => {

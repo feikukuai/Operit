@@ -92,8 +92,21 @@ export interface WebChatMessage {
 export interface WebChatMessagesPage {
   messages: WebChatMessage[];
   has_more_before: boolean;
+  has_more_after: boolean;
   next_before_timestamp?: number | null;
+  next_after_timestamp?: number | null;
 }
+
+export interface WebChatMessageLocatorPreview {
+  timestamp: number;
+  sender: ChatSender | 'think' | string;
+  preview_content: string;
+  content_length: number;
+  display_mode: string;
+  is_favorite: boolean;
+}
+
+export type HistoryDisplayMode = 'BY_CHARACTER_CARD' | 'BY_FOLDER' | 'CURRENT_CHARACTER_ONLY';
 
 export interface WebThemeBackground {
   type: string;
@@ -276,6 +289,16 @@ export interface WebSelectModelResponse {
   selector: WebModelSelectorState;
 }
 
+export interface WebMemoryProfileItem {
+  id: string;
+  name: string;
+}
+
+export interface WebMemorySelectorState {
+  current_profile_id: string;
+  profiles: WebMemoryProfileItem[];
+}
+
 export interface WebChatStreamEvent {
   event: 'start' | 'user_message' | 'assistant_delta' | 'assistant_done' | 'error';
   chat_id: string;
@@ -293,4 +316,27 @@ export interface ContextStatsSnapshot {
   currentValue: number;
   maxValue: number;
   percent: number;
+}
+
+export interface WebInputSettingsState {
+  enable_thinking_mode: boolean;
+  thinking_quality_level: number;
+  enable_memory_auto_update: boolean;
+  enable_auto_read: boolean;
+  enable_max_context_mode: boolean;
+  enable_tools: boolean;
+  disable_stream_output: boolean;
+  disable_user_preference_description: boolean;
+  permission_level: 'ALLOW' | 'ASK' | 'FORBID' | string;
+  current_window_tokens: number;
+  base_context_length_k: number;
+  max_context_length_k: number;
+  active_context_length_k: number;
+  max_window_tokens: number;
+}
+
+export interface WebChatReorderItem {
+  chat_id: string;
+  display_order: number;
+  group?: string | null;
 }

@@ -8,6 +8,7 @@ object OperitPaths {
 
     private const val OPERIT_DIR_NAME = "Operit"
     private const val CLEAN_ON_EXIT_DIR_NAME = "cleanOnExit"
+    private const val PLUGINS_DIR_NAME = "plugins"
     private const val MCP_PLUGINS_DIR_NAME = "mcp_plugins"
     private const val BRIDGE_DIR_NAME = "bridge"
     private const val EXPORTS_DIR_NAME = "exports"
@@ -33,6 +34,26 @@ object OperitPaths {
 
     fun cleanOnExitDir(): File {
         return ensureDir(File(operitRootDir(), CLEAN_ON_EXIT_DIR_NAME))
+    }
+
+    fun pluginsDir(): File {
+        return ensureDir(File(operitRootDir(), PLUGINS_DIR_NAME))
+    }
+
+    fun pluginConfigDir(pluginId: String): File {
+        val trimmed = pluginId.trim()
+        val safeBaseName =
+            trimmed
+                .replace(Regex("""[\\/:*?"<>|\u0000-\u001F]"""), "_")
+                .trim('.', ' ')
+                .ifBlank { "plugin" }
+        val safeName =
+            if (safeBaseName == trimmed) {
+                safeBaseName
+            } else {
+                "$safeBaseName-${Integer.toHexString(trimmed.hashCode())}"
+            }
+        return ensureDir(File(pluginsDir(), safeName))
     }
 
     fun cleanOnExitInternalDir(context: Context): File {
@@ -103,6 +124,10 @@ object OperitPaths {
 
     fun cleanOnExitPathSdcard(): String {
         return "${operitRootPathSdcard()}/$CLEAN_ON_EXIT_DIR_NAME"
+    }
+
+    fun pluginsPathSdcard(): String {
+        return "${operitRootPathSdcard()}/$PLUGINS_DIR_NAME"
     }
 
     fun bridgePathSdcard(): String {

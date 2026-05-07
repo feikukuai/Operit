@@ -1,3 +1,4 @@
+"use strict";
 /* METADATA
 {
   "name": "worldbook_tools",
@@ -309,8 +310,8 @@
   ]
 }
 */
-const WORLD_BOOK_DIR = "/sdcard/Download/Operit/worldbook";
-const WORLD_BOOK_FILE = `${WORLD_BOOK_DIR}/entries.json`;
+Object.defineProperty(exports, "__esModule", { value: true });
+const worldbook_storage_js_1 = require("../shared/worldbook_storage.js");
 function generateId() {
     return `wb_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 }
@@ -323,41 +324,11 @@ function splitKeywords(raw) {
         .map((keyword) => keyword.trim())
         .filter((keyword) => keyword.length > 0);
 }
-async function ensureDataDir() {
-    try {
-        await Tools.Files.mkdir(WORLD_BOOK_DIR, true);
-    }
-    catch (_error) {
-        // Ignore if it already exists or cannot be created until the first write.
-    }
-}
-async function ensureDataFile() {
-    await ensureDataDir();
-    const existsResult = await Tools.Files.exists(WORLD_BOOK_FILE);
-    if (existsResult?.exists) {
-        return;
-    }
-    await Tools.Files.write(WORLD_BOOK_FILE, "[]", false);
-}
 async function loadEntries() {
-    await ensureDataFile();
-    try {
-        const result = await Tools.Files.read(WORLD_BOOK_FILE);
-        if (result?.content) {
-            const parsed = JSON.parse(result.content);
-            if (Array.isArray(parsed)) {
-                return parsed;
-            }
-        }
-    }
-    catch (_error) {
-        // Treat missing or malformed files as an empty data set.
-    }
-    return [];
+    return await (0, worldbook_storage_js_1.readWorldBookEntries)();
 }
 async function saveEntries(entries) {
-    await ensureDataFile();
-    await Tools.Files.write(WORLD_BOOK_FILE, JSON.stringify(entries, null, 2));
+    await (0, worldbook_storage_js_1.writeWorldBookEntries)(entries);
 }
 async function wrap(handler, params) {
     try {
@@ -525,3 +496,4 @@ exports.update_entry = (params) => wrap(updateEntry, params);
 exports.delete_entry = (params) => wrap(deleteEntry, params);
 exports.toggle_entry = (params) => wrap(toggleEntry, params);
 exports.list_character_cards_proxy = (params) => wrap(listCharacterCardsProxy, params);
+void (0, worldbook_storage_js_1.ensureWorldBookStorage)();

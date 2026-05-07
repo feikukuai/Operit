@@ -1,4 +1,4 @@
-const DUMP_DIR = "/sdcard/Download/Operit/debug_msg_dump/dumps/";
+const DUMP_DIR = `${ToolPkg.getConfigDir()}/dumps/`;
 
 function ensureDumpDir() {
   try {

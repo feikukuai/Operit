@@ -56,7 +56,7 @@ fun CodeEditor(
     readOnly: Boolean = false,
     showLineNumbers: Boolean = true,
     enableCompletion: Boolean = true,
-    editorRef: ((NativeCodeEditor) -> Unit)? = null
+    editorRef: ((NativeCodeEditor?) -> Unit)? = null
 ) {
     val theme = getThemeForLanguage(language)
     val latestCode = rememberUpdatedState(code)
@@ -155,6 +155,13 @@ fun CodeEditor(
                         if (view.getText() != latestCode.value) {
                             view.setText(latestCode.value, fromUpdate = true)
                         }
+                    },
+                    onRelease = { view ->
+                        if (editorRefState.value === view) {
+                            editorRefState.value = null
+                        }
+                        latestEditorRef.value?.invoke(null)
+                        view.release()
                     }
                 )
 
@@ -229,73 +236,126 @@ class NativeCodeEditor @JvmOverloads constructor(
 ) : ViewGroup(context, attrs) {
 
     private val canvasEditorView = CanvasCodeEditorView(context, attrs)
+    private var isReleased = false
 
     init {
         addView(canvasEditorView)
     }
 
     fun setOnTextChangedListener(listener: (String) -> Unit) {
+        if (isReleased) {
+            return
+        }
         canvasEditorView.setOnTextChangedListener(listener)
     }
 
     fun setEditorTheme(theme: EditorTheme) {
+        if (isReleased) {
+            return
+        }
         canvasEditorView.setEditorTheme(theme)
     }
 
     fun setLanguage(language: String) {
+        if (isReleased) {
+            return
+        }
         canvasEditorView.setLanguage(language)
     }
 
     fun setReadOnly(readOnly: Boolean) {
+        if (isReleased) {
+            return
+        }
         canvasEditorView.setReadOnly(readOnly)
         isEnabled = !readOnly
     }
 
     fun setShowLineNumbers(showLineNumbers: Boolean) {
+        if (isReleased) {
+            return
+        }
         canvasEditorView.setShowLineNumbers(showLineNumbers)
     }
 
     fun setCompletionEnabled(enableCompletion: Boolean) {
+        if (isReleased) {
+            return
+        }
         canvasEditorView.setCompletionEnabled(enableCompletion)
     }
 
     fun setViewportBottomPadding(bottomPaddingPx: Int) {
+        if (isReleased) {
+            return
+        }
         canvasEditorView.setViewportBottomPadding(bottomPaddingPx)
     }
 
     fun setText(text: String, fromUpdate: Boolean = false) {
+        if (isReleased) {
+            return
+        }
         if (canvasEditorView.getTextContent() != text || !fromUpdate) {
             canvasEditorView.setTextContent(text)
         }
     }
 
-    fun getText(): String = canvasEditorView.getTextContent()
+    fun getText(): String = if (isReleased) "" else canvasEditorView.getTextContent()
 
     fun setCompletionCallback(callback: EditorCompletionCallback?) {
+        if (isReleased) {
+            return
+        }
         canvasEditorView.setCompletionCallback(callback)
     }
 
     fun applyCompletion(item: CompletionItem) {
+        if (isReleased) {
+            return
+        }
         canvasEditorView.applyCompletion(item)
     }
 
     fun undo() {
+        if (isReleased) {
+            return
+        }
         canvasEditorView.undo()
     }
 
     fun redo() {
+        if (isReleased) {
+            return
+        }
         canvasEditorView.redo()
     }
 
     fun insertSymbol(symbol: String) {
+        if (isReleased) {
+            return
+        }
         canvasEditorView.insertSymbol(symbol)
     }
 
     fun replaceAllText(newText: String) {
+        if (isReleased) {
+            return
+        }
         canvasEditorView.replaceAllText(newText)
     }
 
-    fun getCursorScreenPosition(): Point = canvasEditorView.getCursorScreenPosition()
+    fun getCursorScreenPosition(): Point =
+        if (isReleased) Point(0, 0) else canvasEditorView.getCursorScreenPosition()
+
+    fun release() {
+        if (isReleased) {
+            return
+        }
+        isReleased = true
+        canvasEditorView.release()
+        removeAllViews()
+    }
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         val width = MeasureSpec.getSize(widthMeasureSpec)

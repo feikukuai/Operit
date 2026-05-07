@@ -103,10 +103,10 @@ const siliconflowDraw = (function () {
     const DEFAULT_POLL_INTERVAL_MS = 5000;
     const DEFAULT_MAX_WAIT_TIME_MS = 600000;
     const VIDEO_SIZE_OPTIONS = ["1280x720", "720x1280", "960x960"];
-    const DOWNLOAD_ROOT = "/sdcard/Download";
-    const OPERIT_DIR = `${DOWNLOAD_ROOT}/Operit`;
-    const DRAWS_DIR = `${OPERIT_DIR}/draws`;
-    const VIDEOS_DIR = `${OPERIT_DIR}/videos`;
+    const DRAW_ROOT_DIR = getPluginConfigDir("draw");
+    const STORAGE_DIR = `${DRAW_ROOT_DIR}/siliconflow_draw`;
+    const DRAWS_DIR = `${STORAGE_DIR}/draws`;
+    const VIDEOS_DIR = `${STORAGE_DIR}/videos`;
     function getApiKey() {
         const apiKey = getEnv("SILICONFLOW_API_KEY");
         if (!apiKey) {
@@ -258,7 +258,7 @@ const siliconflowDraw = (function () {
         return /^https?:\/\//i.test(String(value || "").trim());
     }
     async function ensureDirectories() {
-        const dirs = [DOWNLOAD_ROOT, OPERIT_DIR, DRAWS_DIR, VIDEOS_DIR];
+        const dirs = [DRAW_ROOT_DIR, STORAGE_DIR, DRAWS_DIR, VIDEOS_DIR];
         for (const dir of dirs) {
             try {
                 const result = await Tools.Files.mkdir(dir);

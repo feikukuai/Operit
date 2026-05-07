@@ -196,6 +196,9 @@ class SpeechServicesPreferences(private val context: Context) {
                 VoiceServiceFactory.VoiceServiceType.OPENAI_TTS -> {
                     httpConfig?.let { prefs[TTS_HTTP_CONFIG] = serializerJson.encodeToString(it) }
                 }
+                VoiceServiceFactory.VoiceServiceType.ONNX_TTS -> {
+                    httpConfig?.let { prefs[TTS_HTTP_CONFIG] = serializerJson.encodeToString(it) }
+                }
             }
         }
     }

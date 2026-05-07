@@ -374,7 +374,7 @@ private fun normalizeIndentForDisplay(line: String): String {
 }
 
 private fun normalizeToolDisplayForStrictProxy(toolName: String, params: String): Pair<String, String> {
-    if (toolName != "package_proxy") {
+    if (toolName != "package_proxy" && toolName != "proxy") {
         return toolName to params
     }
 

@@ -377,6 +377,19 @@ internal object JsNativeInterfaceDelegates {
         }
     }
 
+    fun getPluginConfigDir(
+        packageManager: PackageManager,
+        pluginId: String
+    ): String {
+        return guard(
+            fallback = "",
+            failureMessage = "Error resolving plugin config dir from JS: pluginId=$pluginId"
+        ) {
+            val target = normalizeNonBlank(pluginId) ?: return@guard ""
+            packageManager.getPluginConfigDirPath(target)
+        }
+    }
+
     fun measureComposeText(context: Context, payloadJson: String): String {
         val payload = JSONObject(payloadJson)
         val text = payload.optString("text")
@@ -503,15 +516,8 @@ internal object JsNativeInterfaceDelegates {
 
         return try {
             val parsed = parseToolCall(toolType, toolName, paramsJson)
-            AppLogger.d(TAG, "[Sync] JavaScript tool call: ${parsed.fullToolName} with params: ${parsed.params}")
             val result = toolHandler.executeTool(parsed.aiTool)
-            if (result.success) {
-                val resultString = result.result.toString()
-                AppLogger.d(
-                    TAG,
-                    "[Sync] Tool execution succeeded: ${resultString.take(1000)}${if (resultString.length > 1000) "..." else ""}"
-                )
-            } else {
+            if (!result.success) {
                 AppLogger.e(TAG, "[Sync] Tool execution failed: ${result.error}")
             }
 
@@ -558,22 +564,11 @@ internal object JsNativeInterfaceDelegates {
                 return
             }
 
-        AppLogger.d(
-            TAG,
-            "[Async] JavaScript tool call: ${parsed.fullToolName} with params: ${parsed.params}, callbackId: $callbackId"
-        )
-
         Thread {
             try {
                 val result = toolHandler.executeTool(parsed.aiTool)
 
-                if (result.success) {
-                    val resultString = result.result.toString()
-                    AppLogger.d(
-                        TAG,
-                        "[Async] Tool execution succeeded: ${resultString.take(1000)}${if (resultString.length > 1000) "..." else ""}"
-                    )
-                } else {
+                if (!result.success) {
                     AppLogger.e(TAG, "[Async] Tool execution failed: ${result.error}")
                 }
 
@@ -621,11 +616,6 @@ internal object JsNativeInterfaceDelegates {
                 )
                 return
             }
-
-        AppLogger.d(
-            TAG,
-            "[AsyncStream] JavaScript tool call: ${parsed.fullToolName} with params: ${parsed.params}, callbackId: $callbackId, intermediateCallbackId: $intermediateCallbackId"
-        )
 
         Thread {
             try {

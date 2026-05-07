@@ -704,7 +704,9 @@ fun NodeDialog(
     val packageManager = remember(context) { toolHandler.getOrCreatePackageManager() }
     val allToolNames = remember(context) {
         toolHandler.registerDefaultTools()
-        toolHandler.getAllToolNames()
+        toolHandler.getAllToolNames().filterNot {
+            it == "package_proxy" || it == "proxy" || it == "search"
+        }
     }
     val filteredToolNames = remember(actionType, allToolNames) {
         val query = actionType.trim()

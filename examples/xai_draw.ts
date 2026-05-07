@@ -98,10 +98,10 @@ const xaiDraw = (function () {
     const IMAGE_API_ENDPOINT = `${API_BASE_URL}/images/generations`;
     const VIDEO_GENERATION_ENDPOINT = `${API_BASE_URL}/videos/generations`;
 
-    const DOWNLOAD_ROOT = "/sdcard/Download";
-    const OPERIT_DIR = `${DOWNLOAD_ROOT}/Operit`;
-    const DRAWS_DIR = `${OPERIT_DIR}/draws`;
-    const VIDEOS_DIR = `${OPERIT_DIR}/videos`;
+    const DRAW_ROOT_DIR = getPluginConfigDir("draw");
+    const STORAGE_DIR = `${DRAW_ROOT_DIR}/xai_draw`;
+    const DRAWS_DIR = `${STORAGE_DIR}/draws`;
+    const VIDEOS_DIR = `${STORAGE_DIR}/videos`;
 
     type JsonMap = Record<string, any>;
 
@@ -228,7 +228,7 @@ const xaiDraw = (function () {
     }
 
     async function ensureDirectories(): Promise<void> {
-        const dirs = [DOWNLOAD_ROOT, OPERIT_DIR, DRAWS_DIR, VIDEOS_DIR];
+        const dirs = [DRAW_ROOT_DIR, STORAGE_DIR, DRAWS_DIR, VIDEOS_DIR];
         for (const dir of dirs) {
             try {
                 const result = await Tools.Files.mkdir(dir);

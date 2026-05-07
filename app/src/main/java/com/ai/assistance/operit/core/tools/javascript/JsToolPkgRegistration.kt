@@ -20,6 +20,7 @@ data class ToolPkgMainRegistrationCapture(
     val toolPromptComposeHooks: List<String>,
     val promptFinalizeHooks: List<String>,
     val promptEstimateFinalizeHooks: List<String>,
+    val summaryGenerateHooks: List<String>,
     val aiProviders: List<String>
 )
 
@@ -40,6 +41,7 @@ private enum class RegistrationBucket {
     TOOL_PROMPT_COMPOSE,
     PROMPT_FINALIZE,
     PROMPT_ESTIMATE_FINALIZE,
+    SUMMARY_GENERATE,
     AI_PROVIDER
 }
 
@@ -84,6 +86,8 @@ internal class JsToolPkgRegistrationSession {
         append(RegistrationBucket.PROMPT_FINALIZE, specJson)
     fun appendPromptEstimateFinalizeHook(specJson: String) =
         append(RegistrationBucket.PROMPT_ESTIMATE_FINALIZE, specJson)
+    fun appendSummaryGenerateHook(specJson: String) =
+        append(RegistrationBucket.SUMMARY_GENERATE, specJson)
     fun appendAiProvider(specJson: String) =
         append(RegistrationBucket.AI_PROVIDER, specJson)
 
@@ -112,6 +116,7 @@ internal class JsToolPkgRegistrationSession {
                 toolPromptComposeHooks = read(RegistrationBucket.TOOL_PROMPT_COMPOSE),
                 promptFinalizeHooks = read(RegistrationBucket.PROMPT_FINALIZE),
                 promptEstimateFinalizeHooks = read(RegistrationBucket.PROMPT_ESTIMATE_FINALIZE),
+                summaryGenerateHooks = read(RegistrationBucket.SUMMARY_GENERATE),
                 aiProviders = read(RegistrationBucket.AI_PROVIDER)
             )
         }
@@ -353,6 +358,19 @@ internal fun buildToolPkgRegistrationBridgeScript(): String {
                 return Promise.reject(new Error('resource not found: ' + resourceKey));
             }
 
+            function getToolPkgConfigDir(pluginId) {
+                var explicitId = String(pluginId || '').trim();
+                var target = explicitId || resolveCurrentToolPkgTarget();
+                if (!target) {
+                    throw new Error('package/toolpkg runtime target is empty');
+                }
+                var path = requireNative('getPluginConfigDir')(target);
+                if (typeof path === 'string' && path.trim()) {
+                    return path;
+                }
+                throw new Error('plugin config dir is unavailable for ' + target);
+            }
+
             var api = {
                 registerToolboxUiModule: function(definition) {
                     registerWithNative(
@@ -384,7 +402,8 @@ internal fun buildToolPkgRegistrationBridgeScript(): String {
                         JSON.stringify(copyObject(definition, ''))
                     );
                 },
-                readResource: readToolPkgResource
+                readResource: readToolPkgResource,
+                getConfigDir: getToolPkgConfigDir
             };
 
             [
@@ -399,7 +418,8 @@ internal fun buildToolPkgRegistrationBridgeScript(): String {
                 ['registerSystemPromptComposeHook', 'registerToolPkgSystemPromptComposeHook'],
                 ['registerToolPromptComposeHook', 'registerToolPkgToolPromptComposeHook'],
                 ['registerPromptFinalizeHook', 'registerToolPkgPromptFinalizeHook'],
-                ['registerPromptEstimateFinalizeHook', 'registerToolPkgPromptEstimateFinalizeHook']
+                ['registerPromptEstimateFinalizeHook', 'registerToolPkgPromptEstimateFinalizeHook'],
+                ['registerSummaryGenerateHook', 'registerToolPkgSummaryGenerateHook']
             ].forEach(function(entry) {
                 var apiName = entry[0];
                 var nativeMethod = entry[1];

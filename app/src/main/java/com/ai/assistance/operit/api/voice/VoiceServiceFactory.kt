@@ -20,6 +20,8 @@ object VoiceServiceFactory {
         /** MiniMax TTS 服务 */
         MINIMAX_TTS,
         OPENAI_TTS,
+        /** 基于 ONNX Runtime 的本地 TTS 服务 */
+        ONNX_TTS,
     }
 
     /**
@@ -85,6 +87,13 @@ object VoiceServiceFactory {
                         apiKey = httpConfig.apiKey,
                         model = httpConfig.modelName,
                         initialVoiceId = httpConfig.voiceId
+                    )
+                }
+                VoiceServiceType.ONNX_TTS -> {
+                    val httpConfig = prefs.ttsHttpConfigFlow.first()
+                    OnnxVoiceProvider(
+                        context = context,
+                        config = httpConfig
                     )
                 }
             }

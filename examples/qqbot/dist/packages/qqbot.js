@@ -7,8 +7,8 @@
         "en": "QQ Bot"
     },
     "description": {
-        "zh": "把腾讯 QQ Bot 的配置、后台 Webhook 收消息服务、消息队列读取，以及 C2C/群发消息能力整理成 Operit 工具。",
-        "en": "Expose Tencent QQ Bot configuration, background webhook service, queued inbound events, and C2C/group messaging as Operit tools."
+        "zh": "把腾讯 QQ Bot 的配置、后台 Gateway WebSocket 收消息服务、消息队列读取，以及 C2C/群发消息能力整理成 Operit 工具。",
+        "en": "Expose Tencent QQ Bot configuration, background Gateway WebSocket receive service, queued inbound events, and C2C/group messaging as Operit tools."
     },
     "enabledByDefault": true,
     "category": "Communication",
@@ -28,8 +28,8 @@
         {
             "name": "usage_advice",
             "description": {
-                "zh": "QQ Bot 使用建议：\\n- 先用 qqbot_configure 保存 AppID、AppSecret 和回调监听地址。\\n- ToolPkg 会在 application_on_create / application_on_foreground 尝试自启动收消息服务；热加载后如果想立刻拉起，也可以手动调用 qqbot_service_start。\\n- 腾讯平台的回调地址请填写 qqbot_status 返回的 publicCallbackUrl（有公网地址时）或 localCallbackUrl（仅本地调试时）。\\n- 收到消息后，用 qqbot_receive_events 取出事件，再把其中 replyHint 里的 scene / openid / group_openid / msg_id 传给发送工具。\\n- 收消息由 ToolPkg 内部启动的本地 HTTP 服务处理。",
-                "en": "QQ Bot advice:\\n- Save AppID, AppSecret, and webhook listen settings with qqbot_configure first.\\n- The ToolPkg will try to auto-start its inbound service on application_on_create / application_on_foreground; after hot reload you can also call qqbot_service_start to launch it immediately.\\n- Configure the Tencent callback URL from qqbot_status, preferably publicCallbackUrl when a public base URL is available.\\n- Use qqbot_receive_events to dequeue inbound events, then pass replyHint.scene / openid / group_openid / msg_id into the send tools.\\n- Inbound messages are handled by a local HTTP service started inside the ToolPkg."
+                "zh": "QQ Bot 使用建议：\\n- 先用 qqbot_configure 保存 AppID 和 AppSecret。\\n- 需要在腾讯 QQ Bot 管理端启用你要接收的事件，至少勾选 C2C_MESSAGE_CREATE 和/或群相关事件。\\n- 热加载后请手动调用 qqbot_service_start 拉起 Gateway WebSocket 收消息服务；需要重启旧实例时传 restart=true。\\n- 收到消息后，用 qqbot_receive_events 取出事件，再把其中 replyHint 里的 scene / openid / group_openid / msg_id 传给发送工具。\\n- 这里的 openid 不是 QQ 号，通常需要先通过收消息事件拿到。",
+                "en": "QQ Bot advice:\\n- Save AppID and AppSecret with qqbot_configure first.\\n- Enable the events you want in the Tencent QQ Bot console, at least C2C_MESSAGE_CREATE and/or the relevant group events.\\n- After hot reload, start the Gateway WebSocket receive service manually with qqbot_service_start; pass restart=true when you need to replace an old instance.\\n- Use qqbot_receive_events to dequeue inbound events, then pass replyHint.scene / openid / group_openid / msg_id into the send tools.\\n- Note that openid is not the same as a QQ number; you usually obtain it from inbound events first."
             },
             "parameters": [],
             "advice": true
@@ -37,8 +37,8 @@
         {
             "name": "qqbot_configure",
             "description": {
-                "zh": "保存 QQ Bot 的 AppID、AppSecret，并把沙箱开关与 Webhook 监听参数写入本地配置；按需自动重启后台收消息服务。",
-                "en": "Persist QQ Bot AppID and AppSecret, while storing sandbox and webhook listen settings in local config; optionally restart the background inbound service."
+                "zh": "保存 QQ Bot 的 AppID、AppSecret 和沙箱开关；按需自动重启后台 Gateway 收消息服务。",
+                "en": "Persist QQ Bot AppID, AppSecret, and sandbox mode; optionally restart the background Gateway receive service."
             },
             "parameters": [
                 {
@@ -60,30 +60,6 @@
                     "required": false
                 },
                 {
-                    "name": "callback_host",
-                    "description": { "zh": "本地监听 Host，例如 0.0.0.0", "en": "Local callback listen host, for example 0.0.0.0" },
-                    "type": "string",
-                    "required": false
-                },
-                {
-                    "name": "callback_port",
-                    "description": { "zh": "本地监听端口，例如 9000", "en": "Local callback listen port, for example 9000" },
-                    "type": "number",
-                    "required": false
-                },
-                {
-                    "name": "callback_path",
-                    "description": { "zh": "回调路径，例如 /qqbot", "en": "Callback path, for example /qqbot" },
-                    "type": "string",
-                    "required": false
-                },
-                {
-                    "name": "public_base_url",
-                    "description": { "zh": "公网基础地址，例如 https://example.com", "en": "Public base URL, for example https://example.com" },
-                    "type": "string",
-                    "required": false
-                },
-                {
                     "name": "test_connection",
                     "description": { "zh": "保存后是否立即测试凭证", "en": "Whether to test credentials after saving" },
                     "type": "boolean",
@@ -100,16 +76,16 @@
         {
             "name": "qqbot_status",
             "description": {
-                "zh": "读取当前 QQ Bot 配置摘要、后台服务状态、消息队列积压数量和推荐回调地址。",
-                "en": "Read the current QQ Bot config summary, background service status, queued event count, and suggested callback URLs."
+                "zh": "读取当前 QQ Bot 配置摘要、后台服务状态、消息队列积压数量和最近缓存到的 openid 信息摘要。",
+                "en": "Read the current QQ Bot config summary, background service status, queued event count, and a summary of recently cached openids."
             },
             "parameters": []
         },
         {
             "name": "qqbot_service_start",
             "description": {
-                "zh": "立即启动 QQ Bot 后台 Webhook 收消息服务；可选强制重启，适合热加载后立刻拉起。",
-                "en": "Start the QQ Bot background webhook service immediately; optionally force a restart, which is useful right after hot reload."
+                "zh": "立即启动 QQ Bot 后台 Gateway WebSocket 收消息服务；可选强制重启，适合热加载后立刻拉起。",
+                "en": "Start the QQ Bot background Gateway WebSocket receive service immediately; optionally force a restart, which is useful right after hot reload."
             },
             "parameters": [
                 {
@@ -129,8 +105,8 @@
         {
             "name": "qqbot_service_stop",
             "description": {
-                "zh": "停止当前 QQ Bot 后台 Webhook 收消息服务。",
-                "en": "Stop the current QQ Bot background webhook service."
+                "zh": "停止当前 QQ Bot 后台 Gateway WebSocket 收消息服务。",
+                "en": "Stop the current QQ Bot background Gateway WebSocket receive service."
             },
             "parameters": [
                 {
@@ -144,8 +120,8 @@
         {
             "name": "qqbot_receive_events",
             "description": {
-                "zh": "从后台服务维护的事件队列里读取 QQ Bot 收到的消息/回调事件；默认会消费并移除这些事件。",
-                "en": "Read inbound QQ Bot message/webhook events from the queue maintained by the background service; by default the events are consumed and removed."
+                "zh": "从后台服务维护的事件队列里读取 QQ Bot 收到的事件；默认会消费并移除这些事件。",
+                "en": "Read inbound QQ Bot events from the queue maintained by the background service; by default the events are consumed and removed."
             },
             "parameters": [
                 {
@@ -197,8 +173,8 @@
         {
             "name": "qqbot_test_connection",
             "description": {
-                "zh": "验证 AppID/AppSecret 是否能正常获取 access token，并尝试读取机器人资料。",
-                "en": "Verify whether AppID/AppSecret can obtain an access token and attempt to read the bot profile."
+                "zh": "验证 AppID/AppSecret 是否能正常获取 access token，并尝试读取机器人资料和 Gateway 地址。",
+                "en": "Verify whether AppID/AppSecret can obtain an access token and attempt to read the bot profile and Gateway URL."
             },
             "parameters": [
                 {

@@ -88,6 +88,11 @@ internal object ToolPkgMainRegistrationScriptParser {
                     registrations = captured.promptEstimateFinalizeHooks,
                     registryName = TOOLPKG_REGISTRATION_PROMPT_ESTIMATE_FINALIZE_HOOK
                 )
+            val summaryGenerateHooks =
+                parseRegisteredFunctionHooks(
+                    registrations = captured.summaryGenerateHooks,
+                    registryName = TOOLPKG_REGISTRATION_SUMMARY_GENERATE_HOOK
+                )
             val aiProviders =
                 parseRegisteredAiProviders(
                     registrations = captured.aiProviders,
@@ -112,6 +117,7 @@ internal object ToolPkgMainRegistrationScriptParser {
                         toolPromptComposeHooks = toolPromptComposeHooks,
                         promptFinalizeHooks = promptFinalizeHooks,
                         promptEstimateFinalizeHooks = promptEstimateFinalizeHooks,
+                        summaryGenerateHooks = summaryGenerateHooks,
                         aiProviders = aiProviders
                     )
             )

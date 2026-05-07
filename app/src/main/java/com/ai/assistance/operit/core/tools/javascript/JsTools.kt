@@ -587,7 +587,7 @@ fun getJsToolsDefinition(): String {
                     return toolCall("send_notification", params);
                 },
                 // 使用工具包
-                usePackage: (packageName) => toolCall("use_package", { package_name: packageName }),
+                usePackage: (packageName) => toolCall("use_package", { package_name: String(packageName ?? "") }),
                 // 安装应用
                 installApp: (path) => toolCall("install_app", { path }),
                 // 卸载应用

@@ -275,7 +275,7 @@ class CustomXmlRenderer(
     }
 
     private fun resolveToolDisplayNameForRender(toolName: String, params: Map<String, String>): String {
-        if (toolName != "package_proxy") {
+        if (toolName != "package_proxy" && toolName != "proxy") {
             return toolName
         }
 

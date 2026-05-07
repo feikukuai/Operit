@@ -337,7 +337,9 @@ function Build-ApktoolRuntime([string] $androidJarPath) {
 }
 
 function Build-JadxRuntime([string] $androidJarPath) {
+    $compileDir = Join-Path $tempRoot "jadx-compiled"
     $jadxPatchDir = Join-Path $tempRoot "jadx-patched"
+    $patchedSaveCodeSourcePath = Join-Path $apktoolPatchSourceRoot "jadx\core\dex\visitors\SaveCode.java"
     $jadxPluginServicePath = Join-Path $jadxPatchDir "META-INF\services\jadx.api.plugins.JadxPlugin"
     $jadxPluginServiceContent = @(
         "jadx.plugins.kotlin.metadata.KotlinMetadataPlugin",
@@ -346,16 +348,16 @@ function Build-JadxRuntime([string] $androidJarPath) {
         "jadx.plugins.mappings.RenameMappingsPlugin",
         "jadx.plugins.input.smali.SmaliInputPlugin",
         "jadx.plugins.input.xapk.XApkInputPlugin",
-        "jadx.plugins.input.dex.DexInputPlugin",
-        "jadx.plugins.input.java.JavaInputPlugin",
-        "jadx.plugins.input.raung.RaungInputPlugin"
+        "jadx.plugins.input.dex.DexInputPlugin"
     )
-    # Keep the headless APK decompiler surface and strip desktop, scripting, AAB, and Java-convert payload.
+    # Keep the headless APK decompiler surface and strip desktop, scripting, AAB, and non-APK input payload.
     $jadxClassExcludePatterns = @(
         "jadx/gui/*",
         "jadx/plugins/script/*",
         "jadx/plugins/input/javaconvert/*",
         "jadx/plugins/input/aab/*",
+        "jadx/plugins/input/java/*",
+        "jadx/plugins/input/raung/*",
         "org/fife/*",
         "com/formdev/*",
         "fonts/*",
@@ -379,9 +381,12 @@ function Build-JadxRuntime([string] $androidJarPath) {
         "config.proto"
     )
     $jadxJarDeleteEntries = @(
-        "META-INF/services/jadx.api.plugins.JadxPlugin"
+        "META-INF/services/jadx.api.plugins.JadxPlugin",
+        "jadx/core/dex/visitors/SaveCode.class"
     )
+    Ensure-CleanDirectory $compileDir
     Ensure-CleanDirectory $jadxPatchDir
+    Require-File $patchedSaveCodeSourcePath
     New-Item -ItemType Directory -Path (Split-Path -Parent $jadxPluginServicePath) -Force | Out-Null
     [System.IO.File]::WriteAllLines(
         $jadxPluginServicePath,
@@ -392,11 +397,22 @@ function Build-JadxRuntime([string] $androidJarPath) {
         -inputJarPath $jadxCoreJarPath `
         -outputJarPath $jadxCoreJvmJarPath `
         -excludePatterns $jadxClassExcludePatterns
+    & $javacPath `
+        -encoding UTF-8 `
+        -source 8 `
+        -target 8 `
+        -cp "$jadxCoreJvmJarPath;$androidJarPath" `
+        -d $compileDir `
+        $patchedSaveCodeSourcePath
     Remove-JarEntries -jarPath $jadxCoreJvmJarPath -entryNames $jadxJarDeleteEntries
     Update-JarFromDirectory `
         -jarPath $jadxCoreJvmJarPath `
         -baseDir $jadxPatchDir `
         -entries @("META-INF/services/jadx.api.plugins.JadxPlugin")
+    Update-JarFromDirectory `
+        -jarPath $jadxCoreJvmJarPath `
+        -baseDir $compileDir `
+        -entries @("jadx/core/dex/visitors/SaveCode.class")
     New-DexJarFromInputJar `
         -inputJarPath $jadxCoreJvmJarPath `
         -outputJarPath $jadxRuntimeJarPath `

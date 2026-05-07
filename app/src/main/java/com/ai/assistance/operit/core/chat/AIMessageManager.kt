@@ -1151,7 +1151,7 @@ object AIMessageManager {
                     val toolBody = match.groupValues.getOrNull(3).orEmpty()
 
                     when {
-                        toolName == "package_proxy" -> {
+                        toolName == "package_proxy" || toolName == "proxy" -> {
                             val proxiedToolName =
                                 ChatMarkupRegex.toolParamPattern
                                     .findAll(toolBody)

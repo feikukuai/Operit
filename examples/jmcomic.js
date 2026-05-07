@@ -69,7 +69,7 @@ METADATA
                 },
                 {
                     "name": "download_dir",
-                    "description": { "zh": "下载目录 (可选, 默认: /sdcard/Download/OperitScripts)", "en": "Download directory (optional; default: /sdcard/Download/OperitScripts)." },
+                    "description": { "zh": "下载目录 (可选, 默认: /sdcard/Download/Operit/plugins/jmcomic_downloader/downloads)", "en": "Download directory (optional; default: /sdcard/Download/Operit/plugins/jmcomic_downloader/downloads)." },
                     "type": "string",
                     "required": false
                 }
@@ -87,7 +87,7 @@ METADATA
                 },
                 {
                     "name": "download_dir",
-                    "description": { "zh": "下载目录 (可选, 默认: /sdcard/Download/OperitScripts)", "en": "Download directory (optional; default: /sdcard/Download/OperitScripts)." },
+                    "description": { "zh": "下载目录 (可选, 默认: /sdcard/Download/Operit/plugins/jmcomic_downloader/downloads)", "en": "Download directory (optional; default: /sdcard/Download/Operit/plugins/jmcomic_downloader/downloads)." },
                     "type": "string",
                     "required": false
                 }
@@ -98,6 +98,8 @@ METADATA
 }*/
 // endregion
 const jmcomic = (function () {
+    const DEFAULT_DOWNLOAD_DIR = `${getPluginConfigDir("jmcomic_downloader")}/downloads`;
+    const TEST_DOWNLOAD_DIR = `${getPluginConfigDir("jmcomic_downloader")}/test_downloads`;
     // region Polyfill & Utils
     const BASE64_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
     function normalizeBase64Input(value) {
@@ -474,10 +476,10 @@ const jmcomic = (function () {
         }
     }
     class JmOptionImpl {
-        constructor(baseDir = "/sdcard/Download/OperitScripts") {
+        constructor(baseDir = DEFAULT_DOWNLOAD_DIR) {
             this.dirRule = new DirRuleImpl(baseDir);
         }
-        static default(baseDir = "/sdcard/Download/OperitScripts") {
+        static default(baseDir = DEFAULT_DOWNLOAD_DIR) {
             return new JmOptionImpl(baseDir);
         }
         buildJmClient() {
@@ -665,7 +667,7 @@ const jmcomic = (function () {
         }
     }
     class SimpleJMDownloader {
-        constructor(downloadDir = "/sdcard/Download/OperitScripts") {
+        constructor(downloadDir = DEFAULT_DOWNLOAD_DIR) {
             this.option = JmOptionImpl.default(downloadDir);
             this.downloader = new JmDownloaderImpl(this.option);
             this.client = this.option.buildJmClient();
@@ -741,7 +743,7 @@ const jmcomic = (function () {
     //region Tool Implementations
     async function main() {
         console.log("🚀 开始执行JMComic工具功能测试...");
-        const downloader = new SimpleJMDownloader("/sdcard/Download/OperitScripts/test_downloads");
+        const downloader = new SimpleJMDownloader(TEST_DOWNLOAD_DIR);
         const testQuery = "原神";
         console.log(`1. 测试搜索功能，关键词: "${testQuery}"`);
         const searchResult = await downloader.searchComics({ query: testQuery });

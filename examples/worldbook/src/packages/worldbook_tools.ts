@@ -310,8 +310,11 @@
 }
 */
 
-const WORLD_BOOK_DIR = "/sdcard/Download/Operit/worldbook";
-const WORLD_BOOK_FILE = `${WORLD_BOOK_DIR}/entries.json`;
+import {
+  ensureWorldBookStorage,
+  readWorldBookEntries,
+  writeWorldBookEntries
+} from "../shared/worldbook_storage.js";
 
 interface WorldBookEntry {
   id: string;
@@ -366,42 +369,12 @@ function splitKeywords(raw?: string): string[] {
     .filter((keyword) => keyword.length > 0);
 }
 
-async function ensureDataDir(): Promise<void> {
-  try {
-    await Tools.Files.mkdir(WORLD_BOOK_DIR, true);
-  } catch (_error) {
-    // Ignore if it already exists or cannot be created until the first write.
-  }
-}
-
-async function ensureDataFile(): Promise<void> {
-  await ensureDataDir();
-  const existsResult = await Tools.Files.exists(WORLD_BOOK_FILE);
-  if (existsResult?.exists) {
-    return;
-  }
-  await Tools.Files.write(WORLD_BOOK_FILE, "[]", false);
-}
-
 async function loadEntries(): Promise<WorldBookEntry[]> {
-  await ensureDataFile();
-  try {
-    const result = await Tools.Files.read(WORLD_BOOK_FILE);
-    if (result?.content) {
-      const parsed = JSON.parse(result.content);
-      if (Array.isArray(parsed)) {
-        return parsed as WorldBookEntry[];
-      }
-    }
-  } catch (_error) {
-    // Treat missing or malformed files as an empty data set.
-  }
-  return [];
+  return await readWorldBookEntries<WorldBookEntry>();
 }
 
 async function saveEntries(entries: WorldBookEntry[]): Promise<void> {
-  await ensureDataFile();
-  await Tools.Files.write(WORLD_BOOK_FILE, JSON.stringify(entries, null, 2));
+  await writeWorldBookEntries(entries);
 }
 
 async function wrap<TParams>(handler: (params: TParams) => Promise<unknown>, params: TParams) {
@@ -584,3 +557,5 @@ exports.delete_entry = (params: Pick<WorldBookMutationParams, "id">) => wrap(del
 exports.toggle_entry = (params: Pick<WorldBookMutationParams, "id">) => wrap(toggleEntry, params);
 exports.list_character_cards_proxy = (params: never) =>
   wrap(listCharacterCardsProxy as (params: never) => Promise<unknown>, params);
+
+void ensureWorldBookStorage();

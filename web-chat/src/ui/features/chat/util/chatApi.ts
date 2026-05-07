@@ -1,10 +1,14 @@
 import type {
   WebActivePromptTarget,
   WebBootstrapResponse,
+  WebChatReorderItem,
+  WebChatMessageLocatorPreview,
   WebChatMessagesPage,
   WebChatStreamEvent,
   WebCharacterSelectorResponse,
   WebChatSummary,
+  WebInputSettingsState,
+  WebMemorySelectorState,
   WebModelSelectorState,
   WebSelectModelResponse,
   WebThemeSnapshot,
@@ -155,11 +159,30 @@ export async function renameChat(
   chatId: string,
   title: string
 ): Promise<WebChatSummary> {
+  return updateChat(token, chatId, {
+    title
+  });
+}
+
+export async function updateChat(
+  token: string,
+  chatId: string,
+  payload: {
+    title?: string;
+    group?: string | null;
+    update_group?: boolean;
+    locked?: boolean;
+    update_locked?: boolean;
+    character_card_name?: string | null;
+    character_group_id?: string | null;
+    update_binding?: boolean;
+  }
+): Promise<WebChatSummary> {
   return requestJson<WebChatSummary>(
     `/api/web/chats/${encodeURIComponent(chatId)}`,
     token,
     { method: 'PATCH' },
-    { title }
+    payload
   );
 }
 
@@ -181,6 +204,7 @@ export async function getMessages(
   options?: {
     limit?: number;
     beforeTimestamp?: number | null;
+    afterTimestamp?: number | null;
   }
 ): Promise<WebChatMessagesPage> {
   const params = new URLSearchParams();
@@ -190,11 +214,130 @@ export async function getMessages(
   if (typeof options?.beforeTimestamp === 'number' && Number.isFinite(options.beforeTimestamp)) {
     params.set('before_timestamp', String(Math.floor(options.beforeTimestamp)));
   }
+  if (typeof options?.afterTimestamp === 'number' && Number.isFinite(options.afterTimestamp)) {
+    params.set('after_timestamp', String(Math.floor(options.afterTimestamp)));
+  }
   const query = params.toString();
   return requestJson<WebChatMessagesPage>(
     `/api/web/chats/${encodeURIComponent(chatId)}/messages${query ? `?${query}` : ''}`,
     token
   );
+}
+
+export async function getMessageLocatorEntries(
+  token: string,
+  chatId: string
+): Promise<WebChatMessageLocatorPreview[]> {
+  return requestJson<WebChatMessageLocatorPreview[]>(
+    `/api/web/chats/${encodeURIComponent(chatId)}/message-locator`,
+    token
+  );
+}
+
+export async function revealMessageWindow(
+  token: string,
+  chatId: string,
+  timestamp: number
+): Promise<WebChatMessagesPage> {
+  return requestJson<WebChatMessagesPage>(
+    `/api/web/chats/${encodeURIComponent(chatId)}/messages/reveal`,
+    token,
+    { method: 'POST' },
+    { timestamp }
+  );
+}
+
+export async function toggleMessageFavorite(
+  token: string,
+  chatId: string,
+  timestamp: number,
+  isFavorite: boolean
+): Promise<void> {
+  await requestJson(
+    `/api/web/chats/${encodeURIComponent(chatId)}/messages/favorite`,
+    token,
+    { method: 'PATCH' },
+    { timestamp, is_favorite: isFavorite }
+  );
+}
+
+export async function reorderChats(
+  token: string,
+  items: WebChatReorderItem[]
+): Promise<void> {
+  await requestJson('/api/web/chats/reorder', token, { method: 'POST' }, { items });
+}
+
+export async function renameGroup(
+  token: string,
+  payload: {
+    old_name: string;
+    new_name: string;
+    character_card_name?: string | null;
+  }
+): Promise<void> {
+  await requestJson('/api/web/chat-groups/rename', token, { method: 'POST' }, payload);
+}
+
+export async function deleteGroup(
+  token: string,
+  payload: {
+    group_name: string;
+    delete_chats: boolean;
+    character_card_name?: string | null;
+  }
+): Promise<void> {
+  await requestJson('/api/web/chat-groups/delete', token, { method: 'POST' }, payload);
+}
+
+export async function getInputSettings(token: string): Promise<WebInputSettingsState> {
+  return requestJson<WebInputSettingsState>('/api/web/input-settings', token);
+}
+
+export async function getMemorySelector(token: string): Promise<WebMemorySelectorState> {
+  return requestJson<WebMemorySelectorState>('/api/web/memory-selector', token);
+}
+
+export async function selectMemoryProfile(
+  token: string,
+  profileId: string
+): Promise<WebMemorySelectorState> {
+  return requestJson<WebMemorySelectorState>(
+    '/api/web/memory-selector',
+    token,
+    { method: 'POST' },
+    { profile_id: profileId }
+  );
+}
+
+export async function updateInputSettings(
+  token: string,
+  payload: Partial<{
+    enable_thinking_mode: boolean;
+    thinking_quality_level: number;
+    enable_memory_auto_update: boolean;
+    enable_auto_read: boolean;
+    enable_max_context_mode: boolean;
+    enable_tools: boolean;
+    disable_stream_output: boolean;
+    disable_user_preference_description: boolean;
+    permission_level: string;
+  }>
+): Promise<WebInputSettingsState> {
+  return requestJson<WebInputSettingsState>(
+    '/api/web/input-settings',
+    token,
+    { method: 'PATCH' },
+    payload
+  );
+}
+
+export async function runManualMemoryUpdate(token: string): Promise<void> {
+  await requestJson('/api/web/actions/manual-memory-update', token, { method: 'POST' });
+}
+
+export async function runManualConversationSummary(token: string): Promise<void> {
+  await requestJson('/api/web/actions/manual-conversation-summary', token, { method: 'POST' });
 }
 
 export async function getTheme(token: string, chatId: string): Promise<WebThemeSnapshot> {

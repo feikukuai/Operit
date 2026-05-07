@@ -4,6 +4,7 @@ import android.content.Context
 import com.ai.assistance.operit.data.preferences.ActivePromptManager
 import com.ai.assistance.operit.data.repository.CustomEmojiRepository
 import com.ai.assistance.operit.util.markdown.MarkdownProcessorType
+import com.ai.assistance.operit.util.stream.Stream
 import com.ai.assistance.operit.util.stream.stream
 import com.ai.assistance.operit.util.streamnative.nativeMarkdownSplitByBlock
 import kotlinx.coroutines.flow.first
@@ -15,9 +16,111 @@ import java.io.File
  * 负责将AI回复按句号分割并模拟逐句发送
  */
 object WaifuMessageProcessor {
+    private val SENTENCE_SPLIT_REGEX =
+        Regex("(?<=[。！？~～])|(?<=[!?])|(?<=\\.)(?![.\\d])|(?<=\\.)$|(?<=\\.{3})|(?<=[…](?![…]))")
+    private val SENTENCE_END_REGEX =
+        Regex("(?:[。！？~～.!?…]|\\.{3})\\s*$")
     
     private var customEmojiRepository: CustomEmojiRepository? = null
     private var activePromptManager: ActivePromptManager? = null
+
+    class StreamingSession(
+        private val removePunctuation: Boolean = false
+    ) {
+        private val emittedSegments = mutableListOf<String>()
+
+        fun collectStableSegments(content: String): List<String> {
+            return collectSegments(
+                splitMessageBySentencesInternal(
+                    content = buildRenderableContentForWaifu(content),
+                    removePunctuation = removePunctuation,
+                    includeTrailingIncomplete = false,
+                )
+            )
+        }
+
+        fun collectFinalSegments(content: String): List<String> {
+            return collectSegments(
+                splitMessageBySentencesInternal(
+                    content = buildRenderableContentForWaifu(content),
+                    removePunctuation = removePunctuation,
+                    includeTrailingIncomplete = true,
+                )
+            )
+        }
+
+        private fun collectSegments(segments: List<String>): List<String> {
+            if (segments.isEmpty()) {
+                return emptyList()
+            }
+
+            if (segments.size < emittedSegments.size) {
+                AppLogger.w(
+                    "WaifuMessageProcessor",
+                    "流式分句结果短于已输出结果，忽略本次快照: emitted=${emittedSegments.size}, current=${segments.size}"
+                )
+                return emptyList()
+            }
+
+            val prefixMatches =
+                emittedSegments.indices.all { index ->
+                    emittedSegments[index] == segments[index]
+                }
+            if (!prefixMatches) {
+                AppLogger.w(
+                    "WaifuMessageProcessor",
+                    "流式分句前缀发生变化，忽略不可回滚的增量输出"
+                )
+                return emptyList()
+            }
+
+            val newSegments = segments.drop(emittedSegments.size)
+            emittedSegments.addAll(newSegments)
+            return newSegments
+        }
+    }
+
+    fun streamSegments(
+        sourceStream: Stream<String>,
+        removePunctuation: Boolean = false,
+    ): Stream<String> = stream {
+        val session = StreamingSession(removePunctuation = removePunctuation)
+        val renderableBuffer = StringBuilder()
+
+        suspend fun appendRenderableText(text: String) {
+            if (text.isEmpty()) {
+                return
+            }
+            renderableBuffer.append(text)
+            session.collectStableSegments(renderableBuffer.toString()).forEach { emit(it) }
+        }
+
+        sourceStream.nativeMarkdownSplitByBlock().collect { blockGroup ->
+            val blockType = blockGroup.tag ?: MarkdownProcessorType.PLAIN_TEXT
+            when (blockType) {
+                MarkdownProcessorType.XML_BLOCK -> {
+                    blockGroup.stream.collect { }
+                }
+
+                MarkdownProcessorType.CODE_BLOCK,
+                MarkdownProcessorType.TABLE,
+                MarkdownProcessorType.BLOCK_LATEX,
+                MarkdownProcessorType.IMAGE -> {
+                    val blockBuilder = StringBuilder()
+                    blockGroup.stream.collect { blockBuilder.append(it) }
+                    appendRenderableText(blockBuilder.toString())
+                }
+
+                else -> {
+                    blockGroup.stream.collect { piece ->
+                        appendRenderableText(piece)
+                    }
+                }
+            }
+        }
+
+        session.collectFinalSegments(renderableBuffer.toString()).forEach { emit(it) }
+    }
     
     /**
      * 初始化处理器（需要在应用启动时调用）
@@ -34,6 +137,26 @@ object WaifuMessageProcessor {
      * @return 分割后的句子列表
      */
     fun splitMessageBySentences(content: String, removePunctuation: Boolean = false): List<String> {
+        return splitMessageBySentencesInternal(
+            content = buildRenderableContentForWaifu(content),
+            removePunctuation = removePunctuation,
+            includeTrailingIncomplete = true,
+        )
+    }
+
+    fun splitStableMessageSegments(content: String, removePunctuation: Boolean = false): List<String> {
+        return splitMessageBySentencesInternal(
+            content = buildRenderableContentForWaifu(content),
+            removePunctuation = removePunctuation,
+            includeTrailingIncomplete = false,
+        )
+    }
+
+    private fun splitMessageBySentencesInternal(
+        content: String,
+        removePunctuation: Boolean,
+        includeTrailingIncomplete: Boolean,
+    ): List<String> {
         if (content.isBlank()) return emptyList()
 
         // 正则表达式，用于匹配Markdown的图片 ![]() 和链接 []()
@@ -81,12 +204,9 @@ object WaifuMessageProcessor {
 
                 if (cleanedContent.isBlank()) continue
 
-                val splitRegex =
-                    Regex("(?<=[。！？~～])|(?<=[.!?]{1}(?![.]))|(?<=\\.{3})|(?<=[…](?![…]))")
-
                 com.ai.assistance.operit.util.AppLogger.d(
                     "WaifuMessageProcessor",
-                    "分割正则: $splitRegex"
+                    "分割正则: $SENTENCE_SPLIT_REGEX"
                 )
                 com.ai.assistance.operit.util.AppLogger.d(
                     "WaifuMessageProcessor",
@@ -94,9 +214,13 @@ object WaifuMessageProcessor {
                 )
 
                 var sentences =
-                    cleanedContent.split(splitRegex)
+                    cleanedContent.split(SENTENCE_SPLIT_REGEX)
                         .filter { it.isNotBlank() }
                         .map { it.trim() }
+
+                if (!includeTrailingIncomplete && sentences.isNotEmpty() && !hasStableSentenceEnding(cleanedContent)) {
+                    sentences = sentences.dropLast(1)
+                }
 
                 // 如果需要移除标点符号，则处理每个句子
                 if (removePunctuation) {
@@ -166,6 +290,34 @@ object WaifuMessageProcessor {
         
         return finalResult
     }
+
+    private fun hasStableSentenceEnding(content: String): Boolean {
+        return SENTENCE_END_REGEX.containsMatchIn(content.trimEnd())
+    }
+
+    fun buildRenderableContentForWaifu(content: String): String {
+        if (content.isBlank()) {
+            return ""
+        }
+
+        val blocks = StructuredAssistantContentParser.parse(content)
+        if (blocks.isEmpty()) {
+            return content
+        }
+
+        val builder = StringBuilder()
+        blocks.forEach { block ->
+            when (block.kind) {
+                StructuredAssistantContentParser.BlockKind.TEXT -> {
+                    builder.append(block.rawContent)
+                }
+
+                StructuredAssistantContentParser.BlockKind.XML -> Unit
+            }
+        }
+
+        return builder.toString()
+    }
     
     /**
      * 清理内容中的状态标签和XML标签，只保留纯文本
@@ -173,7 +325,9 @@ object WaifuMessageProcessor {
     fun cleanContentForWaifu(content: String): String {
         val sanitizedContent =
             ChatUtils.removeThinkingContent(
-                ChatUtils.stripGeminiThoughtSignatureMeta(content)
+                ChatUtils.stripGeminiThoughtSignatureMeta(
+                    buildRenderableContentForWaifu(content)
+                )
             )
 
         return sanitizedContent
@@ -291,7 +445,8 @@ object WaifuMessageProcessor {
     fun shouldSplitMessage(content: String): Boolean {
         if (content.isBlank()) return false
 
-        val segments = splitIntoSegments(content)
+        val renderableContent = buildRenderableContentForWaifu(content)
+        val segments = splitIntoSegments(renderableContent)
         val protectedCount = segments.count { it.isProtected && it.content.isNotBlank() }
         if (protectedCount > 0) {
             val hasUnprotected = segments.any { !it.isProtected && it.content.isNotBlank() }
@@ -300,10 +455,10 @@ object WaifuMessageProcessor {
         }
         
         // 检查是否包含表情包标签
-        val hasEmotionTags = content.contains(Regex("<emotion[^>]*>.*?</emotion>"))
+        val hasEmotionTags = renderableContent.contains(Regex("<emotion[^>]*>.*?</emotion>"))
         
         // 首先清理内容
-        val cleanedContent = cleanContentForWaifu(content)
+        val cleanedContent = cleanContentForWaifu(renderableContent)
         if (cleanedContent.isBlank()) return false
         
         // 检查是否包含句号、问号、感叹号、波浪号或省略号（与splitMessageBySentences保持一致）
@@ -313,7 +468,7 @@ object WaifuMessageProcessor {
         val isLongEnough = cleanedContent.length >= 10
         
         // 检查是否包含多个句子 (这里不考虑标点符号移除，因为是判断是否需要分句)
-        val sentences = splitMessageBySentences(content, removePunctuation = false) // 这里传入原始内容，因为splitMessageBySentences内部会清理
+        val sentences = splitMessageBySentences(renderableContent, removePunctuation = false)
         val hasMultipleSentences = sentences.size > 1
         
         // 如果有表情包标签，或者满足其他条件，就进行分句处理

@@ -1,5 +1,10 @@
 import { ApiError } from '../util/chatApi';
-import type { ContextStatsSnapshot, WebChatMessage, WebChatSummary } from '../util/chatTypes';
+import type {
+  ContextStatsSnapshot,
+  WebChatMessage,
+  WebChatSummary,
+  WebInputSettingsState
+} from '../util/chatTypes';
 
 const CONTEXT_WINDOW_MAX = 16_000;
 
@@ -25,11 +30,19 @@ export function buildVisibleChats(chats: WebChatSummary[], search: string) {
 
 export function buildContextStats(
   messages: WebChatMessage[],
-  messageInput: string
+  messageInput: string,
+  inputSettings?: WebInputSettingsState | null
 ): ContextStatsSnapshot {
-  const currentValue =
+  const fallbackCurrentValue =
     messages.reduce((sum, message) => sum + message.content_raw.length, 0) + messageInput.length;
-  const maxValue = CONTEXT_WINDOW_MAX;
+  const currentValue =
+    typeof inputSettings?.current_window_tokens === 'number'
+      ? inputSettings.current_window_tokens + messageInput.length
+      : fallbackCurrentValue;
+  const maxValue =
+    typeof inputSettings?.max_window_tokens === 'number' && inputSettings.max_window_tokens > 0
+      ? inputSettings.max_window_tokens
+      : CONTEXT_WINDOW_MAX;
   const percent = Math.max(0, Math.min(99, Math.round((currentValue / maxValue) * 100)));
 
   return {

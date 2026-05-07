@@ -1109,6 +1109,7 @@ export interface SandboxPackagesResultData {
     enabledCount: number;
     disabledCount: number;
     packages: SandboxPackageResultItem[];
+    packageLoadErrors: Record<string, string>;
     toString(): string;
 }
 

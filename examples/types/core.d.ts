@@ -168,6 +168,12 @@ export namespace NativeInterface {
     function registerToolPkgXmlRenderPlugin(specJson: string): void;
 
     /**
+     * Resolve the persistent config directory for a package or toolpkg.
+     * Returns an absolute path under `/sdcard/Download/Operit/plugins/<id>`.
+     */
+    function getPluginConfigDir(pluginId: string): string;
+
+    /**
      * Register an input menu toggle plugin for current toolpkg main registration session.
      * @param specJson - JSON object string describing an input menu toggle plugin
      */

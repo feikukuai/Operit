@@ -25,6 +25,8 @@ import com.ai.assistance.operit.core.application.ActivityLifecycleManager
 import com.ai.assistance.operit.core.tools.AIToolHandler
 import com.ai.assistance.operit.core.tools.StringResultData
 import com.ai.assistance.operit.core.tools.ToolExecutionLimits
+import com.ai.assistance.operit.core.tools.climode.CliToolModeSupport
+import com.ai.assistance.operit.core.tools.climode.ToolExposureMode
 import com.ai.assistance.operit.core.tools.packTool.PackageManager
 import com.ai.assistance.operit.data.model.FunctionType
 import com.ai.assistance.operit.data.model.InputProcessingState
@@ -1968,12 +1970,18 @@ class EnhancedAIService private constructor(private val context: Context) {
         }
 
         val processToolJob = toolProcessingScope.launch {
+            val config = getModelConfigForFunction(
+                functionType = functionType,
+                chatModelConfigIdOverride = chatModelConfigIdOverride,
+                chatModelIndexOverride = chatModelIndexOverride
+            )
             val allToolResults = ToolExecutionManager.executeInvocations(
                 invocations = toolInvocations,
                 context = this@EnhancedAIService.context,
                 toolHandler = toolHandler,
                 packageManager = packageManager,
                 collector = collector,
+                toolExposureMode = ToolExposureMode.resolve(config.apiProviderType),
                 callerName = characterName,
                 callerChatId = chatId,
                 callerCardId = roleCardId
@@ -2475,7 +2483,7 @@ class EnhancedAIService private constructor(private val context: Context) {
     }
 
     private fun resolveToolDisplayName(tool: AITool): String {
-        if (tool.name != "package_proxy") {
+        if (tool.name != "package_proxy" && tool.name != "proxy") {
             return tool.name
         }
         val targetToolName = tool.parameters
@@ -2527,6 +2535,7 @@ class EnhancedAIService private constructor(private val context: Context) {
         val chatModelHasDirectImage = config.enableDirectImageProcessing
         val chatModelHasDirectAudio = config.enableDirectAudioProcessing
         val chatModelHasDirectVideo = config.enableDirectVideoProcessing
+        val toolExposureMode = ToolExposureMode.resolve(config.apiProviderType)
 
         return conversationService.prepareConversationHistory(
                 chatHistory,
@@ -2548,6 +2557,7 @@ class EnhancedAIService private constructor(private val context: Context) {
                 chatModelHasDirectVideo,
                 useToolCallApi,
                 chatModelHasDirectImage,
+                toolExposureMode,
                 preferenceProfileIdOverride,
                 dispatchHistoryHooks,
                 dispatchSystemPromptComposeHooks,
@@ -2688,9 +2698,20 @@ class EnhancedAIService private constructor(private val context: Context) {
             if (!config.enableToolCall) {
                 return null
             }
+
+            val toolExposureMode = ToolExposureMode.resolve(config.apiProviderType)
             
             // 获取所有工具分类
             val isEnglish = LocaleUtils.getCurrentLanguage(context) == "en"
+
+            if (toolExposureMode == ToolExposureMode.CLI) {
+                val cliTools = CliToolModeSupport.buildCliPublicToolPrompts(isEnglish)
+                AppLogger.d(
+                    TAG,
+                    "CLI Tool Mode已启用，提供 ${cliTools.size} 个工具 (provider=${config.apiProviderType})"
+                )
+                return cliTools
+            }
 
             // 后端识图服务是否可用（IMAGE_RECOGNITION 功能），用于 intent-based 视觉模型
             val hasBackendImageRecognition = multiServiceManager.hasImageRecognitionConfigured()

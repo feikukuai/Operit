@@ -31,6 +31,7 @@ import com.ai.assistance.operit.data.model.ToolPrompt
 import com.ai.assistance.operit.data.model.ToolResult
 import com.ai.assistance.operit.ui.features.chat.webview.workspace.WorkspaceConfig
 import com.ai.assistance.operit.widget.ToolPkgDesktopWidgetHost
+import com.ai.assistance.operit.util.OperitPaths
 import java.io.File
 import java.nio.charset.StandardCharsets
 import java.util.concurrent.ConcurrentHashMap
@@ -2128,6 +2129,18 @@ private constructor(private val context: Context, private val aiToolHandler: AIT
     fun getExternalPackagesPath(): String {
         // 为了更易读，改成Android/data/包名/files/packages的形式
         return "Android/data/${context.packageName}/files/packages"
+    }
+
+    fun getPluginConfigDirPath(pluginId: String): String {
+        val candidate = pluginId.trim()
+        if (candidate.isBlank()) {
+            return ""
+        }
+
+        val resolvedPluginId =
+            resolveToolPkgSubpackageRuntime(candidate)?.containerPackageName
+                ?: candidate
+        return OperitPaths.pluginConfigDir(resolvedPluginId).absolutePath
     }
 
     /**

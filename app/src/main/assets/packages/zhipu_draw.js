@@ -6,8 +6,8 @@
     "en": "Zhipu Draw"
   },
   "description": {
-    "zh": "使用智谱AI图像生成API根据提示词画图，将图片保存到本地 /sdcard/Download/Operit/draws/ 目录，并返回 Markdown 图片提示。",
-    "en": "Generate images via Zhipu AI image generation API from a prompt, save to /sdcard/Download/Operit/draws/, and return a Markdown image reference."
+    "zh": "使用智谱AI图像生成API根据提示词画图，将图片保存到本地 /sdcard/Download/Operit/plugins/draw/zhipu_draw/draws/ 目录，并返回 Markdown 图片提示。",
+    "en": "Generate images via Zhipu AI image generation API from a prompt, save to /sdcard/Download/Operit/plugins/draw/zhipu_draw/draws/, and return a Markdown image reference."
   },
   "env": [
     {
@@ -53,9 +53,9 @@ const zhipuDraw = (function () {
         .writeTimeout(HTTP_TIMEOUT_MS)
         .build();
     const API_BASE_URL = "https://open.bigmodel.cn/api/paas/v4/images/generations";
-    const DOWNLOAD_ROOT = "/sdcard/Download";
-    const OPERIT_DIR = `${DOWNLOAD_ROOT}/Operit`;
-    const DRAWS_DIR = `${OPERIT_DIR}/draws`;
+    const DRAW_ROOT_DIR = getPluginConfigDir("draw");
+    const STORAGE_DIR = `${DRAW_ROOT_DIR}/zhipu_draw`;
+    const DRAWS_DIR = `${STORAGE_DIR}/draws`;
     function getErrorMessage(error) {
         if (error instanceof Error)
             return error.message;
@@ -90,7 +90,7 @@ const zhipuDraw = (function () {
         return `${base}_${timestamp}`;
     }
     async function ensureDirectories() {
-        const dirs = [DOWNLOAD_ROOT, OPERIT_DIR, DRAWS_DIR];
+        const dirs = [DRAW_ROOT_DIR, STORAGE_DIR, DRAWS_DIR];
         for (const dir of dirs) {
             try {
                 const result = await Tools.Files.mkdir(dir);
@@ -169,7 +169,7 @@ const zhipuDraw = (function () {
         const fileUri = `file://${filePath}`;
         const markdown = `![AI生成的图片](${fileUri})`;
         const hintLines = [];
-        hintLines.push("图片已生成并保存在本地 /sdcard/Download/Operit/draws/ 目录。");
+        hintLines.push(`图片已生成并保存在本地 ${DRAWS_DIR}。`);
         hintLines.push(`本地路径: ${filePath}`);
         hintLines.push(`提示词: ${prompt}`);
         hintLines.push(`模型: ${apiResult.model || "glm-image"}`);
@@ -190,7 +190,7 @@ const zhipuDraw = (function () {
             const result = await draw_image(params);
             complete({
                 success: true,
-                message: "图片生成成功，已保存到 /sdcard/Download/Operit/draws/，并返回 Markdown 图片提示。",
+                message: `图片生成成功，已保存到 ${DRAWS_DIR}，并返回 Markdown 图片提示。`,
                 data: result
             });
         }

@@ -1309,6 +1309,14 @@ class JsEngine(private val context: Context) {
         }
 
         @JavascriptInterface
+        fun getPluginConfigDir(pluginId: String): String {
+            return JsNativeInterfaceDelegates.getPluginConfigDir(
+                packageManager = packageManager,
+                pluginId = pluginId
+            )
+        }
+
+        @JavascriptInterface
         fun measureComposeText(payloadJson: String): String {
             return JsNativeInterfaceDelegates.measureComposeText(
                 context = context,
@@ -1471,6 +1479,11 @@ class JsEngine(private val context: Context) {
         @JavascriptInterface
         fun registerToolPkgPromptEstimateFinalizeHook(specJson: String) {
             toolPkgRegistrationSession.appendPromptEstimateFinalizeHook(specJson)
+        }
+
+        @JavascriptInterface
+        fun registerToolPkgSummaryGenerateHook(specJson: String) {
+            toolPkgRegistrationSession.appendSummaryGenerateHook(specJson)
         }
 
         @JavascriptInterface

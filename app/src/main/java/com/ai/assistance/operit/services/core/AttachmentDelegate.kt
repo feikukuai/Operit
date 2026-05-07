@@ -134,6 +134,10 @@ class AttachmentDelegate(private val context: Context, private val toolHandler: 
                         }
                     }
 
+                    var sourceUri: Uri? = null
+                    var fileName: String? = null
+                    var mimeType: String? = null
+
                     // 检查是否是媒体选择器特殊路径
                     if (filePath.contains("/sdcard/.transforms/synthetic/picker/") ||
                                     filePath.contains("/com.android.providers.media.photopicker/")
@@ -144,36 +148,12 @@ class AttachmentDelegate(private val context: Context, private val toolHandler: 
                             // 尝试从特殊路径提取实际URI
                             val actualUri = extractMediaStoreUri(filePath)
                             if (actualUri != null) {
-                                // 使用提取出的URI创建临时文件
-                                val fileName = filePath.substringAfterLast('/')
-                                val tempFile = createTempFileFromUri(actualUri, fileName)
-
-                                if (tempFile != null) {
-                                    AppLogger.d(TAG, "Successfully created temp file from media picker path: ${tempFile.absolutePath}")
-
-                                    // 创建附件对象
-                                    val mimeType =
-                                            getMimeTypeFromPath(tempFile.name) ?: "image/jpeg"
-                                    val attachmentInfo =
-                                            AttachmentInfo(
-                                                    filePath = tempFile.absolutePath,
-                                                    fileName = fileName,
-                                                    mimeType = mimeType,
-                                                    fileSize = tempFile.length()
-                                            )
-
-                                    // 添加到附件列表
-                                    val currentList = _attachments.value
-                                    if (!currentList.any { it.filePath == tempFile.absolutePath }) {
-                                        _attachments.value = currentList + attachmentInfo
-                                    }
-
-                                    _toastEvent.emit(context.getString(R.string.attachment_added, fileName))
-                                    return@withContext
-                                } else {
-                                    AppLogger.e(TAG, "Failed to create temp file from media path")
-                                    _toastEvent.emit(context.getString(R.string.attachment_media_process_failed))
-                                }
+                                sourceUri = actualUri
+                                fileName = filePath.substringAfterLast('/')
+                                mimeType =
+                                        context.contentResolver.getType(actualUri)
+                                                ?: getMimeTypeFromPath(fileName!!)
+                                                ?: "image/jpeg"
                             }
                         } catch (e: Exception) {
                             AppLogger.e(TAG, "Error handling media picker path", e)
@@ -181,75 +161,57 @@ class AttachmentDelegate(private val context: Context, private val toolHandler: 
                         }
                     }
 
-                    // Check if it's a content URI path
-                    if (filePath.startsWith("content://")) {
+                    if (sourceUri == null && filePath.startsWith("content://")) {
                         val uri = Uri.parse(filePath)
                         AppLogger.d(TAG, "Handling content URI: $uri")
 
-                        // Get file metadata from ContentResolver
-                        val fileName = getFileNameFromUri(uri)
-                        val mimeType = context.contentResolver.getType(uri) ?: "application/octet-stream"
-
-                        // Always create a temporary file for content URIs to ensure persistent access
-                        AppLogger.d(TAG, "Copying content URI to a local temporary file.")
-                        val tempFile = createTempFileFromUri(uri, fileName)
-
-                        if (tempFile != null && tempFile.exists()) {
-                            AppLogger.d(TAG, "Successfully created temp file: ${tempFile.absolutePath}")
-                            val attachmentInfo =
-                                AttachmentInfo(
-                                    filePath = tempFile.absolutePath,
-                                    fileName = fileName,
-                                    mimeType = mimeType,
-                                    fileSize = tempFile.length()
-                                )
-
-                            // Add to attachment list
-                            val currentList = _attachments.value
-                            if (!currentList.any { it.filePath == tempFile.absolutePath }) {
-                                _attachments.value = currentList + attachmentInfo
-                            }
-                            _toastEvent.emit(context.getString(R.string.attachment_added, fileName))
-                        } else {
-                            AppLogger.e(TAG, "Failed to create temp file from URI: $uri")
-                            _toastEvent.emit(context.getString(R.string.attachment_cannot_attach, fileName))
-                        }
-                    } else {
-                        // Handle as regular file path
+                        sourceUri = uri
+                        fileName = getFileNameFromUri(uri)
+                        mimeType = context.contentResolver.getType(uri) ?: "application/octet-stream"
+                    } else if (sourceUri == null) {
+                        // Handle as regular file path, but copy immediately because some picker
+                        // providers expose unstable paths such as /storage/.pick/...
                         val file = java.io.File(filePath)
                         if (!file.exists()) {
                             _toastEvent.emit(context.getString(R.string.attachment_file_not_exist))
                             return@withContext
                         }
 
-                        val fileName = file.name
-                        val fileSize = file.length()
-                        val mimeType = getMimeTypeFromPath(filePath) ?: "application/octet-stream"
-
-                        // 图片文件使用绝对路径
-                        val actualFilePath =
-                                if (mimeType.startsWith("image/")) {
-                                    file.absolutePath
-                                } else {
-                                    filePath
-                                }
-
-                        val attachmentInfo =
-                                AttachmentInfo(
-                                        filePath = actualFilePath,
-                                        fileName = fileName,
-                                        mimeType = mimeType,
-                                        fileSize = fileSize
-                                )
-
-                        // Add to attachment list
-                        val currentList = _attachments.value
-                        if (!currentList.any { it.filePath == actualFilePath }) {
-                            _attachments.value = currentList + attachmentInfo
-                        }
-
-                        _toastEvent.emit(context.getString(R.string.attachment_added, fileName))
+                        sourceUri = Uri.fromFile(file)
+                        fileName = file.name
+                        mimeType = getMimeTypeFromPath(filePath) ?: "application/octet-stream"
                     }
+
+                    val resolvedUri = sourceUri
+                    val resolvedFileName = fileName
+                    val resolvedMimeType = mimeType
+                    if (resolvedUri == null || resolvedFileName.isNullOrBlank() || resolvedMimeType.isNullOrBlank()) {
+                        _toastEvent.emit(context.getString(R.string.attachment_cannot_attach, filePath))
+                        return@withContext
+                    }
+
+                    AppLogger.d(TAG, "Copying attachment source to a local temporary file: $resolvedUri")
+                    val tempFile = createTempFileFromUri(resolvedUri, resolvedFileName)
+                    if (tempFile == null || !tempFile.exists()) {
+                        AppLogger.e(TAG, "Failed to create temp file from source: $resolvedUri")
+                        _toastEvent.emit(context.getString(R.string.attachment_cannot_attach, resolvedFileName))
+                        return@withContext
+                    }
+
+                    val attachmentInfo =
+                            AttachmentInfo(
+                                    filePath = tempFile.absolutePath,
+                                    fileName = resolvedFileName,
+                                    mimeType = resolvedMimeType,
+                                    fileSize = tempFile.length()
+                            )
+
+                    val currentList = _attachments.value
+                    if (!currentList.any { it.filePath == tempFile.absolutePath }) {
+                        _attachments.value = currentList + attachmentInfo
+                    }
+
+                    _toastEvent.emit(context.getString(R.string.attachment_added, resolvedFileName))
                 } catch (e: Exception) {
                     _toastEvent.emit(context.getString(R.string.attachment_add_failed, e.message ?: ""))
                     AppLogger.e(TAG, "Error adding attachment", e)

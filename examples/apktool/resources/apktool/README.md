@@ -12,7 +12,7 @@ This directory keeps the generated runtime layout and docs, but the `.jar` artif
 - Packaging rule: every runtime jar must be an Android-loadable dex-jar containing `classes.dex`
 - Expected layers:
   - `apktool-runtime-android.jar` carries `brut.androlib.*` plus the Android-only `prebuilt/android/aapt2`
-  - `jadx-runtime-android.jar` carries `jadx.api.*`, strips desktop GUI payload, and removes `jadx-script`, `java-convert`, `aab-input`, plus their bundled compiler/build baggage during packaging
+  - `jadx-runtime-android.jar` carries the headless JADX APK pipeline, patches `jadx.core.dex.visitors.SaveCode` to avoid newer JDK-only `PrintWriter(File, Charset)`, and removes desktop GUI, `jadx-script`, `java-convert`, `aab-input`, `java-input`, and `raung` payload during packaging
   - `apk-reverse-helper-runtime-android.jar` carries the stable helper facade and native-analysis helpers
 - Resource generation is handled by `examples/apktool/build_runtime_android_resources.ps1`
 - `android-framework.jar` remains a standalone resource and is no longer duplicated inside `apktool-runtime-android.jar`

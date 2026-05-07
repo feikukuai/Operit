@@ -94,10 +94,10 @@ const xaiDraw = (function () {
     const API_BASE_URL = "https://api.x.ai/v1";
     const IMAGE_API_ENDPOINT = `${API_BASE_URL}/images/generations`;
     const VIDEO_GENERATION_ENDPOINT = `${API_BASE_URL}/videos/generations`;
-    const DOWNLOAD_ROOT = "/sdcard/Download";
-    const OPERIT_DIR = `${DOWNLOAD_ROOT}/Operit`;
-    const DRAWS_DIR = `${OPERIT_DIR}/draws`;
-    const VIDEOS_DIR = `${OPERIT_DIR}/videos`;
+    const DRAW_ROOT_DIR = getPluginConfigDir("draw");
+    const STORAGE_DIR = `${DRAW_ROOT_DIR}/xai_draw`;
+    const DRAWS_DIR = `${STORAGE_DIR}/draws`;
+    const VIDEOS_DIR = `${STORAGE_DIR}/videos`;
     function getErrorMessage(error) {
         if (error instanceof Error)
             return error.message;
@@ -203,7 +203,7 @@ const xaiDraw = (function () {
         return normalized;
     }
     async function ensureDirectories() {
-        const dirs = [DOWNLOAD_ROOT, OPERIT_DIR, DRAWS_DIR, VIDEOS_DIR];
+        const dirs = [DRAW_ROOT_DIR, STORAGE_DIR, DRAWS_DIR, VIDEOS_DIR];
         for (const dir of dirs) {
             try {
                 const result = await Tools.Files.mkdir(dir);

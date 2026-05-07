@@ -14,6 +14,7 @@ import com.ai.assistance.operit.data.model.ActivePrompt
 import com.ai.assistance.operit.data.model.AttachmentInfo
 import com.ai.assistance.operit.data.model.ChatHistory
 import com.ai.assistance.operit.data.model.ChatMessage
+import com.ai.assistance.operit.data.model.ChatMessageLocatorPreview
 import com.ai.assistance.operit.data.model.CharacterCard
 import com.ai.assistance.operit.data.model.CharacterCardChatModelBindingMode
 import com.ai.assistance.operit.data.model.CharacterGroupCard
@@ -33,11 +34,17 @@ import com.ai.assistance.operit.data.preferences.ModelConfigManager
 import com.ai.assistance.operit.data.preferences.ThemePreferenceSnapshot
 import com.ai.assistance.operit.data.preferences.ToolCollapseMode
 import com.ai.assistance.operit.data.preferences.UserPreferencesManager
+import com.ai.assistance.operit.integrations.http.bridge.WebChatActionBridge
 import com.ai.assistance.operit.data.repository.ChatHistoryManager
+import com.ai.assistance.operit.integrations.http.bridge.WebChatInputSettingsBridge
+import com.ai.assistance.operit.integrations.http.bridge.WebChatMemorySelectorBridge
+import com.ai.assistance.operit.integrations.http.bridge.WebChatManagementBridge
 import com.ai.assistance.operit.integrations.externalchat.ExternalChatResponseSanitizer
+import com.ai.assistance.operit.services.core.MAX_DISPLAY_PAGE_COUNT
+import com.ai.assistance.operit.services.core.resolveDisplayPageRanges
 import com.ai.assistance.operit.util.AppLogger
 import com.ai.assistance.operit.util.ChatMarkupRegex
-import com.ai.assistance.operit.util.streamnative.NativeXmlSplitter
+import com.ai.assistance.operit.util.StructuredAssistantContentParser
 import com.ai.assistance.operit.ui.theme.resolveThemeColorScheme
 import fi.iki.elonen.NanoHTTPD
 import java.io.BufferedWriter
@@ -86,6 +93,11 @@ class WebChatHttpBridge(
     private val characterGroupCardManager = CharacterGroupCardManager.getInstance(appContext)
     private val functionalConfigManager = FunctionalConfigManager(appContext)
     private val modelConfigManager = ModelConfigManager(appContext)
+    private val inputSettingsBridge = WebChatInputSettingsBridge(appContext, core)
+    private val memorySelectorBridge = WebChatMemorySelectorBridge(appContext)
+    private val actionBridge = WebChatActionBridge(core)
+    private val chatManagementBridge =
+        WebChatManagementBridge(core, chatHistoryManager, activePromptManager)
     private val assetIdBySource = ConcurrentHashMap<String, String>()
     private val assetsById = ConcurrentHashMap<String, RegisteredAsset>()
     private val uploadsById = ConcurrentHashMap<String, UploadedAttachmentEntry>()
@@ -118,11 +130,38 @@ class WebChatHttpBridge(
             session.uri == MODEL_SELECTOR_PATH && session.method == NanoHTTPD.Method.POST ->
                 handleSelectModel(session)
 
+            session.uri == MEMORY_SELECTOR_PATH && session.method == NanoHTTPD.Method.GET ->
+                handleMemorySelector()
+
+            session.uri == MEMORY_SELECTOR_PATH && session.method == NanoHTTPD.Method.POST ->
+                handleSelectMemoryProfile(session)
+
+            session.uri == INPUT_SETTINGS_PATH && session.method == NanoHTTPD.Method.GET ->
+                handleInputSettings()
+
+            session.uri == INPUT_SETTINGS_PATH && session.method == NanoHTTPD.Method.PATCH ->
+                handleUpdateInputSettings(session)
+
+            session.uri == MANUAL_MEMORY_UPDATE_PATH && session.method == NanoHTTPD.Method.POST ->
+                handleManualMemoryUpdate()
+
+            session.uri == MANUAL_CONVERSATION_SUMMARY_PATH && session.method == NanoHTTPD.Method.POST ->
+                handleManualConversationSummary()
+
             session.uri == CHATS_PATH && session.method == NanoHTTPD.Method.GET ->
                 handleListChats()
 
             session.uri == CHATS_PATH && session.method == NanoHTTPD.Method.POST ->
                 handleCreateChat(session)
+
+            session.uri == CHATS_REORDER_PATH && session.method == NanoHTTPD.Method.POST ->
+                handleReorderChats(session)
+
+            session.uri == CHAT_GROUP_RENAME_PATH && session.method == NanoHTTPD.Method.POST ->
+                handleRenameGroup(session)
+
+            session.uri == CHAT_GROUP_DELETE_PATH && session.method == NanoHTTPD.Method.POST ->
+                handleDeleteGroup(session)
 
             chatIdFrom(session.uri, CHATS_PATH)?.let { chatId ->
                 session.uri == "$CHATS_PATH/$chatId"
@@ -145,6 +184,26 @@ class WebChatHttpBridge(
                 handleMessages(
                     session,
                     requireNotNull(chatIdFrom(session.uri, "$CHATS_PATH/", "/messages"))
+                )
+
+            chatIdFrom(session.uri, "$CHATS_PATH/", "/message-locator") != null &&
+                session.method == NanoHTTPD.Method.GET ->
+                handleMessageLocator(
+                    requireNotNull(chatIdFrom(session.uri, "$CHATS_PATH/", "/message-locator"))
+                )
+
+            chatIdFrom(session.uri, "$CHATS_PATH/", "/messages/reveal") != null &&
+                session.method == NanoHTTPD.Method.POST ->
+                handleRevealMessage(
+                    session,
+                    requireNotNull(chatIdFrom(session.uri, "$CHATS_PATH/", "/messages/reveal"))
+                )
+
+            chatIdFrom(session.uri, "$CHATS_PATH/", "/messages/favorite") != null &&
+                session.method == NanoHTTPD.Method.PATCH ->
+                handleToggleMessageFavorite(
+                    session,
+                    requireNotNull(chatIdFrom(session.uri, "$CHATS_PATH/", "/messages/favorite"))
                 )
 
             chatIdFrom(session.uri, "$CHATS_PATH/", "/theme") != null &&
@@ -425,6 +484,63 @@ class WebChatHttpBridge(
         return jsonResponse(NanoHTTPD.Response.Status.OK, created)
     }
 
+    private fun handleInputSettings(): NanoHTTPD.Response {
+        val settings = runBlocking { inputSettingsBridge.resolveState() }
+        return jsonResponse(NanoHTTPD.Response.Status.OK, settings)
+    }
+
+    private fun handleMemorySelector(): NanoHTTPD.Response {
+        val selector = runBlocking { memorySelectorBridge.resolveState() }
+        return jsonResponse(NanoHTTPD.Response.Status.OK, selector)
+    }
+
+    private fun handleSelectMemoryProfile(session: NanoHTTPD.IHTTPSession): NanoHTTPD.Response {
+        val request = parseJsonRequest<WebSelectMemoryProfileRequest>(session)
+            ?: return jsonResponse(
+                NanoHTTPD.Response.Status.BAD_REQUEST,
+                WebErrorResponse("Invalid JSON body")
+            )
+        val updated = runBlocking { memorySelectorBridge.selectProfile(request.profileId) }
+            ?: return jsonResponse(
+                NanoHTTPD.Response.Status.BAD_REQUEST,
+                WebErrorResponse("Invalid profile_id")
+            )
+        return jsonResponse(NanoHTTPD.Response.Status.OK, updated)
+    }
+
+    private fun handleUpdateInputSettings(session: NanoHTTPD.IHTTPSession): NanoHTTPD.Response {
+        val request = parseJsonRequest<WebUpdateInputSettingsRequest>(session)
+            ?: return jsonResponse(
+                NanoHTTPD.Response.Status.BAD_REQUEST,
+                WebErrorResponse("Invalid JSON body")
+            )
+
+        val updated = runBlocking { inputSettingsBridge.update(request) }
+        return jsonResponse(NanoHTTPD.Response.Status.OK, updated)
+    }
+
+    private fun handleManualMemoryUpdate(): NanoHTTPD.Response {
+        actionBridge.manuallyUpdateMemory()
+        return jsonResponse(
+            NanoHTTPD.Response.Status.OK,
+            WebActionResponse(
+                success = true,
+                chatId = core.currentChatId.value
+            )
+        )
+    }
+
+    private fun handleManualConversationSummary(): NanoHTTPD.Response {
+        actionBridge.manuallySummarizeConversation()
+        return jsonResponse(
+            NanoHTTPD.Response.Status.OK,
+            WebActionResponse(
+                success = true,
+                chatId = core.currentChatId.value
+            )
+        )
+    }
+
     private fun handleUpdateChat(
         session: NanoHTTPD.IHTTPSession,
         chatId: String
@@ -441,17 +557,121 @@ class WebChatHttpBridge(
                 NanoHTTPD.Response.Status.BAD_REQUEST,
                 WebErrorResponse("Invalid JSON body")
             )
-        val title = request.title?.trim()?.takeIf { it.isNotBlank() }
-            ?: return jsonResponse(
+        val hasTitleChange = request.title != null
+        val hasGroupChange = request.updateGroup
+        val hasLockedChange = request.updateLocked && request.locked != null
+        val hasBindingChange = request.updateBinding
+        if (!hasTitleChange && !hasGroupChange && !hasLockedChange && !hasBindingChange) {
+            return jsonResponse(
+                NanoHTTPD.Response.Status.BAD_REQUEST,
+                WebErrorResponse("No update fields provided")
+            )
+        }
+
+        val normalizedTitle = request.title?.trim()?.takeIf { it.isNotBlank() }
+        if (hasTitleChange && normalizedTitle == null) {
+            return jsonResponse(
                 NanoHTTPD.Response.Status.BAD_REQUEST,
                 WebErrorResponse("Missing title")
             )
+        }
+
+        val normalizedCharacterCardName = request.characterCardName?.trim()?.takeIf { it.isNotBlank() }
+        val normalizedCharacterGroupId = request.characterGroupId?.trim()?.takeIf { it.isNotBlank() }
+        if (hasBindingChange && normalizedCharacterCardName != null && normalizedCharacterGroupId != null) {
+            return jsonResponse(
+                NanoHTTPD.Response.Status.BAD_REQUEST,
+                WebErrorResponse("Chat binding cannot target both a character card and a character group")
+            )
+        }
 
         val updated = runBlocking {
-            chatHistoryManager.updateChatTitle(chatId, title)
-            buildChatSummary(requireNotNull(currentChatMeta(chatId)))
+            chatManagementBridge.updateChat(
+                chatId = chatId,
+                request = request,
+                currentChatMeta = ::currentChatMeta,
+                buildChatSummary = ::buildChatSummary
+            )
         }
-        return jsonResponse(NanoHTTPD.Response.Status.OK, updated)
+        return if (updated != null) {
+            jsonResponse(NanoHTTPD.Response.Status.OK, updated)
+        } else {
+            jsonResponse(
+                NanoHTTPD.Response.Status.NOT_FOUND,
+                WebErrorResponse("Chat not found")
+            )
+        }
+    }
+
+    private fun handleReorderChats(session: NanoHTTPD.IHTTPSession): NanoHTTPD.Response {
+        val request = parseJsonRequest<WebReorderChatsRequest>(session)
+            ?: return jsonResponse(
+                NanoHTTPD.Response.Status.BAD_REQUEST,
+                WebErrorResponse("Invalid JSON body")
+            )
+        if (request.items.isEmpty()) {
+            return jsonResponse(
+                NanoHTTPD.Response.Status.BAD_REQUEST,
+                WebErrorResponse("No reorder items provided")
+            )
+        }
+
+        val success = runBlocking { chatManagementBridge.reorderChats(request.items) }
+
+        return if (success) {
+            jsonResponse(
+                NanoHTTPD.Response.Status.OK,
+                WebActionResponse(success = true)
+            )
+        } else {
+            jsonResponse(
+                NanoHTTPD.Response.Status.NOT_FOUND,
+                WebErrorResponse("One or more chats could not be found")
+            )
+        }
+    }
+
+    private fun handleRenameGroup(session: NanoHTTPD.IHTTPSession): NanoHTTPD.Response {
+        val request = parseJsonRequest<WebRenameGroupRequest>(session)
+            ?: return jsonResponse(
+                NanoHTTPD.Response.Status.BAD_REQUEST,
+                WebErrorResponse("Invalid JSON body")
+            )
+        val oldName = request.oldName.trim()
+        val newName = request.newName.trim()
+        if (oldName.isBlank() || newName.isBlank()) {
+            return jsonResponse(
+                NanoHTTPD.Response.Status.BAD_REQUEST,
+                WebErrorResponse("Group names must not be blank")
+            )
+        }
+
+        runBlocking { chatManagementBridge.renameGroup(request) }
+        return jsonResponse(
+            NanoHTTPD.Response.Status.OK,
+            WebActionResponse(success = true)
+        )
+    }
+
+    private fun handleDeleteGroup(session: NanoHTTPD.IHTTPSession): NanoHTTPD.Response {
+        val request = parseJsonRequest<WebDeleteGroupRequest>(session)
+            ?: return jsonResponse(
+                NanoHTTPD.Response.Status.BAD_REQUEST,
+                WebErrorResponse("Invalid JSON body")
+            )
+        val groupName = request.groupName.trim()
+        if (groupName.isBlank()) {
+            return jsonResponse(
+                NanoHTTPD.Response.Status.BAD_REQUEST,
+                WebErrorResponse("Group name must not be blank")
+            )
+        }
+
+        runBlocking { chatManagementBridge.deleteGroup(request) }
+        return jsonResponse(
+            NanoHTTPD.Response.Status.OK,
+            WebActionResponse(success = true)
+        )
     }
 
     private fun handleSelectChat(chatId: String): NanoHTTPD.Response {
@@ -528,28 +748,209 @@ class WebChatHttpBridge(
         val beforeTimestamp = session.parameters["before_timestamp"]
             ?.firstOrNull()
             ?.toLongOrNull()
+        val afterTimestamp = session.parameters["after_timestamp"]
+            ?.firstOrNull()
+            ?.toLongOrNull()
+        if (beforeTimestamp != null && afterTimestamp != null) {
+            return jsonResponse(
+                NanoHTTPD.Response.Status.BAD_REQUEST,
+                WebErrorResponse("before_timestamp and after_timestamp cannot both be provided")
+            )
+        }
 
         val page = runBlocking {
             val structuredRenderPreferences = resolveStructuredRenderPreferences()
-            val fetchedMessagesDesc = chatHistoryManager.loadChatMessagesDesc(
-                chatId = chatId,
-                limit = limit + 1,
-                beforeTimestampExclusive = beforeTimestamp
-            )
-            val hasMoreBefore = fetchedMessagesDesc.size > limit
-            val pageMessages =
-                fetchedMessagesDesc
-                    .take(limit)
-                    .asReversed()
-            WebChatMessagesPage(
-                messages = pageMessages.map { message ->
-                    buildWebMessage(chatId, message, structuredRenderPreferences = structuredRenderPreferences)
-                },
-                hasMoreBefore = hasMoreBefore,
-                nextBeforeTimestamp = pageMessages.firstOrNull()?.timestamp
-            )
+            when {
+                beforeTimestamp != null -> {
+                    val fetchedMessages = chatHistoryManager.loadOlderChatMessages(
+                        chatId = chatId,
+                        beforeTimestampExclusive = beforeTimestamp,
+                        limit = limit + 1
+                    )
+                    val hasMoreBefore = fetchedMessages.size > limit
+                    val pageMessages = if (hasMoreBefore) fetchedMessages.takeLast(limit) else fetchedMessages
+                    val hasMoreAfter = pageMessages.lastOrNull()?.timestamp?.let {
+                        chatHistoryManager.hasMessagesAfter(chatId, it)
+                    } ?: false
+                    WebChatMessagesPage(
+                        messages = pageMessages.map { message ->
+                            buildWebMessage(chatId, message, structuredRenderPreferences = structuredRenderPreferences)
+                        },
+                        hasMoreBefore = hasMoreBefore,
+                        hasMoreAfter = hasMoreAfter,
+                        nextBeforeTimestamp = pageMessages.firstOrNull()?.timestamp,
+                        nextAfterTimestamp = pageMessages.lastOrNull()?.timestamp
+                    )
+                }
+
+                afterTimestamp != null -> {
+                    val fetchedMessages = chatHistoryManager.loadChatMessagesAscAfter(
+                        chatId = chatId,
+                        afterTimestampExclusive = afterTimestamp,
+                        limit = limit + 1
+                    )
+                    val hasMoreAfter = fetchedMessages.size > limit
+                    val pageMessages = fetchedMessages.take(limit)
+                    val hasMoreBefore = pageMessages.firstOrNull()?.timestamp?.let {
+                        chatHistoryManager.hasMessagesBefore(chatId, it)
+                    } ?: false
+                    WebChatMessagesPage(
+                        messages = pageMessages.map { message ->
+                            buildWebMessage(chatId, message, structuredRenderPreferences = structuredRenderPreferences)
+                        },
+                        hasMoreBefore = hasMoreBefore,
+                        hasMoreAfter = hasMoreAfter,
+                        nextBeforeTimestamp = pageMessages.firstOrNull()?.timestamp,
+                        nextAfterTimestamp = pageMessages.lastOrNull()?.timestamp
+                    )
+                }
+
+                else -> {
+                    val fetchedMessagesDesc = chatHistoryManager.loadChatMessagesDesc(
+                        chatId = chatId,
+                        limit = limit + 1
+                    )
+                    val hasMoreBefore = fetchedMessagesDesc.size > limit
+                    val pageMessages =
+                        fetchedMessagesDesc
+                            .take(limit)
+                            .asReversed()
+                    WebChatMessagesPage(
+                        messages = pageMessages.map { message ->
+                            buildWebMessage(chatId, message, structuredRenderPreferences = structuredRenderPreferences)
+                        },
+                        hasMoreBefore = hasMoreBefore,
+                        hasMoreAfter = false,
+                        nextBeforeTimestamp = pageMessages.firstOrNull()?.timestamp,
+                        nextAfterTimestamp = pageMessages.lastOrNull()?.timestamp
+                    )
+                }
+            }
         }
         return jsonResponse(NanoHTTPD.Response.Status.OK, page)
+    }
+
+    private fun handleMessageLocator(chatId: String): NanoHTTPD.Response {
+        if (!runBlocking { chatHistoryManager.chatExists(chatId) }) {
+            return jsonResponse(
+                NanoHTTPD.Response.Status.NOT_FOUND,
+                WebErrorResponse("Chat not found")
+            )
+        }
+
+        val previews = runBlocking {
+            chatHistoryManager.loadChatMessageLocatorPreviews(chatId).map(::buildWebMessageLocatorPreview)
+        }
+        return jsonResponse(NanoHTTPD.Response.Status.OK, previews)
+    }
+
+    private fun handleRevealMessage(
+        session: NanoHTTPD.IHTTPSession,
+        chatId: String
+    ): NanoHTTPD.Response {
+        if (!runBlocking { chatHistoryManager.chatExists(chatId) }) {
+            return jsonResponse(
+                NanoHTTPD.Response.Status.NOT_FOUND,
+                WebErrorResponse("Chat not found")
+            )
+        }
+
+        val request = parseJsonRequest<WebRevealMessageRequest>(session)
+            ?: return jsonResponse(
+                NanoHTTPD.Response.Status.BAD_REQUEST,
+                WebErrorResponse("Invalid JSON body")
+            )
+        val targetTimestamp = request.timestamp
+            ?: return jsonResponse(
+                NanoHTTPD.Response.Status.BAD_REQUEST,
+                WebErrorResponse("Missing timestamp")
+            )
+
+        val page = runBlocking {
+            val locatorEntries = chatHistoryManager.loadChatMessageLocatorPreviews(chatId)
+            val pageRanges = resolveDisplayPageRanges(locatorEntries)
+            val targetPageIndex =
+                pageRanges.indexOfFirst { range ->
+                    targetTimestamp in range.startTimestampInclusive..range.endTimestampInclusive
+                }
+            if (targetPageIndex < 0) {
+                null
+            } else {
+                val windowStartPageIndex =
+                    if (targetPageIndex < pageRanges.lastIndex) {
+                        targetPageIndex
+                    } else {
+                        (targetPageIndex - (MAX_DISPLAY_PAGE_COUNT - 1)).coerceAtLeast(0)
+                    }
+                val windowEndPageIndex =
+                    (windowStartPageIndex + MAX_DISPLAY_PAGE_COUNT - 1).coerceAtMost(pageRanges.lastIndex)
+                val revealedMessages =
+                    chatHistoryManager.loadChatMessagesWindow(
+                        chatId = chatId,
+                        startTimestampInclusive = pageRanges[windowStartPageIndex].startTimestampInclusive,
+                        endTimestampInclusive = pageRanges[windowEndPageIndex].endTimestampInclusive
+                    )
+                val structuredRenderPreferences = resolveStructuredRenderPreferences()
+                WebChatMessagesPage(
+                    messages = revealedMessages.map { message ->
+                        buildWebMessage(
+                            chatId,
+                            message,
+                            structuredRenderPreferences = structuredRenderPreferences
+                        )
+                    },
+                    hasMoreBefore = windowStartPageIndex > 0,
+                    hasMoreAfter = windowEndPageIndex < pageRanges.lastIndex,
+                    nextBeforeTimestamp = revealedMessages.firstOrNull()?.timestamp,
+                    nextAfterTimestamp = revealedMessages.lastOrNull()?.timestamp
+                )
+            }
+        }
+
+        return if (page != null) {
+            jsonResponse(NanoHTTPD.Response.Status.OK, page)
+        } else {
+            jsonResponse(
+                NanoHTTPD.Response.Status.NOT_FOUND,
+                WebErrorResponse("Message not found")
+            )
+        }
+    }
+
+    private fun handleToggleMessageFavorite(
+        session: NanoHTTPD.IHTTPSession,
+        chatId: String
+    ): NanoHTTPD.Response {
+        if (!runBlocking { chatHistoryManager.chatExists(chatId) }) {
+            return jsonResponse(
+                NanoHTTPD.Response.Status.NOT_FOUND,
+                WebErrorResponse("Chat not found")
+            )
+        }
+
+        val request = parseJsonRequest<WebToggleMessageFavoriteRequest>(session)
+            ?: return jsonResponse(
+                NanoHTTPD.Response.Status.BAD_REQUEST,
+                WebErrorResponse("Invalid JSON body")
+            )
+        val timestamp = request.timestamp
+            ?: return jsonResponse(
+                NanoHTTPD.Response.Status.BAD_REQUEST,
+                WebErrorResponse("Missing timestamp")
+            )
+        val isFavorite = request.isFavorite
+            ?: return jsonResponse(
+                NanoHTTPD.Response.Status.BAD_REQUEST,
+                WebErrorResponse("Missing favorite state")
+            )
+
+        runBlocking {
+            chatHistoryManager.setMessageFavorite(chatId, timestamp, isFavorite)
+        }
+        return jsonResponse(
+            NanoHTTPD.Response.Status.OK,
+            WebActionResponse(success = true, chatId = chatId)
+        )
     }
 
     private fun handleTheme(chatId: String): NanoHTTPD.Response {
@@ -1279,6 +1680,19 @@ class WebChatHttpBridge(
         )
     }
 
+    private fun buildWebMessageLocatorPreview(
+        preview: ChatMessageLocatorPreview
+    ): WebChatMessageLocatorPreview {
+        return WebChatMessageLocatorPreview(
+            timestamp = preview.timestamp,
+            sender = normalizeSender(preview.sender),
+            previewContent = preview.previewContent,
+            contentLength = preview.contentLength,
+            displayMode = preview.displayMode,
+            isFavorite = preview.isFavorite
+        ) 
+    }
+
     private suspend fun latestAssistantMessage(
         chatId: String,
         returnToolStatus: Boolean
@@ -1486,14 +1900,9 @@ class WebChatHttpBridge(
             return null
         }
 
-        val splitSegments = NativeXmlSplitter.splitXmlTag(content)
         val flatBlocks =
-            if (splitSegments.isNotEmpty()) {
-                splitSegments.mapNotNull { segment ->
-                    buildStructuredContentBlock(segment)
-                }
-            } else {
-                listOf(WebMessageContentBlock(kind = "text", content = content))
+            StructuredAssistantContentParser.parse(content).mapNotNull { block ->
+                buildStructuredContentBlock(block)
             }
 
         if (flatBlocks.isEmpty()) {
@@ -1504,95 +1913,29 @@ class WebChatHttpBridge(
         return groupedBlocks.takeIf { it.isNotEmpty() }
     }
 
-    private fun buildStructuredContentBlock(segment: List<String>): WebMessageContentBlock? {
-        val kind = segment.getOrNull(0) ?: return null
-        val rawContent = segment.getOrNull(1).orEmpty()
-        if (rawContent.isEmpty()) {
+    private fun buildStructuredContentBlock(
+        block: StructuredAssistantContentParser.Block
+    ): WebMessageContentBlock? {
+        if (block.rawContent.isEmpty()) {
             return null
         }
 
-        if (kind == "text") {
+        if (block.kind == StructuredAssistantContentParser.BlockKind.TEXT) {
             return WebMessageContentBlock(
                 kind = "text",
-                content = rawContent
+                content = block.content
             )
         }
 
-        val rawTagName = ChatMarkupRegex.extractOpeningTagName(rawContent)
-        val tagName = ChatMarkupRegex.normalizeToolLikeTagName(rawTagName) ?: rawTagName
         return WebMessageContentBlock(
             kind = "xml",
-            content = extractXmlInnerContent(rawContent, rawTagName, tagName),
-            xml = rawContent,
-            tagName = tagName,
-            rawTagName = rawTagName,
-            attrs = extractXmlAttributes(rawContent),
-            closed = isXmlFullyClosed(rawContent, rawTagName)
+            content = block.content,
+            xml = block.rawContent,
+            tagName = block.tagName,
+            rawTagName = block.rawTagName,
+            attrs = block.attrs,
+            closed = block.closed
         )
-    }
-
-    private fun extractXmlInnerContent(
-        xml: String,
-        rawTagName: String?,
-        normalizedTagName: String?
-    ): String {
-        val effectiveTagName =
-            when {
-                !rawTagName.isNullOrBlank() -> rawTagName
-                !normalizedTagName.isNullOrBlank() -> normalizedTagName
-                else -> return xml
-            }
-        val startTag = "<$effectiveTagName"
-        val startTagIndex = xml.indexOf(startTag)
-        if (startTagIndex < 0) {
-            return xml
-        }
-
-        val startTagEnd = xml.indexOf('>', startTagIndex)
-        if (startTagEnd < 0) {
-            return xml
-        }
-
-        val endTag = "</$effectiveTagName>"
-        val endIndex = xml.lastIndexOf(endTag)
-        val contentEndExclusive =
-            if (endIndex > startTagEnd) {
-                endIndex
-            } else {
-                xml.length
-            }
-        return xml.substring(startTagEnd + 1, contentEndExclusive)
-    }
-
-    private fun extractXmlAttributes(xml: String): Map<String, String> {
-        val trimmed = xml.trim()
-        val startTagEnd = trimmed.indexOf('>')
-        if (startTagEnd <= 0) {
-            return emptyMap()
-        }
-
-        val startTag = trimmed.substring(0, startTagEnd + 1)
-        val attrs = linkedMapOf<String, String>()
-        Regex("""([A-Za-z_:][A-Za-z0-9_.:-]*)\s*=\s*(['"])([\s\S]*?)\2""")
-            .findAll(startTag)
-            .forEach { match ->
-                val name = match.groupValues.getOrNull(1)?.trim().orEmpty()
-                val value = match.groupValues.getOrNull(3).orEmpty()
-                if (name.isNotBlank()) {
-                    attrs[name] = value
-                }
-            }
-        return attrs
-    }
-
-    private fun isXmlFullyClosed(xml: String, rawTagName: String?): Boolean {
-        val trimmed = xml.trim()
-        if (trimmed.endsWith("/>")) {
-            return true
-        }
-
-        val effectiveTagName = rawTagName ?: ChatMarkupRegex.extractOpeningTagName(trimmed) ?: return false
-        return trimmed.contains("</$effectiveTagName>")
     }
 
     private fun groupContentBlocks(
@@ -2408,7 +2751,15 @@ class WebChatHttpBridge(
         private const val CHARACTER_SELECTOR_PATH = "/api/web/character-selector"
         private const val ACTIVE_PROMPT_PATH = "/api/web/active-prompt"
         private const val MODEL_SELECTOR_PATH = "/api/web/model-selector"
+        private const val MEMORY_SELECTOR_PATH = "/api/web/memory-selector"
+        private const val INPUT_SETTINGS_PATH = "/api/web/input-settings"
+        private const val MANUAL_MEMORY_UPDATE_PATH = "/api/web/actions/manual-memory-update"
+        private const val MANUAL_CONVERSATION_SUMMARY_PATH =
+            "/api/web/actions/manual-conversation-summary"
         private const val CHATS_PATH = "/api/web/chats"
+        private const val CHATS_REORDER_PATH = "/api/web/chats/reorder"
+        private const val CHAT_GROUP_RENAME_PATH = "/api/web/chat-groups/rename"
+        private const val CHAT_GROUP_DELETE_PATH = "/api/web/chat-groups/delete"
         private const val UPLOADS_PATH = "/api/web/uploads"
         private const val ASSET_ROUTE_PREFIX = "/api/web/assets"
         private const val JSON_MIME_TYPE = "application/json; charset=utf-8"

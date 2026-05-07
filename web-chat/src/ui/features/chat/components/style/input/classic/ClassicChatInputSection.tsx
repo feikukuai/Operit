@@ -6,18 +6,14 @@ import { FullscreenInputDialog } from '../../../FullscreenInputDialog';
 import { SimpleLinearProgressIndicator } from '../../../SimpleLinearProgressIndicator';
 import {
   FullscreenIcon,
-  MicIcon,
   PlusIcon,
   SendIcon,
   StopIcon
 } from '../../../../util/chatIcons';
-import { ClassicChatSettingsBar } from './ClassicChatSettingsBar';
 import { PendingMessageQueuePanel } from '../common/PendingMessageQueuePanel';
 import type {
   InputProcessingStage,
   PendingQueueMessageItem,
-  WebModelSelectorState,
-  WebSelectModelResponse,
   WebThemeSnapshot,
   WebUploadedAttachment
 } from '../../../../util/chatTypes';
@@ -49,10 +45,6 @@ export function ClassicChatInputSection({
   onDeletePendingQueueMessage,
   onEditPendingQueueMessage,
   onSendPendingQueueMessage,
-  modelSelector,
-  modelSelectorLoading,
-  onSelectModelConfig,
-  contextPercent
 }: {
   messageInput: string;
   onMessageInputChange: (value: string) => void;
@@ -73,18 +65,9 @@ export function ClassicChatInputSection({
   onDeletePendingQueueMessage: (id: number) => void;
   onEditPendingQueueMessage: (id: number) => void;
   onSendPendingQueueMessage: (id: number) => Promise<void>;
-  modelSelector: WebModelSelectorState | null;
-  modelSelectorLoading: boolean;
-  onSelectModelConfig: (
-    configId: string,
-    modelIndex: number,
-    confirmCharacterCardSwitch?: boolean
-  ) => Promise<WebSelectModelResponse | null>;
-  contextPercent: number;
   theme: WebThemeSnapshot | null;
 }) {
   const [fullscreenOpen, setFullscreenOpen] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const canSendMessage = messageInput.trim().length > 0 || pendingUploads.length > 0;
   const showQueueAction = isLoading && messageInput.trim().length > 0;
@@ -172,7 +155,6 @@ export function ClassicChatInputSection({
         <button
           className={`classic-input-circle ${attachmentPanelOpen ? 'is-active' : ''}`}
           onClick={() => {
-            setSettingsOpen(false);
             onAttachmentPanelChange(!attachmentPanelOpen);
           }}
           title="附件"
@@ -193,21 +175,9 @@ export function ClassicChatInputSection({
           onClick={submitCurrentAction}
           type="button"
         >
-          {showCancelAction ? <StopIcon size={18} /> : canSendMessage ? <SendIcon size={18} /> : <MicIcon size={18} />}
+          {showCancelAction ? <StopIcon size={18} /> : <SendIcon size={18} />}
         </button>
       </div>
-
-      <ClassicChatSettingsBar
-        contextPercent={contextPercent}
-        modelSelector={modelSelector}
-        modelSelectorLoading={modelSelectorLoading}
-        onSelectModelConfig={onSelectModelConfig}
-        onToggleSettings={() => {
-          onAttachmentPanelChange(false);
-          setSettingsOpen(!settingsOpen);
-        }}
-        settingsOpen={settingsOpen}
-      />
 
       <AttachmentSelector
         onDismiss={() => onAttachmentPanelChange(false)}

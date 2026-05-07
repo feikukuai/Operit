@@ -42,6 +42,8 @@
 - 创建目标目录
 - 将 Android 侧插件目录复制到 Linux 侧目录
 - 执行自动分析出的安装/构建命令（会跳过启动命令）
+3.1) 本地插件识别规则：
+- 这样识别是为兼容存储位置外层套目录的情况（如 `<pluginId>/<repo>-main/...`）；Android 侧目录内至少要命中一个标志文件：`README.md`、`package.json`、`mcp.config.json`、`main.js`、`main.py`、`index.js`、`index.py`，否则可能被判定为未安装，进不了启动列表。
 4) 命令型插件判定：
 - 对于 command 为 npx/uvx/uv 的命令型插件，系统按“已部署”处理，仅做最小目录准备。
 - 配置 Node 类命令型 MCP 时，mcp_config.json 里仍应按上游常见写法填写 `command: "npx"`；不要自行改写成 `pnpm` 或 `npm`。
@@ -180,6 +182,7 @@
 - `SILICONFLOW_TTS`：需填写 `api_key`、`model_name`、`voice_id`。
 - `MINIMAX_TTS`：需填写 `api_key`，可选填写 `url_template`、`model_name`、`voice_id`。默认接口为 `https://api.minimaxi.com/v1/t2a_v2`，内部固定按 `data.audio -> http_get` 解析音频。
 - `OPENAI_TTS`：需填写 `url_template`、`api_key`、`model_name`、`voice_id`。
+- `ONNX_TTS`：本地 ONNX TTS。`url_template` 填本地 `.onnx` 模型路径，`model_name` 填本地 tokenizer/config JSON 路径，`voice_id` 可选填数字 speaker id，`headers` 可选填写 `sample_rate`、`threads`、`noise_scale`、`length_scale`、`noise_w`、`text_mode`、`speaker_count`、输入名和 blank/bos/eos token 等本地参数。
 3) STT（语音转文本）可选引擎：
 - `SHERPA_NCNN`：本地识别，通常无需 API Key。
 - `OPENAI_STT`：需填写 `endpoint_url`、`api_key`、`model_name`。
@@ -189,6 +192,9 @@
 - `HTTP_TTS` 的模板没放 `{text}` 占位符（GET 通常在 URL，POST 通常在 body）。
 - `HTTP_TTS` 的 `response_pipeline` 不是合法 JSON 数组，或步骤名 / `path` 填错。
 - `OPENAI_WS_TTS` 把 HTTP 地址填成了 WebSocket 地址，或把 WebSocket 地址误填成 HTTP 地址。
+- `ONNX_TTS` 的 `url_template` 不是本地 `.onnx` 文件路径，或文件不存在。
+- `ONNX_TTS` 的 `model_name` 没填本地 tokenizer/config JSON 路径，或配置里缺少 `sample_rate` / token 映射。
+- `ONNX_TTS` 的 `headers` 不是合法 JSON（必须是对象），或把本地参数名 / 数值类型写错。
 - TTS/STT 的 endpoint 路径写错（比如把 chat/completions 写成 audio 接口）。
 - `model_name` 填了不存在的模型或与接口不匹配。
 - 改完配置后没有重新测试语音播报或语音识别。
@@ -278,6 +284,8 @@
 - Create target directory
 - Copy plugin files from Android side to Linux side
 - Execute auto-generated install/build commands (startup commands are skipped)
+3.1) Local plugin recognition rule:
+- This exists to handle nested storage layouts (for example `<pluginId>/<repo>-main/...`): the Android-side plugin directory must contain at least one marker file such as `README.md`, `package.json`, `mcp.config.json`, `main.js`, `main.py`, `index.js`, or `index.py`; otherwise it may be treated as not installed and never enter the startup list.
 4) Command-based plugin handling:
 - For command-based plugins using npx/uvx/uv, the system treats them as deployed and only performs minimal directory preparation.
 - For Node-style command MCPs, keep the config in mcp_config.json aligned with upstream examples and still write `command: "npx"`; do not rewrite it to `pnpm` or `npm` yourself.
@@ -416,6 +424,7 @@
 - `SILICONFLOW_TTS`: fill `api_key`, `model_name`, `voice_id`.
 - `MINIMAX_TTS`: fill `api_key`; optionally set `url_template`, `model_name`, and `voice_id`. Default endpoint is `https://api.minimaxi.com/v1/t2a_v2`, and audio is resolved from `data.audio` automatically.
 - `OPENAI_TTS`: fill `url_template`, `api_key`, `model_name`, `voice_id`.
+- `ONNX_TTS`: local ONNX TTS. Set `url_template` to the local `.onnx` model path, `model_name` to the local tokenizer/config JSON path, optionally set `voice_id` to a numeric speaker id, and use `headers` for local options such as `sample_rate`, `threads`, `noise_scale`, `length_scale`, `noise_w`, `text_mode`, `speaker_count`, input names, and blank/bos/eos token settings.
 3) STT (speech-to-text) engines:
 - `SHERPA_NCNN`: local recognition, usually no API key required.
 - `OPENAI_STT`: fill `endpoint_url`, `api_key`, `model_name`.
@@ -425,6 +434,9 @@
 - Missing `{text}` placeholder in HTTP TTS template (typically in URL for GET, in body for POST).
 - `response_pipeline` in `HTTP_TTS` is not a valid JSON array, or a step name / `path` is incorrect.
 - `OPENAI_WS_TTS` is configured with an HTTP URL instead of a WebSocket URL, or vice versa.
+- `url_template` in `ONNX_TTS` is not a local `.onnx` file path, or the file does not exist.
+- `model_name` in `ONNX_TTS` is not a local tokenizer/config JSON path, or the config is missing `sample_rate` / token mappings.
+- `headers` in `ONNX_TTS` is not valid JSON, or local option names / numeric values are invalid.
 - Wrong endpoint path for TTS/STT (for example using chat/completions instead of audio endpoints).
 - `model_name` does not exist or does not match the API.
 - No real retest after saving config.
@@ -761,8 +773,8 @@
         {
           name: "tts_service_type"
           description: {
-            zh: "可选，SIMPLE_TTS/HTTP_TTS/OPENAI_WS_TTS/SILICONFLOW_TTS/MINIMAX_TTS/OPENAI_TTS"
-            en: "Optional, SIMPLE_TTS/HTTP_TTS/OPENAI_WS_TTS/SILICONFLOW_TTS/MINIMAX_TTS/OPENAI_TTS"
+            zh: "可选，SIMPLE_TTS/HTTP_TTS/OPENAI_WS_TTS/SILICONFLOW_TTS/MINIMAX_TTS/OPENAI_TTS/ONNX_TTS"
+            en: "Optional, SIMPLE_TTS/HTTP_TTS/OPENAI_WS_TTS/SILICONFLOW_TTS/MINIMAX_TTS/OPENAI_TTS/ONNX_TTS"
           }
           type: string
           required: false
@@ -770,8 +782,8 @@
         {
           name: "tts_url_template"
           description: {
-            zh: "可选，TTS URL 模板。仅支持 `{text}`、`{rate}`、`{pitch}`、`{voice}`"
-            en: "Optional TTS URL template. Supports only `{text}`, `{rate}`, `{pitch}`, `{voice}`"
+            zh: "可选，TTS URL 模板；ONNX_TTS 时表示本地 .onnx 模型路径。HTTP 系列仅支持 `{text}`、`{rate}`、`{pitch}`、`{voice}`"
+            en: "Optional TTS URL template; for ONNX_TTS this is the local .onnx model path. HTTP-style providers support only `{text}`, `{rate}`, `{pitch}`, `{voice}`"
           }
           type: string
           required: false
@@ -788,8 +800,8 @@
         {
           name: "tts_headers"
           description: {
-            zh: "可选，TTS headers 的 JSON 对象字符串"
-            en: "Optional JSON object string for TTS headers"
+            zh: "可选，TTS headers 的 JSON 对象字符串；ONNX_TTS 时存放 sample_rate、noise_scale、输入名等本地参数"
+            en: "Optional JSON object string for TTS headers; for ONNX_TTS this stores local options such as sample_rate, noise_scale, and input names"
           }
           type: string
           required: false
@@ -806,8 +818,8 @@
         {
           name: "tts_request_body"
           description: {
-            zh: "可选，TTS POST body 模板。仅支持 `{text}`、`{rate}`、`{pitch}`、`{voice}`"
-            en: "Optional TTS POST body template. Supports only `{text}`, `{rate}`, `{pitch}`, `{voice}`"
+            zh: "可选，HTTP 类 TTS 的 POST body 模板。仅支持 `{text}`、`{rate}`、`{pitch}`、`{voice}`"
+            en: "Optional POST body template for HTTP-style TTS providers. Supports only `{text}`, `{rate}`, `{pitch}`, `{voice}`"
           }
           type: string
           required: false
@@ -833,8 +845,8 @@
         {
           name: "tts_voice_id"
           description: {
-            zh: "可选，TTS 音色 ID"
-            en: "Optional TTS voice id"
+            zh: "可选，TTS 音色 ID；ONNX_TTS 时表示模型需要的数字 speaker id"
+            en: "Optional TTS voice id; for ONNX_TTS this is the numeric speaker id required by the model"
           }
           type: string
           required: false
@@ -842,8 +854,8 @@
         {
           name: "tts_model_name"
           description: {
-            zh: "可选，TTS 模型名"
-            en: "Optional TTS model name"
+            zh: "可选，TTS 模型名；ONNX_TTS 时表示本地 tokenizer/config JSON 路径"
+            en: "Optional TTS model name; for ONNX_TTS this is the local tokenizer/config JSON path"
           }
           type: string
           required: false
@@ -2067,7 +2079,7 @@ description: one-line summary of what this skill does
         const normalizedPackageName = normalize_package_key(packageName);
         const normalizedPaths = relatedPaths.map((path) => String(path ?? "").trim()).filter(Boolean);
         const packageLoadErrors = payload?.packageLoadErrors;
-        if (!packageLoadErrors || typeof packageLoadErrors !== "object") {
+        if (!packageLoadErrors) {
             return {};
         }
         return Object.fromEntries(Object.entries(packageLoadErrors).filter(([key, value]) => {
@@ -2156,12 +2168,12 @@ description: one-line summary of what this skill does
         return Number.isFinite(parsed) && parsed >= 0 ? Math.floor(parsed) : defaultValue;
     }
     async function android_path_exists(path) {
-        const result = (await Tools.Files.exists(path, "android"));
-        return !!result?.exists;
+        const result = await Tools.Files.exists(path, "android");
+        return result.exists;
     }
     async function get_android_file_type(path) {
-        const result = (await Tools.Files.info(path, "android"));
-        return String(result?.fileType ?? "").trim().toLowerCase();
+        const result = await Tools.Files.info(path, "android");
+        return result.fileType.trim().toLowerCase();
     }
     async function ensure_android_directory(path) {
         await Tools.Files.mkdir(path, true, "android");
@@ -2186,12 +2198,8 @@ description: one-line summary of what this skill does
         }
     }
     async function read_android_text_file(path) {
-        const result = (await Tools.Files.read({ path, environment: "android" }));
-        const content = typeof result?.content === "string" ? result.content : extract_string_result(result);
-        if (typeof content !== "string") {
-            throw new Error(`Failed to read text file: ${path}`);
-        }
-        return content;
+        const result = await Tools.Files.read({ path, environment: "android" });
+        return result.content;
     }
     function parse_json_record(raw) {
         if (!raw)
@@ -2276,7 +2284,7 @@ description: one-line summary of what this skill does
     }
     async function delete_duplicate_external_js_package_files(packageName, keepPath) {
         const removedPaths = [];
-        const listing = (await Tools.Files.list(SANDBOX_EXTERNAL_PACKAGES_DIR, "android"));
+        const listing = await Tools.Files.list(SANDBOX_EXTERNAL_PACKAGES_DIR, "android");
         for (const entry of listing?.entries ?? []) {
             const entryName = String(entry?.name ?? "").trim();
             if (!entryName || entry?.isDirectory || !entryName.toLowerCase().endsWith(".js")) {
@@ -2538,7 +2546,7 @@ description: one-line summary of what this skill does
             let activateResult = null;
             if (activateAfterInstall) {
                 logStep(`Activating package via use_package -> ${packageInfo.packageName}`);
-                activateResult = extract_string_result(await toolCall("use_package", { package_name: packageInfo.packageName }));
+                activateResult = await Tools.System.usePackage(packageInfo.packageName);
                 logStep(`Activation result -> ${activateResult || "<empty>"}`);
             }
             else {
@@ -2631,7 +2639,7 @@ description: one-line summary of what this skill does
                     reset_subpackage_states: resetSubpackageStates
                 }
             });
-            logStep(`Debug install broadcast dispatched -> ${extract_string_result(broadcastResult) || "<empty>"}`);
+            logStep(`Debug install broadcast dispatched -> ${broadcastResult.result || "<empty>"}`);
             const refresh = await refresh_sandbox_packages_until(resolvedSource.packageId, waitMs);
             const relatedLoadErrors = collect_related_package_load_errors(refresh.payload, resolvedSource.packageId, resolvedSource.sourcePath, archivePath, targetPath);
             logStep(`Sandbox refresh completed -> found=${String(Boolean(refresh.packageEntry))}, builtIn=${String(refresh.packageEntry?.isBuiltIn ?? false)}`);
@@ -2678,7 +2686,7 @@ description: one-line summary of what this skill does
                 logStep(`Enabling subpackage -> ${subpackageId}`);
                 const enableResult = await Tools.SoftwareSettings.setSandboxPackageEnabled(subpackageId, true);
                 logStep(`Subpackage enable result [${subpackageId}] -> ${enableResult.message || "<empty>"}`);
-                const activateResult = extract_string_result(await toolCall("use_package", { package_name: subpackageId }));
+                const activateResult = await Tools.System.usePackage(subpackageId);
                 logStep(`Subpackage activate result [${subpackageId}] -> ${activateResult || "<empty>"}`);
                 subpackageResults.push({
                     subpackage_id: subpackageId,
@@ -2830,22 +2838,6 @@ description: one-line summary of what this skill does
             });
         }
     }
-    function extract_string_result(result) {
-        if (typeof result === "string")
-            return result;
-        if (!result || typeof result !== "object" || Array.isArray(result))
-            return "";
-        const record = result;
-        if (typeof record.value === "string")
-            return record.value;
-        if (record.value !== undefined && record.value !== null)
-            return String(record.value);
-        if (typeof record.data === "string")
-            return record.data;
-        if (record.data !== undefined && record.data !== null)
-            return String(record.data);
-        return "";
-    }
     async function read_environment_variable(params) {
         try {
             const key = (params?.key ?? "").trim();
@@ -2936,12 +2928,6 @@ description: one-line summary of what this skill does
     async function set_speech_services_config(params) {
         try {
             const updates = { ...(params ?? {}) };
-            if (updates.tts_locale !== undefined && updates.tts_locale !== null) {
-                updates.tts_locale = String(updates.tts_locale);
-            }
-            if (Array.isArray(updates.tts_response_pipeline)) {
-                updates.tts_response_pipeline = JSON.stringify(updates.tts_response_pipeline);
-            }
             const result = await Tools.SoftwareSettings.setSpeechServicesConfig(updates);
             const parsed = result;
             complete({
@@ -2974,8 +2960,7 @@ description: one-line summary of what this skill does
             delete options.text;
             const result = await Tools.SoftwareSettings.testTtsPlayback(text, options);
             const success = result.playbackTriggered;
-            const detailMessage = (typeof result.errorMessage === "string" && result.errorMessage.trim().length > 0 && result.errorMessage) ||
-                "TTS playback test failed.";
+            const detailMessage = result.errorMessage?.trim() || "TTS playback test failed.";
             complete({
                 success,
                 message: success ? "TTS playback test triggered." : detailMessage,
@@ -3310,7 +3295,7 @@ description: one-line summary of what this skill does
                 });
                 return;
             }
-            const result = await toolCall("use_package", { package_name: packageName });
+            const result = await Tools.System.usePackage(packageName);
             complete({
                 success: true,
                 message: `Package probe finished: ${packageName}`,

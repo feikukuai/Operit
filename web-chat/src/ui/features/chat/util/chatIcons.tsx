@@ -194,6 +194,16 @@ export function AddCircleIcon(props: IconProps) {
   );
 }
 
+export function DragHandleIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="M6 8h12" />
+      <path d="M6 12h12" />
+      <path d="M6 16h12" />
+    </IconBase>
+  );
+}
+
 export function TuneIcon(props: IconProps) {
   return (
     <IconBase {...props}>
@@ -362,6 +372,28 @@ export function GroupIcon(props: IconProps) {
       <path d="M4.5 19a5 5 0 0 1 9 0" />
       <path d="M13.5 18.5a4.2 4.2 0 0 1 6 0" />
     </IconBase>
+  );
+}
+
+export function StarOutlineIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="m12 3.5 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1L3.2 9.9l6.1-.9Z" />
+    </IconBase>
+  );
+}
+
+export function StarFilledIcon(props: IconProps) {
+  return (
+    <svg
+      fill="currentColor"
+      height={props.size ?? 18}
+      viewBox="0 0 24 24"
+      width={props.size ?? 18}
+      {...props}
+    >
+      <path d="m12 3.5 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1L3.2 9.9l6.1-.9Z" />
+    </svg>
   );
 }
 

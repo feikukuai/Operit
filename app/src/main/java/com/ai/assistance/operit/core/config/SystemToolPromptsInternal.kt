@@ -1642,13 +1642,13 @@ object SystemToolPromptsInternal {
                                     ToolParameterSchema(
                                         name = "tts_service_type",
                                         type = "string",
-                                        description = "optional, SIMPLE_TTS/HTTP_TTS/OPENAI_WS_TTS/SILICONFLOW_TTS/MINIMAX_TTS/OPENAI_TTS",
+                                        description = "optional, SIMPLE_TTS/HTTP_TTS/OPENAI_WS_TTS/SILICONFLOW_TTS/MINIMAX_TTS/OPENAI_TTS/ONNX_TTS",
                                         required = false
                                     ),
                                     ToolParameterSchema(
                                         name = "tts_url_template",
                                         type = "string",
-                                        description = "optional, TTS endpoint URL template",
+                                        description = "optional, TTS endpoint URL template; for ONNX_TTS this is the local .onnx model path",
                                         required = false
                                     ),
                                     ToolParameterSchema(
@@ -1660,7 +1660,7 @@ object SystemToolPromptsInternal {
                                     ToolParameterSchema(
                                         name = "tts_headers",
                                         type = "string",
-                                        description = "optional, TTS headers JSON object string",
+                                        description = "optional, TTS headers JSON object string; for ONNX_TTS this stores local options such as sample_rate/noise_scale/input names",
                                         required = false
                                     ),
                                     ToolParameterSchema(
@@ -1690,13 +1690,13 @@ object SystemToolPromptsInternal {
                                     ToolParameterSchema(
                                         name = "tts_voice_id",
                                         type = "string",
-                                        description = "optional, TTS voice id",
+                                        description = "optional, TTS voice id; for ONNX_TTS this is numeric speaker id when the model requires it",
                                         required = false
                                     ),
                                     ToolParameterSchema(
                                         name = "tts_model_name",
                                         type = "string",
-                                        description = "optional, TTS model name",
+                                        description = "optional, TTS model name; for ONNX_TTS this is the local tokenizer/config JSON path",
                                         required = false
                                     ),
                                     ToolParameterSchema(
@@ -4248,13 +4248,13 @@ object SystemToolPromptsInternal {
                                     ToolParameterSchema(
                                         name = "tts_service_type",
                                         type = "string",
-                                        description = "可选，SIMPLE_TTS/HTTP_TTS/OPENAI_WS_TTS/SILICONFLOW_TTS/MINIMAX_TTS/OPENAI_TTS",
+                                        description = "可选，SIMPLE_TTS/HTTP_TTS/OPENAI_WS_TTS/SILICONFLOW_TTS/MINIMAX_TTS/OPENAI_TTS/ONNX_TTS",
                                         required = false
                                     ),
                                     ToolParameterSchema(
                                         name = "tts_url_template",
                                         type = "string",
-                                        description = "可选，TTS 端点 URL 模板",
+                                        description = "可选，TTS 端点 URL 模板；ONNX_TTS 时表示本地 .onnx 模型路径",
                                         required = false
                                     ),
                                     ToolParameterSchema(
@@ -4266,7 +4266,7 @@ object SystemToolPromptsInternal {
                                     ToolParameterSchema(
                                         name = "tts_headers",
                                         type = "string",
-                                        description = "可选，TTS headers 的 JSON 对象字符串",
+                                        description = "可选，TTS headers 的 JSON 对象字符串；ONNX_TTS 时存放 sample_rate/noise_scale/input 名称等本地参数",
                                         required = false
                                     ),
                                     ToolParameterSchema(
@@ -4296,13 +4296,13 @@ object SystemToolPromptsInternal {
                                     ToolParameterSchema(
                                         name = "tts_voice_id",
                                         type = "string",
-                                        description = "可选，TTS 音色 ID",
+                                        description = "可选，TTS 音色 ID；ONNX_TTS 时表示模型需要的数字 speaker id",
                                         required = false
                                     ),
                                     ToolParameterSchema(
                                         name = "tts_model_name",
                                         type = "string",
-                                        description = "可选，TTS 模型名",
+                                        description = "可选，TTS 模型名；ONNX_TTS 时表示本地 tokenizer/config JSON 路径",
                                         required = false
                                     ),
                                     ToolParameterSchema(

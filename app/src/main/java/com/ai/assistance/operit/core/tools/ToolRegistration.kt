@@ -2,13 +2,19 @@ package com.ai.assistance.operit.core.tools
 
 import android.content.Context
 import com.ai.assistance.operit.R
+import com.ai.assistance.operit.api.chat.enhance.ToolExecutionManager
+import com.ai.assistance.operit.core.tools.climode.CliToolModeSupport
+import com.ai.assistance.operit.core.tools.climode.ToolExposureMode
 import com.ai.assistance.operit.core.tools.defaultTool.ToolGetter
 import com.ai.assistance.operit.data.model.AITool
 import com.ai.assistance.operit.data.model.ToolParameter
 import com.ai.assistance.operit.data.model.ToolResult
+import com.ai.assistance.operit.data.preferences.CharacterCardToolAccessResolver
+import com.ai.assistance.operit.data.preferences.ResolvedCharacterCardToolAccess
 import com.ai.assistance.operit.integrations.tasker.triggerAIAgentAction
 import com.ai.assistance.operit.services.FloatingChatService
 import com.ai.assistance.operit.ui.common.displays.VirtualDisplayOverlay
+import com.ai.assistance.operit.util.LocaleUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.last
@@ -68,6 +74,195 @@ fun registerAllTools(handler: AIToolHandler, context: Context) {
         } else {
             ""
         }
+    }
+
+    val packageContextParamNames = setOf(
+        "__operit_package_caller_name",
+        "__operit_package_chat_id",
+        "__operit_package_caller_card_id"
+    )
+
+    class ParsedProxyInvocation(
+        val targetToolName: String,
+        val forwardedParameters: MutableList<ToolParameter>
+    )
+
+    fun isEnglishLanguage(): Boolean {
+        return LocaleUtils.getCurrentLanguage(context).lowercase().startsWith("en")
+    }
+
+    fun buildToolErrorResult(tool: AITool, error: String): ToolResult {
+        return ToolResult(
+            toolName = tool.name,
+            success = false,
+            result = StringResultData(""),
+            error = error
+        )
+    }
+
+    fun parseProxyInvocation(
+        tool: AITool,
+        requireQualifiedTarget: Boolean
+    ): Pair<ParsedProxyInvocation?, ToolResult?> {
+        val allowedParamNames = setOf("tool_name", "params") + packageContextParamNames
+        val unknownParamNames = tool.parameters.map { it.name }.filter { it !in allowedParamNames }
+        if (unknownParamNames.isNotEmpty()) {
+            return null to buildToolErrorResult(
+                tool,
+                "Unexpected parameters: ${unknownParamNames.joinToString(", ")}. Only tool_name, params, and supported system context parameters are allowed"
+            )
+        }
+
+        val toolNameParams = tool.parameters.filter { it.name == "tool_name" }
+        if (toolNameParams.size != 1) {
+            return null to buildToolErrorResult(
+                tool,
+                "Exactly one tool_name parameter is required"
+            )
+        }
+        val targetToolName = toolNameParams.first().value.trim()
+        if (targetToolName.isBlank()) {
+            return null to buildToolErrorResult(
+                tool,
+                "Missing required parameter: tool_name"
+            )
+        }
+
+        if (requireQualifiedTarget && !targetToolName.contains(':')) {
+            return null to buildToolErrorResult(
+                tool,
+                "tool_name must use packageName:toolName format"
+            )
+        }
+
+        val paramsParams = tool.parameters.filter { it.name == "params" }
+        if (paramsParams.size != 1) {
+            return null to buildToolErrorResult(
+                tool,
+                "Exactly one params parameter is required"
+            )
+        }
+        val paramsRaw = paramsParams.first().value.trim()
+        if (paramsRaw.isBlank()) {
+            return null to buildToolErrorResult(tool, "params must be a JSON object")
+        }
+
+        val paramsObject = try {
+            JSONObject(paramsRaw)
+        } catch (_: Exception) {
+            return null to buildToolErrorResult(tool, "params must be a valid JSON object")
+        }
+
+        val forwardedParameters = mutableListOf<ToolParameter>()
+        val keys = paramsObject.keys()
+        while (keys.hasNext()) {
+            val key = keys.next()
+            val value = paramsObject.opt(key)
+            val valueString = when (value) {
+                null, JSONObject.NULL -> "null"
+                is String -> value
+                else -> value.toString()
+            }
+            forwardedParameters.add(ToolParameter(name = key, value = valueString))
+        }
+
+        packageContextParamNames.forEach { paramName ->
+            val value = tool.parameters
+                .firstOrNull { it.name == paramName }
+                ?.value
+                ?.trim()
+            if (!value.isNullOrBlank() && forwardedParameters.none { it.name == paramName }) {
+                forwardedParameters.add(ToolParameter(name = paramName, value = value))
+            }
+        }
+
+        return ParsedProxyInvocation(
+            targetToolName = targetToolName,
+            forwardedParameters = forwardedParameters
+        ) to null
+    }
+
+    fun resolveCurrentRoleCardToolAccess(): ResolvedCharacterCardToolAccess {
+        val runtimeContext = ToolExecutionManager.currentToolRuntimeContext()
+        return runBlocking {
+            CharacterCardToolAccessResolver
+                .getInstance(context)
+                .resolve(
+                    roleCardId = runtimeContext?.callerCardId,
+                    packageManager = handler.getOrCreatePackageManager()
+                )
+        }
+    }
+
+    fun isProxyTargetAllowedForRoleCard(
+        targetToolName: String,
+        forwardedParameters: List<ToolParameter>,
+        roleCardToolAccess: ResolvedCharacterCardToolAccess
+    ): Boolean {
+        val usePackageSourceName =
+            if (targetToolName == "use_package") {
+                forwardedParameters
+                    .firstOrNull { it.name == "package_name" }
+                    ?.value
+                    ?.trim()
+                    .orEmpty()
+                    .ifBlank { null }
+            } else {
+                null
+            }
+
+        return CliToolModeSupport.isToolNameAllowedForRoleCard(
+            toolName = targetToolName,
+            usePackageSourceName = usePackageSourceName,
+            roleCardToolAccess = roleCardToolAccess
+        )
+    }
+
+    fun executeProxyTargetWithPermissionCheck(
+        targetToolName: String,
+        forwardedParameters: List<ToolParameter>,
+        useEnglish: Boolean
+    ): ToolResult {
+        val proxiedTool = AITool(
+            name = targetToolName,
+            parameters = forwardedParameters
+        )
+        val executor = handler.getToolExecutorOrActivate(targetToolName)
+        if (executor == null) {
+            return ToolResult(
+                toolName = targetToolName,
+                success = false,
+                result = StringResultData(""),
+                error = CliToolModeSupport.buildProxyTargetUnavailableMessage(targetToolName, useEnglish)
+            )
+        }
+
+        val hasPermission = runBlocking {
+            handler.getToolPermissionSystem().checkToolPermission(proxiedTool)
+        }
+        if (!hasPermission) {
+            val errorMessage = "User cancelled the tool execution."
+            handler.notifyToolPermissionChecked(
+                proxiedTool,
+                granted = false,
+                reason = errorMessage
+            )
+            return ToolResult(
+                toolName = targetToolName,
+                success = false,
+                result = StringResultData(""),
+                error = errorMessage
+            )
+        }
+
+        handler.notifyToolPermissionChecked(proxiedTool, granted = true)
+        val proxiedResult = handler.executeTool(proxiedTool)
+        return ToolResult(
+            toolName = targetToolName,
+            success = proxiedResult.success,
+            result = proxiedResult.result,
+            error = proxiedResult.error
+        )
     }
 
     // 不在提示词加入的工具
@@ -637,125 +832,158 @@ fun registerAllTools(handler: AIToolHandler, context: Context) {
     )
 
     handler.registerTool(
+            name = CliToolModeSupport.SEARCH_TOOL_NAME,
+            descriptionGenerator = { tool ->
+                val query = tool.parameters.find { it.name == "query" }?.value ?: ""
+                "Search hidden tool catalog: $query"
+            },
+            executor = { tool ->
+                val useEnglish = isEnglishLanguage()
+                val runtimeContext = ToolExecutionManager.currentToolRuntimeContext()
+                if (runtimeContext?.toolExposureMode != ToolExposureMode.CLI) {
+                    return@registerTool ToolResult(
+                        toolName = tool.name,
+                        success = false,
+                        result = StringResultData(""),
+                        error = CliToolModeSupport.buildCliModeUnavailableMessage(useEnglish)
+                    )
+                }
+
+                val query = tool.parameters
+                    .firstOrNull { it.name == "query" }
+                    ?.value
+                    ?.trim()
+                    .orEmpty()
+                if (query.isBlank()) {
+                    return@registerTool buildToolErrorResult(tool, "Missing required parameter: query")
+                }
+
+                val limit = tool.parameters
+                    .firstOrNull { it.name == "limit" }
+                    ?.value
+                    ?.trim()
+                    ?.takeIf { it.isNotEmpty() }
+                    ?.toIntOrNull()
+                    ?: CliToolModeSupport.defaultSearchLimit()
+
+                val roleCardToolAccess = resolveCurrentRoleCardToolAccess()
+                val hiddenCatalog = runBlocking {
+                    CliToolModeSupport.buildHiddenToolCatalog(
+                        context = context,
+                        packageManager = handler.getOrCreatePackageManager(),
+                        roleCardToolAccess = roleCardToolAccess,
+                        useEnglish = useEnglish
+                    )
+                }
+                val results = CliToolModeSupport.searchHiddenToolCatalog(
+                    catalog = hiddenCatalog,
+                    query = query,
+                    limit = limit
+                )
+                ToolResult(
+                    toolName = tool.name,
+                    success = true,
+                    result = StringResultData(
+                        CliToolModeSupport.formatSearchResults(query, results, useEnglish)
+                    )
+                )
+            }
+    )
+
+    handler.registerTool(
+            name = CliToolModeSupport.PROXY_TOOL_NAME,
+            descriptionGenerator = { tool ->
+                val targetToolName = tool.parameters.find { it.name == "tool_name" }?.value ?: ""
+                "Proxy call to hidden tool: $targetToolName"
+            },
+            executor = { tool ->
+                val useEnglish = isEnglishLanguage()
+                val runtimeContext = ToolExecutionManager.currentToolRuntimeContext()
+                if (runtimeContext?.toolExposureMode != ToolExposureMode.CLI) {
+                    return@registerTool ToolResult(
+                        toolName = tool.name,
+                        success = false,
+                        result = StringResultData(""),
+                        error = CliToolModeSupport.buildCliModeUnavailableMessage(useEnglish)
+                    )
+                }
+
+                val (parsedInvocation, parseError) = parseProxyInvocation(
+                    tool = tool,
+                    requireQualifiedTarget = false
+                )
+                if (parseError != null) {
+                    return@registerTool parseError
+                }
+                val resolvedInvocation = parsedInvocation ?: return@registerTool buildToolErrorResult(
+                    tool,
+                    "Missing required parameter: tool_name"
+                )
+
+                if (CliToolModeSupport.isReservedProxyTarget(resolvedInvocation.targetToolName)) {
+                    return@registerTool ToolResult(
+                        toolName = tool.name,
+                        success = false,
+                        result = StringResultData(""),
+                        error = CliToolModeSupport.buildReservedProxyTargetMessage(
+                            resolvedInvocation.targetToolName,
+                            useEnglish
+                        )
+                    )
+                }
+
+                val roleCardToolAccess = resolveCurrentRoleCardToolAccess()
+                if (!isProxyTargetAllowedForRoleCard(
+                        targetToolName = resolvedInvocation.targetToolName,
+                        forwardedParameters = resolvedInvocation.forwardedParameters,
+                        roleCardToolAccess = roleCardToolAccess
+                    )
+                ) {
+                    return@registerTool ToolResult(
+                        toolName = resolvedInvocation.targetToolName,
+                        success = false,
+                        result = StringResultData(""),
+                        error = CliToolModeSupport.buildRoleAccessDeniedMessage(useEnglish)
+                    )
+                }
+
+                executeProxyTargetWithPermissionCheck(
+                    targetToolName = resolvedInvocation.targetToolName,
+                    forwardedParameters = resolvedInvocation.forwardedParameters,
+                    useEnglish = useEnglish
+                )
+            }
+    )
+
+    handler.registerTool(
             name = "package_proxy",
             descriptionGenerator = { tool ->
                 val targetToolName = tool.parameters.find { it.name == "tool_name" }?.value ?: ""
                 "Proxy call to package tool: $targetToolName"
             },
             executor = { tool ->
-                val packageContextParamNames = setOf(
-                    "__operit_package_caller_name",
-                    "__operit_package_chat_id",
-                    "__operit_package_caller_card_id"
+                val (parsedInvocation, parseError) = parseProxyInvocation(
+                    tool = tool,
+                    requireQualifiedTarget = true
                 )
-                val allowedParamNames = setOf("tool_name", "params") + packageContextParamNames
-                val unknownParamNames = tool.parameters.map { it.name }.filter { it !in allowedParamNames }
-                if (unknownParamNames.isNotEmpty()) {
-                    return@registerTool ToolResult(
-                        toolName = tool.name,
-                        success = false,
-                        result = StringResultData(""),
-                        error = "Unexpected parameters: ${unknownParamNames.joinToString(", ")}. Only tool_name, params, and supported system context parameters are allowed"
-                    )
+                if (parseError != null) {
+                    return@registerTool parseError
                 }
-
-                val toolNameParams = tool.parameters.filter { it.name == "tool_name" }
-                if (toolNameParams.size != 1) {
-                    return@registerTool ToolResult(
-                        toolName = tool.name,
-                        success = false,
-                        result = StringResultData(""),
-                        error = "Exactly one tool_name parameter is required"
-                    )
-                }
-                val targetToolName = toolNameParams.first().value.trim()
-                if (targetToolName.isBlank()) {
-                    return@registerTool ToolResult(
-                        toolName = tool.name,
-                        success = false,
-                        result = StringResultData(""),
-                        error = "Missing required parameter: tool_name"
-                    )
-                }
-
-                if (targetToolName == "package_proxy") {
-                    return@registerTool ToolResult(
-                        toolName = tool.name,
-                        success = false,
-                        result = StringResultData(""),
-                        error = "tool_name cannot be package_proxy"
-                    )
-                }
-
-                if (!targetToolName.contains(':')) {
-                    return@registerTool ToolResult(
-                        toolName = tool.name,
-                        success = false,
-                        result = StringResultData(""),
-                        error = "tool_name must use packageName:toolName format"
-                    )
-                }
-
-                val paramsParams = tool.parameters.filter { it.name == "params" }
-                if (paramsParams.size != 1) {
-                    return@registerTool ToolResult(
-                        toolName = tool.name,
-                        success = false,
-                        result = StringResultData(""),
-                        error = "Exactly one params parameter is required"
-                    )
-                }
-                val paramsRaw = paramsParams.first().value.trim()
-                if (paramsRaw.isBlank()) {
-                    return@registerTool ToolResult(
-                        toolName = tool.name,
-                        success = false,
-                        result = StringResultData(""),
-                        error = "params must be a JSON object"
-                    )
-                }
-
-                val paramsObject = try {
-                    JSONObject(paramsRaw)
-                } catch (_: Exception) {
-                    return@registerTool ToolResult(
-                        toolName = tool.name,
-                        success = false,
-                        result = StringResultData(""),
-                        error = "params must be a valid JSON object"
-                    )
-                }
-
-                val forwardedParameters = mutableListOf<ToolParameter>()
-                val keys = paramsObject.keys()
-                while (keys.hasNext()) {
-                    val key = keys.next()
-                    val value = paramsObject.opt(key)
-                    val valueString = when (value) {
-                        null, JSONObject.NULL -> "null"
-                        is String -> value
-                        else -> value.toString()
-                    }
-                    forwardedParameters.add(ToolParameter(name = key, value = valueString))
-                }
-
-                packageContextParamNames.forEach { paramName ->
-                    val value = tool.parameters
-                        .firstOrNull { it.name == paramName }
-                        ?.value
-                        ?.trim()
-                    if (!value.isNullOrBlank() && forwardedParameters.none { it.name == paramName }) {
-                        forwardedParameters.add(ToolParameter(name = paramName, value = value))
-                    }
+                val resolvedInvocation = parsedInvocation ?: return@registerTool buildToolErrorResult(
+                    tool,
+                    "Missing required parameter: tool_name"
+                )
+                if (resolvedInvocation.targetToolName == CliToolModeSupport.PACKAGE_PROXY_TOOL_NAME) {
+                    return@registerTool buildToolErrorResult(tool, "tool_name cannot be package_proxy")
                 }
 
                 val proxiedTool = AITool(
-                    name = targetToolName,
-                    parameters = forwardedParameters
+                    name = resolvedInvocation.targetToolName,
+                    parameters = resolvedInvocation.forwardedParameters
                 )
                 val proxiedResult = handler.executeTool(proxiedTool)
                 ToolResult(
-                    toolName = targetToolName,
+                    toolName = resolvedInvocation.targetToolName,
                     success = proxiedResult.success,
                     result = proxiedResult.result,
                     error = proxiedResult.error

@@ -1,9 +1,8 @@
 import worldbookManagerScreen from "./ui/worldbook_manager/index.ui.js";
+import { ensureWorldBookStorage, readWorldBookEntries } from "./shared/worldbook_storage.js";
 
 declare function getCallerCardId(): string | undefined;
 
-const WORLD_BOOK_DIR = "/sdcard/Download/Operit/worldbook";
-const WORLD_BOOK_FILE = "/sdcard/Download/Operit/worldbook/entries.json";
 const WORLDBOOK_ROUTE = "toolpkg:com.operit.worldbook:ui:worldbook_manager";
 
 interface WorldBookEntry {
@@ -115,28 +114,9 @@ async function resolveCurrentCharacterCardId(
   }
 }
 
-async function ensureWorldBookFile(): Promise<void> {
-  await Tools.Files.mkdir(WORLD_BOOK_DIR, true);
-  const existsResult = await Tools.Files.exists(WORLD_BOOK_FILE);
-  if (existsResult?.exists) {
-    return;
-  }
-  await Tools.Files.write(WORLD_BOOK_FILE, "[]", false);
-}
-
 async function readEnabledEntries(): Promise<WorldBookEntry[]> {
   try {
-    await ensureWorldBookFile();
-    const fileResult = await Tools.Files.read(WORLD_BOOK_FILE);
-    if (!fileResult?.content) {
-      return [];
-    }
-
-    const parsed = JSON.parse(fileResult.content);
-    if (!Array.isArray(parsed)) {
-      return [];
-    }
-
+    const parsed = await readWorldBookEntries<WorldBookEntry>();
     const enabledEntries = parsed.filter((entry) => entry && entry.enabled !== false) as WorldBookEntry[];
     enabledEntries.sort((left, right) => (right.priority || 50) - (left.priority || 50));
     return enabledEntries;
@@ -236,6 +216,7 @@ export async function finalizeHook(
   }
 
   let nextHistory = [...history];
+  let nextProcessedInput = String(payload.processedInput || payload.rawInput || "");
 
   if (hitSystemEntries.length > 0) {
     const sysInjection = buildInjection(hitSystemEntries);
@@ -260,29 +241,18 @@ export async function finalizeHook(
 
   if (hitUserEntries.length > 0) {
     const userInjection = `${buildInjection(hitUserEntries)}\n`;
-    let injected = false;
-
-    for (let i = nextHistory.length - 1; i >= 0; i -= 1) {
-      const turn = nextHistory[i];
-      if (!injected && turn.kind === "USER") {
-        nextHistory[i] = {
-          ...turn,
-          content: userInjection + turn.content
-        };
-        injected = true;
-        break;
-      }
-    }
-
-    if (!injected) {
-      nextHistory.push({ kind: "USER", content: userInjection });
-    }
+    nextProcessedInput = userInjection + nextProcessedInput;
   }
 
-  return { preparedHistory: nextHistory };
+  return {
+    preparedHistory: nextHistory,
+    processedInput: nextProcessedInput
+  };
 }
 
 export function registerToolPkg() {
+  void ensureWorldBookStorage();
+
   ToolPkg.registerUiRoute({
     id: "worldbook_manager",
     route: WORLDBOOK_ROUTE,

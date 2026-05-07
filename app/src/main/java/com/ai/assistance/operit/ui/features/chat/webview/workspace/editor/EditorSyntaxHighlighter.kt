@@ -7,6 +7,7 @@ import com.ai.assistance.operit.ui.features.chat.webview.workspace.editor.langua
 import com.ai.assistance.operit.ui.features.chat.webview.workspace.editor.language.LanguageSupport
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.atomic.AtomicInteger
 
 internal data class HighlightSnapshot(
@@ -27,6 +28,8 @@ internal class EditorSyntaxHighlighter(
     private val latestRequestedVersion = AtomicInteger(0)
 
     @Volatile
+    private var released = false
+    @Volatile
     private var language = initialLanguage.lowercase()
     @Volatile
     private var languageSupport = LanguageFactory.getLanguageSupport(language)
@@ -38,26 +41,42 @@ internal class EditorSyntaxHighlighter(
     }
 
     fun requestHighlight(text: String, version: Int) {
+        if (released) {
+            return
+        }
         latestRequestedVersion.set(version)
-        val activeLanguage = language
         val activeSupport = languageSupport
-        executor.execute {
-            val colors = IntArray(text.length)
-            if (text.isNotEmpty()) {
-                parseFullText(text, colors, activeSupport)
-            }
-            if (latestRequestedVersion.get() != version) {
-                return@execute
-            }
-            mainHandler.post {
-                if (latestRequestedVersion.get() == version) {
-                    onResult(HighlightSnapshot(version, colors))
+
+        try {
+            executor.execute {
+                if (released) {
+                    return@execute
+                }
+
+                val colors = IntArray(text.length)
+                if (text.isNotEmpty()) {
+                    parseFullText(text, colors, activeSupport)
+                }
+                if (released || latestRequestedVersion.get() != version) {
+                    return@execute
+                }
+                mainHandler.post {
+                    if (!released && latestRequestedVersion.get() == version) {
+                        onResult(HighlightSnapshot(version, colors))
+                    }
                 }
             }
+        } catch (_: RejectedExecutionException) {
+            // The view was released while a new highlight request was being scheduled.
         }
     }
 
     fun release() {
+        if (released) {
+            return
+        }
+        released = true
+        mainHandler.removeCallbacksAndMessages(null)
         executor.shutdownNow()
     }
 

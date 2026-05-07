@@ -37,7 +37,8 @@ export namespace ToolPkg {
         | PromptHistoryEventName
         | SystemPromptComposeEventName
         | ToolPromptComposeEventName
-        | PromptFinalizeEventName;
+        | PromptFinalizeEventName
+        | SummaryGenerateEventName;
 
     export type HookReturn = JsonValue | void | Promise<JsonValue | void>;
 
@@ -142,6 +143,11 @@ export namespace ToolPkg {
         | "before_finalize_prompt"
         | "before_send_to_model";
 
+    export type SummaryGenerateEventName =
+        | "before_prepare_summary_prompt"
+        | "before_send_to_model"
+        | "after_generate_summary";
+
     export type PromptTurnKind =
         | "SYSTEM"
         | "USER"
@@ -179,6 +185,15 @@ export namespace ToolPkg {
         metadata?: JsonObject;
     }
 
+    export interface SummaryHookObjectResult extends JsonObject {
+        chatHistory?: PromptTurn[];
+        preparedHistory?: PromptTurn[];
+        systemPrompt?: string;
+        summaryPrompt?: string;
+        summaryResult?: string;
+        metadata?: JsonObject;
+    }
+
     export interface PromptHookEventPayload extends JsonObject {
         stage?: string;
         chatId?: string;
@@ -193,6 +208,20 @@ export namespace ToolPkg {
         toolPrompt?: string;
         modelParameters?: JsonObject[];
         availableTools?: JsonObject[];
+        metadata?: JsonObject;
+    }
+
+    export interface SummaryGenerateEventPayload extends JsonObject {
+        stage?: string;
+        functionType?: string;
+        useEnglish?: boolean;
+        previousSummary?: string;
+        chatHistory?: PromptTurn[];
+        preparedHistory?: PromptTurn[];
+        systemPrompt?: string;
+        summaryPrompt?: string;
+        summaryResult?: string;
+        modelParameters?: JsonObject[];
         metadata?: JsonObject;
     }
 
@@ -234,6 +263,13 @@ export namespace ToolPkg {
         | void
         | Promise<string | PromptTurn[] | PromptHookObjectResult | null | void>;
 
+    export type SummaryGenerateHookReturn =
+        | string
+        | SummaryHookObjectResult
+        | null
+        | void
+        | Promise<string | SummaryHookObjectResult | null | void>;
+
     export type AppLifecycleHookHandler =
         (event: AppLifecycleHookEvent) => AppLifecycleHookReturn;
 
@@ -274,6 +310,9 @@ export namespace ToolPkg {
 
     export type PromptEstimateFinalizeHookHandler =
         (event: PromptEstimateFinalizeHookEvent) => PromptFinalizeHookReturn;
+
+    export type SummaryGenerateHookHandler =
+        (event: SummaryGenerateHookEvent) => SummaryGenerateHookReturn;
 
     export interface HookEventBase<
         TEventName extends string,
@@ -361,6 +400,9 @@ export namespace ToolPkg {
 
     export interface PromptEstimateFinalizeHookEvent
         extends HookEventBase<PromptFinalizeEventName, PromptHookEventPayload> {}
+
+    export interface SummaryGenerateHookEvent
+        extends HookEventBase<SummaryGenerateEventName, SummaryGenerateEventPayload> {}
 
     export interface AiProviderConfig extends JsonObject {
         id: string;
@@ -595,6 +637,11 @@ export namespace ToolPkg {
         function: PromptEstimateFinalizeHookHandler;
     }
 
+    export interface SummaryGenerateHookRegistration {
+        id: string;
+        function: SummaryGenerateHookHandler;
+    }
+
     export interface AiProviderRegistration {
         id: string;
         displayName?: string;
@@ -622,8 +669,10 @@ export namespace ToolPkg {
         registerToolPromptComposeHook(definition: ToolPromptComposeHookRegistration): void;
         registerPromptFinalizeHook(definition: PromptFinalizeHookRegistration): void;
         registerPromptEstimateFinalizeHook(definition: PromptEstimateFinalizeHookRegistration): void;
+        registerSummaryGenerateHook(definition: SummaryGenerateHookRegistration): void;
         registerAiProvider(definition: AiProviderRegistration): void;
         readResource(key: string, outputFileName?: string, internal?: boolean): Promise<string>;
+        getConfigDir(pluginId?: string): string;
     }
 }
 
@@ -659,6 +708,8 @@ declare global {
     function registerToolPkgPromptFinalizeHook(definition: ToolPkg.PromptFinalizeHookRegistration): void;
 
     function registerToolPkgPromptEstimateFinalizeHook(definition: ToolPkg.PromptEstimateFinalizeHookRegistration): void;
+
+    function registerToolPkgSummaryGenerateHook(definition: ToolPkg.SummaryGenerateHookRegistration): void;
 
     function registerToolPkgAiProvider(definition: ToolPkg.AiProviderRegistration): void;
 

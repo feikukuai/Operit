@@ -7,7 +7,6 @@ import com.ai.assistance.operit.R
 import com.ai.assistance.operit.util.AppLogger
 import com.ai.assistance.operit.core.chat.hooks.PromptTurn
 import com.ai.assistance.operit.core.chat.hooks.PromptTurnKind
-import com.ai.assistance.operit.core.chat.hooks.toPromptTurns
 import com.ai.assistance.operit.util.FFmpegUtil
 import com.ai.assistance.operit.util.ImagePoolManager
 import com.ai.assistance.operit.util.MediaPoolManager
@@ -520,85 +519,47 @@ class MNNProvider(
         }
     }
 
-    private fun trimHistoryToStructuredTokenBudget(
-        session: MNNLlmSession,
-        history: List<Pair<String, String>>,
-        maxPromptTokens: Int,
-        toolsJson: String?,
-        preserveThinkInHistory: Boolean
-    ): List<Pair<String, String>> {
-        if (history.isEmpty()) return history
-
-        val systemPrefixCount = if (history.first().first == "system") 1 else 0
-
-        fun countCandidate(candidate: List<Pair<String, String>>): Int {
-            val messagesJson = StructuredToolCallBridge.buildMessagesJson(
-                candidate.toPromptTurns(),
-                preserveThinkInHistory
-            )
-            return session.countTokensStructured(messagesJson, toolsJson)
-        }
-
-        val fullTokens = kotlin.runCatching { countCandidate(history) }.getOrDefault(Int.MAX_VALUE)
-        if (fullTokens <= maxPromptTokens) return history
-
-        if (history.size <= systemPrefixCount + 1) {
-            if (systemPrefixCount == 1) {
-                val withoutSystem = history.drop(1)
-                val withoutSystemTokens =
-                    kotlin.runCatching { countCandidate(withoutSystem) }.getOrDefault(Int.MAX_VALUE)
-                if (withoutSystemTokens <= maxPromptTokens) {
-                    return withoutSystem
-                }
-            }
-            return history
-        }
-
-        var low = systemPrefixCount
-        var high = history.size - 1
-        while (low < high) {
-            val mid = (low + high) / 2
-            val candidate = ArrayList<Pair<String, String>>(history.size - (mid - systemPrefixCount))
-            if (systemPrefixCount == 1) {
-                candidate.add(history[0])
-            }
-            for (i in mid until history.size) {
-                candidate.add(history[i])
-            }
-
-            val tokens = kotlin.runCatching { countCandidate(candidate) }.getOrDefault(Int.MAX_VALUE)
-            if (tokens > maxPromptTokens) {
-                low = mid + 1
-            } else {
-                high = mid
-            }
-        }
-
-        val trimmed = ArrayList<Pair<String, String>>(history.size - (low - systemPrefixCount))
-        if (systemPrefixCount == 1) {
-            trimmed.add(history[0])
-        }
-        for (i in low until history.size) {
-            trimmed.add(history[i])
-        }
-
-        if (systemPrefixCount == 1) {
-            val trimmedTokens = kotlin.runCatching { countCandidate(trimmed) }.getOrDefault(Int.MAX_VALUE)
-            if (trimmedTokens > maxPromptTokens) {
-                val withoutSystem = trimmed.drop(1)
-                val withoutSystemTokens =
-                    kotlin.runCatching { countCandidate(withoutSystem) }.getOrDefault(Int.MAX_VALUE)
-                if (withoutSystemTokens <= maxPromptTokens) {
-                    return withoutSystem
-                }
-            }
-        }
-
-        return trimmed
-    }
-
     private fun shouldUseInternalToolCall(availableTools: List<ToolPrompt>?): Boolean {
         return enableToolCall && !availableTools.isNullOrEmpty()
+    }
+
+    private fun applyRequestJinjaContext(
+        session: MNNLlmSession,
+        enableThinking: Boolean,
+        availableTools: List<ToolPrompt>?,
+        useInternalToolCall: Boolean
+    ) {
+        val toolsArray =
+            if (useInternalToolCall) {
+                StructuredToolCallBridge.buildToolsArray(availableTools)
+            } else {
+                JSONArray()
+            }
+
+        val contextUpdate =
+            JSONObject().apply {
+                put("enable_thinking", enableThinking)
+                put("tools", toolsArray)
+            }
+
+        val configUpdate =
+            JSONObject().apply {
+                put(
+                    "jinja",
+                    JSONObject().apply {
+                        put("context", contextUpdate)
+                    }
+                )
+            }
+
+        if (!session.setConfig(configUpdate.toString())) {
+            throw IllegalStateException("Failed to apply MNN jinja context")
+        }
+
+        AppLogger.d(
+            TAG,
+            "Applied MNN jinja context: thinking=$enableThinking, tools=${toolsArray.length()}"
+        )
     }
 
     /**
@@ -660,14 +621,6 @@ class MNNProvider(
                 return@stream
             }
 
-            // 设置 thinking 模式（仅对支持的模型有效，如 Qwen3）
-            try {
-                session.setThinkingMode(enableThinking)
-                AppLogger.d(TAG, "Thinking mode set to: $enableThinking")
-            } catch (e: Exception) {
-                AppLogger.w(TAG, "Failed to set thinking mode (model may not support it): ${e.message}")
-            }
-
             // 应用模型参数（采样参数）
             applyModelParameters(session, modelParameters)
 
@@ -677,16 +630,23 @@ class MNNProvider(
             }
 
             val useInternalToolCall = shouldUseInternalToolCall(availableTools)
-            val flattenedHistory = flattenTypedHistory(chatHistory, preserveThinkInHistory)
-
             val modelDir = getModelDir(context, modelName)
             val maxAllTokens = cachedModelMaxAllTokens ?: readModelMaxAllTokens(modelDir).also { cachedModelMaxAllTokens = it }
 
-            val multimodalHistory = flattenedHistory.map { (role, content) ->
-                val processed = preprocessMultimodalText(content, modelDir)
+            val multimodalTurns = chatHistory.map { turn ->
+                val processed = preprocessMultimodalText(turn.content, modelDir)
                 requestTempFiles.addAll(processed.tempFiles)
-                role to processed.text
+                turn.copy(content = processed.text)
             }
+
+            applyRequestJinjaContext(session, enableThinking, availableTools, useInternalToolCall)
+
+            val conversationHistory =
+                if (useInternalToolCall) {
+                    StructuredToolCallBridge.buildMnnChatHistory(multimodalTurns, preserveThinkInHistory)
+                } else {
+                    flattenTypedHistory(multimodalTurns, preserveThinkInHistory)
+                }
 
             val requestedMaxNewTokens = modelParameters
                 .find { it.name == "max_tokens" }
@@ -695,89 +655,48 @@ class MNNProvider(
             val effectiveMaxNewTokens = (if (requestedMaxNewTokens > 0) requestedMaxNewTokens else 512).coerceAtMost(8192)
             val maxPromptTokens = (maxAllTokens - effectiveMaxNewTokens).coerceAtLeast(128)
 
-            val toolsJson = if (useInternalToolCall) {
-                StructuredToolCallBridge.buildToolsJson(availableTools)
-            } else {
-                null
-            }
+            val safeHistory = trimHistoryToTokenBudget(session, conversationHistory, maxPromptTokens)
 
-            val safeHistory = if (useInternalToolCall) {
-                trimHistoryToStructuredTokenBudget(
-                    session = session,
-                    history = multimodalHistory,
-                    maxPromptTokens = maxPromptTokens,
-                    toolsJson = toolsJson,
-                    preserveThinkInHistory = preserveThinkInHistory
-                )
-            } else {
-                trimHistoryToTokenBudget(session, multimodalHistory, maxPromptTokens)
-            }
-
-            val messagesJson = if (useInternalToolCall) {
-                StructuredToolCallBridge.buildMessagesJson(
-                    safeHistory.toPromptTurns(),
-                    preserveThinkInHistory
-                )
-            } else {
-                null
-            }
-
-            _inputTokenCount = if (useInternalToolCall) {
-                session.countTokensStructured(messagesJson!!, toolsJson)
-            } else {
+            _inputTokenCount =
                 kotlin.runCatching { session.countTokensWithHistory(safeHistory) }
-                    .getOrElse { countTokens(buildPrompt(flattenedHistory)) }
-            }
+                    .getOrElse { error ->
+                        if (useInternalToolCall) {
+                            throw error
+                        }
+                        countTokens(buildPrompt(conversationHistory))
+                    }
             onTokensUpdated(_inputTokenCount, 0, 0)
 
             AppLogger.d(
                 TAG,
-                "开始MNN LLM推理，历史消息数: ${multimodalHistory.size}, thinking模式: $enableThinking, toolCall=$useInternalToolCall"
+                "开始MNN LLM推理，历史消息数: ${conversationHistory.size}, thinking模式: $enableThinking, toolCall=$useInternalToolCall"
             )
 
             var outputTokenCount = 0
             val toolCallOutputBuffer = StringBuilder()
             val finalOutputBuffer = StringBuilder()
             val emitDirectly = !useInternalToolCall
-            val success = if (useInternalToolCall) {
-                session.generateStreamStructured(messagesJson!!, toolsJson, requestedMaxNewTokens) { token ->
-                    if (isCancelled) {
-                        false
+            val success = session.generateStream(safeHistory, requestedMaxNewTokens) { token ->
+                if (isCancelled) {
+                    false
+                } else {
+                    outputTokenCount += 1
+                    _outputTokenCount = outputTokenCount
+
+                    if (emitDirectly) {
+                        finalOutputBuffer.append(token)
+                        runBlocking { emit(token) }
                     } else {
-                        outputTokenCount += 1
-                        _outputTokenCount = outputTokenCount
                         toolCallOutputBuffer.append(token)
-
-                        kotlin.runCatching {
-                            kotlinx.coroutines.runBlocking {
-                                onTokensUpdated(_inputTokenCount, 0, _outputTokenCount)
-                            }
-                        }
-                        true
                     }
-                }
-            } else {
-                session.generateStream(safeHistory, requestedMaxNewTokens) { token ->
-                    if (isCancelled) {
-                        false  // 停止生成
-                    } else {
-                        // 更新输出token计数（估算）
-                        outputTokenCount += 1
-                        _outputTokenCount = outputTokenCount
 
-                        if (emitDirectly) {
-                            finalOutputBuffer.append(token)
-                            runBlocking { emit(token) }
+                    kotlin.runCatching {
+                        kotlinx.coroutines.runBlocking {
+                            onTokensUpdated(_inputTokenCount, 0, _outputTokenCount)
                         }
-
-                        kotlin.runCatching {
-                            kotlinx.coroutines.runBlocking {
-                                onTokensUpdated(_inputTokenCount, 0, _outputTokenCount)
-                            }
-                        }
-
-                        true  // 继续生成
                     }
+
+                    true
                 }
             }
 

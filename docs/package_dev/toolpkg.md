@@ -13,6 +13,7 @@
 - 输入菜单开关插件。
 - 工具执行生命周期钩子。
 - Prompt 输入、历史、系统提示词、工具提示词、最终发送前的各类钩子。
+- 摘要生成阶段的各类钩子。
 
 ## 类型命名空间与运行时对象
 
@@ -43,6 +44,7 @@ ToolPkg.registerMessageProcessingPlugin(...)
 - `registerToolPkgToolPromptComposeHook(...)`
 - `registerToolPkgPromptFinalizeHook(...)`
 - `registerToolPkgPromptEstimateFinalizeHook(...)`
+- `registerToolPkgSummaryGenerateHook(...)`
 
 ## 基础类型
 
@@ -86,6 +88,7 @@ type LocalizedText = string | { [lang: string]: string }
 - `input_menu_toggle`
 - 工具生命周期事件
 - Prompt 输入 / 历史 / 系统提示词 / 工具提示词 / 最终发送事件
+- 摘要生成事件
 
 ### Prompt 轮次类型：`PromptTurnKind` / `PromptTurn`
 
@@ -151,6 +154,12 @@ interface PromptTurn {
 
 - `before_finalize_prompt`
 - `before_send_to_model`
+
+#### `SummaryGenerateEventName`
+
+- `before_prepare_summary_prompt`
+- `before_send_to_model`
+- `after_generate_summary`
 
 ## 事件对象
 
@@ -230,6 +239,22 @@ interface PromptTurn {
 - `availableTools?`
 - `metadata?`
 
+### `SummaryGenerateEventPayload`
+
+字段包括：
+
+- `stage?`
+- `functionType?`
+- `useEnglish?`
+- `previousSummary?`
+- `chatHistory?: PromptTurn[]`
+- `preparedHistory?: PromptTurn[]`
+- `systemPrompt?`
+- `summaryPrompt?`
+- `summaryResult?`
+- `modelParameters?`
+- `metadata?`
+
 ## 返回值类型
 
 ### 消息处理插件返回：`MessageProcessingHookReturn`
@@ -298,6 +323,7 @@ interface PromptTurn {
 - `SystemPromptComposeHookReturn`
 - `ToolPromptComposeHookReturn`
 - `PromptFinalizeHookReturn`
+- `SummaryGenerateHookReturn`
 
 这几类返回允许在字符串、消息数组、结构化对象与空返回之间切换，具体以类型定义为准。
 其中：
@@ -305,6 +331,7 @@ interface PromptTurn {
 - `PromptHistoryHookReturn` 里的数组元素类型是 `PromptTurn`
 - `PromptFinalizeHookReturn` 里的数组元素类型也是 `PromptTurn`
 - 估算阶段的 `PromptEstimateHistoryHook` / `PromptEstimateFinalizeHook` 复用相同的 payload 和返回结构
+- `SummaryGenerateHookReturn` 可以返回字符串或结构化对象；字符串在摘要生成前阶段会被当作 `summaryPrompt`，在 `after_generate_summary` 阶段会被当作 `summaryResult`
 
 ## 注册定义对象
 
@@ -360,6 +387,7 @@ interface PromptTurn {
 - `ToolPromptComposeHookRegistration`
 - `PromptFinalizeHookRegistration`
 - `PromptEstimateFinalizeHookRegistration`
+- `SummaryGenerateHookRegistration`
 
 ## `ToolPkg.Registry`
 
@@ -381,6 +409,7 @@ interface PromptTurn {
 - `registerToolPromptComposeHook(definition)`
 - `registerPromptFinalizeHook(definition)`
 - `registerPromptEstimateFinalizeHook(definition)`
+- `registerSummaryGenerateHook(definition)`
 - `readResource(key, outputFileName?)`
 
 ### `ToolPkg.readResource(...)`
@@ -513,6 +542,29 @@ ToolPkg.registerInputMenuTogglePlugin({
       ];
     }
     return [];
+  }
+});
+```
+
+### 注册摘要生成 Hook
+
+```ts
+ToolPkg.registerSummaryGenerateHook({
+  id: 'demo_summary_hook',
+  function(event) {
+    if (event.eventName === 'before_prepare_summary_prompt') {
+      return {
+        summaryPrompt: '请重点总结最近的工程决策、已完成事项和下一步待办。'
+      };
+    }
+
+    if (event.eventName === 'after_generate_summary') {
+      return {
+        summaryResult: String(event.eventPayload?.summaryResult ?? '').trim()
+      };
+    }
+
+    return null;
   }
 });
 ```

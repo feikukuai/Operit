@@ -151,6 +151,7 @@ internal data class ToolPkgContainerRuntime(
     val toolPromptComposeHooks: List<ToolPkgFunctionHookRuntime>,
     val promptFinalizeHooks: List<ToolPkgFunctionHookRuntime>,
     val promptEstimateFinalizeHooks: List<ToolPkgFunctionHookRuntime>,
+    val summaryGenerateHooks: List<ToolPkgFunctionHookRuntime>,
     val aiProviders: List<ToolPkgAiProviderRuntime>
 )
 
@@ -282,6 +283,7 @@ internal data class ToolPkgMainRegistration(
     val toolPromptComposeHooks: List<ToolPkgRegisteredFunctionHook> = emptyList(),
     val promptFinalizeHooks: List<ToolPkgRegisteredFunctionHook> = emptyList(),
     val promptEstimateFinalizeHooks: List<ToolPkgRegisteredFunctionHook> = emptyList(),
+    val summaryGenerateHooks: List<ToolPkgRegisteredFunctionHook> = emptyList(),
     val aiProviders: List<ToolPkgRegisteredAiProvider> = emptyList()
 )
 
@@ -1006,6 +1008,30 @@ internal object ToolPkgArchiveParser {
             )
         }
 
+        val summaryGenerateHooks = mutableListOf<ToolPkgFunctionHookRuntime>()
+        val summaryGenerateIds = linkedSetOf<String>()
+        mainRegistration.summaryGenerateHooks.forEachIndexed { index, hook ->
+            val id = hook.id.trim()
+            if (id.isBlank()) {
+                throw IllegalArgumentException("$TOOLPKG_REGISTRATION_SUMMARY_GENERATE_HOOK[$index].id is required")
+            }
+            if (!summaryGenerateIds.add(id.lowercase())) {
+                throw IllegalArgumentException("Duplicate summary generate hook id: $id")
+            }
+
+            val function = hook.function.trim()
+            if (function.isBlank()) {
+                throw IllegalArgumentException("$TOOLPKG_REGISTRATION_SUMMARY_GENERATE_HOOK[$index].function is required")
+            }
+            summaryGenerateHooks.add(
+                ToolPkgFunctionHookRuntime(
+                    id = id,
+                    function = function,
+                    functionSource = hook.functionSource
+                )
+            )
+        }
+
         val aiProviders = mutableListOf<ToolPkgAiProviderRuntime>()
         val aiProviderIds = linkedSetOf<String>()
         mainRegistration.aiProviders.forEachIndexed { index, provider ->
@@ -1100,6 +1126,7 @@ internal object ToolPkgArchiveParser {
                 toolPromptComposeHooks = toolPromptComposeHooks,
                 promptFinalizeHooks = promptFinalizeHooks,
                 promptEstimateFinalizeHooks = promptEstimateFinalizeHooks,
+                summaryGenerateHooks = summaryGenerateHooks,
                 aiProviders = aiProviders
             )
 

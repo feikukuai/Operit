@@ -57,7 +57,7 @@ export namespace System {
      * Use a tool package
      * @param packageName - Package name
      */
-    function usePackage(packageName: string): Promise<any>;
+    function usePackage(packageName: string): Promise<string>;
 
     /**
      * Install an application

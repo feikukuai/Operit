@@ -164,6 +164,7 @@ class CanvasCodeEditorView @JvmOverloads constructor(
     private var scrollOffsetX = 0f
     private var scrollOffsetY = 0f
     private var viewportBottomPaddingPx = 0f
+    private var isReleased = false
     private var isDirty = true
     private var renderThread: RenderThread? = null
     private var completionPrefix = ""
@@ -290,9 +291,15 @@ class CanvasCodeEditorView @JvmOverloads constructor(
     }
 
     fun release() {
+        if (isReleased) {
+            return
+        }
+        isReleased = true
         stopRenderThread()
         actionMode?.finish()
         actionMode = null
+        textChangedListener = null
+        completionCallback = null
         highlighter.release()
     }
 
@@ -433,13 +440,16 @@ class CanvasCodeEditorView @JvmOverloads constructor(
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
-        if (holder.surface.isValid) {
+        if (!isReleased && holder.surface.isValid) {
             startRenderThread()
         }
     }
 
     override fun onDetachedFromWindow() {
-        release()
+        stopRenderThread()
+        actionMode?.finish()
+        actionMode = null
+        hideCompletions()
         super.onDetachedFromWindow()
     }
 
@@ -860,6 +870,9 @@ class CanvasCodeEditorView @JvmOverloads constructor(
     }
 
     private fun onDocumentMutated() {
+        if (isReleased) {
+            return
+        }
         preferredColumnCells = null
         ensureCursorVisible()
         notifySelectionChanged()
@@ -870,6 +883,9 @@ class CanvasCodeEditorView @JvmOverloads constructor(
     }
 
     private fun requestHighlight() {
+        if (isReleased) {
+            return
+        }
         highlighter.requestHighlight(document.textString(), document.version)
     }
 

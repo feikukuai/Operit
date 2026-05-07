@@ -40,6 +40,11 @@ data class AppLifecycleHookParams(
     val extras: Map<String, Any?> = emptyMap()
 )
 
+data class AppLifecycleReplayEvent(
+    val event: AppLifecycleEvent,
+    val params: AppLifecycleHookParams
+)
+
 interface AppLifecycleHookPlugin {
     val id: String
 
@@ -53,6 +58,9 @@ object AppLifecycleHookPluginRegistry {
     private const val TAG = "AppLifecycleHooks"
     private val plugins = CopyOnWriteArrayList<AppLifecycleHookPlugin>()
     private val dispatchScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val stateLock = Any()
+    private var applicationCreateParams: AppLifecycleHookParams? = null
+    private var applicationForegroundParams: AppLifecycleHookParams? = null
 
     @Synchronized
     fun register(plugin: AppLifecycleHookPlugin) {
@@ -69,6 +77,7 @@ object AppLifecycleHookPluginRegistry {
         event: AppLifecycleEvent,
         params: AppLifecycleHookParams
     ) {
+        recordReplayableState(event, params)
         for (plugin in plugins) {
             try {
                 plugin.onEvent(event, params)
@@ -84,6 +93,54 @@ object AppLifecycleHookPluginRegistry {
     ) {
         dispatchScope.launch {
             dispatch(event = event, params = params)
+        }
+    }
+
+    fun getReplayableApplicationEvents(): List<AppLifecycleReplayEvent> {
+        synchronized(stateLock) {
+            val replayEvents = mutableListOf<AppLifecycleReplayEvent>()
+            applicationCreateParams?.let { params ->
+                replayEvents.add(
+                    AppLifecycleReplayEvent(
+                        event = AppLifecycleEvent.APPLICATION_CREATE,
+                        params = params
+                    )
+                )
+            }
+            applicationForegroundParams?.let { params ->
+                replayEvents.add(
+                    AppLifecycleReplayEvent(
+                        event = AppLifecycleEvent.APPLICATION_FOREGROUND,
+                        params = params
+                    )
+                )
+            }
+            return replayEvents
+        }
+    }
+
+    private fun recordReplayableState(
+        event: AppLifecycleEvent,
+        params: AppLifecycleHookParams
+    ) {
+        synchronized(stateLock) {
+            when (event) {
+                AppLifecycleEvent.APPLICATION_CREATE -> {
+                    applicationCreateParams = params
+                }
+
+                AppLifecycleEvent.APPLICATION_FOREGROUND -> {
+                    applicationForegroundParams = params
+                }
+
+                AppLifecycleEvent.APPLICATION_BACKGROUND -> {
+                    applicationForegroundParams = null
+                }
+
+                else -> {
+                    // No replay state needed for other lifecycle events.
+                }
+            }
         }
     }
 }

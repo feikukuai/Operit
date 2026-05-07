@@ -150,12 +150,12 @@ const douyin = (function () {
             // 替换文件名中的非法字符
             videoTitle = videoTitle.replace(/[\\/:*?"<>|]/g, '_');
             // 逐级创建目录并下载视频
-            const baseDir = "/sdcard/Download/OperitScripts";
-            const destinationDir = `${baseDir}/douyin`;
+            const baseDir = getPluginConfigDir("douyin_download");
+            const destinationDir = `${baseDir}/downloads`;
             const destinationPath = `${destinationDir}/${videoTitle}_${videoId}.mp4`;
             console.log(`确保目录存在: ${destinationDir}`);
             // 逐级创建目录以确保路径存在
-            const dirsToCreate = ["/sdcard/Download/", baseDir, destinationDir];
+            const dirsToCreate = [baseDir, destinationDir];
             for (const dir of dirsToCreate) {
                 const mkdirResult = await Tools.Files.mkdir(dir);
                 if (!mkdirResult.successful) {
