@@ -9,6 +9,7 @@ import android.os.IBinder
 import com.ai.assistance.operit.R
 import com.ai.assistance.operit.util.AppLogger
 import com.ai.assistance.operit.util.ChatMarkupRegex
+import com.ai.assistance.operit.util.WaifuMessageProcessor
 import com.ai.assistance.operit.util.stream.SharedStream
 import com.ai.assistance.operit.core.tools.AgentStatusResultData
 import com.ai.assistance.operit.core.tools.ChatCreationResultData
@@ -30,18 +31,22 @@ import com.ai.assistance.operit.data.model.InputProcessingState
 import com.ai.assistance.operit.data.model.PromptFunctionType
 import com.ai.assistance.operit.data.model.ToolResult
 import com.ai.assistance.operit.data.preferences.CharacterCardManager
+import com.ai.assistance.operit.data.preferences.WaifuPreferences
 import com.ai.assistance.operit.data.repository.ChatHistoryManager
 import com.ai.assistance.operit.services.ChatServiceCore
 import com.ai.assistance.operit.services.FloatingChatService
 import com.ai.assistance.operit.ui.floating.FloatingMode
 import java.time.ZoneId
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 
@@ -77,8 +82,6 @@ class StandardChatManagerTool(private val context: Context) {
         private const val SERVICE_CONNECTION_TIMEOUT = 15000L // 15秒超时
         private const val RESPONSE_STREAM_ACQUIRE_TIMEOUT = 15000L
         private const val AI_RESPONSE_TIMEOUT = 180000L
-        private const val WAIFU_STREAM_PREFERRED_CHARS = 48
-        private const val WAIFU_STREAM_FORCE_CHARS = 120
     }
 
     private fun simplifyXmlBlocksForHistory(text: String): String {
@@ -123,19 +126,6 @@ class StandardChatManagerTool(private val context: Context) {
             "false" -> false
             else -> null
         }
-    }
-
-    private fun shouldFlushWaifuChunk(buffer: CharSequence): Boolean {
-        if (buffer.isEmpty()) return false
-        if (buffer.length >= WAIFU_STREAM_FORCE_CHARS) return true
-        if (buffer.length < WAIFU_STREAM_PREFERRED_CHARS) return false
-        val lastChar = buffer[buffer.length - 1]
-        return lastChar == '\n' ||
-            lastChar == '。' ||
-            lastChar == '！' ||
-            lastChar == '？' ||
-            lastChar == '!' ||
-            lastChar == '?'
     }
 
     private fun buildChatInfo(
@@ -1532,12 +1522,12 @@ class StandardChatManagerTool(private val context: Context) {
         }
     }
 
-    fun sendMessageToAIStream(tool: AITool): Flow<ToolResult> = flow {
+    fun sendMessageToAIStream(tool: AITool): Flow<ToolResult> = channelFlow {
         val message = tool.parameters.find { it.name == "message" }?.value ?: ""
         val waifuParam = tool.parameters.find { it.name == "waifu" }?.value?.trim()
         val waifuMode = parseBooleanOrNull(waifuParam)
         if (waifuParam != null && waifuMode == null) {
-            emit(
+            send(
                 ToolResult(
                     toolName = tool.name,
                     success = false,
@@ -1545,16 +1535,23 @@ class StandardChatManagerTool(private val context: Context) {
                     error = "Invalid parameter: waifu must be true/false"
                 )
             )
-            return@flow
+            return@channelFlow
         }
 
         try {
             when (val startResult = startMessageToAIStream(tool)) {
-                is MessageSendStreamStartResult.Failed -> emit(startResult.result)
+                is MessageSendStreamStartResult.Failed -> send(startResult.result)
                 is MessageSendStreamStartResult.Started -> {
                     val session = startResult.session
                     val effectiveWaifuMode = waifuMode == true
-                    emit(
+                    val waifuRemovePunctuation =
+                        if (effectiveWaifuMode) {
+                            WaifuPreferences.getInstance(context).waifuRemovePunctuationFlow.first()
+                        } else {
+                            false
+                        }
+
+                    send(
                         ToolResult(
                             toolName = tool.name,
                             success = true,
@@ -1571,13 +1568,12 @@ class StandardChatManagerTool(private val context: Context) {
                     )
 
                     val fullResponse = StringBuilder()
-                    val bufferedChunk = StringBuilder()
                     var chunkIndex = 0
                     var receivedChars = 0
 
-                    suspend fun emitChunk(chunk: String) {
+                    suspend fun sendChunk(chunk: String) {
                         if (chunk.isEmpty()) return
-                        emit(
+                        send(
                             ToolResult(
                                 toolName = tool.name,
                                 success = true,
@@ -1596,36 +1592,46 @@ class StandardChatManagerTool(private val context: Context) {
                         chunkIndex += 1
                     }
 
-                    suspend fun flushBufferedChunk(force: Boolean) {
-                        if (bufferedChunk.isEmpty()) return
-                        if (!force && !shouldFlushWaifuChunk(bufferedChunk)) return
-                        val chunk = bufferedChunk.toString()
-                        bufferedChunk.setLength(0)
-                        emitChunk(chunk)
-                    }
-
                     val aiResponse =
                         try {
                             withTimeout(session.responseTimeoutMs) {
-                                session.responseStream.collect { chunk: String ->
-                                    if (chunk.isEmpty()) {
-                                        return@collect
+                                coroutineScope {
+                                    val rawStreamJob = async {
+                                        session.responseStream.collect { chunk: String ->
+                                            if (chunk.isEmpty()) {
+                                                return@collect
+                                            }
+                                            fullResponse.append(chunk)
+                                            receivedChars += chunk.length
+                                            if (!effectiveWaifuMode) {
+                                                sendChunk(chunk)
+                                            }
+                                        }
+                                        fullResponse.toString()
                                     }
-                                    fullResponse.append(chunk)
-                                    receivedChars += chunk.length
-                                    if (effectiveWaifuMode) {
-                                        bufferedChunk.append(chunk)
-                                        flushBufferedChunk(force = false)
-                                    } else {
-                                        emitChunk(chunk)
-                                    }
+
+                                    val waifuStreamJob =
+                                        if (effectiveWaifuMode) {
+                                            launch {
+                                                WaifuMessageProcessor.streamSegments(
+                                                    sourceStream = session.responseStream,
+                                                    removePunctuation = waifuRemovePunctuation
+                                                ).collect { segment ->
+                                                    sendChunk(segment)
+                                                }
+                                            }
+                                        } else {
+                                            null
+                                        }
+
+                                    val result = rawStreamJob.await()
+                                    waifuStreamJob?.join()
+                                    result
                                 }
-                                flushBufferedChunk(force = true)
-                                fullResponse.toString()
                             }
                         } catch (e: TimeoutCancellationException) {
                             runCatching { session.cancel() }
-                            emit(
+                            send(
                                 ToolResult(
                                     toolName = tool.name,
                                     success = false,
@@ -1636,7 +1642,7 @@ class StandardChatManagerTool(private val context: Context) {
                                     error = "Timeout waiting for AI reply"
                                 )
                             )
-                            return@flow
+                            return@channelFlow
                         }
 
                     val finalState = session.currentState()
@@ -1647,7 +1653,7 @@ class StandardChatManagerTool(private val context: Context) {
                             null
                         }
 
-                    emit(
+                    send(
                         ToolResult(
                             toolName = tool.name,
                             success = finalError == null,
@@ -1664,7 +1670,7 @@ class StandardChatManagerTool(private val context: Context) {
             }
         } catch (e: Exception) {
             AppLogger.e(TAG, "Failed to stream message", e)
-            emit(
+            send(
                 ToolResult(
                     toolName = tool.name,
                     success = false,

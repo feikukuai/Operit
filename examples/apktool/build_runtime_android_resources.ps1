@@ -340,6 +340,7 @@ function Build-JadxRuntime([string] $androidJarPath) {
     $compileDir = Join-Path $tempRoot "jadx-compiled"
     $jadxPatchDir = Join-Path $tempRoot "jadx-patched"
     $patchedSaveCodeSourcePath = Join-Path $apktoolPatchSourceRoot "jadx\core\dex\visitors\SaveCode.java"
+    $patchedZipDeflateSourcePath = Join-Path $apktoolPatchSourceRoot "jadx\zip\parser\ZipDeflate.java"
     $jadxPluginServicePath = Join-Path $jadxPatchDir "META-INF\services\jadx.api.plugins.JadxPlugin"
     $jadxPluginServiceContent = @(
         "jadx.plugins.kotlin.metadata.KotlinMetadataPlugin",
@@ -382,11 +383,13 @@ function Build-JadxRuntime([string] $androidJarPath) {
     )
     $jadxJarDeleteEntries = @(
         "META-INF/services/jadx.api.plugins.JadxPlugin",
-        "jadx/core/dex/visitors/SaveCode.class"
+        "jadx/core/dex/visitors/SaveCode.class",
+        "jadx/zip/parser/ZipDeflate.class"
     )
     Ensure-CleanDirectory $compileDir
     Ensure-CleanDirectory $jadxPatchDir
     Require-File $patchedSaveCodeSourcePath
+    Require-File $patchedZipDeflateSourcePath
     New-Item -ItemType Directory -Path (Split-Path -Parent $jadxPluginServicePath) -Force | Out-Null
     [System.IO.File]::WriteAllLines(
         $jadxPluginServicePath,
@@ -403,7 +406,8 @@ function Build-JadxRuntime([string] $androidJarPath) {
         -target 8 `
         -cp "$jadxCoreJvmJarPath;$androidJarPath" `
         -d $compileDir `
-        $patchedSaveCodeSourcePath
+        $patchedSaveCodeSourcePath `
+        $patchedZipDeflateSourcePath
     Remove-JarEntries -jarPath $jadxCoreJvmJarPath -entryNames $jadxJarDeleteEntries
     Update-JarFromDirectory `
         -jarPath $jadxCoreJvmJarPath `
@@ -412,7 +416,10 @@ function Build-JadxRuntime([string] $androidJarPath) {
     Update-JarFromDirectory `
         -jarPath $jadxCoreJvmJarPath `
         -baseDir $compileDir `
-        -entries @("jadx/core/dex/visitors/SaveCode.class")
+        -entries @(
+            "jadx/core/dex/visitors/SaveCode.class",
+            "jadx/zip/parser/ZipDeflate.class"
+        )
     New-DexJarFromInputJar `
         -inputJarPath $jadxCoreJvmJarPath `
         -outputJarPath $jadxRuntimeJarPath `

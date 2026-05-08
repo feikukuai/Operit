@@ -5,8 +5,8 @@ import com.ai.assistance.operit.core.config.SystemToolPrompts
 import com.ai.assistance.operit.core.tools.PackageTool
 import com.ai.assistance.operit.core.tools.PackageToolParameter
 import com.ai.assistance.operit.core.tools.ToolPackage
-import com.ai.assistance.operit.core.tools.mcp.MCPPackage
 import com.ai.assistance.operit.core.tools.packTool.PackageManager
+import com.ai.assistance.operit.data.mcp.MCPLocalServer
 import com.ai.assistance.operit.data.model.ApiProviderType
 import com.ai.assistance.operit.data.model.SystemToolPromptCategory
 import com.ai.assistance.operit.data.model.ToolParameterSchema
@@ -14,6 +14,7 @@ import com.ai.assistance.operit.data.model.ToolPrompt
 import com.ai.assistance.operit.data.preferences.ResolvedCharacterCardToolAccess
 import com.ai.assistance.operit.data.skill.SkillRepository
 import java.util.Locale
+import org.json.JSONObject
 
 enum class ToolExposureMode {
     FULL,
@@ -246,29 +247,32 @@ object CliToolModeSupport {
 
         enabledPackages.forEach { packageName ->
             val toolPackage = packageManager.getEffectivePackageTools(packageName) ?: return@forEach
-            addActivationEntry(
-                entries = entries,
-                displayName = packageName,
-                description = toolPackage.description.resolve(context),
-                keywordTag = "package",
-                sourceKind = HiddenToolSourceKind.ACTIVATION
-            )
-            addPackageToolEntries(
-                entries = entries,
-                prefix = packageName,
-                toolPackage = toolPackage,
-                descriptionResolver = { it.description.resolve(context) },
-                paramHintResolver = { parameter ->
-                    buildParameterHint(
-                        name = parameter.name,
-                        description = parameter.description.resolve(context),
-                        type = parameter.type,
-                        required = parameter.required
-                    )
-                },
-                sourceKind = HiddenToolSourceKind.PACKAGE,
-                keywordTag = "package"
-            )
+            if (toolPackage.tools.isEmpty()) {
+                addActivationEntry(
+                    entries = entries,
+                    displayName = packageName,
+                    description = toolPackage.description.resolve(context),
+                    keywordTag = "package",
+                    sourceKind = HiddenToolSourceKind.ACTIVATION
+                )
+            } else {
+                addPackageToolEntries(
+                    entries = entries,
+                    prefix = packageName,
+                    toolPackage = toolPackage,
+                    descriptionResolver = { it.description.resolve(context) },
+                    paramHintResolver = { parameter ->
+                        buildParameterHint(
+                            name = parameter.name,
+                            description = parameter.description.resolve(context),
+                            type = parameter.type,
+                            required = parameter.required
+                        )
+                    },
+                    sourceKind = HiddenToolSourceKind.PACKAGE,
+                    keywordTag = "package"
+                )
+            }
         }
 
         val skillPackages =
@@ -289,33 +293,26 @@ object CliToolModeSupport {
         val mcpServers =
             packageManager.getAvailableServerPackages()
                 .filterKeys { roleCardToolAccess.isExternalSourceAllowed(it) }
+        val mcpLocalServer = MCPLocalServer.getInstance(context)
 
         mcpServers.forEach { (serverName, serverConfig) ->
-            addActivationEntry(
-                entries = entries,
-                displayName = serverName,
-                description = serverConfig.description,
-                keywordTag = "mcp",
-                sourceKind = HiddenToolSourceKind.ACTIVATION
-            )
+            val cachedTools = mcpLocalServer.getCachedTools(serverName).orEmpty()
+            if (cachedTools.isEmpty()) {
+                addActivationEntry(
+                    entries = entries,
+                    displayName = serverName,
+                    description = serverConfig.description,
+                    keywordTag = "mcp",
+                    sourceKind = HiddenToolSourceKind.ACTIVATION
+                )
+                return@forEach
+            }
 
-            val mcpLoadResult = MCPPackage.loadFromServer(context, serverConfig)
-            val mcpToolPackage = mcpLoadResult.mcpPackage?.toToolPackage() ?: return@forEach
-            addPackageToolEntries(
+            addCachedMcpToolEntries(
                 entries = entries,
-                prefix = serverName,
-                toolPackage = mcpToolPackage,
-                descriptionResolver = { it.description.resolve(context) },
-                paramHintResolver = { parameter ->
-                    buildParameterHint(
-                        name = parameter.name,
-                        description = parameter.description.resolve(context),
-                        type = parameter.type,
-                        required = parameter.required
-                    )
-                },
-                sourceKind = HiddenToolSourceKind.MCP,
-                keywordTag = "mcp"
+                serverName = serverName,
+                serverDescription = serverConfig.description,
+                cachedTools = cachedTools
             )
         }
 
@@ -562,6 +559,65 @@ object CliToolModeSupport {
                     )
                 entries.putIfAbsent("${entry.sourceKind}:${entry.targetToolName}:${entry.displayName}", entry)
             }
+    }
+
+    private fun addCachedMcpToolEntries(
+        entries: MutableMap<String, HiddenToolCatalogEntry>,
+        serverName: String,
+        serverDescription: String,
+        cachedTools: List<MCPLocalServer.CachedToolInfo>
+    ) {
+        cachedTools.forEach { cachedTool ->
+            val toolName = cachedTool.name.trim()
+            if (toolName.isEmpty()) {
+                return@forEach
+            }
+            val targetToolName = "$serverName:$toolName"
+            val entry =
+                HiddenToolCatalogEntry(
+                    targetToolName = targetToolName,
+                    displayName = targetToolName,
+                    description = cachedTool.description.ifBlank { serverDescription },
+                    parameterHints = buildCachedMcpParameterHints(cachedTool.inputSchema),
+                    sourceKind = HiddenToolSourceKind.MCP,
+                    keywords = listOf(serverName, "mcp", "cached")
+                )
+            entries.putIfAbsent("${entry.sourceKind}:${entry.targetToolName}:${entry.displayName}", entry)
+        }
+    }
+
+    private fun buildCachedMcpParameterHints(inputSchemaJson: String): List<String> {
+        val schema =
+            runCatching { JSONObject(inputSchemaJson) }.getOrNull()
+                ?: return emptyList()
+        val properties = schema.optJSONObject("properties") ?: return emptyList()
+
+        val requiredNames = linkedSetOf<String>()
+        val requiredArray = schema.optJSONArray("required")
+        if (requiredArray != null) {
+            for (index in 0 until requiredArray.length()) {
+                requiredArray.optString(index)
+                    .takeIf { it.isNotBlank() }
+                    ?.let(requiredNames::add)
+            }
+        }
+
+        val parameterHints = mutableListOf<String>()
+        val keys = properties.keys()
+        while (keys.hasNext()) {
+            val name = keys.next()
+            val parameterObject = properties.optJSONObject(name)
+            val type = parameterObject?.optString("type").takeUnless { it.isNullOrBlank() } ?: "string"
+            val description = parameterObject?.optString("description").orEmpty()
+            parameterHints +=
+                buildParameterHint(
+                    name = name,
+                    description = description,
+                    type = type,
+                    required = requiredNames.contains(name)
+                )
+        }
+        return parameterHints
     }
 
     private fun scoreEntry(

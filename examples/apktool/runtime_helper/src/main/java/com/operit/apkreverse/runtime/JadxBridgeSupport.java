@@ -37,17 +37,19 @@ final class JadxBridgeSupport {
 
             Object decompiler = ReflectionSupport.newInstance("jadx.api.JadxDecompiler", args);
             try {
-                ReflectionSupport.invoke(decompiler, "load");
-                ReflectionSupport.invoke(decompiler, "save");
+                return runWithDecompilerContextClassLoader(decompiler, () -> {
+                    ReflectionSupport.invoke(decompiler, "load");
+                    ReflectionSupport.invoke(decompiler, "save");
 
-                JSONObject payload = new JSONObject();
-                payload.put("inputApkPath", inputApk.getAbsolutePath());
-                payload.put("outputDir", outputDirectory.getAbsolutePath());
-                payload.put("classCount", sizeOf(ReflectionSupport.invoke(decompiler, "getClasses")));
-                payload.put("resourceCount", sizeOf(ReflectionSupport.invoke(decompiler, "getResources")));
-                payload.put("errorsCount", numberOf(ReflectionSupport.invoke(decompiler, "getErrorsCount")));
-                payload.put("warnsCount", numberOf(ReflectionSupport.invoke(decompiler, "getWarnsCount")));
-                return payload.toString();
+                    JSONObject payload = new JSONObject();
+                    payload.put("inputApkPath", inputApk.getAbsolutePath());
+                    payload.put("outputDir", outputDirectory.getAbsolutePath());
+                    payload.put("classCount", sizeOf(ReflectionSupport.invoke(decompiler, "getClasses")));
+                    payload.put("resourceCount", sizeOf(ReflectionSupport.invoke(decompiler, "getResources")));
+                    payload.put("errorsCount", numberOf(ReflectionSupport.invoke(decompiler, "getErrorsCount")));
+                    payload.put("warnsCount", numberOf(ReflectionSupport.invoke(decompiler, "getWarnsCount")));
+                    return payload.toString();
+                });
             } finally {
                 ReflectionSupport.invoke(decompiler, "close");
             }
@@ -68,6 +70,30 @@ final class JadxBridgeSupport {
         flags.remove(secureXmlParserFlag);
         Object security = ReflectionSupport.newInstance("jadx.api.security.impl.JadxSecurity", flags);
         ReflectionSupport.invoke(args, "setSecurity", security);
+    }
+
+    private static <T> T runWithDecompilerContextClassLoader(
+            Object decompiler,
+            ThrowingSupplier<T> action
+    ) throws Exception {
+        Thread currentThread = Thread.currentThread();
+        ClassLoader previousClassLoader = currentThread.getContextClassLoader();
+        ClassLoader decompilerClassLoader = decompiler.getClass().getClassLoader();
+        boolean changed = decompilerClassLoader != null && decompilerClassLoader != previousClassLoader;
+        if (changed) {
+            currentThread.setContextClassLoader(decompilerClassLoader);
+        }
+        try {
+            return action.get();
+        } finally {
+            if (changed) {
+                currentThread.setContextClassLoader(previousClassLoader);
+            }
+        }
+    }
+
+    private interface ThrowingSupplier<T> {
+        T get() throws Exception;
     }
 
     private static int sizeOf(Object value) throws Exception {
