@@ -10,38 +10,36 @@ exports.ensureQQBotServiceStarted = ensureQQBotServiceStarted;
 const qqbot_common_1 = require("./qqbot_common");
 const qqbot_openapi_1 = require("./qqbot_openapi");
 const qqbot_state_1 = require("./qqbot_state");
-let terminalSessionId = null;
+const HIDDEN_TERMINAL_EXECUTOR_KEY = "qqbot_gateway_service";
 function getLocalServiceBaseUrl() {
     return `http://127.0.0.1:${qqbot_common_1.LOCAL_SERVICE_PORT}`;
+}
+async function withPromiseTimeout(promise, timeoutMs, label) {
+    let timerId = null;
+    try {
+        return await Promise.race([
+            promise,
+            new Promise((_resolve, reject) => {
+                timerId = setTimeout(() => {
+                    reject(new Error(`${label} timed out after ${timeoutMs}ms`));
+                }, Math.max(1, timeoutMs));
+            })
+        ]);
+    }
+    finally {
+        if (timerId != null) {
+            clearTimeout(timerId);
+        }
+    }
 }
 async function sleepMsAsync(ms) {
     await Tools.System.sleep(ms);
 }
-async function createTerminalSessionIdAsync() {
-    const session = await Tools.System.terminal.create(qqbot_common_1.TERMINAL_SESSION_NAME);
-    const sessionId = (0, qqbot_common_1.asText)(session?.sessionId).trim();
-    if (!sessionId) {
-        throw new Error("Failed to create QQ Bot gateway terminal session");
-    }
-    terminalSessionId = sessionId;
-    return sessionId;
-}
-async function ensureTerminalSessionIdAsync() {
-    if (terminalSessionId) {
-        return terminalSessionId;
-    }
-    return await createTerminalSessionIdAsync();
-}
 async function runTerminalCommand(command, timeoutMs) {
-    let sessionId = await ensureTerminalSessionIdAsync();
-    try {
-        return await Tools.System.terminal.exec(sessionId, command, timeoutMs);
-    }
-    catch (_error) {
-        terminalSessionId = null;
-        sessionId = await createTerminalSessionIdAsync();
-        return await Tools.System.terminal.exec(sessionId, command, timeoutMs);
-    }
+    return await Tools.System.terminal.hiddenExec(command, {
+        executorKey: HIDDEN_TERMINAL_EXECUTOR_KEY,
+        timeoutMs
+    });
 }
 async function ensureTerminalPythonAvailable() {
     const result = await runTerminalCommand("python3 - <<'PY'\nimport http.server, json, os, socket, ssl, sys, threading, urllib.request\nprint('__PY_OK__')\nPY", 15000);
@@ -79,13 +77,54 @@ function uniqueStrings(values) {
     }
     return result;
 }
+function isQQBotServiceCommandLine(cmdline) {
+    const normalized = cmdline.replace(/\u0000/g, " ").trim();
+    if (!normalized) {
+        return false;
+    }
+    return normalized.includes(qqbot_common_1.TERMINAL_SERVICE_OUTPUT_FILE_NAME)
+        && normalized.includes("--state-dir")
+        && normalized.includes((0, qqbot_state_1.getStateDirectoryPath)());
+}
+async function inspectProcessAsync(pid) {
+    const trimmed = pid.trim();
+    if (!trimmed) {
+        return {
+            exists: false,
+            state: "",
+            cmdline: ""
+        };
+    }
+    const result = await runTerminalCommand(`if [ -d /proc/${(0, qqbot_common_1.shellQuote)(trimmed)} ]; then state=$(awk '{print $3}' /proc/${(0, qqbot_common_1.shellQuote)(trimmed)}/stat 2>/dev/null); cmd=$(tr '\\000' ' ' < /proc/${(0, qqbot_common_1.shellQuote)(trimmed)}/cmdline 2>/dev/null); printf '__STATE__=%s\\n__CMD__=%s\\n' "$state" "$cmd"; fi`, 4000);
+    const output = (0, qqbot_common_1.asText)(result.output);
+    const stateMatch = output.match(/__STATE__=([^\r\n]*)/);
+    const cmdMatch = output.match(/__CMD__=([^\r\n]*)/);
+    return {
+        exists: Number(result.exitCode ?? 1) === 0 && output.includes("__STATE__="),
+        state: (stateMatch?.[1] || "").trim(),
+        cmdline: (cmdMatch?.[1] || "").trim()
+    };
+}
 async function isProcessAliveAsync(pid) {
     const trimmed = pid.trim();
     if (!trimmed) {
         return false;
     }
-    const result = await runTerminalCommand(`kill -0 ${(0, qqbot_common_1.shellQuote)(trimmed)} >/dev/null 2>&1`, 4000);
-    return Number(result.exitCode ?? 1) === 0;
+    const probe = await runTerminalCommand(`kill -0 ${(0, qqbot_common_1.shellQuote)(trimmed)} >/dev/null 2>&1`, 4000);
+    if (Number(probe.exitCode ?? 1) !== 0) {
+        return false;
+    }
+    const inspection = await inspectProcessAsync(trimmed);
+    if (!inspection.exists) {
+        return true;
+    }
+    if (inspection.state === "Z") {
+        return false;
+    }
+    if (!inspection.cmdline) {
+        return true;
+    }
+    return isQQBotServiceCommandLine(inspection.cmdline);
 }
 async function listQQBotServicePidsAsync() {
     const stateDir = (0, qqbot_common_1.shellQuote)((0, qqbot_state_1.getStateDirectoryPath)());
@@ -119,7 +158,7 @@ async function requestLocalServiceJsonOrThrow(path, method, body, timeoutMs) {
 }
 async function queryLocalQQBotServiceStatusAsync(timeoutMs = 1200) {
     try {
-        const response = await requestLocalServiceAsync("/status", "GET", null, timeoutMs);
+        const response = await withPromiseTimeout(requestLocalServiceAsync("/status", "GET", null, timeoutMs), timeoutMs + 200, "Local QQ Bot service /status request");
         if (!response.success || !(0, qqbot_common_1.hasOwn)(response.json, "mode")) {
             return null;
         }

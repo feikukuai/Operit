@@ -3232,8 +3232,9 @@ Kini anda boleh menggunakan mod AutoGLM di antara muka perbualan.</string>
     <string name="provider_openrouter">OpenRouter (agregasi pelbagai model)</string>
     <string name="provider_infiniai">Infinigence-AI</string>
     <string name="provider_alipay_bailing">Model Bailing Alipay</string>
-    <string name="provider_lmstudio">LM Studio</string>
-    <string name="provider_ollama">Ollama</string>
+    <string name="provider_lmstudio">LM Studio (model tempatan)</string>
+    <string name="provider_ollama">Ollama (model tempatan)</string>
+    <string name="provider_openai_local">Serasi OpenAI (model tempatan)</string>
 
     <string name="settings_theme_subtitle">Penyesuaian tema dan penampilan</string>
     <string name="layout_adjustment">Pelarasan susun atur</string>

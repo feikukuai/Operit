@@ -1470,8 +1470,41 @@ export interface MessageSendResultData {
     chatId: string;
     /** The message content that was sent */
     message: string;
+    /** Final AI response content when available */
+    aiResponse?: string | null;
+    /** Reply receive timestamp when available */
+    receivedAt?: number | null;
     /** Sent timestamp */
     sentAt: number;
+    /** Returns a formatted string representation */
+    toString(): string;
+}
+
+/**
+ * Message send streaming event data
+ */
+export interface MessageSendStreamEventData {
+    /** Event type, currently "start" or "chunk" */
+    type: string;
+
+    /** The ID of the chat receiving the streamed reply */
+    chatId: string;
+
+    /** The original message content that was sent */
+    message: string;
+
+    /** Whether waifu-style chunk aggregation is enabled for this stream */
+    waifu: boolean;
+
+    /** Incremental chunk content for "chunk" events */
+    chunk?: string | null;
+
+    /** Zero-based chunk index */
+    chunkIndex?: number | null;
+
+    /** Total received character count so far */
+    receivedChars?: number | null;
+
     /** Returns a formatted string representation */
     toString(): string;
 }

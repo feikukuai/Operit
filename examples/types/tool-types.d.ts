@@ -168,6 +168,7 @@ export interface ToolResultMap {
     'delete_chat': ChatDeleteResultData;
 
     'send_message_to_ai': MessageSendResultData;
+    'send_message_to_ai_streaming': MessageSendResultData;
     'list_character_cards': CharacterCardListResultData;
     'get_chat_messages': ChatMessagesResultData;
 

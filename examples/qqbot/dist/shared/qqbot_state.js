@@ -4,6 +4,7 @@ exports.getStateDirectoryPath = getStateDirectoryPath;
 exports.getStateFilePath = getStateFilePath;
 exports.getConfigFilePath = getConfigFilePath;
 exports.getServiceLogPath = getServiceLogPath;
+exports.getAutoReplyStateFilePath = getAutoReplyStateFilePath;
 exports.readEnv = readEnv;
 exports.writeEnv = writeEnv;
 exports.readTextFileWithTools = readTextFileWithTools;
@@ -14,13 +15,68 @@ exports.writeJsonObjectFileAsync = writeJsonObjectFileAsync;
 exports.readPersistedConfigAsync = readPersistedConfigAsync;
 exports.writePersistedConfigAsync = writePersistedConfigAsync;
 exports.updatePersistedConfigAsync = updatePersistedConfigAsync;
+exports.readPersistedAutoReplyStateAsync = readPersistedAutoReplyStateAsync;
+exports.writePersistedAutoReplyStateAsync = writePersistedAutoReplyStateAsync;
+exports.flushPersistedAutoReplyStateAsync = flushPersistedAutoReplyStateAsync;
 exports.readConfigSnapshotFrom = readConfigSnapshotFrom;
 exports.readConfigSnapshotAsync = readConfigSnapshotAsync;
 exports.requireConfiguredSnapshotAsync = requireConfiguredSnapshotAsync;
 exports.buildStatus = buildStatus;
 const qqbot_common_1 = require("./qqbot_common");
-let persistedConfigCache = null;
+const AUTO_REPLY_STATE_FILE_NAME = "auto_reply_state.json";
+let stateDirectoryPathCache = "";
+const cachedJsonStores = Object.create(null);
+function cloneJsonObject(value) {
+    return JSON.parse(JSON.stringify(value));
+}
+function normalizeStorePath(path) {
+    return (0, qqbot_common_1.asText)(path).trim().replace(/\\/g, "/");
+}
+function getCachedJsonStoreEntry(path) {
+    const normalizedPath = normalizeStorePath(path);
+    if (!normalizedPath) {
+        throw new Error("State store path is empty");
+    }
+    if (!cachedJsonStores[normalizedPath]) {
+        cachedJsonStores[normalizedPath] = {
+            loaded: false,
+            dirty: false,
+            value: {}
+        };
+    }
+    return cachedJsonStores[normalizedPath];
+}
+async function readCachedJsonStoreAsync(path, sanitize) {
+    const entry = getCachedJsonStoreEntry(path);
+    if (!entry.loaded) {
+        const raw = await readJsonObjectFileAsync(path);
+        const nextValue = sanitize ? sanitize(raw) : raw;
+        entry.value = cloneJsonObject(nextValue);
+        entry.loaded = true;
+        entry.dirty = false;
+    }
+    return cloneJsonObject(entry.value);
+}
+async function writeCachedJsonStoreAsync(path, value, sanitize) {
+    const entry = getCachedJsonStoreEntry(path);
+    const nextValue = sanitize ? sanitize(value) : value;
+    entry.value = cloneJsonObject(nextValue);
+    entry.loaded = true;
+    entry.dirty = true;
+    return cloneJsonObject(entry.value);
+}
+async function flushCachedJsonStoreAsync(path) {
+    const entry = getCachedJsonStoreEntry(path);
+    if (!entry.loaded || !entry.dirty) {
+        return;
+    }
+    await writeJsonObjectFileAsync(path, entry.value);
+    entry.dirty = false;
+}
 function getStateDirectoryPath() {
+    if (stateDirectoryPathCache) {
+        return stateDirectoryPathCache;
+    }
     if (typeof getPluginConfigDir !== "function") {
         throw new Error("getPluginConfigDir is unavailable");
     }
@@ -28,7 +84,8 @@ function getStateDirectoryPath() {
     if (!path) {
         throw new Error(`Failed to resolve plugin config dir for ${qqbot_common_1.QQBOT_TOOLPKG_ID}`);
     }
-    return path;
+    stateDirectoryPathCache = path;
+    return stateDirectoryPathCache;
 }
 function getStateFilePath(name) {
     return `${getStateDirectoryPath()}/${name}`;
@@ -38,6 +95,9 @@ function getConfigFilePath() {
 }
 function getServiceLogPath() {
     return getStateFilePath(qqbot_common_1.LOG_FILE_NAME);
+}
+function getAutoReplyStateFilePath() {
+    return getStateFilePath(AUTO_REPLY_STATE_FILE_NAME);
 }
 function readEnv(key) {
     if (typeof getEnv !== "function") {
@@ -88,22 +148,39 @@ function sanitizePersistedConfig(value) {
         autoReply
     };
 }
+function sanitizeAutoReplyStateStore(value) {
+    return {
+        runtime: (0, qqbot_common_1.hasOwn)(value, "runtime") && (0, qqbot_common_1.isObject)(value.runtime)
+            ? cloneJsonObject(value.runtime)
+            : {},
+        bindings: (0, qqbot_common_1.hasOwn)(value, "bindings") && (0, qqbot_common_1.isObject)(value.bindings)
+            ? cloneJsonObject(value.bindings)
+            : {},
+        records: (0, qqbot_common_1.hasOwn)(value, "records") && (0, qqbot_common_1.isObject)(value.records)
+            ? cloneJsonObject(value.records)
+            : {}
+    };
+}
 async function readPersistedConfigAsync() {
-    if (persistedConfigCache) {
-        return { ...persistedConfigCache };
-    }
-    persistedConfigCache = sanitizePersistedConfig(await readJsonObjectFileAsync(getConfigFilePath()));
-    return { ...persistedConfigCache };
+    return await readCachedJsonStoreAsync(getConfigFilePath(), sanitizePersistedConfig);
 }
 async function writePersistedConfigAsync(value) {
-    const sanitized = sanitizePersistedConfig(value);
-    await writeJsonObjectFileAsync(getConfigFilePath(), sanitized);
-    persistedConfigCache = sanitized;
-    return { ...sanitized };
+    const nextValue = await writeCachedJsonStoreAsync(getConfigFilePath(), value, sanitizePersistedConfig);
+    await flushCachedJsonStoreAsync(getConfigFilePath());
+    return nextValue;
 }
 async function updatePersistedConfigAsync(patch) {
     const current = await readPersistedConfigAsync();
     return await writePersistedConfigAsync({ ...current, ...patch });
+}
+async function readPersistedAutoReplyStateAsync() {
+    return await readCachedJsonStoreAsync(getAutoReplyStateFilePath(), sanitizeAutoReplyStateStore);
+}
+async function writePersistedAutoReplyStateAsync(value) {
+    return await writeCachedJsonStoreAsync(getAutoReplyStateFilePath(), value, sanitizeAutoReplyStateStore);
+}
+async function flushPersistedAutoReplyStateAsync() {
+    await flushCachedJsonStoreAsync(getAutoReplyStateFilePath());
 }
 function readConfigSnapshotFrom(storedConfig, overrides) {
     const appId = overrides && (0, qqbot_common_1.hasOwn)(overrides, "appId")

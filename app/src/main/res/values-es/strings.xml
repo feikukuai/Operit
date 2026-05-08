@@ -1231,8 +1231,9 @@
     <string name="provider_iflow">iFlow</string>
     <string name="provider_openrouter">OpenRouter (Hub Multi-modelo)</string>
     <string name="provider_infiniai">InfiniAI</string>
-    <string name="provider_lmstudio">LM Studio</string>
-    <string name="provider_ollama">Ollama</string>
+    <string name="provider_lmstudio">LM Studio (modelo local)</string>
+    <string name="provider_ollama">Ollama (modelo local)</string>
+    <string name="provider_openai_local">OpenAI compatible (modelo local)</string>
     <string name="provider_novita">Novita AI</string>
     <string name="provider_other">Otros proveedores</string>
     <string name="select_api_provider_title">Seleccionar Proveedor API</string>

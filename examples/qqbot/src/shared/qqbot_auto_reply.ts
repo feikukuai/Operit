@@ -1,19 +1,25 @@
 import {
     JsonObject,
     PACKAGE_VERSION,
+    QQBotConfigSnapshot,
     asText,
     firstNonBlank,
     hasOwn,
+    isObject,
     parseOptionalBoolean,
     parsePositiveInt,
     safeErrorMessage,
     toBoolean
 } from "./qqbot_common";
 import {
+    flushPersistedAutoReplyStateAsync,
     readPersistedConfigAsync,
+    readPersistedAutoReplyStateAsync,
     readConfigSnapshotAsync,
+    readConfigSnapshotFrom,
+    requireConfiguredSnapshotAsync,
     updatePersistedConfigAsync,
-    requireConfiguredSnapshotAsync
+    writePersistedAutoReplyStateAsync
 } from "./qqbot_state";
 import {
     buildServiceStatusAsync,
@@ -22,15 +28,11 @@ import {
     removeQueuedEventsFromServiceAsync,
     stopQQBotServiceInternalAsync
 } from "./qqbot_service";
-import { buildSendMessageBody, openApiRequest } from "./qqbot_openapi";
+import { buildSendMessageBody, fetchAccessToken, openApiRequest } from "./qqbot_openapi";
 
 const WaifuMessageProcessor = Java.com.ai.assistance.operit.util.WaifuMessageProcessor;
 
-const DEFAULT_ASSISTANT_INSTRUCTION = [
-    "你正在通过 Operit 的 QQ Bot 与真实用户对话。",
-    "请直接输出要发回 QQ 的回复正文。",
-    "不要解释系统内部过程，不要输出 XML、工具标签或多余前缀。"
-].join(" ");
+const DEFAULT_ASSISTANT_INSTRUCTION = "";
 
 const DEFAULT_AUTO_REPLY_CONFIG = {
     enabled: false,
@@ -45,12 +47,6 @@ const DEFAULT_AUTO_REPLY_CONFIG = {
 
 let autoReplyTimerId: ReturnType<typeof setInterval> | null = null;
 let autoReplyTickActive = false;
-let autoReplyConfigCache: AutoReplyConfig | null = null;
-let autoReplyStateCache: AutoReplyStateStore = {
-    runtime: {},
-    bindings: {},
-    records: {}
-};
 
 type AutoReplyConfig = typeof DEFAULT_AUTO_REPLY_CONFIG;
 type QQReplyHint = {
@@ -133,8 +129,24 @@ type ChatSendMessageResult = {
     sentAt?: number;
 };
 
+type ChatSendStreamEvent = {
+    type?: string;
+    chunk?: string | null;
+    chunkIndex?: number | null;
+    receivedChars?: number | null;
+    waifu?: boolean;
+};
+
 type QQBotServiceState = JsonObject & {
     botUserId?: string;
+};
+
+type QQInboundAttachment = {
+    id: string;
+    url: string;
+    fileName: string;
+    mimeType: string;
+    size: number;
 };
 
 function normalizeAutoReplyConfig(raw: JsonObject): AutoReplyConfig {
@@ -173,23 +185,19 @@ function normalizeAutoReplyConfig(raw: JsonObject): AutoReplyConfig {
     }
 
     if (hasOwn(raw, "assistantInstruction")) {
-        next.assistantInstruction = firstNonBlank(asText(raw.assistantInstruction), DEFAULT_ASSISTANT_INSTRUCTION);
+        next.assistantInstruction = asText(raw.assistantInstruction).trim();
     }
 
     return next;
 }
 
 async function readAutoReplyConfigAsync(): Promise<AutoReplyConfig> {
-    if (autoReplyConfigCache) {
-        return autoReplyConfigCache;
-    }
     const storedConfig = await readPersistedConfigAsync();
-    autoReplyConfigCache = normalizeAutoReplyConfig(
+    return normalizeAutoReplyConfig(
         hasOwn(storedConfig, "autoReply") && typeof storedConfig.autoReply === "object" && storedConfig.autoReply
             ? storedConfig.autoReply as JsonObject
             : {}
     );
-    return autoReplyConfigCache;
 }
 
 async function writeAutoReplyConfigAsync(config: JsonObject): Promise<AutoReplyConfig> {
@@ -206,7 +214,6 @@ async function writeAutoReplyConfigAsync(config: JsonObject): Promise<AutoReplyC
             assistantInstruction: normalized.assistantInstruction
         }
     });
-    autoReplyConfigCache = normalized;
     return normalized;
 }
 
@@ -219,12 +226,15 @@ async function updateAutoReplyConfigAsync(patch: JsonObject): Promise<AutoReplyC
 }
 
 async function readAutoReplyStateStoreAsync(): Promise<AutoReplyStateStore> {
-    return autoReplyStateCache;
+    return await readPersistedAutoReplyStateAsync<AutoReplyStateStore>();
 }
 
 async function writeAutoReplyStateStoreAsync(store: AutoReplyStateStore): Promise<AutoReplyStateStore> {
-    autoReplyStateCache = store;
-    return store;
+    return await writePersistedAutoReplyStateAsync<AutoReplyStateStore>(store);
+}
+
+async function flushAutoReplyStateStoreAsync(): Promise<void> {
+    await flushPersistedAutoReplyStateAsync();
 }
 
 async function readAutoReplyRuntimeAsync(): Promise<AutoReplyRuntime> {
@@ -255,6 +265,7 @@ async function writeAutoReplyBindingsAsync(bindings: AutoReplyBindings): Promise
         ...store,
         bindings
     });
+    await flushAutoReplyStateStoreAsync();
 }
 
 async function readAutoReplyRecordsAsync(): Promise<AutoReplyRecords> {
@@ -268,6 +279,7 @@ async function writeAutoReplyRecordsAsync(records: AutoReplyRecords): Promise<vo
         ...store,
         records: trimmed
     });
+    await flushAutoReplyStateStoreAsync();
 }
 
 function trimRecordMap(records: AutoReplyRecords): AutoReplyRecords {
@@ -282,6 +294,27 @@ function trimRecordMap(records: AutoReplyRecords): AutoReplyRecords {
         next[item.key] = item.value;
     });
     return next;
+}
+
+async function readActiveAutoReplyContextAsync(): Promise<{
+    snapshot: QQBotConfigSnapshot;
+    config: AutoReplyConfig;
+    disabledReason: "" | "listener_disabled" | "disabled";
+}> {
+    const storedConfig = await readPersistedConfigAsync();
+    const snapshot = readConfigSnapshotFrom(storedConfig);
+    const config = normalizeAutoReplyConfig(
+        hasOwn(storedConfig, "autoReply") && typeof storedConfig.autoReply === "object" && storedConfig.autoReply
+            ? storedConfig.autoReply as JsonObject
+            : {}
+    );
+    return {
+        snapshot,
+        config,
+        disabledReason: !snapshot.listenerEnabled
+            ? "listener_disabled"
+            : (!config.enabled ? "disabled" : "")
+    };
 }
 
 function buildEventKey(event: AutoReplyEvent): string {
@@ -317,41 +350,215 @@ function buildChatTitle(event: AutoReplyEvent): string {
     return `[QQ][私聊] ${firstNonBlank(asText(event.userOpenId), "unknown")}`;
 }
 
-function buildSenderName(event: AutoReplyEvent): string {
-    const scene = asText(event.scene).trim().toLowerCase();
-    const tail = scene === "group"
-        ? firstNonBlank(asText(event.groupOpenId), "group")
-        : firstNonBlank(asText(event.userOpenId), "user");
-    if (scene === "group") {
-        return `QQ群友 ${tail}`;
-    }
-    return `QQ用户 ${tail}`;
+function escapeXml(value: string): string {
+    return value
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/\"/g, "&quot;")
+        .replace(/'/g, "&apos;");
 }
 
-function buildInboundChatMessage(config: AutoReplyConfig, event: AutoReplyEvent): string {
+function sanitizePathSegment(value: string, fallback: string): string {
+    const normalized = value
+        .replace(/[\\/:*?"<>|\u0000-\u001F]+/g, "_")
+        .replace(/\s+/g, "_")
+        .trim()
+        .replace(/^_+|_+$/g, "");
+    return normalized || fallback;
+}
+
+function hashText(value: string): string {
+    let hash = 0;
+    for (let index = 0; index < value.length; index += 1) {
+        hash = ((hash << 5) - hash + value.charCodeAt(index)) | 0;
+    }
+    return Math.abs(hash).toString(16);
+}
+
+function buildFileNameFromUrl(url: string): string {
+    const normalized = url.trim();
+    if (!normalized) {
+        return "";
+    }
+    try {
+        const withoutQuery = normalized.split("?")[0];
+        const lastSegment = withoutQuery.split("/").pop() || "";
+        return decodeURIComponent(lastSegment).trim();
+    } catch (_error) {
+        return "";
+    }
+}
+
+function normalizeAttachmentUrl(url: string): string {
+    const trimmed = url.trim();
+    if (trimmed.startsWith("//")) {
+        return `https:${trimmed}`;
+    }
+    return trimmed;
+}
+
+function normalizeQQInboundAttachment(raw: JsonObject, index: number): QQInboundAttachment | null {
+    const url = normalizeAttachmentUrl(firstNonBlank(
+        asText(raw.url),
+        asText(raw.download_url),
+        asText(raw.file_url)
+    ));
+    if (!url) {
+        return null;
+    }
+    const mimeType = firstNonBlank(
+        asText(raw.content_type),
+        asText(raw.contentType),
+        asText(raw.mime_type),
+        asText(raw.mimeType),
+        "application/octet-stream"
+    );
+    const providedName = firstNonBlank(
+        asText(raw.filename),
+        asText(raw.file_name),
+        asText(raw.name),
+        buildFileNameFromUrl(url)
+    );
+    const fileName = sanitizePathSegment(providedName, `attachment_${index + 1}`);
+    return {
+        id: firstNonBlank(asText(raw.id), asText(raw.file_id), asText(raw.uuid), `attachment_${index + 1}`),
+        url,
+        fileName,
+        mimeType,
+        size: Number(raw.size ?? raw.file_size ?? 0) || 0
+    };
+}
+
+function extractQQInboundAttachments(event: AutoReplyEvent): QQInboundAttachment[] {
+    const rawPayload = isObject(event.rawPayload) ? event.rawPayload : {};
+    const payloadData = isObject(rawPayload.d) ? rawPayload.d as JsonObject : {};
+    const candidates: JsonObject[] = [];
+    const pushArrayItems = (value: unknown): void => {
+        if (!Array.isArray(value)) {
+            return;
+        }
+        for (let index = 0; index < value.length; index += 1) {
+            const item = value[index];
+            if (isObject(item)) {
+                candidates.push(item);
+            }
+        }
+    };
+    pushArrayItems(payloadData.attachments);
+    pushArrayItems(payloadData.files);
+    if (isObject(payloadData.file_info)) {
+        candidates.push(payloadData.file_info as JsonObject);
+    }
+    const normalized: QQInboundAttachment[] = [];
+    const seen = new Set<string>();
+    for (let index = 0; index < candidates.length; index += 1) {
+        const item = normalizeQQInboundAttachment(candidates[index], index);
+        if (!item) {
+            continue;
+        }
+        const key = `${item.url}|${item.fileName}`;
+        if (seen.has(key)) {
+            continue;
+        }
+        seen.add(key);
+        normalized.push(item);
+    }
+    return normalized;
+}
+
+async function ensureQQBotAttachmentDirAsync(event: AutoReplyEvent): Promise<string> {
+    const eventDirName = sanitizePathSegment(
+        firstNonBlank(asText(event.eventId).trim(), asText(event.messageId).trim(), hashText(asText(event.timestamp))),
+        "event"
+    );
+    const baseDir = `${OPERIT_CLEAN_ON_EXIT_DIR}/qqbot/${eventDirName}`;
+    await Tools.Files.mkdir(baseDir, true, "android");
+    await Tools.Files.write(`${baseDir}/.nomedia`, "", false, "android");
+    return baseDir;
+}
+
+async function buildQQAttachmentDownloadHeadersAsync(): Promise<Record<string, string>> {
+    const snapshot = await requireConfiguredSnapshotAsync();
+    const token = await fetchAccessToken(snapshot, 20000);
+    return {
+        Accept: "*/*",
+        Authorization: `${token.tokenType} ${token.accessToken}`,
+        "X-Union-Appid": snapshot.appId
+    };
+}
+
+async function materializeQQInboundAttachmentsAsync(event: AutoReplyEvent): Promise<string[]> {
+    const attachments = extractQQInboundAttachments(event);
+    if (attachments.length === 0) {
+        return [];
+    }
+    const baseDir = await ensureQQBotAttachmentDirAsync(event);
+    const headers = await buildQQAttachmentDownloadHeadersAsync();
+    const tags: string[] = [];
+    for (let index = 0; index < attachments.length; index += 1) {
+        const attachment = attachments[index];
+        const safeFileName = sanitizePathSegment(attachment.fileName, `attachment_${index + 1}`);
+        const localPath = `${baseDir}/${safeFileName}`;
+        await Tools.Files.download(attachment.url, localPath, "android", headers);
+        const fileInfo = await Tools.Files.info(localPath, "android");
+        const resolvedSize = Number(fileInfo.size ?? attachment.size ?? 0) || 0;
+        tags.push(
+            `<attachment id="${escapeXml(localPath)}" filename="${escapeXml(safeFileName)}" type="${escapeXml(attachment.mimeType)}" size="${resolvedSize}">${escapeXml(localPath)}</attachment>`
+        );
+    }
+    return tags;
+}
+
+function buildInboundChatContextAttachment(config: AutoReplyConfig, event: AutoReplyEvent): string {
     const scene = asText(event.scene).trim().toLowerCase();
     const sceneLabel = scene === "group" ? "QQ群消息" : scene === "c2c" ? "QQ私聊消息" : "QQ消息";
-    const lines = [
-        config.assistantInstruction,
-        "",
-        `当前收到一条${sceneLabel}。`,
+    const contentLines = [
+        `scene: ${scene || "unknown"}`,
+        `sceneLabel: ${sceneLabel}`,
         `eventType: ${asText(event.eventType).trim()}`,
         `messageId: ${asText(event.messageId).trim()}`
     ];
 
     const userOpenId = asText(event.userOpenId).trim();
     if (userOpenId) {
-        lines.push(`userOpenId: ${userOpenId}`);
+        contentLines.push(`userOpenId: ${userOpenId}`);
     }
     const groupOpenId = asText(event.groupOpenId).trim();
     if (groupOpenId) {
-        lines.push(`groupOpenId: ${groupOpenId}`);
+        contentLines.push(`groupOpenId: ${groupOpenId}`);
+    }
+    const authorId = asText(event.authorId).trim();
+    if (authorId) {
+        contentLines.push(`authorId: ${authorId}`);
+    }
+    const extraInstruction = asText(config.assistantInstruction).trim();
+    if (extraInstruction) {
+        contentLines.push("");
+        contentLines.push("instruction:");
+        contentLines.push(extraInstruction);
     }
 
-    lines.push("");
-    lines.push("用户消息如下：");
-    lines.push(asText(event.content).trim());
-    return lines.join("\n");
+    const attachmentContent = contentLines.join("\n");
+    const attachmentId = firstNonBlank(
+        asText(event.eventId).trim(),
+        asText(event.messageId).trim(),
+        `${scene || "qq"}_context`
+    );
+    const filename = scene === "group" ? "qq_group_message_context.txt" : "qq_private_message_context.txt";
+    return `<attachment id="${escapeXml(attachmentId)}" filename="${escapeXml(filename)}" type="text/plain" size="${attachmentContent.length}">${escapeXml(attachmentContent)}</attachment>`;
+}
+
+async function buildInboundChatMessage(config: AutoReplyConfig, event: AutoReplyEvent): Promise<string> {
+    const userMessage = asText(event.content).trim();
+    const attachmentTags = [
+        buildInboundChatContextAttachment(config, event),
+        ...(await materializeQQInboundAttachmentsAsync(event))
+    ];
+    if (!userMessage) {
+        return attachmentTags.join("\n");
+    }
+    return [userMessage, "", ...attachmentTags].join("\n");
 }
 
 function sanitizeAiReplyText(raw: string): string {
@@ -399,15 +606,22 @@ async function buildAutoReplyStatusAsync(options: {
 } = {}): Promise<JsonObject> {
     const includeBindings = options.includeBindings !== false;
     const includeRecords = options.includeRecords !== false;
-    const config = await readAutoReplyConfigAsync();
+    const storedConfig = await readPersistedConfigAsync();
+    const config = normalizeAutoReplyConfig(
+        hasOwn(storedConfig, "autoReply") && typeof storedConfig.autoReply === "object" && storedConfig.autoReply
+            ? storedConfig.autoReply as JsonObject
+            : {}
+    );
+    const snapshot = readConfigSnapshotFrom(storedConfig);
     const runtime = await readAutoReplyRuntimeAsync();
+    const isActiveByConfig = snapshot.listenerEnabled && config.enabled;
     return {
         success: true,
         packageVersion: PACKAGE_VERSION,
         config,
         runtime: {
             ...runtime,
-            running: toBoolean(runtime.running, false) || autoReplyTimerId != null
+            running: isActiveByConfig && (toBoolean(runtime.running, false) || autoReplyTimerId != null)
         },
         ...(includeBindings ? {
             bindings: summarizeBindings(await readAutoReplyBindingsAsync())
@@ -434,19 +648,50 @@ async function resolveBoundChatIdAsync(config: AutoReplyConfig, event: AutoReply
         throw new Error("Unable to resolve conversation key for QQ event");
     }
 
-    const bindings = await readAutoReplyBindingsAsync();
+    const store = await readAutoReplyStateStoreAsync();
+    const bindings: AutoReplyBindings = {
+        ...store.bindings
+    };
     const existing = bindings[conversationKey];
     const existingChatId = firstNonBlank(existing?.chatId ?? "");
     if (existingChatId) {
-        const findResult = await Tools.Chat.findChat({
-            query: existingChatId,
-            match: "exact",
-            index: 0
-        }) as ChatFindResult;
-        if ((findResult.chat?.id ?? "") === existingChatId) {
-            return existingChatId;
+        try {
+            const findResult = await Tools.Chat.findChat({
+                query: existingChatId,
+                match: "exact",
+                index: 0
+            }) as ChatFindResult;
+            if ((findResult.chat?.id ?? "") === existingChatId) {
+                return existingChatId;
+            }
+        } catch (error: unknown) {
+            const message = safeErrorMessage(error);
+            if (!message.includes("Chat not found by query")) {
+                throw error;
+            }
         }
+        delete bindings[conversationKey];
+        const records: AutoReplyRecords = {
+            ...store.records
+        };
+        let changed = false;
+        Object.keys(records).forEach((key) => {
+            if ((records[key]?.chatId ?? "").trim() === existingChatId) {
+                delete records[key];
+                changed = true;
+            }
+        });
+        await writeAutoReplyStateStoreAsync({
+            ...store,
+            bindings,
+            records: changed ? trimRecordMap(records) : store.records
+        });
+        await flushAutoReplyStateStoreAsync();
     }
+
+    const nextBindings: AutoReplyBindings = {
+        ...bindings
+    };
 
     const creation = await Tools.Chat.createNew(
         config.chatGroup,
@@ -463,7 +708,7 @@ async function resolveBoundChatIdAsync(config: AutoReplyConfig, event: AutoReply
         await Tools.Chat.updateTitle(chatId, title);
     } catch (_error) {}
 
-    bindings[conversationKey] = {
+    nextBindings[conversationKey] = {
         chatId,
         title,
         scene: asText(event.scene).trim(),
@@ -472,11 +717,21 @@ async function resolveBoundChatIdAsync(config: AutoReplyConfig, event: AutoReply
         lastMessageId: asText(event.messageId).trim(),
         lastProcessedAt: new Date().toISOString()
     };
-    await writeAutoReplyBindingsAsync(bindings);
+    await writeAutoReplyStateStoreAsync({
+        ...store,
+        bindings: nextBindings,
+        records: store.records
+    });
+    await flushAutoReplyStateStoreAsync();
     return chatId;
 }
 
-async function generateAiReplyAsync(config: AutoReplyConfig, event: AutoReplyEvent, eventKey: string): Promise<JsonObject> {
+async function generateAiReplyAsync(
+    config: AutoReplyConfig,
+    event: AutoReplyEvent,
+    eventKey: string,
+    onIntermediateResult?: (event: ChatSendStreamEvent) => void
+): Promise<JsonObject> {
     const records = await readAutoReplyRecordsAsync();
     const existing = records[eventKey];
     const existingReply = firstNonBlank(existing?.aiResponse ?? "");
@@ -488,17 +743,19 @@ async function generateAiReplyAsync(config: AutoReplyConfig, event: AutoReplyEve
     }
 
     const chatId = await resolveBoundChatIdAsync(config, event);
-    const sendResult = await Tools.Chat.sendMessage(
-        buildInboundChatMessage(config, event),
+    const sendResult = await Tools.Chat.sendMessageStreaming(
+        await buildInboundChatMessage(config, event),
         chatId,
         config.characterCardId || undefined,
-        buildSenderName(event),
+        undefined,
         {
+            waifu: true,
             persist_turn: true,
             notify_reply: false,
             hide_user_message: false,
             disable_warning: true,
-            timeout_ms: config.aiTimeoutMs
+            timeout_ms: config.aiTimeoutMs,
+            onIntermediateResult
         }
     ) as ChatSendMessageResult;
     const aiResponse = sanitizeAiReplyText((sendResult.aiResponse ?? "").trim());
@@ -536,14 +793,19 @@ async function generateAiReplyAsync(config: AutoReplyConfig, event: AutoReplyEve
     };
 }
 
-async function sendReplyToQQAsync(event: AutoReplyEvent, replyText: string): Promise<JsonObject> {
+async function sendReplyToQQAsync(
+    event: AutoReplyEvent,
+    replyText: string,
+    msgSeq = 1
+): Promise<JsonObject> {
     const snapshot = await requireConfiguredSnapshotAsync();
     const scene = asText(event.scene).trim().toLowerCase();
     const replyHint = event.replyHint;
     const body = buildSendMessageBody({
         content: replyText,
         msg_id: replyHint?.msg_id ?? "",
-        event_id: replyHint?.event_id ?? ""
+        event_id: replyHint?.event_id ?? "",
+        msg_seq: msgSeq
     });
 
     if (scene === "group") {
@@ -599,8 +861,9 @@ function classifyEvent(config: AutoReplyConfig, event: AutoReplyEvent, serviceSt
     const scene = asText(event.scene).trim().toLowerCase();
     const eventType = asText(event.eventType).trim();
     const content = asText(event.content).trim();
+    const hasAttachments = extractQQInboundAttachments(event).length > 0;
 
-    if (!content) {
+    if (!content && !hasAttachments) {
         return { action: "skip", reason: "empty_content" };
     }
     if (scene === "c2c" && !config.c2cEnabled) {
@@ -629,10 +892,42 @@ async function processSingleEventAsync(config: AutoReplyConfig, event: AutoReply
         throw new Error("Unable to build event key for QQ auto reply");
     }
 
-    const generated = await generateAiReplyAsync(config, event, eventKey);
+    let nextMsgSeq = 1;
+    let streamedChunkCount = 0;
+    let lastSendResult: JsonObject | null = null;
+    let streamSendQueue: Promise<void> = Promise.resolve();
+
+    const generated = await generateAiReplyAsync(
+        config,
+        event,
+        eventKey,
+        (streamEvent) => {
+            if (!streamEvent || streamEvent.type !== "chunk") {
+                return;
+            }
+            const chunkText = sanitizeAiReplyText(asText(streamEvent.chunk));
+            if (!chunkText) {
+                return;
+            }
+            const currentMsgSeq = nextMsgSeq;
+            nextMsgSeq += 1;
+            streamedChunkCount += 1;
+            streamSendQueue = streamSendQueue.then(async () => {
+                lastSendResult = await sendReplyToQQAsync(event, chunkText, currentMsgSeq);
+            });
+        }
+    );
+    await streamSendQueue;
     const aiResponse = typeof generated.aiResponse === "string" ? generated.aiResponse : "";
     const chatId = typeof generated.chatId === "string" ? generated.chatId : "";
-    const sendResult = await sendReplyToQQAsync(event, aiResponse.trim());
+    const sendResult =
+        streamedChunkCount > 0
+            ? (lastSendResult || {
+                scene: asText(event.scene).trim().toLowerCase(),
+                streamed: true,
+                chunkCount: streamedChunkCount
+            })
+            : await sendReplyToQQAsync(event, aiResponse.trim(), nextMsgSeq);
 
     const records = await readAutoReplyRecordsAsync();
     records[eventKey] = {
@@ -650,31 +945,41 @@ async function processSingleEventAsync(config: AutoReplyConfig, event: AutoReply
         eventKey,
         chatId: chatId.trim(),
         replyPreview: aiResponse.trim().slice(0, 200),
+        streamedChunkCount,
         sendResult
     };
 }
 
 async function processAutoReplyQueueOnceAsync(source: string): Promise<JsonObject> {
-    const snapshot = await readConfigSnapshotAsync();
-    const config = await readAutoReplyConfigAsync();
-    if (!snapshot.listenerEnabled || !config.enabled) {
+    const initialContext = await readActiveAutoReplyContextAsync();
+    if (initialContext.disabledReason) {
+        await stopAutoReplyLoopInternal("manual_stop");
         return {
             success: true,
             skipped: true,
-            reason: !snapshot.listenerEnabled ? "listener_disabled" : "disabled",
+            reason: initialContext.disabledReason,
             packageVersion: PACKAGE_VERSION
         };
     }
-
     await ensureQQBotServiceStarted({
         allow_missing_config: false,
         timeout_ms: 8000,
         source
     });
 
+    const activeContext = await readActiveAutoReplyContextAsync();
+    if (activeContext.disabledReason) {
+        await stopAutoReplyLoopInternal("manual_stop");
+        return {
+            success: true,
+            skipped: true,
+            reason: activeContext.disabledReason,
+            packageVersion: PACKAGE_VERSION
+        };
+    }
     const serviceStatus = await buildServiceStatusAsync({
         includeContacts: false,
-        snapshot
+        snapshot: activeContext.snapshot
     });
     const runtimeState = (serviceStatus.runtime || {}) as QQBotServiceState;
     const queueResult = await queryQueuedEventsFromServiceAsync({
@@ -705,9 +1010,24 @@ async function processAutoReplyQueueOnceAsync(source: string): Promise<JsonObjec
     const skippedItems: JsonObject[] = [];
     let queueRemainingCount = queue.length;
     for (let index = 0; index < queue.length && processedCount < 1; index += 1) {
+        const latestContext = await readActiveAutoReplyContextAsync();
+        if (latestContext.disabledReason) {
+            await stopAutoReplyLoopInternal("manual_stop");
+            return {
+                success: true,
+                skipped: true,
+                reason: latestContext.disabledReason,
+                packageVersion: PACKAGE_VERSION,
+                processedCount,
+                skippedCount,
+                processedItems,
+                skippedItems,
+                queueRemainingCount
+            };
+        }
         const event = queue[index];
         const eventKey = buildEventKey(event);
-        const decision = classifyEvent(config, event, runtimeState);
+        const decision = classifyEvent(latestContext.config, event, runtimeState);
         if (decision.action === "skip") {
             skippedCount += 1;
             skippedItems.push({
@@ -721,7 +1041,7 @@ async function processAutoReplyQueueOnceAsync(source: string): Promise<JsonObjec
             continue;
         }
 
-        const result = await processSingleEventAsync(config, event);
+        const result = await processSingleEventAsync(latestContext.config, event);
         processedCount += 1;
         processedItems.push(result);
         if (eventKey) {
@@ -758,7 +1078,6 @@ async function stopAutoReplyLoopInternal(reason: string, errorText = ""): Promis
         clearInterval(autoReplyTimerId);
         autoReplyTimerId = null;
     }
-    autoReplyTickActive = false;
     return await updateAutoReplyRuntimeAsync({
         running: false,
         status: reason === "manual_stop" ? "stopped" : "error",
@@ -794,9 +1113,8 @@ async function tickAutoReplyLoopAsync(source: string): Promise<void> {
 }
 
 export async function ensureQQBotAutoReplyLoopStarted(source = "manual_start"): Promise<JsonObject> {
-    const snapshot = await readConfigSnapshotAsync();
-    const config = await readAutoReplyConfigAsync();
-    if (!snapshot.listenerEnabled) {
+    const context = await readActiveAutoReplyContextAsync();
+    if (context.disabledReason === "listener_disabled") {
         await updateAutoReplyConfigAsync({
             enabled: false
         });
@@ -809,7 +1127,8 @@ export async function ensureQQBotAutoReplyLoopStarted(source = "manual_start"): 
             status: await buildAutoReplyStatusAsync()
         };
     }
-    if (!config.enabled) {
+    if (context.disabledReason === "disabled") {
+        await stopAutoReplyLoopInternal("manual_stop");
         return {
             success: true,
             skipped: true,
@@ -818,6 +1137,7 @@ export async function ensureQQBotAutoReplyLoopStarted(source = "manual_start"): 
             status: await buildAutoReplyStatusAsync()
         };
     }
+    const config = context.config;
 
     if (autoReplyTimerId != null) {
         return {
@@ -901,8 +1221,10 @@ export async function qqbot_auto_reply_configure(params: JsonObject = {}): Promi
 
         if (!config.enabled) {
             await stopAutoReplyLoopInternal("manual_stop");
+            await flushAutoReplyStateStoreAsync();
         } else if (autoReplyTimerId != null && config.pollIntervalMs !== before.pollIntervalMs) {
             await stopAutoReplyLoopInternal("restart");
+            await flushAutoReplyStateStoreAsync();
             await ensureQQBotAutoReplyLoopStarted("qqbot_auto_reply_configure");
         } else if (startNow || autoReplyTimerId != null) {
             if (autoReplyTimerId == null) {
@@ -956,6 +1278,7 @@ export async function qqbot_auto_reply_start(): Promise<any> {
 export async function qqbot_auto_reply_stop(): Promise<any> {
     try {
         await stopAutoReplyLoopInternal("manual_stop");
+        await flushAutoReplyStateStoreAsync();
         return {
             success: true,
             packageVersion: PACKAGE_VERSION,
@@ -1024,6 +1347,7 @@ export async function onQQBotAutoReplyApplicationForeground(): Promise<any> {
 export async function onQQBotAutoReplyApplicationTerminate(): Promise<any> {
     try {
         await stopAutoReplyLoopInternal("application_terminate");
+        await flushAutoReplyStateStoreAsync();
         return { ok: true };
     } catch (error: unknown) {
         return {

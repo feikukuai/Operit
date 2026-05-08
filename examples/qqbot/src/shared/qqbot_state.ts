@@ -17,9 +17,81 @@ import {
     toBoolean
 } from "./qqbot_common";
 
-let persistedConfigCache: JsonObject | null = null;
+const AUTO_REPLY_STATE_FILE_NAME = "auto_reply_state.json";
+
+type CachedJsonStoreEntry = {
+    loaded: boolean;
+    dirty: boolean;
+    value: JsonObject;
+};
+
+let stateDirectoryPathCache = "";
+const cachedJsonStores: Record<string, CachedJsonStoreEntry> = Object.create(null);
+
+function cloneJsonObject(value: JsonObject): JsonObject {
+    return JSON.parse(JSON.stringify(value)) as JsonObject;
+}
+
+function normalizeStorePath(path: string): string {
+    return asText(path).trim().replace(/\\/g, "/");
+}
+
+function getCachedJsonStoreEntry(path: string): CachedJsonStoreEntry {
+    const normalizedPath = normalizeStorePath(path);
+    if (!normalizedPath) {
+        throw new Error("State store path is empty");
+    }
+    if (!cachedJsonStores[normalizedPath]) {
+        cachedJsonStores[normalizedPath] = {
+            loaded: false,
+            dirty: false,
+            value: {}
+        };
+    }
+    return cachedJsonStores[normalizedPath];
+}
+
+async function readCachedJsonStoreAsync(
+    path: string,
+    sanitize?: (value: JsonObject) => JsonObject
+): Promise<JsonObject> {
+    const entry = getCachedJsonStoreEntry(path);
+    if (!entry.loaded) {
+        const raw = await readJsonObjectFileAsync(path);
+        const nextValue = sanitize ? sanitize(raw) : raw;
+        entry.value = cloneJsonObject(nextValue);
+        entry.loaded = true;
+        entry.dirty = false;
+    }
+    return cloneJsonObject(entry.value);
+}
+
+async function writeCachedJsonStoreAsync(
+    path: string,
+    value: JsonObject,
+    sanitize?: (value: JsonObject) => JsonObject
+): Promise<JsonObject> {
+    const entry = getCachedJsonStoreEntry(path);
+    const nextValue = sanitize ? sanitize(value) : value;
+    entry.value = cloneJsonObject(nextValue);
+    entry.loaded = true;
+    entry.dirty = true;
+    return cloneJsonObject(entry.value);
+}
+
+async function flushCachedJsonStoreAsync(path: string): Promise<void> {
+    const entry = getCachedJsonStoreEntry(path);
+    if (!entry.loaded || !entry.dirty) {
+        return;
+    }
+    await writeJsonObjectFileAsync(path, entry.value);
+    entry.dirty = false;
+}
 
 export function getStateDirectoryPath(): string {
+    if (stateDirectoryPathCache) {
+        return stateDirectoryPathCache;
+    }
     if (typeof getPluginConfigDir !== "function") {
         throw new Error("getPluginConfigDir is unavailable");
     }
@@ -27,7 +99,8 @@ export function getStateDirectoryPath(): string {
     if (!path) {
         throw new Error(`Failed to resolve plugin config dir for ${QQBOT_TOOLPKG_ID}`);
     }
-    return path;
+    stateDirectoryPathCache = path;
+    return stateDirectoryPathCache;
 }
 
 export function getStateFilePath(name: string): string {
@@ -40,6 +113,10 @@ export function getConfigFilePath(): string {
 
 export function getServiceLogPath(): string {
     return getStateFilePath(LOG_FILE_NAME);
+}
+
+export function getAutoReplyStateFilePath(): string {
+    return getStateFilePath(AUTO_REPLY_STATE_FILE_NAME);
 }
 
 export function readEnv(key: string): string {
@@ -99,24 +176,51 @@ function sanitizePersistedConfig(value: JsonObject): JsonObject {
     };
 }
 
+function sanitizeAutoReplyStateStore(value: JsonObject): JsonObject {
+    return {
+        runtime: hasOwn(value, "runtime") && isObject(value.runtime)
+            ? cloneJsonObject(value.runtime as JsonObject)
+            : {},
+        bindings: hasOwn(value, "bindings") && isObject(value.bindings)
+            ? cloneJsonObject(value.bindings as JsonObject)
+            : {},
+        records: hasOwn(value, "records") && isObject(value.records)
+            ? cloneJsonObject(value.records as JsonObject)
+            : {}
+    };
+}
+
 export async function readPersistedConfigAsync(): Promise<JsonObject> {
-    if (persistedConfigCache) {
-        return { ...persistedConfigCache };
-    }
-    persistedConfigCache = sanitizePersistedConfig(await readJsonObjectFileAsync(getConfigFilePath()));
-    return { ...persistedConfigCache };
+    return await readCachedJsonStoreAsync(getConfigFilePath(), sanitizePersistedConfig);
 }
 
 export async function writePersistedConfigAsync(value: JsonObject): Promise<JsonObject> {
-    const sanitized = sanitizePersistedConfig(value);
-    await writeJsonObjectFileAsync(getConfigFilePath(), sanitized);
-    persistedConfigCache = sanitized;
-    return { ...sanitized };
+    const nextValue = await writeCachedJsonStoreAsync(getConfigFilePath(), value, sanitizePersistedConfig);
+    await flushCachedJsonStoreAsync(getConfigFilePath());
+    return nextValue;
 }
 
 export async function updatePersistedConfigAsync(patch: JsonObject): Promise<JsonObject> {
     const current = await readPersistedConfigAsync();
     return await writePersistedConfigAsync({ ...current, ...patch });
+}
+
+export async function readPersistedAutoReplyStateAsync<TState extends JsonObject = JsonObject>(): Promise<TState> {
+    return await readCachedJsonStoreAsync(getAutoReplyStateFilePath(), sanitizeAutoReplyStateStore) as TState;
+}
+
+export async function writePersistedAutoReplyStateAsync<TState extends JsonObject = JsonObject>(
+    value: TState
+): Promise<TState> {
+    return await writeCachedJsonStoreAsync(
+        getAutoReplyStateFilePath(),
+        value,
+        sanitizeAutoReplyStateStore
+    ) as TState;
+}
+
+export async function flushPersistedAutoReplyStateAsync(): Promise<void> {
+    await flushCachedJsonStoreAsync(getAutoReplyStateFilePath());
 }
 
 export function readConfigSnapshotFrom(storedConfig: JsonObject, overrides?: JsonObject): QQBotConfigSnapshot {

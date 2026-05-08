@@ -21,6 +21,7 @@ import com.ai.assistance.operit.core.tools.ChatSwitchResultData
 import com.ai.assistance.operit.core.tools.ChatTitleUpdateResultData
 import com.ai.assistance.operit.core.tools.ChatDeleteResultData
 import com.ai.assistance.operit.core.tools.MessageSendResultData
+import com.ai.assistance.operit.core.tools.MessageSendStreamEventData
 import com.ai.assistance.operit.core.tools.StringResultData
 import com.ai.assistance.operit.data.model.ChatHistory
 import com.ai.assistance.operit.data.model.AITool
@@ -38,7 +39,9 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 
@@ -74,6 +77,8 @@ class StandardChatManagerTool(private val context: Context) {
         private const val SERVICE_CONNECTION_TIMEOUT = 15000L // 15秒超时
         private const val RESPONSE_STREAM_ACQUIRE_TIMEOUT = 15000L
         private const val AI_RESPONSE_TIMEOUT = 180000L
+        private const val WAIFU_STREAM_PREFERRED_CHARS = 48
+        private const val WAIFU_STREAM_FORCE_CHARS = 120
     }
 
     private fun simplifyXmlBlocksForHistory(text: String): String {
@@ -118,6 +123,19 @@ class StandardChatManagerTool(private val context: Context) {
             "false" -> false
             else -> null
         }
+    }
+
+    private fun shouldFlushWaifuChunk(buffer: CharSequence): Boolean {
+        if (buffer.isEmpty()) return false
+        if (buffer.length >= WAIFU_STREAM_FORCE_CHARS) return true
+        if (buffer.length < WAIFU_STREAM_PREFERRED_CHARS) return false
+        val lastChar = buffer[buffer.length - 1]
+        return lastChar == '\n' ||
+            lastChar == '。' ||
+            lastChar == '！' ||
+            lastChar == '？' ||
+            lastChar == '!' ||
+            lastChar == '?'
     }
 
     private fun buildChatInfo(
@@ -1510,6 +1528,149 @@ class StandardChatManagerTool(private val context: Context) {
                 success = false,
                 result = MessageSendResultData(chatId = "", message = ""),
                 error = "Error sending message: ${e.message}"
+            )
+        }
+    }
+
+    fun sendMessageToAIStream(tool: AITool): Flow<ToolResult> = flow {
+        val message = tool.parameters.find { it.name == "message" }?.value ?: ""
+        val waifuParam = tool.parameters.find { it.name == "waifu" }?.value?.trim()
+        val waifuMode = parseBooleanOrNull(waifuParam)
+        if (waifuParam != null && waifuMode == null) {
+            emit(
+                ToolResult(
+                    toolName = tool.name,
+                    success = false,
+                    result = MessageSendResultData(chatId = "", message = message),
+                    error = "Invalid parameter: waifu must be true/false"
+                )
+            )
+            return@flow
+        }
+
+        try {
+            when (val startResult = startMessageToAIStream(tool)) {
+                is MessageSendStreamStartResult.Failed -> emit(startResult.result)
+                is MessageSendStreamStartResult.Started -> {
+                    val session = startResult.session
+                    val effectiveWaifuMode = waifuMode == true
+                    emit(
+                        ToolResult(
+                            toolName = tool.name,
+                            success = true,
+                            result = MessageSendStreamEventData(
+                                type = "start",
+                                chatId = session.chatId,
+                                message = session.message,
+                                waifu = effectiveWaifuMode,
+                                chunkIndex = 0,
+                                receivedChars = 0
+                            ),
+                            error = ""
+                        )
+                    )
+
+                    val fullResponse = StringBuilder()
+                    val bufferedChunk = StringBuilder()
+                    var chunkIndex = 0
+                    var receivedChars = 0
+
+                    suspend fun emitChunk(chunk: String) {
+                        if (chunk.isEmpty()) return
+                        emit(
+                            ToolResult(
+                                toolName = tool.name,
+                                success = true,
+                                result = MessageSendStreamEventData(
+                                    type = "chunk",
+                                    chatId = session.chatId,
+                                    message = session.message,
+                                    waifu = effectiveWaifuMode,
+                                    chunk = chunk,
+                                    chunkIndex = chunkIndex,
+                                    receivedChars = receivedChars
+                                ),
+                                error = ""
+                            )
+                        )
+                        chunkIndex += 1
+                    }
+
+                    suspend fun flushBufferedChunk(force: Boolean) {
+                        if (bufferedChunk.isEmpty()) return
+                        if (!force && !shouldFlushWaifuChunk(bufferedChunk)) return
+                        val chunk = bufferedChunk.toString()
+                        bufferedChunk.setLength(0)
+                        emitChunk(chunk)
+                    }
+
+                    val aiResponse =
+                        try {
+                            withTimeout(session.responseTimeoutMs) {
+                                session.responseStream.collect { chunk: String ->
+                                    if (chunk.isEmpty()) {
+                                        return@collect
+                                    }
+                                    fullResponse.append(chunk)
+                                    receivedChars += chunk.length
+                                    if (effectiveWaifuMode) {
+                                        bufferedChunk.append(chunk)
+                                        flushBufferedChunk(force = false)
+                                    } else {
+                                        emitChunk(chunk)
+                                    }
+                                }
+                                flushBufferedChunk(force = true)
+                                fullResponse.toString()
+                            }
+                        } catch (e: TimeoutCancellationException) {
+                            runCatching { session.cancel() }
+                            emit(
+                                ToolResult(
+                                    toolName = tool.name,
+                                    success = false,
+                                    result = MessageSendResultData(
+                                        chatId = session.chatId,
+                                        message = session.message
+                                    ),
+                                    error = "Timeout waiting for AI reply"
+                                )
+                            )
+                            return@flow
+                        }
+
+                    val finalState = session.currentState()
+                    val finalError =
+                        if (finalState is InputProcessingState.Error) {
+                            finalState.message
+                        } else {
+                            null
+                        }
+
+                    emit(
+                        ToolResult(
+                            toolName = tool.name,
+                            success = finalError == null,
+                            result = MessageSendResultData(
+                                chatId = session.chatId,
+                                message = session.message,
+                                aiResponse = aiResponse,
+                                receivedAt = System.currentTimeMillis()
+                            ),
+                            error = finalError
+                        )
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            AppLogger.e(TAG, "Failed to stream message", e)
+            emit(
+                ToolResult(
+                    toolName = tool.name,
+                    success = false,
+                    result = MessageSendResultData(chatId = "", message = message),
+                    error = "Error sending message: ${e.message}"
+                )
             )
         }
     }

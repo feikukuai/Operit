@@ -364,7 +364,7 @@ function Screen(ctx) {
     const saveAutomation = async () => {
         await runAction("save_automation", async () => await (0, qqbot_auto_reply_js_1.qqbot_auto_reply_configure)(buildAutomationParams()), text.savingDone);
     };
-    const toggleAutoReplyEnabled = (checked) => {
+    const toggleAutoReplyEnabled = async (checked) => {
         if (!listenerEnabledState.value) {
             autoReplyEnabledState.set(false);
             return;
@@ -373,13 +373,13 @@ function Screen(ctx) {
         if (isAnyBusy) {
             return;
         }
-        void runAction("save_automation", async () => await (0, qqbot_auto_reply_js_1.qqbot_auto_reply_configure)({
+        await runAction("save_automation", async () => await (0, qqbot_auto_reply_js_1.qqbot_auto_reply_configure)({
             ...buildAutomationParams(),
             enabled: checked,
             start_now: checked
         }), text.savingDone);
     };
-    const toggleListenerEnabled = (checked) => {
+    const toggleListenerEnabled = async (checked) => {
         listenerEnabledState.set(checked);
         if (!checked) {
             autoReplyEnabledState.set(false);
@@ -387,7 +387,7 @@ function Screen(ctx) {
         if (isAnyBusy) {
             return;
         }
-        void runAction(checked ? "start_service" : "stop_service", async () => {
+        await runAction(checked ? "start_service" : "stop_service", async () => {
             return checked ? await (0, qqbot_runtime_js_1.qqbot_service_start)({}) : await (0, qqbot_runtime_js_1.qqbot_service_stop)({});
         }, text.actionDone);
     };
@@ -454,11 +454,11 @@ function Screen(ctx) {
                     style: "bodySmall",
                     color: "onSurfaceVariant"
                 }),
-                createToggleRow(ctx, text.sandboxTitle, text.sandboxDesc, useSandboxState.value, (checked) => {
+                createToggleRow(ctx, text.sandboxTitle, text.sandboxDesc, useSandboxState.value, async (checked) => {
                     if (isAnyBusy) {
                         return;
                     }
-                    void saveSandboxSetting(checked);
+                    await saveSandboxSetting(checked);
                 }, !isAnyBusy),
                 ctx.UI.Button({
                     text: isBusy("save_credentials") ? text.loading : text.saveCredentials,

@@ -1123,6 +1123,23 @@ fun getJsToolsDefinition(): String {
                     if (options.timeout_ms !== undefined && options.timeout_ms !== null) params.timeout_ms = String(options.timeout_ms);
                     return toolCall("send_message_to_ai", params);
                 },
+                sendMessageStreaming: (message, chatId, roleCardId, senderName, options = {}) => {
+                    const params = { message };
+                    const toolOptions = {};
+                    if (chatId) params.chat_id = chatId;
+                    if (roleCardId) params.role_card_id = roleCardId;
+                    if (senderName) params.sender_name = senderName;
+                    if (options.persist_turn !== undefined) params.persist_turn = options.persist_turn;
+                    if (options.notify_reply !== undefined) params.notify_reply = options.notify_reply;
+                    if (options.hide_user_message !== undefined) params.hide_user_message = options.hide_user_message;
+                    if (options.disable_warning !== undefined) params.disable_warning = options.disable_warning;
+                    if (options.timeout_ms !== undefined && options.timeout_ms !== null) params.timeout_ms = String(options.timeout_ms);
+                    if (options.waifu !== undefined) params.waifu = options.waifu;
+                    if (typeof options.onIntermediateResult === "function") {
+                        toolOptions.onIntermediateResult = options.onIntermediateResult;
+                    }
+                    return toolCall("send_message_to_ai_streaming", params, toolOptions);
+                },
                 // 列出所有角色卡
                 listCharacterCards: () => toolCall("list_character_cards", {})
             }

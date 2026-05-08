@@ -3233,8 +3233,9 @@ Sekarang Anda dapat menggunakan mode AutoGLM di antarmuka percakapan.</string>
     <string name="provider_openrouter">OpenRouter (Agregasi Multi-Model)</string>
     <string name="provider_infiniai">Infiniai</string>
     <string name="provider_alipay_bailing">Model Bailing Alipay</string>
-    <string name="provider_lmstudio">LM Studio</string>
-    <string name="provider_ollama">Ollama</string>
+    <string name="provider_lmstudio">LM Studio (model lokal)</string>
+    <string name="provider_ollama">Ollama (model lokal)</string>
+    <string name="provider_openai_local">Kompatibel OpenAI (model lokal)</string>
     <string name="provider_mnn">Inferensi Lokal MNN</string>
     <string name="provider_llama_cpp">Inferensi Lokal llama.cpp</string>
     <string name="provider_ppinfra">Paiouyun</string>

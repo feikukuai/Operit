@@ -171,36 +171,6 @@ class StandardHttpTools(private val context: Context) {
         )
     }
 
-    private fun logHttpRequest(spec: PreparedHttpRequest) {
-        val logSB = StringBuilder("\n====== HTTP Request Details Start ======")
-        logSB.append("\nURL: ${spec.url}")
-        logSB.append("\nMethod: ${spec.method}")
-        logSB.append("\nRequest headers:")
-        spec.request.headers.forEach { header ->
-            logSB.append("\n  ${header.first}: ${header.second}")
-        }
-        if (spec.method != "GET" && spec.method != "HEAD" && spec.bodyParam.isNotBlank()) {
-            logSB.append("\nRequest body type: ${spec.bodyType}")
-            logSB.append("\nRequest body content: ${spec.bodyParam}")
-        }
-
-        val requestCookieUrl = spec.url.toHttpUrlOrNull()
-        if (requestCookieUrl != null && spec.useCookies) {
-            logSB.append("\nCookies:")
-            val cookies = cookieJar.loadForRequest(requestCookieUrl)
-            if (cookies.isEmpty()) {
-                logSB.append("\n  No Cookie")
-            } else {
-                cookies.forEach { cookie ->
-                    logSB.append("\n  ${cookie.name}: ${cookie.value}")
-                }
-            }
-        }
-
-        logSB.append("\n====== HTTP Request Details End ======")
-        AppLogger.d(TAG, logSB.toString())
-    }
-
     private fun buildHttpResponseData(
             url: String,
             response: okhttp3.Response,
@@ -341,7 +311,6 @@ class StandardHttpTools(private val context: Context) {
     suspend fun httpRequest(tool: AITool): ToolResult {
         return try {
             val spec = prepareHttpRequest(tool)
-            logHttpRequest(spec)
             val response = spec.client.newCall(spec.request).execute()
             val responseBody = response.body ?: return errorResult(tool.name, "Response body is empty")
             val bodyBytes = responseBody.bytes()
@@ -354,7 +323,6 @@ class StandardHttpTools(private val context: Context) {
                         AppLogger.w(TAG, "Failed to decode response body as text for content-type $contentType", e)
                         "[Binary Content, decoding failed]"
                     }
-            AppLogger.i(TAG, "responseBodyString: $responseBodyString")
             val httpResponseData =
                     buildHttpResponseData(
                             url = spec.url,
@@ -373,7 +341,6 @@ class StandardHttpTools(private val context: Context) {
     suspend fun httpRequestStream(tool: AITool): Flow<ToolResult> = flow {
         try {
             val spec = prepareHttpRequest(tool)
-            logHttpRequest(spec)
             val response = spec.client.newCall(spec.request).execute()
             val responseBody = response.body
                     ?: run {

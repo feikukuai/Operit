@@ -338,6 +338,19 @@ fun ModelApiSettingsSection(
     val isMnnProvider = selectedApiProvider == ApiProviderType.MNN
     val isLlamaProvider = selectedApiProvider == ApiProviderType.LLAMA_CPP
     val isToolPkgProvider = selectedApiProvider == null
+    val canUseKeylessModelUi = isToolPkgProvider || !providerRequiresApiKey
+    val canEditModelName =
+        !isMnnProvider &&
+            !isLlamaProvider &&
+            (canUseKeylessModelUi || !isUsingDefaultApiKey)
+    val canRequestModelList =
+        isToolPkgProvider ||
+            isMnnProvider ||
+            isLlamaProvider ||
+            (
+                apiEndpointInput.isNotBlank() &&
+                    (!providerRequiresApiKey || (!isUsingDefaultApiKey && apiKeyInput.isNotBlank()))
+            )
     val endpointOptions = getEndpointOptions(selectedProviderTypeId)
     val selectableEndpointOptions =
         when {
@@ -611,11 +624,11 @@ fun ModelApiSettingsSection(
                     },
                         value = modelNameInput,
                         onValueChange = {
-                        if (!isMnnProvider && !isLlamaProvider && (!isUsingDefaultApiKey || isToolPkgProvider)) {
+                        if (canEditModelName) {
                                 modelNameInput = it.replace("\n", "").replace("\r", "")
                             }
                         },
-                    enabled = if (isMnnProvider || isLlamaProvider) false else (!isUsingDefaultApiKey || isToolPkgProvider),
+                    enabled = !isMnnProvider && !isLlamaProvider && canEditModelName,
                     trailingContent = {
                 IconButton(
                         onClick = {
@@ -633,17 +646,7 @@ fun ModelApiSettingsSection(
                             showNotification(gettingModelsText)
 
                             scope.launch {
-                                val canRequestModels =
-                                    isToolPkgProvider ||
-                                        isMnnProvider ||
-                                        isLlamaProvider ||
-                                        (
-                                            apiEndpointInput.isNotBlank() &&
-                                                !isUsingDefaultApiKey &&
-                                                (!providerRequiresApiKey || apiKeyInput.isNotBlank())
-                                        )
-
-                                if (canRequestModels) {
+                                if (canRequestModelList) {
                                     isLoadingModels = true
                                     modelLoadError = null
                                     AppLogger.d(
@@ -674,7 +677,7 @@ fun ModelApiSettingsSection(
                                         isLoadingModels = false
                                         AppLogger.d(TAG, "模型列表获取流程完成")
                                     }
-                                } else if (!isToolPkgProvider && isUsingDefaultApiKey) {
+                                } else if (!isToolPkgProvider && isUsingDefaultApiKey && providerRequiresApiKey) {
                                     AppLogger.d(TAG, "使用默认配置，不获取模型列表")
                                     showNotification(defaultConfigNoModelsText)
                                 } else {
@@ -688,7 +691,7 @@ fun ModelApiSettingsSection(
                                 IconButtonDefaults.iconButtonColors(
                                         contentColor = MaterialTheme.colorScheme.primary
                                 ),
-                                enabled = if (isMnnProvider || isLlamaProvider) true else (!isUsingDefaultApiKey || isToolPkgProvider)
+                                enabled = canRequestModelList
                 ) {
                     if (isLoadingModels) {
                         CircularProgressIndicator(
@@ -700,7 +703,7 @@ fun ModelApiSettingsSection(
                                 imageVector = Icons.AutoMirrored.Filled.FormatListBulleted,
                                 contentDescription = stringResource(R.string.get_models_list),
                                 tint =
-                                                if (!isMnnProvider && !isLlamaProvider && isUsingDefaultApiKey && !isToolPkgProvider)
+                                                if (!canRequestModelList && !isToolPkgProvider)
                                                         MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
                                                 else MaterialTheme.colorScheme.primary
                                 )
@@ -792,16 +795,7 @@ fun ModelApiSettingsSection(
                         FilledIconButton(
                                 onClick = {
                                     scope.launch {
-                                        val canRequestModels =
-                                            isToolPkgProvider ||
-                                                isMnnProvider ||
-                                                isLlamaProvider ||
-                                                (
-                                                    apiEndpointInput.isNotBlank() &&
-                                                        !isUsingDefaultApiKey &&
-                                                        (!providerRequiresApiKey || apiKeyInput.isNotBlank())
-                                                )
-                                        if (canRequestModels) {
+                                        if (canRequestModelList) {
                                             isLoadingModels = true
                                             try {
                                                 val result = fetchAvailableModels()
@@ -1066,6 +1060,7 @@ private fun getBuiltInProviderDisplayName(provider: ApiProviderType, context: an
         ApiProviderType.NVIDIA -> context.getString(R.string.provider_nvidia)
         ApiProviderType.LMSTUDIO -> context.getString(R.string.provider_lmstudio)
         ApiProviderType.OLLAMA -> context.getString(R.string.provider_ollama)
+        ApiProviderType.OPENAI_LOCAL -> context.getString(R.string.provider_openai_local)
         ApiProviderType.MNN -> context.getString(R.string.provider_mnn)
         ApiProviderType.LLAMA_CPP -> context.getString(R.string.provider_llama_cpp)
         ApiProviderType.PPINFRA -> context.getString(R.string.provider_ppinfra)
@@ -1720,6 +1715,7 @@ private fun getProviderColor(providerTypeId: String): androidx.compose.ui.graphi
         ApiProviderType.NVIDIA -> MaterialTheme.colorScheme.primary.copy(alpha = 0.72f)
         ApiProviderType.LMSTUDIO -> MaterialTheme.colorScheme.tertiary
         ApiProviderType.OLLAMA -> MaterialTheme.colorScheme.primary.copy(alpha = 0.78f)
+        ApiProviderType.OPENAI_LOCAL -> MaterialTheme.colorScheme.primary.copy(alpha = 0.82f)
         ApiProviderType.MNN -> MaterialTheme.colorScheme.secondary
         ApiProviderType.LLAMA_CPP -> MaterialTheme.colorScheme.secondary.copy(alpha = 0.9f)
         ApiProviderType.PPINFRA -> MaterialTheme.colorScheme.primaryContainer

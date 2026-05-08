@@ -493,11 +493,12 @@ object ScrapedModelPricingRowsCollect {
         ALIYUN|wan2.6-i2v|COUNT|0|0|0|CNY
         ALIYUN|z-image-turbo|COUNT|0|0|0.1|CNY
         """.trimIndent(),
+        // Synced with DeepSeek official pricing on 2026-05-07.
         """
-        DEEPSEEK|deepseek-chat|TOKEN|1|2|0.2|CNY
-        DEEPSEEK|deepseek-reasoner|TOKEN|1|2|0.2|CNY
-        DEEPSEEK|deepseek-v4-flash|TOKEN|1|2|0.2|CNY
-        DEEPSEEK|deepseek-v4-pro|TOKEN|12|24|1|CNY
+        DEEPSEEK|deepseek-chat|TOKEN|1|2|0.02|CNY
+        DEEPSEEK|deepseek-reasoner|TOKEN|1|2|0.02|CNY
+        DEEPSEEK|deepseek-v4-flash|TOKEN|1|2|0.02|CNY
+        DEEPSEEK|deepseek-v4-pro|TOKEN|3|6|0.025|CNY
         """.trimIndent(),
         """
         DOUBAO|doubao-seed-1-6-250615|TOKEN|1.2|12|0|CNY

@@ -279,7 +279,7 @@ function createToggleRow(
   title: string,
   subtitle: string,
   checked: boolean,
-  onCheckedChange: (checked: boolean) => void,
+  onCheckedChange: (checked: boolean) => void | Promise<void>,
   enabled = true
 ): ComposeNode {
   return ctx.UI.Row(
@@ -516,7 +516,7 @@ export default function Screen(ctx: ComposeDslContext): ComposeNode {
     );
   };
 
-  const toggleAutoReplyEnabled = (checked: boolean): void => {
+  const toggleAutoReplyEnabled = async (checked: boolean): Promise<void> => {
     if (!listenerEnabledState.value) {
       autoReplyEnabledState.set(false);
       return;
@@ -525,7 +525,7 @@ export default function Screen(ctx: ComposeDslContext): ComposeNode {
     if (isAnyBusy) {
       return;
     }
-    void runAction(
+    await runAction(
       "save_automation",
       async () =>
         await qqbot_auto_reply_configure({
@@ -537,7 +537,7 @@ export default function Screen(ctx: ComposeDslContext): ComposeNode {
     );
   };
 
-  const toggleListenerEnabled = (checked: boolean): void => {
+  const toggleListenerEnabled = async (checked: boolean): Promise<void> => {
     listenerEnabledState.set(checked);
     if (!checked) {
       autoReplyEnabledState.set(false);
@@ -545,7 +545,7 @@ export default function Screen(ctx: ComposeDslContext): ComposeNode {
     if (isAnyBusy) {
       return;
     }
-    void runAction(
+    await runAction(
       checked ? "start_service" : "stop_service",
       async () => {
         return checked ? await qqbot_service_start({}) : await qqbot_service_stop({});
@@ -632,11 +632,11 @@ export default function Screen(ctx: ComposeDslContext): ComposeNode {
           text.sandboxTitle,
           text.sandboxDesc,
           useSandboxState.value,
-          (checked) => {
+          async (checked) => {
             if (isAnyBusy) {
               return;
             }
-            void saveSandboxSetting(checked);
+            await saveSandboxSetting(checked);
           },
           !isAnyBusy
         ),

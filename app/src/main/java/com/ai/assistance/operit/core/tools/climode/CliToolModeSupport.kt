@@ -22,6 +22,9 @@ enum class ToolExposureMode {
     companion object {
         fun resolve(providerType: ApiProviderType): ToolExposureMode {
             return when (providerType) {
+                ApiProviderType.LMSTUDIO,
+                ApiProviderType.OLLAMA,
+                ApiProviderType.OPENAI_LOCAL,
                 ApiProviderType.MNN,
                 ApiProviderType.LLAMA_CPP -> CLI
                 else -> FULL

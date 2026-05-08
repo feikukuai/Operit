@@ -2029,6 +2029,26 @@ data class MessageSendResultData(
     }
 }
 
+/** 发送消息流式事件数据 */
+@Serializable
+data class MessageSendStreamEventData(
+    val type: String,
+    val chatId: String,
+    val message: String,
+    val waifu: Boolean = false,
+    val chunk: String? = null,
+    val chunkIndex: Int? = null,
+    val receivedChars: Int? = null
+) : ToolResultData() {
+    override fun toString(): String {
+        return when (type) {
+            "chunk" -> chunk.orEmpty()
+            "start" -> "Message stream started"
+            else -> "Message stream event: $type"
+        }
+    }
+}
+
 /** 记忆链接结果数据 */
 @Serializable
 data class MemoryLinkResultData(

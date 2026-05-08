@@ -32,6 +32,7 @@ enum class ApiProviderType {
         NVIDIA, // NVIDIA API Catalog / NIM
         LMSTUDIO, // LM Studio本地模型服务
         OLLAMA, // Ollama 本地/私有部署服务（OpenAI兼容）
+        OPENAI_LOCAL, // OpenAI兼容本地模型服务
         MNN, // MNN本地推理引擎
         LLAMA_CPP, // llama.cpp 本地推理引擎
         PPINFRA, // 派欧云

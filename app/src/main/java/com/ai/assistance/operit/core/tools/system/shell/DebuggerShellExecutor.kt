@@ -88,16 +88,13 @@ class DebuggerShellExecutor(private val context: Context) : ShellExecutor {
                     return@withContext ShellExecutor.CommandResult(false, "", permStatus.reason)
                 }
 
-                AppLogger.d(TAG, "Executing command: $command")
-
                 // 使用更精确的方法检测shell操作符
                 if (containsShellOperators(command)) {
-                    AppLogger.d(
-                            TAG,
-                            "Command contains shell operators or redirections, executing with shell"
-                    )
+                    AppLogger.d(TAG, "Executing command via shell: $command")
                     return@withContext executeWithShell(command)
                 }
+
+                AppLogger.d(TAG, "Executing command: $command")
 
                 // 普通命令执行
                 return@withContext executeCommandDirect(command)
@@ -321,8 +318,6 @@ class DebuggerShellExecutor(private val context: Context) : ShellExecutor {
     /** 通过shell解释器执行包含特殊操作符的命令 */
     private suspend fun executeWithShell(command: String): ShellExecutor.CommandResult =
             withContext(Dispatchers.IO) {
-                AppLogger.d(TAG, "Executing through shell: $command")
-
                 try {
                     val service =
                             getShizukuService()
@@ -359,7 +354,6 @@ class DebuggerShellExecutor(private val context: Context) : ShellExecutor {
                             trimmedForBg.endsWith("&") && !trimmedForBg.endsWith("&&")
 
                     val shellArgs = arrayOf("sh", "-e", "-c", enhancedCommand)
-                    AppLogger.d(TAG, "Enhanced shell command: ${shellArgs.joinToString(", ", "[", "]")}")
 
                     // 创建进程
                     val process =

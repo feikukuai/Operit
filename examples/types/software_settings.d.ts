@@ -66,9 +66,53 @@ export namespace SoftwareSettings {
         wait_ms?: number | string;
     }
 
+    /**
+     * Known model-config provider enum names.
+     * `LMSTUDIO`, `OLLAMA`, `OPENAI_LOCAL`, `MNN`, and `LLAMA_CPP` are local-model providers.
+     * Custom provider ids are also allowed.
+     */
+    type ModelConfigProviderType =
+        | 'OPENAI'
+        | 'OPENAI_RESPONSES'
+        | 'OPENAI_RESPONSES_GENERIC'
+        | 'OPENAI_GENERIC'
+        | 'ANTHROPIC'
+        | 'ANTHROPIC_GENERIC'
+        | 'GOOGLE'
+        | 'GEMINI_GENERIC'
+        | 'BAIDU'
+        | 'ALIYUN'
+        | 'XUNFEI'
+        | 'ZHIPU'
+        | 'BAICHUAN'
+        | 'MOONSHOT'
+        | 'DEEPSEEK'
+        | 'MISTRAL'
+        | 'SILICONFLOW'
+        | 'IFLOW'
+        | 'OPENROUTER'
+        | 'FOUR_ROUTER'
+        | 'NOUS_PORTAL'
+        | 'INFINIAI'
+        | 'ALIPAY_BAILING'
+        | 'DOUBAO'
+        | 'NVIDIA'
+        | 'LMSTUDIO'
+        | 'OLLAMA'
+        | 'OPENAI_LOCAL'
+        | 'MNN'
+        | 'LLAMA_CPP'
+        | 'PPINFRA'
+        | 'NOVITA'
+        | 'OTHER'
+        | (string & {});
+
     interface ModelConfigUpdateOptions {
         name?: string;
-        api_provider_type?: string;
+        /**
+         * Provider enum name, for example `OPENAI_GENERIC`, `OPENAI_LOCAL`, `LMSTUDIO`, `OLLAMA`, `MNN`, or `LLAMA_CPP`.
+         */
+        api_provider_type?: ModelConfigProviderType;
         api_endpoint?: string;
         api_key?: string;
         model_name?: string;
