@@ -40,10 +40,21 @@ function pushInjectionProcessingState(chatId?: string): void {
 
 async function appendExtraInfoWithStatus(
   processedInput: string,
-  chatId?: string
+  chatId?: string,
+  activePrompt?: ToolPkg.ActivePromptSnapshot
 ) {
   pushInjectionProcessingState(chatId);
-  return appendExtraInfoToMessage(processedInput, chatId || undefined);
+  return appendExtraInfoToMessage(
+    processedInput,
+    chatId || undefined,
+    activePrompt
+  );
+}
+
+function resolveHookActivePrompt(
+  input: ToolPkg.PromptInputHookEvent | ToolPkg.PromptFinalizeHookEvent
+): ToolPkg.ActivePromptSnapshot | undefined {
+  return input.eventPayload.metadata?.activePrompt;
 }
 
 export function registerToolPkg(): boolean {
@@ -96,9 +107,11 @@ export async function onPromptInput(
   }
 
   const chatId = String(input.eventPayload.chatId ?? getChatId() ?? "").trim();
+  const activePrompt = resolveHookActivePrompt(input);
   return appendExtraInfoWithStatus(
     processedInput,
-    chatId || undefined
+    chatId || undefined,
+    activePrompt
   );
 }
 
@@ -122,9 +135,11 @@ export async function onPromptFinalize(
   }
 
   const chatId = String(input.eventPayload.chatId ?? getChatId() ?? "").trim();
+  const activePrompt = resolveHookActivePrompt(input);
   return appendExtraInfoWithStatus(
     processedInput,
-    chatId || undefined
+    chatId || undefined,
+    activePrompt
   );
 }
 

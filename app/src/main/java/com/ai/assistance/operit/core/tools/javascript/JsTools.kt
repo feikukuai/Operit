@@ -867,96 +867,188 @@ fun getJsToolsDefinition(): String {
             },
             // 记忆管理
             Memory: {
+                _normalizeCallerCardId: (callerCardId) => {
+                    if (callerCardId === undefined || callerCardId === null) return undefined;
+                    const normalized = String(callerCardId).trim();
+                    return normalized.length > 0 ? normalized : undefined;
+                },
                 // 查询记忆库
-                query: (query, folderPath, limit, startTime, endTime, snapshotId, threshold) => {
-                    const params = { query };
-                    if (folderPath) params.folder_path = folderPath;
-                    if (startTime !== undefined) params.start_time = startTime;
-                    if (endTime !== undefined) params.end_time = endTime;
-                    if (limit !== undefined) params.limit = limit;
-                    if (snapshotId !== undefined && snapshotId !== null) params.snapshot_id = String(snapshotId);
-                    if (threshold !== undefined) params.threshold = threshold;
+                query: (query, folderPath, limit, startTime, endTime, snapshotId, threshold, callerCardId) => {
+                    const options =
+                        query && typeof query === 'object' && !Array.isArray(query)
+                            ? query
+                            : {
+                                query,
+                                folderPath,
+                                limit,
+                                startTime,
+                                endTime,
+                                snapshotId,
+                                threshold,
+                                callerCardId
+                            };
+                    const params = { query: options.query };
+                    if (options.folderPath) params.folder_path = options.folderPath;
+                    if (options.startTime !== undefined) params.start_time = options.startTime;
+                    if (options.endTime !== undefined) params.end_time = options.endTime;
+                    if (options.limit !== undefined) params.limit = options.limit;
+                    if (options.snapshotId !== undefined && options.snapshotId !== null) params.snapshot_id = String(options.snapshotId);
+                    if (options.threshold !== undefined) params.threshold = options.threshold;
+                    const normalizedCallerCardId = Tools.Memory._normalizeCallerCardId(options.callerCardId);
+                    if (normalizedCallerCardId !== undefined) params.caller_card_id = normalizedCallerCardId;
                     return toolCall("query_memory", params);
                 },
                 // 通过标题获取记忆
-                getByTitle: (title, chunkIndex, chunkRange, query, limit) => {
-                    const params = { title };
-                    if (chunkIndex !== undefined) params.chunk_index = chunkIndex;
-                    if (chunkRange) params.chunk_range = chunkRange;
-                    if (query) params.query = query;
-                    if (limit !== undefined) params.limit = limit;
+                getByTitle: (title, chunkIndex, chunkRange, query, limit, callerCardId) => {
+                    const options =
+                        title && typeof title === 'object' && !Array.isArray(title)
+                            ? title
+                            : {
+                                title,
+                                chunkIndex,
+                                chunkRange,
+                                query,
+                                limit,
+                                callerCardId
+                            };
+                    const params = { title: options.title };
+                    if (options.chunkIndex !== undefined) params.chunk_index = options.chunkIndex;
+                    if (options.chunkRange) params.chunk_range = options.chunkRange;
+                    if (options.query) params.query = options.query;
+                    if (options.limit !== undefined) params.limit = options.limit;
+                    const normalizedCallerCardId = Tools.Memory._normalizeCallerCardId(options.callerCardId);
+                    if (normalizedCallerCardId !== undefined) params.caller_card_id = normalizedCallerCardId;
                     return toolCall("get_memory_by_title", params);
                 },
                 // 创建记忆
-                create: (title, content, contentType, source, folderPath, tags) => {
-                    const params = { title, content };
-                    if (contentType) params.content_type = contentType;
-                    if (source) params.source = source;
-                    if (folderPath) params.folder_path = folderPath;
-                    if (tags) params.tags = tags;
+                create: (title, content, contentType, source, folderPath, tags, callerCardId) => {
+                    const options =
+                        title && typeof title === 'object' && !Array.isArray(title)
+                            ? title
+                            : {
+                                title,
+                                content,
+                                contentType,
+                                source,
+                                folderPath,
+                                tags,
+                                callerCardId
+                            };
+                    const params = { title: options.title, content: options.content };
+                    if (options.contentType) params.content_type = options.contentType;
+                    if (options.source) params.source = options.source;
+                    if (options.folderPath) params.folder_path = options.folderPath;
+                    if (options.tags) params.tags = options.tags;
+                    const normalizedCallerCardId = Tools.Memory._normalizeCallerCardId(options.callerCardId);
+                    if (normalizedCallerCardId !== undefined) params.caller_card_id = normalizedCallerCardId;
                     return toolCall("create_memory", params);
                 },
                 // 更新记忆
-                update: (oldTitle, updates = {}) => {
-                    const params = { old_title: oldTitle };
-                    if (updates.newTitle) params.new_title = updates.newTitle;
-                    if (updates.content) params.content = updates.content;
-                    if (updates.contentType) params.content_type = updates.contentType;
-                    if (updates.source) params.source = updates.source;
-                    if (updates.credibility !== undefined) params.credibility = updates.credibility;
-                    if (updates.importance !== undefined) params.importance = updates.importance;
-                    if (updates.folderPath) params.folder_path = updates.folderPath;
-                    if (updates.tags) params.tags = updates.tags;
+                update: (oldTitle, updates = {}, callerCardId) => {
+                    const options =
+                        oldTitle && typeof oldTitle === 'object' && !Array.isArray(oldTitle)
+                            ? oldTitle
+                            : { oldTitle, ...updates, callerCardId };
+                    const params = { old_title: options.oldTitle };
+                    if (options.newTitle) params.new_title = options.newTitle;
+                    if (options.content) params.content = options.content;
+                    if (options.contentType) params.content_type = options.contentType;
+                    if (options.source) params.source = options.source;
+                    if (options.credibility !== undefined) params.credibility = options.credibility;
+                    if (options.importance !== undefined) params.importance = options.importance;
+                    if (options.folderPath) params.folder_path = options.folderPath;
+                    if (options.tags) params.tags = options.tags;
+                    const normalizedCallerCardId = Tools.Memory._normalizeCallerCardId(options.callerCardId);
+                    if (normalizedCallerCardId !== undefined) params.caller_card_id = normalizedCallerCardId;
                     return toolCall("update_memory", params);
                 },
                 // 删除记忆
-                deleteMemory: (title) => toolCall("delete_memory", { title }),
+                deleteMemory: (title, callerCardId) => {
+                    const options =
+                        title && typeof title === 'object' && !Array.isArray(title)
+                            ? title
+                            : { title, callerCardId };
+                    const params = { title: options.title };
+                    const normalizedCallerCardId = Tools.Memory._normalizeCallerCardId(options.callerCardId);
+                    if (normalizedCallerCardId !== undefined) params.caller_card_id = normalizedCallerCardId;
+                    return toolCall("delete_memory", params);
+                },
                 // 批量移动记忆（按标题列表和/或来源文件夹筛选）
-                move: (targetFolderPath, titles, sourceFolderPath) => {
-                    const params = { target_folder_path: targetFolderPath };
-                    if (titles) {
-                        params.titles = Array.isArray(titles) ? titles.join(",") : String(titles);
+                move: (targetFolderPath, titles, sourceFolderPath, callerCardId) => {
+                    const options =
+                        targetFolderPath && typeof targetFolderPath === 'object' && !Array.isArray(targetFolderPath)
+                            ? targetFolderPath
+                            : { targetFolderPath, titles, sourceFolderPath, callerCardId };
+                    const params = { target_folder_path: options.targetFolderPath };
+                    if (options.titles) {
+                        params.titles = Array.isArray(options.titles) ? options.titles.join(",") : String(options.titles);
                     }
-                    if (sourceFolderPath !== undefined && sourceFolderPath !== null) params.source_folder_path = String(sourceFolderPath);
+                    if (options.sourceFolderPath !== undefined && options.sourceFolderPath !== null) params.source_folder_path = String(options.sourceFolderPath);
+                    const normalizedCallerCardId = Tools.Memory._normalizeCallerCardId(options.callerCardId);
+                    if (normalizedCallerCardId !== undefined) params.caller_card_id = normalizedCallerCardId;
                     return toolCall("move_memory", params);
                 },
                 // 链接记忆
-                link: (sourceTitle, targetTitle, linkType, weight, description) => {
-                    const params = { source_title: sourceTitle, target_title: targetTitle };
-                    if (linkType) params.link_type = linkType;
-                    if (weight !== undefined) params.weight = weight;
-                    if (description) params.description = description;
+                link: (sourceTitle, targetTitle, linkType, weight, description, callerCardId) => {
+                    const options =
+                        sourceTitle && typeof sourceTitle === 'object' && !Array.isArray(sourceTitle)
+                            ? sourceTitle
+                            : { sourceTitle, targetTitle, linkType, weight, description, callerCardId };
+                    const params = { source_title: options.sourceTitle, target_title: options.targetTitle };
+                    if (options.linkType) params.link_type = options.linkType;
+                    if (options.weight !== undefined) params.weight = options.weight;
+                    if (options.description) params.description = options.description;
+                    const normalizedCallerCardId = Tools.Memory._normalizeCallerCardId(options.callerCardId);
+                    if (normalizedCallerCardId !== undefined) params.caller_card_id = normalizedCallerCardId;
                     return toolCall("link_memories", params);
                 },
                 // 查询记忆链接
-                queryLinks: (linkId, sourceTitle, targetTitle, linkType, limit) => {
+                queryLinks: (linkId, sourceTitle, targetTitle, linkType, limit, callerCardId) => {
+                    const options =
+                        linkId && typeof linkId === 'object' && !Array.isArray(linkId)
+                            ? linkId
+                            : { linkId, sourceTitle, targetTitle, linkType, limit, callerCardId };
                     const params = {};
-                    if (linkId !== undefined && linkId !== null) params.link_id = linkId;
-                    if (sourceTitle) params.source_title = sourceTitle;
-                    if (targetTitle) params.target_title = targetTitle;
-                    if (linkType) params.link_type = linkType;
-                    if (limit !== undefined) params.limit = limit;
+                    if (options.linkId !== undefined && options.linkId !== null) params.link_id = options.linkId;
+                    if (options.sourceTitle) params.source_title = options.sourceTitle;
+                    if (options.targetTitle) params.target_title = options.targetTitle;
+                    if (options.linkType) params.link_type = options.linkType;
+                    if (options.limit !== undefined) params.limit = options.limit;
+                    const normalizedCallerCardId = Tools.Memory._normalizeCallerCardId(options.callerCardId);
+                    if (normalizedCallerCardId !== undefined) params.caller_card_id = normalizedCallerCardId;
                     return toolCall("query_memory_links", params);
                 },
                 // 更新记忆链接（优先按 linkId）
-                updateLink: (linkId, sourceTitle, targetTitle, linkType, newLinkType, weight, description) => {
+                updateLink: (linkId, sourceTitle, targetTitle, linkType, newLinkType, weight, description, callerCardId) => {
+                    const options =
+                        linkId && typeof linkId === 'object' && !Array.isArray(linkId)
+                            ? linkId
+                            : { linkId, sourceTitle, targetTitle, linkType, newLinkType, weight, description, callerCardId };
                     const params = {};
-                    if (linkId !== undefined && linkId !== null) params.link_id = linkId;
-                    if (sourceTitle) params.source_title = sourceTitle;
-                    if (targetTitle) params.target_title = targetTitle;
-                    if (linkType) params.link_type = linkType;
-                    if (newLinkType) params.new_link_type = newLinkType;
-                    if (weight !== undefined) params.weight = weight;
-                    if (description !== undefined) params.description = description;
+                    if (options.linkId !== undefined && options.linkId !== null) params.link_id = options.linkId;
+                    if (options.sourceTitle) params.source_title = options.sourceTitle;
+                    if (options.targetTitle) params.target_title = options.targetTitle;
+                    if (options.linkType) params.link_type = options.linkType;
+                    if (options.newLinkType) params.new_link_type = options.newLinkType;
+                    if (options.weight !== undefined) params.weight = options.weight;
+                    if (options.description !== undefined) params.description = options.description;
+                    const normalizedCallerCardId = Tools.Memory._normalizeCallerCardId(options.callerCardId);
+                    if (normalizedCallerCardId !== undefined) params.caller_card_id = normalizedCallerCardId;
                     return toolCall("update_memory_link", params);
                 },
                 // 删除记忆链接（优先按 linkId）
-                deleteLink: (linkId, sourceTitle, targetTitle, linkType) => {
+                deleteLink: (linkId, sourceTitle, targetTitle, linkType, callerCardId) => {
+                    const options =
+                        linkId && typeof linkId === 'object' && !Array.isArray(linkId)
+                            ? linkId
+                            : { linkId, sourceTitle, targetTitle, linkType, callerCardId };
                     const params = {};
-                    if (linkId !== undefined && linkId !== null) params.link_id = linkId;
-                    if (sourceTitle) params.source_title = sourceTitle;
-                    if (targetTitle) params.target_title = targetTitle;
-                    if (linkType) params.link_type = linkType;
+                    if (options.linkId !== undefined && options.linkId !== null) params.link_id = options.linkId;
+                    if (options.sourceTitle) params.source_title = options.sourceTitle;
+                    if (options.targetTitle) params.target_title = options.targetTitle;
+                    if (options.linkType) params.link_type = options.linkType;
+                    const normalizedCallerCardId = Tools.Memory._normalizeCallerCardId(options.callerCardId);
+                    if (normalizedCallerCardId !== undefined) params.caller_card_id = normalizedCallerCardId;
                     return toolCall("delete_memory_link", params);
                 }
             },

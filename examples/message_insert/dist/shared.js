@@ -754,6 +754,13 @@ function buildMemorySnapshotId(chatId) {
     }
     return normalized.slice(0, 6);
 }
+function resolveMemoryCallerCardId(activePrompt) {
+    if (!activePrompt || activePrompt.type !== "character_card") {
+        return undefined;
+    }
+    const callerCardId = String(activePrompt.id || "").trim();
+    return callerCardId || undefined;
+}
 function stripMessageForMemorySearch(messageText) {
     return String(messageText || "")
         .replace(/<attachment\b[\s\S]*?<\/attachment>/gi, " ")
@@ -769,11 +776,12 @@ function stripMessageForMemorySearch(messageText) {
 function buildMemorySearchQuery(messageText) {
     return stripMessageForMemorySearch(messageText);
 }
-async function buildMemoryContent(messageText, chatId) {
+async function buildMemoryContent(messageText, chatId, activePrompt) {
     const text = resolveExtraInfoI18n();
     const settings = loadSettings();
     const reuseSnapshot = !settings.allowRepeatedMemorySearch;
     const snapshotId = reuseSnapshot ? buildMemorySnapshotId(chatId) : "";
+    const callerCardId = resolveMemoryCallerCardId(activePrompt);
     if (reuseSnapshot && !snapshotId) {
         throw new Error(text.memorySnapshotUnavailable);
     }
@@ -792,6 +800,7 @@ async function buildMemoryContent(messageText, chatId) {
         query: searchQuery,
         limit: settings.memoryLimit,
         ...(reuseSnapshot ? { snapshot_id: snapshotId } : {}),
+        ...(callerCardId ? { caller_card_id: callerCardId } : {}),
     });
     const memories = Array.isArray(result?.memories) ? result.memories : [];
     lines.push(`${text.memoryResultCountLabel}: ${memories.length}`);
@@ -813,17 +822,17 @@ async function buildMemoryContent(messageText, chatId) {
     });
     return lines.join("\n");
 }
-async function appendExtraInfoToMessage(messageText, chatId) {
+async function appendExtraInfoToMessage(messageText, chatId, activePrompt) {
     if (!stripMessageForMemorySearch(messageText)) {
         return null;
     }
-    const tags = await buildExtraInfoAttachmentTags(messageText, chatId);
+    const tags = await buildExtraInfoAttachmentTags(messageText, chatId, activePrompt);
     if (!tags.length) {
         return null;
     }
     return `${String(messageText || "").replace(/\s+$/, "")} ${tags.join(" ")}`.trim();
 }
-async function buildExtraInfoAttachmentTags(messageText, chatId) {
+async function buildExtraInfoAttachmentTags(messageText, chatId, activePrompt) {
     const settings = loadSettings();
     if (!settings.masterEnabled || containsExtraInfoAttachment(messageText)) {
         return [];
@@ -906,7 +915,7 @@ async function buildExtraInfoAttachmentTags(messageText, chatId) {
     if (settings.injectMemory) {
         let content = "";
         try {
-            content = await buildMemoryContent(messageText, chatId);
+            content = await buildMemoryContent(messageText, chatId, activePrompt);
         }
         catch (error) {
             content = buildErrorContent(resolveExtraInfoI18n().attachmentMemoryTitle, error);

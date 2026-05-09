@@ -758,6 +758,7 @@ object SystemToolPrompts {
         chatModelHasDirectVideo: Boolean = false,
         safBookmarkNames: List<String> = emptyList(),
         toolVisibility: Map<String, Boolean> = emptyMap(),
+        hookMetadata: Map<String, Any?> = emptyMap(),
         dispatchToolPromptComposeHooks: (PromptHookContext) -> PromptHookContext = PromptHookRegistry::dispatchToolPromptComposeHooks
     ): String {
         val categories = if (includeMemoryTools) {
@@ -800,7 +801,7 @@ object SystemToolPrompts {
                             "chatModelHasDirectVideo" to chatModelHasDirectVideo,
                             "safBookmarkNames" to safBookmarkNames,
                             "toolVisibility" to toolVisibility
-                        )
+                        ) + hookMetadata
                 )
             )
         var prompt = beforeContext.toolPrompt
@@ -836,6 +837,7 @@ object SystemToolPrompts {
         chatModelHasDirectVideo: Boolean = false,
         safBookmarkNames: List<String> = emptyList(),
         toolVisibility: Map<String, Boolean> = emptyMap(),
+        hookMetadata: Map<String, Any?> = emptyMap(),
         dispatchToolPromptComposeHooks: (PromptHookContext) -> PromptHookContext = PromptHookRegistry::dispatchToolPromptComposeHooks
     ): String {
         val categories = if (includeMemoryTools) {
@@ -878,7 +880,7 @@ object SystemToolPrompts {
                             "chatModelHasDirectVideo" to chatModelHasDirectVideo,
                             "safBookmarkNames" to safBookmarkNames,
                             "toolVisibility" to toolVisibility
-                        )
+                        ) + hookMetadata
                 )
             )
         var prompt = beforeContext.toolPrompt

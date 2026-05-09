@@ -1013,6 +1013,16 @@ function buildMemorySnapshotId(chatId?: string): string {
   return normalized.slice(0, 6);
 }
 
+function resolveMemoryCallerCardId(
+  activePrompt?: ToolPkg.ActivePromptSnapshot | null
+): string | undefined {
+  if (!activePrompt || activePrompt.type !== "character_card") {
+    return undefined;
+  }
+  const callerCardId = String(activePrompt.id || "").trim();
+  return callerCardId || undefined;
+}
+
 function stripMessageForMemorySearch(messageText: string): string {
   return String(messageText || "")
     .replace(/<attachment\b[\s\S]*?<\/attachment>/gi, " ")
@@ -1032,12 +1042,14 @@ function buildMemorySearchQuery(messageText: string): string {
 
 async function buildMemoryContent(
   messageText: string,
-  chatId?: string
+  chatId?: string,
+  activePrompt?: ToolPkg.ActivePromptSnapshot | null
 ): Promise<string> {
   const text = resolveExtraInfoI18n();
   const settings = loadSettings();
   const reuseSnapshot = !settings.allowRepeatedMemorySearch;
   const snapshotId = reuseSnapshot ? buildMemorySnapshotId(chatId) : "";
+  const callerCardId = resolveMemoryCallerCardId(activePrompt);
   if (reuseSnapshot && !snapshotId) {
     throw new Error(text.memorySnapshotUnavailable);
   }
@@ -1062,6 +1074,7 @@ async function buildMemoryContent(
     query: searchQuery,
     limit: settings.memoryLimit,
     ...(reuseSnapshot ? { snapshot_id: snapshotId } : {}),
+    ...(callerCardId ? { caller_card_id: callerCardId } : {}),
   });
 
   const memories = Array.isArray(result?.memories) ? result.memories : [];
@@ -1101,13 +1114,18 @@ async function buildMemoryContent(
 
 export async function appendExtraInfoToMessage(
   messageText: string,
-  chatId?: string
+  chatId?: string,
+  activePrompt?: ToolPkg.ActivePromptSnapshot | null
 ): Promise<string | null> {
   if (!stripMessageForMemorySearch(messageText)) {
     return null;
   }
 
-  const tags = await buildExtraInfoAttachmentTags(messageText, chatId);
+  const tags = await buildExtraInfoAttachmentTags(
+    messageText,
+    chatId,
+    activePrompt
+  );
   if (!tags.length) {
     return null;
   }
@@ -1117,7 +1135,8 @@ export async function appendExtraInfoToMessage(
 
 export async function buildExtraInfoAttachmentTags(
   messageText: string,
-  chatId?: string
+  chatId?: string,
+  activePrompt?: ToolPkg.ActivePromptSnapshot | null
 ): Promise<string[]> {
   const settings = loadSettings();
   if (!settings.masterEnabled || containsExtraInfoAttachment(messageText)) {
@@ -1204,7 +1223,7 @@ export async function buildExtraInfoAttachmentTags(
   if (settings.injectMemory) {
     let content = "";
     try {
-      content = await buildMemoryContent(messageText, chatId);
+      content = await buildMemoryContent(messageText, chatId, activePrompt);
     } catch (error) {
       content = buildErrorContent(resolveExtraInfoI18n().attachmentMemoryTitle, error);
     }

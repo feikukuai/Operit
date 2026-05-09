@@ -5,6 +5,7 @@ import com.ai.assistance.operit.core.tools.packTool.ToolPkgArchiveParser
 import com.ai.assistance.operit.data.api.ArtifactProjectDetailResponse
 import com.ai.assistance.operit.data.api.ArtifactProjectNodeResponse
 import java.io.File
+import java.util.zip.ZipFile
 import org.hjson.JsonValue
 import org.json.JSONArray
 import org.json.JSONObject
@@ -66,13 +67,17 @@ private fun inspectJsAuthorDeclaration(sourceFile: File): LocalArtifactAuthorDec
 }
 
 private fun inspectToolPkgAuthorDeclaration(sourceFile: File): LocalArtifactAuthorDeclaration {
-    sourceFile.inputStream().use { input ->
-        val entries = ToolPkgArchiveParser.readZipEntries(input)
+    ZipFile(sourceFile).use { archive ->
+        val entryIndex = ToolPkgArchiveParser.buildZipEntryIndex(archive)
         val manifestEntryName =
-            findToolPkgManifestEntryName(entries.keys)
+            findToolPkgManifestEntryName(entryIndex.entryNames)
                 ?: throw IllegalStateException("toolpkg 缺少 manifest.hjson 或 manifest.json")
         val manifestText =
-            entries[manifestEntryName]?.toString(Charsets.UTF_8)
+            ToolPkgArchiveParser.readZipEntryText(
+                archive = archive,
+                entryIndex = entryIndex,
+                rawPath = manifestEntryName
+            )
                 ?: throw IllegalStateException("无法读取 toolpkg manifest")
         val manifestJson = JSONObject(JsonValue.readHjson(manifestText).toString())
         return LocalArtifactAuthorDeclaration(

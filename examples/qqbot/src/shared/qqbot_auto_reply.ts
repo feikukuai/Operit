@@ -40,6 +40,7 @@ const DEFAULT_AUTO_REPLY_CONFIG = {
     aiTimeoutMs: 180000,
     c2cEnabled: true,
     groupEnabled: true,
+    waifu: true,
     chatGroup: "QQ Bot",
     characterCardId: "",
     assistantInstruction: DEFAULT_ASSISTANT_INSTRUCTION
@@ -176,6 +177,11 @@ function normalizeAutoReplyConfig(raw: JsonObject): AutoReplyConfig {
         next.groupEnabled = groupEnabled;
     }
 
+    const waifu = parseOptionalBoolean(raw.waifu, "waifu");
+    if (waifu !== undefined) {
+        next.waifu = waifu;
+    }
+
     if (hasOwn(raw, "chatGroup")) {
         next.chatGroup = firstNonBlank(asText(raw.chatGroup), DEFAULT_AUTO_REPLY_CONFIG.chatGroup);
     }
@@ -209,6 +215,7 @@ async function writeAutoReplyConfigAsync(config: JsonObject): Promise<AutoReplyC
             aiTimeoutMs: normalized.aiTimeoutMs,
             c2cEnabled: normalized.c2cEnabled,
             groupEnabled: normalized.groupEnabled,
+            waifu: normalized.waifu,
             chatGroup: normalized.chatGroup,
             characterCardId: normalized.characterCardId,
             assistantInstruction: normalized.assistantInstruction
@@ -556,9 +563,9 @@ async function buildInboundChatMessage(config: AutoReplyConfig, event: AutoReply
         ...(await materializeQQInboundAttachmentsAsync(event))
     ];
     if (!userMessage) {
-        return attachmentTags.join("\n");
+        return attachmentTags.join(" ");
     }
-    return [userMessage, "", ...attachmentTags].join("\n");
+    return [userMessage, ...attachmentTags].join(" ");
 }
 
 function sanitizeAiReplyText(raw: string): string {
@@ -749,7 +756,7 @@ async function generateAiReplyAsync(
         config.characterCardId || undefined,
         undefined,
         {
-            waifu: true,
+            waifu: config.waifu,
             persist_turn: true,
             notify_reply: false,
             hide_user_message: false,
@@ -892,6 +899,7 @@ async function processSingleEventAsync(config: AutoReplyConfig, event: AutoReply
         throw new Error("Unable to build event key for QQ auto reply");
     }
 
+    const shouldStreamReplyToQQ = config.waifu === true;
     let nextMsgSeq = 1;
     let streamedChunkCount = 0;
     let lastSendResult: JsonObject | null = null;
@@ -901,27 +909,29 @@ async function processSingleEventAsync(config: AutoReplyConfig, event: AutoReply
         config,
         event,
         eventKey,
-        (streamEvent) => {
-            if (!streamEvent || streamEvent.type !== "chunk") {
-                return;
+        shouldStreamReplyToQQ
+            ? (streamEvent) => {
+                if (!streamEvent || streamEvent.type !== "chunk") {
+                    return;
+                }
+                const chunkText = sanitizeAiReplyText(asText(streamEvent.chunk));
+                if (!chunkText) {
+                    return;
+                }
+                const currentMsgSeq = nextMsgSeq;
+                nextMsgSeq += 1;
+                streamedChunkCount += 1;
+                streamSendQueue = streamSendQueue.then(async () => {
+                    lastSendResult = await sendReplyToQQAsync(event, chunkText, currentMsgSeq);
+                });
             }
-            const chunkText = sanitizeAiReplyText(asText(streamEvent.chunk));
-            if (!chunkText) {
-                return;
-            }
-            const currentMsgSeq = nextMsgSeq;
-            nextMsgSeq += 1;
-            streamedChunkCount += 1;
-            streamSendQueue = streamSendQueue.then(async () => {
-                lastSendResult = await sendReplyToQQAsync(event, chunkText, currentMsgSeq);
-            });
-        }
+            : undefined
     );
     await streamSendQueue;
     const aiResponse = typeof generated.aiResponse === "string" ? generated.aiResponse : "";
     const chatId = typeof generated.chatId === "string" ? generated.chatId : "";
     const sendResult =
-        streamedChunkCount > 0
+        shouldStreamReplyToQQ && streamedChunkCount > 0
             ? (lastSendResult || {
                 scene: asText(event.scene).trim().toLowerCase(),
                 streamed: true,
@@ -1198,6 +1208,9 @@ export async function qqbot_auto_reply_configure(params: JsonObject = {}): Promi
         }
         if (hasOwn(params, "group_enabled")) {
             patch.groupEnabled = parseOptionalBoolean(params.group_enabled, "group_enabled") === true;
+        }
+        if (hasOwn(params, "waifu")) {
+            patch.waifu = parseOptionalBoolean(params.waifu, "waifu") === true;
         }
         if (hasOwn(params, "chat_group")) {
             patch.chatGroup = asText(params.chat_group).trim();

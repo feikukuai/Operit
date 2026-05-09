@@ -115,6 +115,7 @@ object AIMessageManager {
      * @return 格式化后的完整消息字符串。
      */
     suspend fun buildUserMessageContent(
+        context: Context,
         messageText: String,
         proxySenderName: String? = null,
         attachments: List<AttachmentInfo>,
@@ -125,11 +126,12 @@ object AIMessageManager {
         enableDirectImageProcessing: Boolean = false,
         enableDirectAudioProcessing: Boolean = false,
         enableDirectVideoProcessing: Boolean = false,
-        chatId: String? = null
+        chatId: String? = null,
+        roleCardId: String? = null
     ): String {
         val totalStartTime = messageTimingNow()
         val promptInputStartTime = messageTimingNow()
-        val processedMessageText = InputProcessor.processUserInput(messageText, chatId)
+        val processedMessageText = InputProcessor.processUserInput(context, messageText, chatId, roleCardId)
         logMessageTiming(
             stage = "buildUserMessageContent.processUserInput",
             startTimeMs = promptInputStartTime,

@@ -19,6 +19,7 @@ import com.ai.assistance.operit.core.chat.hooks.PromptHookRegistry
 import com.ai.assistance.operit.core.chat.hooks.PromptTurn
 import com.ai.assistance.operit.core.chat.hooks.PromptTurnKind
 import com.ai.assistance.operit.core.chat.hooks.appendUserTurnIfMissing
+import com.ai.assistance.operit.core.chat.hooks.buildActivePromptHookMetadata
 import com.ai.assistance.operit.core.chat.hooks.toPromptTurns
 import com.ai.assistance.operit.core.chat.hooks.toRoleContentPairs
 import com.ai.assistance.operit.core.application.ActivityLifecycleManager
@@ -631,6 +632,24 @@ class EnhancedAIService private constructor(private val context: Context) {
 
     private fun bypassPromptHooks(context: PromptHookContext): PromptHookContext = context
 
+    private suspend fun buildPromptFinalizeMetadata(
+        chatId: String?,
+        roleCardId: String?,
+        workspacePath: String?,
+        workspaceEnv: String?,
+        enableThinking: Boolean,
+        stream: Boolean,
+        isSubTask: Boolean
+    ): Map<String, Any?> {
+        return mapOf(
+            "workspacePath" to workspacePath,
+            "workspaceEnv" to workspaceEnv,
+            "enableThinking" to enableThinking,
+            "stream" to stream,
+            "isSubTask" to isSubTask
+        ) + buildActivePromptHookMetadata(context, chatId, roleCardId)
+    }
+
     private fun applyFinalizedCurrentUserTurn(
         preparedHistory: List<PromptTurn>,
         originalCurrentMessage: String,
@@ -734,14 +753,15 @@ class EnhancedAIService private constructor(private val context: Context) {
                     preparedHistory = finalPreparedHistory,
                     modelParameters = serializePromptHookModelParameters(modelParameters),
                     availableTools = serializePromptHookToolPrompts(availableTools),
-                    metadata =
-                        mapOf(
-                            "workspacePath" to workspacePath,
-                            "workspaceEnv" to workspaceEnv,
-                            "enableThinking" to enableThinking,
-                            "stream" to stream,
-                            "isSubTask" to isSubTask
-                        )
+                    metadata = buildPromptFinalizeMetadata(
+                        chatId = chatId,
+                        roleCardId = roleCardId,
+                        workspacePath = workspacePath,
+                        workspaceEnv = workspaceEnv,
+                        enableThinking = enableThinking,
+                        stream = stream,
+                        isSubTask = isSubTask
+                    )
                 ),
                 dispatchHooks = PromptHookRegistry::dispatchPromptEstimateFinalizeHooks
             )
@@ -948,14 +968,15 @@ class EnhancedAIService private constructor(private val context: Context) {
                                 preparedHistory = finalPreparedHistory,
                                 modelParameters = serializePromptHookModelParameters(modelParameters),
                                 availableTools = serializePromptHookToolPrompts(availableTools),
-                                metadata =
-                                    mapOf(
-                                        "workspacePath" to workspacePath,
-                                        "workspaceEnv" to workspaceEnv,
-                                        "enableThinking" to enableThinking,
-                                        "stream" to stream,
-                                        "isSubTask" to isSubTask
-                                    )
+                                metadata = buildPromptFinalizeMetadata(
+                                    chatId = chatId,
+                                    roleCardId = roleCardId,
+                                    workspacePath = workspacePath,
+                                    workspaceEnv = workspaceEnv,
+                                    enableThinking = enableThinking,
+                                    stream = stream,
+                                    isSubTask = isSubTask
+                                )
                             )
                         )
                     finalProcessedInput = beforeFinalizeContext.processedInput ?: finalProcessedInput

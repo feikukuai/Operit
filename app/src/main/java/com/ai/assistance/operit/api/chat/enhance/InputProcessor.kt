@@ -1,5 +1,7 @@
 package com.ai.assistance.operit.api.chat.enhance
 
+import android.content.Context
+import com.ai.assistance.operit.core.chat.hooks.buildActivePromptHookMetadata
 import com.ai.assistance.operit.core.chat.hooks.PromptHookContext
 import com.ai.assistance.operit.core.chat.hooks.PromptHookRegistry
 
@@ -15,16 +17,20 @@ object InputProcessor {
      * @return The processed input text
      */
     suspend fun processUserInput(
+        context: Context,
         input: String,
-        chatId: String? = null
+        chatId: String? = null,
+        roleCardId: String? = null
     ): String {
+        val activePromptMetadata = buildActivePromptHookMetadata(context, chatId, roleCardId)
         val beforeContext =
             PromptHookRegistry.dispatchPromptInputHooks(
                 PromptHookContext(
                     stage = "before_process",
                     chatId = chatId,
                     rawInput = input,
-                    processedInput = input
+                    processedInput = input,
+                    metadata = activePromptMetadata
                 )
             )
         val processedInput = beforeContext.processedInput ?: beforeContext.rawInput ?: input

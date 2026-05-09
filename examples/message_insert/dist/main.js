@@ -34,9 +34,12 @@ function pushInjectionProcessingState(chatId) {
         console.log("message_insert pushInjectionProcessingState error", String(error));
     }
 }
-async function appendExtraInfoWithStatus(processedInput, chatId) {
+async function appendExtraInfoWithStatus(processedInput, chatId, activePrompt) {
     pushInjectionProcessingState(chatId);
-    return (0, shared_1.appendExtraInfoToMessage)(processedInput, chatId || undefined);
+    return (0, shared_1.appendExtraInfoToMessage)(processedInput, chatId || undefined, activePrompt);
+}
+function resolveHookActivePrompt(input) {
+    return input.eventPayload.metadata?.activePrompt;
 }
 function registerToolPkg() {
     ToolPkg.registerToolboxUiModule({
@@ -76,7 +79,8 @@ async function onPromptInput(input) {
         return null;
     }
     const chatId = String(input.eventPayload.chatId ?? getChatId() ?? "").trim();
-    return appendExtraInfoWithStatus(processedInput, chatId || undefined);
+    const activePrompt = resolveHookActivePrompt(input);
+    return appendExtraInfoWithStatus(processedInput, chatId || undefined, activePrompt);
 }
 async function onPromptFinalize(input) {
     const stage = String(input.eventPayload.stage ?? input.eventName ?? "");
@@ -91,7 +95,8 @@ async function onPromptFinalize(input) {
         return null;
     }
     const chatId = String(input.eventPayload.chatId ?? getChatId() ?? "").trim();
-    return appendExtraInfoWithStatus(processedInput, chatId || undefined);
+    const activePrompt = resolveHookActivePrompt(input);
+    return appendExtraInfoWithStatus(processedInput, chatId || undefined, activePrompt);
 }
 function onInputMenuToggle(input) {
     const action = String(input.eventPayload.action ?? "").toLowerCase();

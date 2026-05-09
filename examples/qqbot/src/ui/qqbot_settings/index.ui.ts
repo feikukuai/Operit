@@ -42,12 +42,20 @@ type TextBundle = {
   c2cDesc: string;
   groupTitle: string;
   groupDesc: string;
+  waifuTitle: string;
+  waifuDesc: string;
   pollLabel: string;
   pollHint: string;
   aiTimeoutLabel: string;
   aiTimeoutHint: string;
   chatGroupLabel: string;
   cardIdLabel: string;
+  cardDropdownNoCharacterCard: string;
+  cardDropdownBoundCard: string;
+  cardDropdownUnbound: string;
+  cardDropdownLoading: string;
+  cardDropdownNoCards: string;
+  cardDropdownHint: string;
   instructionLabel: string;
   saveAutomation: string;
   controlsTitle: string;
@@ -94,6 +102,13 @@ type RuntimeAction =
   | "stop_service"
   | "run_once";
 
+type CharacterCardOption = {
+  id: string;
+  name: string;
+  description: string;
+  isDefault: boolean;
+};
+
 function resolveText(): TextBundle {
   const locale = typeof getLang === "function" ? String(getLang() || "").trim().toLowerCase() : "";
   if (locale.startsWith("en")) {
@@ -128,12 +143,20 @@ function resolveText(): TextBundle {
       c2cDesc: "Handle inbound C2C messages.",
       groupTitle: "Reply to group chats",
       groupDesc: "Handle inbound group messages.",
+      waifuTitle: "Waifu mode",
+      waifuDesc: "Generate replies in waifu mode. Enabled by default.",
       pollLabel: "Poll interval (ms)",
       pollHint: "How often the auto reply loop checks the local QQ message queue.",
       aiTimeoutLabel: "AI timeout (ms)",
       aiTimeoutHint: "Maximum wait time for Operit AI to generate a reply.",
       chatGroupLabel: "Operit chat group",
-      cardIdLabel: "Character card ID",
+      cardIdLabel: "Character Card (Optional)",
+      cardDropdownNoCharacterCard: "No character card binding",
+      cardDropdownBoundCard: "Character card bound",
+      cardDropdownUnbound: "Current chat uses no character card",
+      cardDropdownLoading: "Loading...",
+      cardDropdownNoCards: "No character cards available",
+      cardDropdownHint: "After selecting a card, QQ Bot auto reply will use that character card when creating chats and sending messages.",
       instructionLabel: "Bridge instruction",
       saveAutomation: "Save Automation",
       controlsTitle: "Controls",
@@ -184,12 +207,20 @@ function resolveText(): TextBundle {
     c2cDesc: "自动回复收到的 C2C 私聊消息。",
     groupTitle: "处理群消息",
     groupDesc: "自动回复收到的群消息。",
+    waifuTitle: "Waifu 模式",
+    waifuDesc: "让自动回复按 waifu 模式生成内容，默认开启。",
     pollLabel: "轮询间隔（毫秒）",
     pollHint: "自动回复循环检查本地 QQ 消息队列的频率。",
     aiTimeoutLabel: "AI 超时（毫秒）",
     aiTimeoutHint: "等待 Operit AI 生成回复的最长时间。",
     chatGroupLabel: "Operit 会话分组",
-    cardIdLabel: "角色卡 ID",
+    cardIdLabel: "绑定角色卡（可选）",
+    cardDropdownNoCharacterCard: "不绑定角色卡",
+    cardDropdownBoundCard: "已绑定角色卡",
+    cardDropdownUnbound: "当前不使用角色卡",
+    cardDropdownLoading: "加载中...",
+    cardDropdownNoCards: "没有可用角色卡",
+    cardDropdownHint: "选择角色卡后，QQ Bot 自动回复在创建会话和发送消息时会使用该角色卡。",
     instructionLabel: "桥接指令",
     saveAutomation: "保存自动化设置",
     controlsTitle: "运行控制",
@@ -378,10 +409,15 @@ export default function Screen(ctx: ComposeDslContext): ComposeNode {
   const autoReplyEnabledState = useStateValue(ctx, "autoReplyEnabled", false);
   const c2cEnabledState = useStateValue(ctx, "c2cEnabled", true);
   const groupEnabledState = useStateValue(ctx, "groupEnabled", true);
+  const waifuState = useStateValue(ctx, "waifu", true);
   const pollIntervalInputState = useStateValue(ctx, "pollIntervalInput", "3000");
   const aiTimeoutInputState = useStateValue(ctx, "aiTimeoutInput", "180000");
   const chatGroupState = useStateValue(ctx, "chatGroup", "QQ Bot");
   const characterCardIdState = useStateValue(ctx, "characterCardId", "");
+  const showCardPickerState = useStateValue(ctx, "showCardPicker", false);
+  const loadingCardsState = useStateValue(ctx, "loadingCards", false);
+  const availableCardsState = useStateValue<CharacterCardOption[]>(ctx, "availableCards", []);
+  const hasLoadedCardsState = useStateValue(ctx, "hasLoadedCards", false);
   const instructionState = useStateValue(ctx, "instruction", "");
   const busyActionState = useStateValue<RuntimeAction>(ctx, "busyAction", "");
   const successMessageState = useStateValue(ctx, "successMessage", "");
@@ -394,6 +430,91 @@ export default function Screen(ctx: ComposeDslContext): ComposeNode {
   const clearMessages = (): void => {
     successMessageState.set("");
     errorMessageState.set("");
+  };
+
+  const queryCharacterCards = async (
+    showErrorToast: boolean
+  ): Promise<{ success: boolean; cards: CharacterCardOption[] }> => {
+    try {
+      const result = await Tools.Chat.listCharacterCards();
+      const cards = (Array.isArray(result?.cards) ? result.cards : [])
+        .map((card) => ({
+          id: String(card?.id || "").trim(),
+          name: String(card?.name || "").trim(),
+          description: String(card?.description || "").trim(),
+          isDefault: card?.isDefault === true
+        }))
+        .filter((card) => !!card.id);
+      availableCardsState.set(cards);
+      hasLoadedCardsState.set(true);
+      return { success: true, cards };
+    } catch (error) {
+      if (showErrorToast) {
+        ctx.showToast(`${text.saveErrorPrefix}${toErrorText(error)}`);
+      }
+      return { success: false, cards: [] };
+    }
+  };
+
+  const ensureCharacterCardsLoaded = async (showErrorToast: boolean): Promise<CharacterCardOption[]> => {
+    if (hasLoadedCardsState.value) {
+      return availableCardsState.value;
+    }
+    const result = await queryCharacterCards(showErrorToast);
+    return result.cards;
+  };
+
+  const findCharacterCard = (cardId: string): CharacterCardOption | null => {
+    const targetId = String(cardId || "").trim();
+    if (!targetId) {
+      return null;
+    }
+    return availableCardsState.value.find((card) => card.id === targetId) || null;
+  };
+
+  const resolveCharacterCardName = (cardId: string): string => {
+    const matchedCard = findCharacterCard(cardId);
+    return String(matchedCard?.name || "").trim();
+  };
+
+  const getSelectedCharacterCardLabel = (): string => {
+    if (!characterCardIdState.value.trim()) {
+      return text.cardDropdownNoCharacterCard;
+    }
+    return resolveCharacterCardName(characterCardIdState.value) || text.cardDropdownBoundCard;
+  };
+
+  const loadCardPicker = async (): Promise<void> => {
+    if (showCardPickerState.value) {
+      showCardPickerState.set(false);
+      loadingCardsState.set(false);
+      return;
+    }
+
+    showCardPickerState.set(true);
+    if (hasLoadedCardsState.value) {
+      loadingCardsState.set(false);
+      return;
+    }
+
+    loadingCardsState.set(true);
+    const result = await queryCharacterCards(true);
+    loadingCardsState.set(false);
+    if (!result.success) {
+      showCardPickerState.set(false);
+    }
+  };
+
+  const pickCharacterCard = (cardId: string): void => {
+    characterCardIdState.set(String(cardId || "").trim());
+    showCardPickerState.set(false);
+    loadingCardsState.set(false);
+  };
+
+  const clearCharacterCardBinding = (): void => {
+    characterCardIdState.set("");
+    showCardPickerState.set(false);
+    loadingCardsState.set(false);
   };
 
   const refreshAll = async (
@@ -426,10 +547,15 @@ export default function Screen(ctx: ComposeDslContext): ComposeNode {
       autoReplyEnabledState.set(nextStatus.listenerEnabled && asBoolean(autoReplyStatus?.config?.enabled, false));
       c2cEnabledState.set(asBoolean(autoReplyStatus?.config?.c2cEnabled, true));
       groupEnabledState.set(asBoolean(autoReplyStatus?.config?.groupEnabled, true));
+      waifuState.set(asBoolean(autoReplyStatus?.config?.waifu, true));
       pollIntervalInputState.set(String(autoReplyStatus?.config?.pollIntervalMs || 3000));
       aiTimeoutInputState.set(String(autoReplyStatus?.config?.aiTimeoutMs || 180000));
       chatGroupState.set(String(autoReplyStatus?.config?.chatGroup || "QQ Bot"));
-      characterCardIdState.set(String(autoReplyStatus?.config?.characterCardId || ""));
+      const nextCharacterCardId = String(autoReplyStatus?.config?.characterCardId || "").trim();
+      characterCardIdState.set(nextCharacterCardId);
+      if (nextCharacterCardId && !findCharacterCard(nextCharacterCardId)) {
+        await ensureCharacterCardsLoaded(false);
+      }
       instructionState.set(String(autoReplyStatus?.config?.assistantInstruction || ""));
     } catch (error) {
       errorMessageState.set(`${text.saveErrorPrefix}${toErrorText(error)}`);
@@ -499,6 +625,7 @@ export default function Screen(ctx: ComposeDslContext): ComposeNode {
       enabled: autoReplyEnabledState.value,
       c2c_enabled: c2cEnabledState.value,
       group_enabled: groupEnabledState.value,
+      waifu: waifuState.value,
       poll_interval_ms: pollIntervalMs,
       ai_timeout_ms: aiTimeoutMs,
       chat_group: chatGroupState.value.trim(),
@@ -674,6 +801,14 @@ export default function Screen(ctx: ComposeDslContext): ComposeNode {
           groupEnabledState.set,
           !isAnyBusy
         ),
+        createToggleRow(
+          ctx,
+          text.waifuTitle,
+          text.waifuDesc,
+          waifuState.value,
+          waifuState.set,
+          !isAnyBusy
+        ),
         ctx.UI.TextField({
           label: text.pollLabel,
           value: pollIntervalInputState.value,
@@ -702,11 +837,175 @@ export default function Screen(ctx: ComposeDslContext): ComposeNode {
           onValueChange: chatGroupState.set,
           singleLine: true
         }),
-        ctx.UI.TextField({
-          label: text.cardIdLabel,
-          value: characterCardIdState.value,
-          onValueChange: characterCardIdState.set,
-          singleLine: true
+        ctx.UI.Text({
+          text: text.cardIdLabel,
+          style: "labelMedium",
+          fontWeight: "bold",
+          color: "onSurface"
+        }),
+        ctx.UI.Box(
+          {
+            fillMaxWidth: true
+          },
+          [
+            ctx.UI.OutlinedButton(
+              {
+                onClick: async () => await loadCardPicker(),
+                fillMaxWidth: true
+              },
+              [
+                ctx.UI.Row(
+                  {
+                    fillMaxWidth: true,
+                    horizontalArrangement: "spaceBetween",
+                    verticalAlignment: "center"
+                  },
+                  [
+                    ctx.UI.Column({ weight: 1, spacing: 2 }, [
+                      ctx.UI.Text({
+                        text: getSelectedCharacterCardLabel(),
+                        color: "onSurface",
+                        fontWeight: "medium",
+                        maxLines: 1,
+                        overflow: "ellipsis"
+                      }),
+                      ctx.UI.Text({
+                        text: characterCardIdState.value.trim()
+                          ? text.cardDropdownBoundCard
+                          : text.cardDropdownUnbound,
+                        style: "bodySmall",
+                        color: "onSurfaceVariant"
+                      })
+                    ]),
+                    ctx.UI.Icon({
+                      name: showCardPickerState.value ? "arrowDropUp" : "arrowDropDown",
+                      tint: "onSurfaceVariant",
+                      size: 20
+                    })
+                  ]
+                )
+              ]
+            ),
+            ctx.UI.DropdownMenu(
+              {
+                expanded: showCardPickerState.value,
+                properties: {
+                  focusable: true
+                },
+                onDismissRequest: () => {
+                  showCardPickerState.set(false);
+                  loadingCardsState.set(false);
+                }
+              },
+              [
+                ctx.UI.Box(
+                  {
+                    modifier: ctx.Modifier
+                      .fillMaxWidth()
+                      .clickable(() => clearCharacterCardBinding())
+                      .padding({ horizontal: 16, vertical: 12 })
+                  },
+                  [
+                    ctx.UI.Text({
+                      text: text.cardDropdownNoCharacterCard,
+                      color: "onSurface",
+                      fontWeight: !characterCardIdState.value.trim() ? "bold" : "normal"
+                    })
+                  ]
+                ),
+                ctx.UI.HorizontalDivider({
+                  color: "outlineVariant",
+                  thickness: 1
+                }),
+                ...(loadingCardsState.value
+                  ? [
+                      ctx.UI.Box(
+                        {
+                          modifier: ctx.Modifier
+                            .fillMaxWidth()
+                            .padding({ horizontal: 16, vertical: 12 })
+                        },
+                        [
+                          ctx.UI.Text({
+                            text: text.cardDropdownLoading,
+                            color: "onSurfaceVariant"
+                          })
+                        ]
+                      )
+                    ]
+                  : availableCardsState.value.length === 0
+                    ? [
+                        ctx.UI.Box(
+                          {
+                            modifier: ctx.Modifier
+                              .fillMaxWidth()
+                              .padding({ horizontal: 16, vertical: 12 })
+                          },
+                          [
+                            ctx.UI.Text({
+                              text: text.cardDropdownNoCards,
+                              color: "onSurfaceVariant"
+                            })
+                          ]
+                        )
+                      ]
+                    : availableCardsState.value.map((card) =>
+                        ctx.UI.Box(
+                          {
+                            modifier: ctx.Modifier
+                              .fillMaxWidth()
+                              .clickable(() => pickCharacterCard(card.id))
+                              .padding({ horizontal: 16, vertical: 12 })
+                          },
+                          [
+                            ctx.UI.Row(
+                              {
+                                fillMaxWidth: true,
+                                horizontalArrangement: "spaceBetween",
+                                verticalAlignment: "center"
+                              },
+                              [
+                                ctx.UI.Column({ weight: 1, spacing: 2 }, [
+                                  ctx.UI.Text({
+                                    text: card.name,
+                                    color: "onSurface",
+                                    fontWeight:
+                                      card.id === characterCardIdState.value.trim() ? "bold" : "normal",
+                                    maxLines: 1,
+                                    overflow: "ellipsis"
+                                  }),
+                                  ...(card.description
+                                    ? [
+                                        ctx.UI.Text({
+                                          text: card.description,
+                                          style: "bodySmall",
+                                          color: "onSurfaceVariant",
+                                          maxLines: 1,
+                                          overflow: "ellipsis"
+                                        })
+                                      ]
+                                    : [])
+                                ]),
+                                card.id === characterCardIdState.value.trim()
+                                  ? ctx.UI.Icon({
+                                      name: "check",
+                                      tint: "primary",
+                                      size: 18
+                                    })
+                                  : ctx.UI.Spacer({ width: 18 })
+                              ]
+                            )
+                          ]
+                        )
+                      ))
+              ]
+            )
+          ]
+        ),
+        ctx.UI.Text({
+          text: text.cardDropdownHint,
+          style: "bodySmall",
+          color: "onSurfaceVariant"
         }),
         ctx.UI.TextField({
           label: text.instructionLabel,

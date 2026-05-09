@@ -2,20 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.default = Screen;
 const i18n_1 = require("../../i18n");
-function parseToolResult(value) {
-    if (!value) {
-        return null;
-    }
-    if (typeof value === "string") {
-        try {
-            return JSON.parse(value);
-        }
-        catch (_error) {
-            return null;
-        }
-    }
-    return value;
-}
+const worldbook_service_js_1 = require("../../shared/worldbook_service.js");
 function resolveText() {
     const rawLocale = getLang();
     const locale = String(rawLocale || "").trim().toLowerCase();
@@ -42,6 +29,7 @@ function Screen(ctx) {
     const [showCardPicker, setShowCardPicker] = ctx.useState("showCardPicker", false);
     const [loadingCards, setLoadingCards] = ctx.useState("loadingCards", false);
     const [availableCards, setAvailableCards] = ctx.useState("availableCards", []);
+    const [hasLoadedCards, setHasLoadedCards] = ctx.useState("hasLoadedCards", false);
     const t = resolveText();
     const colors = ctx.MaterialTheme.colorScheme;
     const { UI } = ctx;
@@ -60,15 +48,11 @@ function Screen(ctx) {
         setFormCharacterCardId("");
         setShowCardPicker(false);
         setLoadingCards(false);
-        setAvailableCards([]);
     }
     async function loadEntries() {
         setLoading(true);
         try {
-            const result = parseToolResult(await ctx.callTool("worldbook_tools:list_entries", {}));
-            if (result?.success) {
-                setEntries(result.entries || []);
-            }
+            setEntries(await (0, worldbook_service_js_1.listWorldBookEntries)());
         }
         catch (error) {
             ctx.showToast(`${t.toastLoadFailedPrefix}${String(error)}`);
@@ -78,9 +62,44 @@ function Screen(ctx) {
             setHasLoadedOnce(true);
         }
     }
+    async function queryCharacterCards(showErrorToast) {
+        try {
+            const cards = await (0, worldbook_service_js_1.listWorldBookCharacterCards)();
+            setAvailableCards(cards);
+            setHasLoadedCards(true);
+            return { success: true, cards };
+        }
+        catch (error) {
+            if (showErrorToast) {
+                ctx.showToast(`${t.toastRoleCardLoadFailedPrefix}${String(error)}`);
+            }
+        }
+        return { success: false, cards: [] };
+    }
+    async function ensureCharacterCardsLoaded(showErrorToast) {
+        if (hasLoadedCards) {
+            return availableCards;
+        }
+        const result = await queryCharacterCards(showErrorToast);
+        return result.cards;
+    }
+    function findCharacterCard(cardId) {
+        const targetId = String(cardId || "").trim();
+        if (!targetId) {
+            return null;
+        }
+        return availableCards.find((card) => String(card.id || "").trim() === targetId) || null;
+    }
+    function resolveCharacterCardName(cardId) {
+        const matchedCard = findCharacterCard(cardId);
+        return String(matchedCard?.name || "").trim();
+    }
+    function getCharacterCardLabel(cardId) {
+        return resolveCharacterCardName(cardId) || t.dropdownBoundCard;
+    }
     async function doToggle(id) {
         try {
-            await ctx.callTool("worldbook_tools:toggle_entry", { id });
+            await (0, worldbook_service_js_1.toggleWorldBookEntry)(id);
             ctx.showToast(t.toastToggleDone);
             await loadEntries();
         }
@@ -90,7 +109,7 @@ function Screen(ctx) {
     }
     async function doDelete(id, name) {
         try {
-            await ctx.callTool("worldbook_tools:delete_entry", { id });
+            await (0, worldbook_service_js_1.deleteWorldBookEntry)(id);
             ctx.showToast(`${t.toastDeletedPrefix}${name}`);
             await loadEntries();
         }
@@ -100,26 +119,25 @@ function Screen(ctx) {
     }
     async function doEdit(id) {
         try {
-            const result = parseToolResult(await ctx.callTool("worldbook_tools:get_entry", { id }));
-            if (result?.success && result.entry) {
-                const entry = result.entry;
-                setEditId(entry.id);
-                setFormName(entry.name || "");
-                setFormContent(entry.content || "");
-                setFormKeywords((entry.keywords || []).join("，"));
-                setFormIsRegex(entry.is_regex === true);
-                setFormCaseSensitive(entry.case_sensitive === true);
-                setFormAlwaysActive(entry.always_active === true);
-                setFormEnabled(entry.enabled !== false);
-                setFormPriority(String(entry.priority ?? 50));
-                setFormScanDepth(String(entry.scan_depth ?? 0));
-                setFormInjectTarget(entry.inject_target || "system");
-                setFormCharacterCardId(entry.character_card_id || "");
-                setShowCardPicker(false);
-                setLoadingCards(false);
-                setAvailableCards([]);
-                setView("edit");
+            const entry = await (0, worldbook_service_js_1.getWorldBookEntry)(id);
+            setEditId(entry.id);
+            setFormName(entry.name || "");
+            setFormContent(entry.content || "");
+            setFormKeywords((entry.keywords || []).join("，"));
+            setFormIsRegex(entry.is_regex === true);
+            setFormCaseSensitive(entry.case_sensitive === true);
+            setFormAlwaysActive(entry.always_active === true);
+            setFormEnabled(entry.enabled !== false);
+            setFormPriority(String(entry.priority ?? 50));
+            setFormScanDepth(String(entry.scan_depth ?? 0));
+            setFormInjectTarget(entry.inject_target || "system");
+            setFormCharacterCardId(entry.character_card_id || "");
+            setShowCardPicker(false);
+            setLoadingCards(false);
+            if (entry.character_card_id && !findCharacterCard(entry.character_card_id)) {
+                await ensureCharacterCardsLoaded(true);
             }
+            setView("edit");
         }
         catch (error) {
             ctx.showToast(`${t.toastLoadFailedPrefix}${String(error)}`);
@@ -132,24 +150,14 @@ function Screen(ctx) {
             return;
         }
         setShowCardPicker(true);
-        setLoadingCards(true);
-        try {
-            const result = parseToolResult(await ctx.callTool("worldbook_tools:list_character_cards_proxy", {}));
-            if (result?.success) {
-                const cards = Array.isArray(result.cards) ? result.cards : [];
-                setAvailableCards(cards);
-                setLoadingCards(false);
-                return;
-            }
-            ctx.showToast(result?.message || t.toastRoleCardLoadFailed);
-            setAvailableCards([]);
+        if (hasLoadedCards) {
             setLoadingCards(false);
-            setShowCardPicker(false);
+            return;
         }
-        catch (error) {
-            ctx.showToast(`${t.toastRoleCardLoadFailedPrefix}${String(error)}`);
-            setAvailableCards([]);
-            setLoadingCards(false);
+        setLoadingCards(true);
+        const result = await queryCharacterCards(true);
+        setLoadingCards(false);
+        if (!result.success) {
             setShowCardPicker(false);
         }
     }
@@ -167,11 +175,7 @@ function Screen(ctx) {
         if (!formCharacterCardId) {
             return t.dropdownNoCharacterCard;
         }
-        const matchedCard = availableCards.find((card) => card.id === formCharacterCardId);
-        if (matchedCard?.name) {
-            return matchedCard.name;
-        }
-        return formCharacterCardId;
+        return getCharacterCardLabel(formCharacterCardId);
     }
     function toggleCardPicker() {
         return loadCardPicker();
@@ -190,7 +194,6 @@ function Screen(ctx) {
             return;
         }
         const isEdit = view === "edit" && !!editId;
-        const action = isEdit ? "worldbook_tools:update_entry" : "worldbook_tools:create_entry";
         const payload = {
             name: formName.trim(),
             content: formContent.trim(),
@@ -208,15 +211,16 @@ function Screen(ctx) {
             payload.id = editId;
         }
         try {
-            const result = parseToolResult(await ctx.callTool(action, payload));
-            if (result?.success) {
-                ctx.showToast(isEdit ? t.toastUpdated : t.toastCreated);
-                setView("list");
-                resetForm();
-                await loadEntries();
-                return;
+            if (isEdit) {
+                await (0, worldbook_service_js_1.updateWorldBookEntry)(payload);
             }
-            ctx.showToast(`${t.toastFailedPrefix}${result?.message || t.toastUnknownResult}`);
+            else {
+                await (0, worldbook_service_js_1.createWorldBookEntry)(payload);
+            }
+            ctx.showToast(isEdit ? t.toastUpdated : t.toastCreated);
+            setView("list");
+            resetForm();
+            await loadEntries();
         }
         catch (error) {
             ctx.showToast(`${t.toastSaveFailedPrefix}${String(error)}`);
@@ -280,6 +284,7 @@ function Screen(ctx) {
     }
     function renderCard(entry) {
         const keywordText = entry.keywords && entry.keywords.length > 0 ? entry.keywords.join("、") : t.keywordEmpty;
+        const characterCardName = resolveCharacterCardName(entry.character_card_id || "");
         const infoPills = [
             renderTag(keywordText, colors.secondaryContainer.copy({ alpha: 0.6 }), colors.onSecondaryContainer),
             renderTag(entry.always_active ? t.tagAlwaysActive : t.tagKeywordTrigger, colors.secondaryContainer.copy({ alpha: 0.6 }), colors.onSecondaryContainer),
@@ -289,7 +294,7 @@ function Screen(ctx) {
                 ? renderTag(t.tagInjectUser, colors.tertiaryContainer.copy({ alpha: 0.7 }), colors.onTertiaryContainer)
                 : renderTag(t.tagInjectSystem, colors.tertiaryContainer.copy({ alpha: 0.7 }), colors.onTertiaryContainer),
             entry.character_card_id
-                ? renderTag(t.tagCharacterCard(entry.character_card_id), colors.primaryContainer.copy({ alpha: 0.7 }), colors.onPrimaryContainer)
+                ? renderTag(characterCardName ? t.tagCharacterCard(characterCardName) : t.dropdownBoundCard, colors.primaryContainer.copy({ alpha: 0.7 }), colors.onPrimaryContainer)
                 : null
         ].filter(Boolean);
         return UI.Card({
@@ -849,6 +854,9 @@ function Screen(ctx) {
         spacing: 10,
         padding: { horizontal: 12, vertical: 8 },
         fillMaxSize: true,
-        onLoad: () => loadEntries()
+        onLoad: async () => {
+            await loadEntries();
+            await ensureCharacterCardsLoaded(false);
+        }
     }, items);
 }

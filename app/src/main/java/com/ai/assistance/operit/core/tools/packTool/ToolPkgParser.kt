@@ -297,9 +297,36 @@ internal sealed interface ToolPkgMainRegistrationParseResult {
     ) : ToolPkgMainRegistrationParseResult
 }
 
+internal data class ToolPkgEntryIndex(
+    val entryNames: Set<String>,
+    private val entryNamesByNormalizedLowercase: Map<String, String>
+) {
+    fun containsEntry(rawPath: String): Boolean {
+        return resolveEntryName(rawPath) != null
+    }
+
+    fun resolveEntryName(rawPath: String): String? {
+        val normalizedPath = ToolPkgArchiveParser.normalizeZipEntryPath(rawPath) ?: return null
+        return entryNamesByNormalizedLowercase[normalizedPath.lowercase()]
+    }
+
+    fun containsEntriesUnderDirectory(rawDirectoryPath: String): Boolean {
+        val normalizedDirectoryPath =
+            ToolPkgArchiveParser.normalizeResourcePath(rawDirectoryPath) ?: return false
+        val prefix = normalizedDirectoryPath.trimEnd('/') + "/"
+        return entryNames.any { it.startsWith(prefix, ignoreCase = true) }
+    }
+}
+
+internal data class ToolPkgManifestPreview(
+    val entryName: String,
+    val manifest: ToolPkgManifest
+)
+
 internal object ToolPkgArchiveParser {
-    fun parseToolPkgFromEntries(
-        entries: Map<String, ByteArray>,
+    fun parseToolPkgFromIndexedEntries(
+        entryIndex: ToolPkgEntryIndex,
+        readEntryText: (String) -> String?,
         sourceType: ToolPkgSourceType,
         sourcePath: String,
         isBuiltIn: Boolean,
@@ -307,12 +334,11 @@ internal object ToolPkgArchiveParser {
         parseMainRegistration: (String, String, String) -> ToolPkgMainRegistrationParseResult,
         reportPackageLoadError: (String, String) -> Unit
     ): ToolPkgLoadResult {
-        val manifestEntryName = findManifestEntry(entries)
+        val manifestEntryName = findManifestEntry(entryIndex.entryNames)
             ?: throw IllegalArgumentException("manifest.hjson or manifest.json not found")
-        val manifestBytes =
-            entries[manifestEntryName]
+        val manifestText =
+            readEntryText(manifestEntryName)
                 ?: throw IllegalArgumentException("Failed to read manifest entry")
-        val manifestText = manifestBytes.toString(StandardCharsets.UTF_8)
         val manifest = parseToolPkgManifest(manifestText, manifestEntryName)
         val manifestBasePath = manifestEntryName.substringBeforeLast('/', missingDelimiterValue = "")
 
@@ -322,12 +348,11 @@ internal object ToolPkgArchiveParser {
         val normalizedMainEntry =
             resolveManifestRelativeZipEntryPath(manifestBasePath, manifest.main)
                 ?: throw IllegalArgumentException("manifest.main is required")
-        if (!containsZipEntry(entries, normalizedMainEntry)) {
+        if (!entryIndex.containsEntry(normalizedMainEntry)) {
             throw IllegalArgumentException("Cannot find manifest.main entry '${manifest.main}'")
         }
         val mainScriptText =
-            findZipEntryContent(entries, normalizedMainEntry)
-                ?.toString(StandardCharsets.UTF_8)
+            readEntryText(normalizedMainEntry)
                 ?: throw IllegalArgumentException("Failed to read manifest.main entry '${manifest.main}'")
 
         val subpackagePackages = mutableListOf<ToolPackage>()
@@ -362,12 +387,11 @@ internal object ToolPkgArchiveParser {
                         ?: throw IllegalArgumentException(
                             "Invalid subpackage entry '${subpackage.entry}'"
                         )
-                val entryBytes =
-                    findZipEntryContent(entries, normalizedSubpackageEntry)
+                val jsContent =
+                    readEntryText(normalizedSubpackageEntry)
                         ?: throw IllegalArgumentException(
                             "Cannot find subpackage entry '${subpackage.entry}'"
                         )
-                val jsContent = entryBytes.toString(StandardCharsets.UTF_8)
 
                 val parsedPackage =
                     parseJsPackage(jsContent) { _, error ->
@@ -433,10 +457,10 @@ internal object ToolPkgArchiveParser {
                     resolveManifestRelativeResourcePath(manifestBasePath, resource.path)
                         ?: throw IllegalArgumentException("Invalid resource path: ${resource.path}")
                 if (isDirectoryResourceMime(resource.mime)) {
-                    if (!containsZipEntriesUnderDirectory(entries, normalizedPath)) {
+                    if (!entryIndex.containsEntriesUnderDirectory(normalizedPath)) {
                         throw IllegalArgumentException("Cannot find resource directory '${resource.path}'")
                     }
-                } else if (!containsZipEntry(entries, normalizedPath)) {
+                } else if (!entryIndex.containsEntry(normalizedPath)) {
                     throw IllegalArgumentException("Cannot find resource path '${resource.path}'")
                 }
                 ToolPkgResourceRuntime(
@@ -596,7 +620,7 @@ internal object ToolPkgArchiveParser {
                     ?: throw IllegalArgumentException(
                         "$TOOLPKG_REGISTRATION_UI_ROUTE[$index].screen is invalid: ${module.screen}"
                     )
-            if (!containsZipEntry(entries, normalizedScreenPath)) {
+            if (!entryIndex.containsEntry(normalizedScreenPath)) {
                 throw IllegalArgumentException(
                     "$TOOLPKG_REGISTRATION_UI_ROUTE[$index].screen not found: ${module.screen}"
                 )
@@ -1137,19 +1161,54 @@ internal object ToolPkgArchiveParser {
         )
     }
 
-    fun readZipEntries(input: InputStream): Map<String, ByteArray> {
-        val entries = linkedMapOf<String, ByteArray>()
-        ZipInputStream(input.buffered()).use { zipInput ->
-            while (true) {
-                val entry = zipInput.nextEntry ?: break
-                val normalizedName = normalizeZipEntryPath(entry.name)
-                if (!entry.isDirectory && normalizedName != null) {
-                    entries[normalizedName] = zipInput.readBytes()
+    fun buildZipEntryIndex(archive: ZipFile): ToolPkgEntryIndex {
+        val normalizedEntryNames = linkedSetOf<String>()
+        val entryNamesByNormalizedLowercase = linkedMapOf<String, String>()
+        val entries = archive.entries()
+        while (entries.hasMoreElements()) {
+            val entry = entries.nextElement()
+            val normalizedName = normalizeZipEntryPath(entry.name)
+            if (!entry.isDirectory && normalizedName != null) {
+                normalizedEntryNames.add(normalizedName)
+                val key = normalizedName.lowercase()
+                if (!entryNamesByNormalizedLowercase.containsKey(key)) {
+                    entryNamesByNormalizedLowercase[key] = entry.name
                 }
-                zipInput.closeEntry()
             }
         }
-        return entries
+        return ToolPkgEntryIndex(
+            entryNames = normalizedEntryNames,
+            entryNamesByNormalizedLowercase = entryNamesByNormalizedLowercase
+        )
+    }
+
+    fun buildDirectoryEntryIndex(rootDir: File): ToolPkgEntryIndex {
+        val normalizedEntryNames = linkedSetOf<String>()
+        val entryNamesByNormalizedLowercase = linkedMapOf<String, String>()
+        if (!rootDir.exists()) {
+            return ToolPkgEntryIndex(
+                entryNames = emptySet(),
+                entryNamesByNormalizedLowercase = emptyMap()
+            )
+        }
+
+        rootDir
+            .walkTopDown()
+            .filter(File::isFile)
+            .forEach { file ->
+                val relativePath = file.relativeTo(rootDir).invariantSeparatorsPath
+                val normalizedName = normalizeZipEntryPath(relativePath) ?: return@forEach
+                normalizedEntryNames.add(normalizedName)
+                val key = normalizedName.lowercase()
+                if (!entryNamesByNormalizedLowercase.containsKey(key)) {
+                    entryNamesByNormalizedLowercase[key] = relativePath
+                }
+            }
+
+        return ToolPkgEntryIndex(
+            entryNames = normalizedEntryNames,
+            entryNamesByNormalizedLowercase = entryNamesByNormalizedLowercase
+        )
     }
 
     fun normalizeZipEntryPath(rawPath: String): String? {
@@ -1189,10 +1248,54 @@ internal object ToolPkgArchiveParser {
         return TOOLPKG_DIRECTORY_RESOURCE_MIME_TYPES.contains(normalizedMime)
     }
 
-    fun findZipEntryContent(entries: Map<String, ByteArray>, rawPath: String): ByteArray? {
-        val normalizedPath = normalizeZipEntryPath(rawPath) ?: return null
-        entries[normalizedPath]?.let { return it }
-        return entries.entries.firstOrNull { it.key.equals(normalizedPath, ignoreCase = true) }?.value
+    fun readZipEntryText(
+        archive: ZipFile,
+        entryIndex: ToolPkgEntryIndex,
+        rawPath: String
+    ): String? {
+        val archiveEntryName = entryIndex.resolveEntryName(rawPath) ?: return null
+        val entry = archive.getEntry(archiveEntryName) ?: return null
+        archive.getInputStream(entry).use { input ->
+            return input.bufferedReader(StandardCharsets.UTF_8).use { reader ->
+                reader.readText()
+            }
+        }
+    }
+
+    fun readDirectoryEntryText(
+        rootDir: File,
+        entryIndex: ToolPkgEntryIndex,
+        rawPath: String
+    ): String? {
+        val relativePath = entryIndex.resolveEntryName(rawPath) ?: return null
+        val file = File(rootDir, relativePath)
+        if (!file.isFile) {
+            return null
+        }
+        return file.readText(StandardCharsets.UTF_8)
+    }
+
+    fun readToolPkgManifestPreview(inputStreamFactory: () -> InputStream): ToolPkgManifestPreview? {
+        inputStreamFactory().use { input ->
+            ZipInputStream(input.buffered()).use { zipInput ->
+                while (true) {
+                    val entry = zipInput.nextEntry ?: break
+                    val normalizedName = normalizeZipEntryPath(entry.name)
+                    if (!entry.isDirectory && normalizedName != null && isManifestEntryName(normalizedName)) {
+                        val manifestText =
+                            zipInput.bufferedReader(StandardCharsets.UTF_8).use { reader ->
+                                reader.readText()
+                            }
+                        return ToolPkgManifestPreview(
+                            entryName = normalizedName,
+                            manifest = parseToolPkgManifest(manifestText, normalizedName)
+                        )
+                    }
+                    zipInput.closeEntry()
+                }
+            }
+        }
+        return null
     }
 
     fun extractZipEntriesFromExternal(zipFilePath: String, destinationDir: File): Boolean {
@@ -1255,37 +1358,30 @@ internal object ToolPkgArchiveParser {
         return true
     }
 
-    private fun containsZipEntry(entries: Map<String, ByteArray>, normalizedPath: String): Boolean {
-        if (entries.containsKey(normalizedPath)) {
-            return true
-        }
-        return entries.keys.any { it.equals(normalizedPath, ignoreCase = true) }
-    }
-
-    private fun containsZipEntriesUnderDirectory(
-        entries: Map<String, ByteArray>,
-        normalizedDirectoryPath: String
-    ): Boolean {
-        val prefix = normalizedDirectoryPath.trimEnd('/') + "/"
-        return entries.keys.any { it.startsWith(prefix, ignoreCase = true) }
-    }
-
-    private fun findManifestEntry(entries: Map<String, ByteArray>): String? {
-        val exactHjson = entries.keys.firstOrNull { it.equals("manifest.hjson", ignoreCase = true) }
+    private fun findManifestEntry(entryNames: Collection<String>): String? {
+        val exactHjson = entryNames.firstOrNull { it.equals("manifest.hjson", ignoreCase = true) }
         if (exactHjson != null) return exactHjson
 
-        val exactJson = entries.keys.firstOrNull { it.equals("manifest.json", ignoreCase = true) }
+        val exactJson = entryNames.firstOrNull { it.equals("manifest.json", ignoreCase = true) }
         if (exactJson != null) return exactJson
 
         val nestedHjson =
-            entries.keys.firstOrNull {
+            entryNames.firstOrNull {
                 it.substringAfterLast('/').equals("manifest.hjson", ignoreCase = true)
             }
         if (nestedHjson != null) return nestedHjson
 
-        return entries.keys.firstOrNull {
+        return entryNames.firstOrNull {
             it.substringAfterLast('/').equals("manifest.json", ignoreCase = true)
         }
+    }
+
+    private fun isManifestEntryName(entryName: String): Boolean {
+        if (entryName.equals("manifest.hjson", ignoreCase = true)) return true
+        if (entryName.equals("manifest.json", ignoreCase = true)) return true
+        val fileName = entryName.substringAfterLast('/')
+        return fileName.equals("manifest.hjson", ignoreCase = true) ||
+            fileName.equals("manifest.json", ignoreCase = true)
     }
 
     private fun parseToolPkgManifest(content: String, manifestEntryName: String): ToolPkgManifest {

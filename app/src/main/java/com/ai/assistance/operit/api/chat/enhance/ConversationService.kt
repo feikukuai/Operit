@@ -8,6 +8,7 @@ import com.ai.assistance.operit.core.chat.hooks.PromptTurn
 import com.ai.assistance.operit.core.chat.hooks.PromptTurnKind
 import com.ai.assistance.operit.core.chat.hooks.SummaryHookContext
 import com.ai.assistance.operit.core.chat.hooks.SummaryHookRegistry
+import com.ai.assistance.operit.core.chat.hooks.buildActivePromptHookMetadata
 import com.ai.assistance.operit.core.chat.hooks.toPromptTurns
 import com.ai.assistance.operit.core.config.SystemPromptConfig
 import com.ai.assistance.operit.core.tools.climode.ToolExposureMode
@@ -115,6 +116,7 @@ class ConversationService(
     ): String {
         try {
             val useEnglish = LocaleUtils.getCurrentLanguage(context).lowercase().startsWith("en")
+            val activePromptMetadata = buildActivePromptHookMetadata(context)
             var systemPrompt = FunctionalPrompts.buildSummarySystemPrompt(previousSummary, useEnglish)
             val sanitizedMessages = ChatUtils.stripGeminiThoughtSignatureMetaTurns(messages)
 
@@ -130,7 +132,7 @@ class ConversationService(
                 mapOf(
                     "providerModel" to summaryService.providerModel,
                     "sourceMessageCount" to summaryHistory.size
-                )
+                ) + activePromptMetadata
 
             val beforePrepareContext =
                 SummaryHookRegistry.dispatchSummaryGenerateHooks(
@@ -400,6 +402,7 @@ class ConversationService(
             dispatchSystemPromptComposeHooks: (PromptHookContext) -> PromptHookContext = PromptHookRegistry::dispatchSystemPromptComposeHooks,
             dispatchToolPromptComposeHooks: (PromptHookContext) -> PromptHookContext = PromptHookRegistry::dispatchToolPromptComposeHooks
     ): List<PromptTurn> {
+        val activePromptMetadata = buildActivePromptHookMetadata(context, chatId, roleCardId)
         val beforeContext =
             dispatchHistoryHooks(
                 PromptHookContext(
@@ -413,7 +416,6 @@ class ConversationService(
                             "workspacePath" to workspacePath,
                             "workspaceEnv" to workspaceEnv,
                             "customSystemPromptTemplate" to customSystemPromptTemplate,
-                            "roleCardId" to roleCardId,
                             "enableGroupOrchestrationHint" to enableGroupOrchestrationHint,
                             "groupParticipantNamesText" to groupParticipantNamesText,
                             "proxySenderName" to proxySenderName,
@@ -425,7 +427,7 @@ class ConversationService(
                             "useToolCallApi" to useToolCallApi,
                             "chatModelHasDirectImage" to chatModelHasDirectImage,
                             "toolExposureMode" to toolExposureMode.name
-                        )
+                        ) + activePromptMetadata
                 )
             )
         val effectiveChatHistory = beforeContext.chatHistory
@@ -516,6 +518,7 @@ class ConversationService(
                     groupOrchestrationRoleName = activeCard?.name?.takeIf { it.isNotBlank() }
                         ?: context.getString(R.string.app_name),
                     groupParticipantNamesText = groupParticipantNamesText.orEmpty(),
+                    hookMetadata = activePromptMetadata,
                     dispatchSystemPromptComposeHooks = dispatchSystemPromptComposeHooks,
                     dispatchToolPromptComposeHooks = dispatchToolPromptComposeHooks
                 )

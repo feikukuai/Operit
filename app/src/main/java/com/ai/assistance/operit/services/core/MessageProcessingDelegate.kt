@@ -242,6 +242,7 @@ class MessageProcessingDelegate(
         val enableDirectVideoProcessing = currentModelConfig.enableDirectVideoProcessing
 
         val finalMessageContent = AIMessageManager.buildUserMessageContent(
+            context = context,
             messageText = messageText,
             attachments = attachments,
             enableWorkspaceAttachment = enableWorkspaceAttachment,
@@ -581,17 +582,19 @@ class MessageProcessingDelegate(
             // 1. 使用 AIMessageManager 构建最终消息
             val buildUserMessageStartTime = messageTimingNow()
             val finalMessageContent = AIMessageManager.buildUserMessageContent(
-                messageText,
-                proxySenderNameOverride,
-                attachments,
-                enableWorkspaceAttachment,
-                workspacePath,
-                workspaceEnv,
-                replyToMessage,
-                enableDirectImageProcessing,
-                enableDirectAudioProcessing,
-                enableDirectVideoProcessing,
-                chatId = chatId
+                context = context,
+                messageText = messageText,
+                proxySenderName = proxySenderNameOverride,
+                attachments = attachments,
+                enableWorkspaceAttachment = enableWorkspaceAttachment,
+                workspacePath = workspacePath,
+                workspaceEnv = workspaceEnv,
+                replyToMessage = replyToMessage,
+                enableDirectImageProcessing = enableDirectImageProcessing,
+                enableDirectAudioProcessing = enableDirectAudioProcessing,
+                enableDirectVideoProcessing = enableDirectVideoProcessing,
+                chatId = chatId,
+                roleCardId = roleCardId
             )
             logMessageTiming(
                 stage = "delegate.buildUserMessageContent",

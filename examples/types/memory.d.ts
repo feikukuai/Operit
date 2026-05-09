@@ -7,6 +7,37 @@
  * Memory management tools
  */
 export namespace Memory {
+    interface CallerScopedOptions {
+        callerCardId?: string;
+    }
+
+    interface QueryOptions extends CallerScopedOptions {
+        query: string;
+        folderPath?: string;
+        limit?: number;
+        startTime?: string;
+        endTime?: string;
+        snapshotId?: string;
+        threshold?: number;
+    }
+
+    interface GetByTitleOptions extends CallerScopedOptions {
+        title: string;
+        chunkIndex?: number;
+        chunkRange?: string;
+        query?: string;
+        limit?: number;
+    }
+
+    interface CreateOptions extends CallerScopedOptions {
+        title: string;
+        content: string;
+        contentType?: string;
+        source?: string;
+        folderPath?: string;
+        tags?: string;
+    }
+
     /**
      * Query the memory library
      * @param query - Search query. Supports a natural-language question, a space-separated phrase, or `|`-separated keywords. Inside a keyword, `*` works as a fuzzy wildcard placeholder such as `error*timeout`; use only `*` to return all memories
@@ -16,6 +47,7 @@ export namespace Memory {
      * @param endTime - Optional local-time end time in `YYYY-MM-DD` or `YYYY-MM-DD HH:mm` format, filters memories by createdAt <= endTime
      * @param snapshotId - Optional snapshot id. Omit or pass empty to auto-create one; pass any non-empty id to use or create that exact snapshot so follow-up or parallel queries can exclude already returned memories
      * @param threshold - Optional relevance threshold (>=0). Only memories whose score is at least this value are returned; `query_memory` defaults to `0`
+     * @param callerCardId - Optional caller role card id used to select the bound memory profile
      * @returns Structured query results
      */
     function query(
@@ -25,8 +57,10 @@ export namespace Memory {
         startTime?: string,
         endTime?: string,
         snapshotId?: string,
-        threshold?: number
+        threshold?: number,
+        callerCardId?: string
     ): Promise<import('./results').MemoryQueryResultData>;
+    function query(options: QueryOptions): Promise<import('./results').MemoryQueryResultData>;
 
     /**
      * Get a memory by exact title
@@ -35,9 +69,11 @@ export namespace Memory {
      * @param chunkRange - Optional chunk range for document nodes (e.g., "3-7")
      * @param query - Optional query to search within the document. Supports natural language, space-separated phrases, `|`-separated keywords, and `*` as a fuzzy wildcard inside a keyword
      * @param limit - Optional maximum number of matched chunks when using query (>=1, default 20)
+     * @param callerCardId - Optional caller role card id used to select the bound memory profile
      * @returns Memory content as a string
      */
-    function getByTitle(title: string, chunkIndex?: number, chunkRange?: string, query?: string, limit?: number): Promise<string>;
+    function getByTitle(title: string, chunkIndex?: number, chunkRange?: string, query?: string, limit?: number, callerCardId?: string): Promise<string>;
+    function getByTitle(options: GetByTitleOptions): Promise<string>;
 
     /**
      * Create a new memory
@@ -47,14 +83,17 @@ export namespace Memory {
      * @param source - Optional source (default "ai_created")
      * @param folderPath - Optional folder path (default "")
      * @param tags - Optional tags (comma-separated string)
+     * @param callerCardId - Optional caller role card id used to select the bound memory profile
      * @returns Creation result as a string
      */
-    function create(title: string, content: string, contentType?: string, source?: string, folderPath?: string, tags?: string): Promise<string>;
+    function create(title: string, content: string, contentType?: string, source?: string, folderPath?: string, tags?: string, callerCardId?: string): Promise<string>;
+    function create(options: CreateOptions): Promise<string>;
 
     /**
      * Update options for memory update
      */
     interface UpdateOptions {
+        oldTitle?: string;
         newTitle?: string;
         content?: string;
         contentType?: string;
@@ -63,31 +102,56 @@ export namespace Memory {
         importance?: number;
         folderPath?: string;
         tags?: string;
+        callerCardId?: string;
     }
 
     /**
      * Update an existing memory
      * @param oldTitle - The current title of the memory
      * @param updates - Update options
+     * @param callerCardId - Optional caller role card id used to select the bound memory profile
      * @returns Update result as a string
      */
-    function update(oldTitle: string, updates?: UpdateOptions): Promise<string>;
+    function update(oldTitle: string, updates?: Omit<UpdateOptions, 'oldTitle'>, callerCardId?: string): Promise<string>;
+    function update(options: UpdateOptions & { oldTitle: string }): Promise<string>;
+
+    interface DeleteOptions extends CallerScopedOptions {
+        title: string;
+    }
 
     /**
      * Delete a memory
      * @param title - The title of the memory to delete
+     * @param callerCardId - Optional caller role card id used to select the bound memory profile
      * @returns Deletion result as a string
      */
-    function deleteMemory(title: string): Promise<string>;
+    function deleteMemory(title: string, callerCardId?: string): Promise<string>;
+    function deleteMemory(options: DeleteOptions): Promise<string>;
+
+    interface MoveOptions extends CallerScopedOptions {
+        targetFolderPath: string;
+        titles?: string[] | string;
+        sourceFolderPath?: string;
+    }
 
     /**
      * Move memories to another folder in batch
      * @param targetFolderPath - Target folder path (empty string means uncategorized)
      * @param titles - Optional memory titles (string array or comma-separated string)
      * @param sourceFolderPath - Optional source folder path (empty string means uncategorized)
+     * @param callerCardId - Optional caller role card id used to select the bound memory profile
      * @returns Move result as a string
      */
-    function move(targetFolderPath: string, titles?: string[] | string, sourceFolderPath?: string): Promise<string>;
+    function move(targetFolderPath: string, titles?: string[] | string, sourceFolderPath?: string, callerCardId?: string): Promise<string>;
+    function move(options: MoveOptions): Promise<string>;
+
+    interface LinkOptions extends CallerScopedOptions {
+        sourceTitle: string;
+        targetTitle: string;
+        linkType?: string;
+        weight?: number;
+        description?: string;
+    }
 
     /**
      * Create a link between two memories
@@ -96,9 +160,19 @@ export namespace Memory {
      * @param linkType - Optional link type (default "related")
      * @param weight - Optional link strength (0.0-1.0, default 0.7)
      * @param description - Optional description of the relationship
+     * @param callerCardId - Optional caller role card id used to select the bound memory profile
      * @returns Link creation result
      */
-    function link(sourceTitle: string, targetTitle: string, linkType?: string, weight?: number, description?: string): Promise<import('./results').MemoryLinkResultData>;
+    function link(sourceTitle: string, targetTitle: string, linkType?: string, weight?: number, description?: string, callerCardId?: string): Promise<import('./results').MemoryLinkResultData>;
+    function link(options: LinkOptions): Promise<import('./results').MemoryLinkResultData>;
+
+    interface QueryLinksOptions extends CallerScopedOptions {
+        linkId?: number;
+        sourceTitle?: string;
+        targetTitle?: string;
+        linkType?: string;
+        limit?: number;
+    }
 
     /**
      * Query memory links with optional filters
@@ -107,6 +181,7 @@ export namespace Memory {
      * @param targetTitle - Optional target memory title filter
      * @param linkType - Optional link type filter
      * @param limit - Optional maximum number of links to return (1-200, default 20)
+     * @param callerCardId - Optional caller role card id used to select the bound memory profile
      * @returns Link query result
      */
     function queryLinks(
@@ -114,8 +189,20 @@ export namespace Memory {
         sourceTitle?: string,
         targetTitle?: string,
         linkType?: string,
-        limit?: number
+        limit?: number,
+        callerCardId?: string
     ): Promise<import('./results').MemoryLinkQueryResultData>;
+    function queryLinks(options: QueryLinksOptions): Promise<import('./results').MemoryLinkQueryResultData>;
+
+    interface UpdateLinkOptions extends CallerScopedOptions {
+        linkId?: number;
+        sourceTitle?: string;
+        targetTitle?: string;
+        linkType?: string;
+        newLinkType?: string;
+        weight?: number;
+        description?: string;
+    }
 
     /**
      * Update an existing memory link
@@ -126,6 +213,7 @@ export namespace Memory {
      * @param newLinkType - Optional new link type
      * @param weight - Optional new link strength (0.0-1.0)
      * @param description - Optional new relationship description
+     * @param callerCardId - Optional caller role card id used to select the bound memory profile
      * @returns Link update result
      */
     function updateLink(
@@ -135,8 +223,17 @@ export namespace Memory {
         linkType?: string,
         newLinkType?: string,
         weight?: number,
-        description?: string
+        description?: string,
+        callerCardId?: string
     ): Promise<import('./results').MemoryLinkResultData>;
+    function updateLink(options: UpdateLinkOptions): Promise<import('./results').MemoryLinkResultData>;
+
+    interface DeleteLinkOptions extends CallerScopedOptions {
+        linkId?: number;
+        sourceTitle?: string;
+        targetTitle?: string;
+        linkType?: string;
+    }
 
     /**
      * Delete an existing memory link
@@ -144,8 +241,9 @@ export namespace Memory {
      * @param sourceTitle - Optional source memory title (used when linkId is not provided)
      * @param targetTitle - Optional target memory title (used when linkId is not provided)
      * @param linkType - Optional link type (for unique resolution)
+     * @param callerCardId - Optional caller role card id used to select the bound memory profile
      * @returns Deletion result as a string
      */
-    function deleteLink(linkId?: number, sourceTitle?: string, targetTitle?: string, linkType?: string): Promise<string>;
+    function deleteLink(linkId?: number, sourceTitle?: string, targetTitle?: string, linkType?: string, callerCardId?: string): Promise<string>;
+    function deleteLink(options: DeleteLinkOptions): Promise<string>;
 }
-

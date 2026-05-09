@@ -311,71 +311,16 @@
 */
 
 import {
-  ensureWorldBookStorage,
-  readWorldBookEntries,
-  writeWorldBookEntries
-} from "../shared/worldbook_storage.js";
-
-interface WorldBookEntry {
-  id: string;
-  name: string;
-  content: string;
-  keywords: string[];
-  is_regex: boolean;
-  case_sensitive: boolean;
-  always_active: boolean;
-  enabled: boolean;
-  priority: number;
-  scan_depth: number;
-  inject_target: "system" | "user";
-  character_card_id: string;
-  created_at: string;
-  updated_at: string;
-}
-
-interface WorldBookMutationParams {
-  id?: string;
-  name?: string;
-  content?: string;
-  keywords?: string;
-  is_regex?: boolean;
-  case_sensitive?: boolean;
-  always_active?: boolean;
-  enabled?: boolean;
-  priority?: number;
-  scan_depth?: number;
-  inject_target?: string;
-  character_card_id?: string;
-}
-
-interface CharacterCardSummary {
-  id?: string;
-  name?: string;
-  description?: string;
-  isDefault?: boolean;
-}
-
-function generateId(): string {
-  return `wb_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
-}
-
-function splitKeywords(raw?: string): string[] {
-  if (!raw) {
-    return [];
-  }
-  return raw
-    .split(/[,，]/)
-    .map((keyword) => keyword.trim())
-    .filter((keyword) => keyword.length > 0);
-}
-
-async function loadEntries(): Promise<WorldBookEntry[]> {
-  return await readWorldBookEntries<WorldBookEntry>();
-}
-
-async function saveEntries(entries: WorldBookEntry[]): Promise<void> {
-  await writeWorldBookEntries(entries);
-}
+  createWorldBookEntry,
+  deleteWorldBookEntry,
+  getWorldBookEntry,
+  listWorldBookCharacterCards,
+  listWorldBookEntries,
+  toggleWorldBookEntry,
+  updateWorldBookEntry,
+  type WorldBookMutationParams
+} from "../shared/worldbook_service.js";
+import { ensureWorldBookStorage } from "../shared/worldbook_storage.js";
 
 async function wrap<TParams>(handler: (params: TParams) => Promise<unknown>, params: TParams) {
   try {
@@ -388,165 +333,42 @@ async function wrap<TParams>(handler: (params: TParams) => Promise<unknown>, par
 }
 
 async function listEntries(): Promise<unknown> {
-  const entries = await loadEntries();
-  const summary = entries
-    .map((entry) => ({
-      id: entry.id,
-      name: entry.name,
-      enabled: entry.enabled,
-      always_active: entry.always_active,
-      priority: entry.priority,
-      keywords: entry.keywords || [],
-      is_regex: entry.is_regex || false,
-      scan_depth: entry.scan_depth ?? 0,
-      inject_target: entry.inject_target || "system",
-      character_card_id: entry.character_card_id || ""
-    }))
-    .sort((left, right) => right.priority - left.priority);
-
-  return { success: true, count: summary.length, entries: summary };
+  const entries = await listWorldBookEntries();
+  return { success: true, count: entries.length, entries };
 }
 
 async function getEntry(params: Pick<WorldBookMutationParams, "id">): Promise<unknown> {
-  const entries = await loadEntries();
-  const entry = entries.find((item) => item.id === params.id);
-  if (!entry) {
-    return { success: false, message: `条目不存在: ${params.id}` };
-  }
+  const entry = await getWorldBookEntry(String(params.id || ""));
   return { success: true, entry };
 }
 
 async function createEntry(params: WorldBookMutationParams): Promise<unknown> {
-  const entries = await loadEntries();
-  const now = new Date().toISOString();
-  const entry: WorldBookEntry = {
-    id: generateId(),
-    name: params.name || "",
-    content: params.content || "",
-    keywords: splitKeywords(params.keywords),
-    is_regex: params.is_regex === true,
-    case_sensitive: params.case_sensitive === true,
-    always_active: params.always_active === true,
-    enabled: params.enabled !== false,
-    priority: params.priority ?? 50,
-    scan_depth: params.scan_depth ?? 0,
-    inject_target: params.inject_target === "user" ? "user" : "system",
-    character_card_id: (params.character_card_id || "").trim(),
-    created_at: now,
-    updated_at: now
-  };
-
-  entries.push(entry);
-  await saveEntries(entries);
+  const entry = await createWorldBookEntry(params);
   return { success: true, message: "条目已创建", entry };
 }
 
 async function updateEntry(params: WorldBookMutationParams): Promise<unknown> {
-  const entries = await loadEntries();
-  const index = entries.findIndex((entry) => entry.id === params.id);
-  if (index === -1) {
-    return { success: false, message: `条目不存在: ${params.id}` };
-  }
-
-  const nextEntry = { ...entries[index] };
-  if (params.name != null) {
-    nextEntry.name = params.name;
-  }
-  if (params.content != null) {
-    nextEntry.content = params.content;
-  }
-  if (params.keywords != null) {
-    nextEntry.keywords = splitKeywords(params.keywords);
-  }
-  if (params.is_regex != null) {
-    nextEntry.is_regex = params.is_regex;
-  }
-  if (params.case_sensitive != null) {
-    nextEntry.case_sensitive = params.case_sensitive;
-  }
-  if (params.always_active != null) {
-    nextEntry.always_active = params.always_active;
-  }
-  if (params.enabled != null) {
-    nextEntry.enabled = params.enabled;
-  }
-  if (params.priority != null) {
-    nextEntry.priority = params.priority;
-  }
-  if (params.scan_depth != null) {
-    nextEntry.scan_depth = params.scan_depth;
-  }
-  if (params.inject_target != null) {
-    nextEntry.inject_target = params.inject_target === "user" ? "user" : "system";
-  }
-  if (params.character_card_id != null) {
-    nextEntry.character_card_id = String(params.character_card_id || "").trim();
-  }
-  nextEntry.updated_at = new Date().toISOString();
-
-  entries[index] = nextEntry;
-  await saveEntries(entries);
-  return { success: true, message: "条目已更新", entry: nextEntry };
+  const entry = await updateWorldBookEntry(params);
+  return { success: true, message: "条目已更新", entry };
 }
 
 async function deleteEntry(params: Pick<WorldBookMutationParams, "id">): Promise<unknown> {
-  const entries = await loadEntries();
-  const index = entries.findIndex((entry) => entry.id === params.id);
-  if (index === -1) {
-    return { success: false, message: `条目不存在: ${params.id}` };
-  }
-
-  const [removed] = entries.splice(index, 1);
-  await saveEntries(entries);
+  const removed = await deleteWorldBookEntry(String(params.id || ""));
   return { success: true, message: `条目已删除: ${removed.name}` };
 }
 
 async function toggleEntry(params: Pick<WorldBookMutationParams, "id">): Promise<unknown> {
-  const entries = await loadEntries();
-  const index = entries.findIndex((entry) => entry.id === params.id);
-  if (index === -1) {
-    return { success: false, message: `条目不存在: ${params.id}` };
-  }
-
-  const nextEnabled = !entries[index].enabled;
-  entries[index] = {
-    ...entries[index],
-    enabled: nextEnabled,
-    updated_at: new Date().toISOString()
-  };
-  await saveEntries(entries);
-
+  const entry = await toggleWorldBookEntry(String(params.id || ""));
   return {
     success: true,
-    message: `${entries[index].name} 已${nextEnabled ? "启用" : "禁用"}`,
-    entry: {
-      id: entries[index].id,
-      name: entries[index].name,
-      enabled: entries[index].enabled
-    }
+    message: `${entry.name} 已${entry.enabled ? "启用" : "禁用"}`,
+    entry
   };
 }
 
 async function listCharacterCardsProxy(): Promise<unknown> {
-  try {
-    const result = await Tools.Chat.listCharacterCards();
-    const cards = Array.isArray(result?.cards)
-      ? (result.cards as CharacterCardSummary[])
-      : [];
-    return {
-      success: true,
-      totalCount: result?.totalCount ?? cards.length,
-      cards: cards.map((card) => ({
-        id: card.id,
-        name: card.name,
-        description: card.description || "",
-        isDefault: card.isDefault === true
-      }))
-    };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    return { success: false, message: `角色卡列表获取失败: ${message}`, cards: [] };
-  }
+  const cards = await listWorldBookCharacterCards();
+  return { success: true, totalCount: cards.length, cards };
 }
 
 exports.list_entries = (params: never) => wrap(listEntries as (params: never) => Promise<unknown>, params);

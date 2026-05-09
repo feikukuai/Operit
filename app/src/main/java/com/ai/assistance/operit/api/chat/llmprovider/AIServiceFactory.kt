@@ -2,21 +2,198 @@ package com.ai.assistance.operit.api.chat.llmprovider
 
 import android.content.Context
 import com.ai.assistance.llama.LlamaSession
-import com.ai.assistance.operit.util.AppLogger
 import com.ai.assistance.operit.data.model.ApiProviderType
 import com.ai.assistance.operit.data.model.ModelConfigData
 import com.ai.assistance.operit.data.preferences.ModelConfigManager
 import com.ai.assistance.operit.plugins.toolpkg.ToolPkgAiProviderRegistry
+import com.ai.assistance.operit.util.AppLogger
+import java.io.IOException
+import java.net.InetAddress
+import java.net.InetSocketAddress
+import java.net.Proxy
 import java.util.concurrent.TimeUnit
+import okhttp3.Call
+import okhttp3.Connection
+import okhttp3.EventListener
+import okhttp3.Handshake
 import okhttp3.ConnectionPool
 import okhttp3.OkHttpClient
 import okhttp3.Protocol
+import okhttp3.Request
+import okhttp3.Response
 import org.json.JSONObject
 
 /**
  * A factory for creating and managing a shared OkHttpClient instance.
  * Using a shared client allows for efficient reuse of connections and resources.
  */
+internal data class LlmRequestTraceContext(
+    val requestId: String,
+    val provider: String,
+    val model: String,
+    val stream: Boolean,
+    val attempt: Int,
+    val endpointLabel: String
+)
+
+private object LlmNetworkEventListenerFactory : EventListener.Factory {
+    override fun create(call: Call): EventListener {
+        return LlmNetworkEventListener(call.request().tag(LlmRequestTraceContext::class.java))
+    }
+}
+
+private class LlmNetworkEventListener(
+    private val traceContext: LlmRequestTraceContext?
+) : EventListener() {
+    private val startedAtNs = System.nanoTime()
+
+    private fun elapsedMs(): Long = (System.nanoTime() - startedAtNs) / 1_000_000
+
+    private fun prefix(): String {
+        val requestId = traceContext?.requestId ?: "unknown"
+        val provider = traceContext?.provider ?: "unknown"
+        val model = traceContext?.model ?: "unknown"
+        val attempt = traceContext?.attempt ?: -1
+        val stream = traceContext?.stream ?: false
+        return "[req=$requestId provider=$provider model=$model attempt=$attempt stream=$stream]"
+    }
+
+    private fun log(stage: String, details: String = "") {
+        val suffix = if (details.isBlank()) "" else " | $details"
+        AppLogger.d("AIHttpTrace", "${prefix()} +${elapsedMs()}ms $stage$suffix")
+    }
+
+    private fun logFailure(stage: String, error: IOException, details: String = "") {
+        val message = buildString {
+            append("${prefix()} +${elapsedMs()}ms $stage")
+            if (details.isNotBlank()) {
+                append(" | ")
+                append(details)
+            }
+            append(" | ")
+            append(error.javaClass.simpleName)
+            append(": ")
+            append(error.message ?: "no message")
+        }
+        AppLogger.e("AIHttpTrace", message, error)
+    }
+
+    private fun formatSocketAddress(socketAddress: InetSocketAddress): String {
+        return "${socketAddress.hostString}:${socketAddress.port}"
+    }
+
+    private fun formatAddresses(addresses: List<InetAddress>): String {
+        return addresses.joinToString(",") { it.hostAddress ?: it.hostName }
+    }
+
+    private fun describeRequest(request: Request): String {
+        val bodyBytes = runCatching { request.body?.contentLength() ?: -1L }.getOrDefault(-1L)
+        return "${request.method} ${request.url.scheme}://${request.url.host}:${request.url.port}${request.url.encodedPath}, bodyBytes=$bodyBytes"
+    }
+
+    override fun callStart(call: Call) {
+        log("callStart", describeRequest(call.request()))
+    }
+
+    override fun dnsStart(call: Call, domainName: String) {
+        log("dnsStart", "host=$domainName")
+    }
+
+    override fun dnsEnd(call: Call, domainName: String, inetAddressList: List<InetAddress>) {
+        log("dnsEnd", "host=$domainName, addresses=${formatAddresses(inetAddressList)}")
+    }
+
+    override fun connectStart(call: Call, inetSocketAddress: InetSocketAddress, proxy: Proxy) {
+        log("connectStart", "target=${formatSocketAddress(inetSocketAddress)}, proxy=${proxy.type()}")
+    }
+
+    override fun secureConnectStart(call: Call) {
+        log("secureConnectStart")
+    }
+
+    override fun secureConnectEnd(call: Call, handshake: Handshake?) {
+        val tlsVersion = handshake?.tlsVersion?.javaName ?: "unknown"
+        val cipherSuite = handshake?.cipherSuite?.javaName ?: "unknown"
+        log("secureConnectEnd", "tls=$tlsVersion, cipher=$cipherSuite")
+    }
+
+    override fun connectEnd(
+        call: Call,
+        inetSocketAddress: InetSocketAddress,
+        proxy: Proxy,
+        protocol: Protocol?
+    ) {
+        log(
+            "connectEnd",
+            "target=${formatSocketAddress(inetSocketAddress)}, protocol=${protocol ?: "unknown"}"
+        )
+    }
+
+    override fun connectFailed(
+        call: Call,
+        inetSocketAddress: InetSocketAddress,
+        proxy: Proxy,
+        protocol: Protocol?,
+        ioe: IOException
+    ) {
+        logFailure(
+            "connectFailed",
+            ioe,
+            "target=${formatSocketAddress(inetSocketAddress)}, proxy=${proxy.type()}, protocol=${protocol ?: "unknown"}"
+        )
+    }
+
+    override fun connectionAcquired(call: Call, connection: Connection) {
+        val route = runCatching { formatSocketAddress(connection.route().socketAddress) }.getOrDefault("unknown")
+        log("connectionAcquired", "route=$route, protocol=${connection.protocol()}")
+    }
+
+    override fun connectionReleased(call: Call, connection: Connection) {
+        val route = runCatching { formatSocketAddress(connection.route().socketAddress) }.getOrDefault("unknown")
+        log("connectionReleased", "route=$route, protocol=${connection.protocol()}")
+    }
+
+    override fun requestHeadersStart(call: Call) {
+        log("requestHeadersStart")
+    }
+
+    override fun requestHeadersEnd(call: Call, request: Request) {
+        log("requestHeadersEnd", describeRequest(request))
+    }
+
+    override fun requestBodyStart(call: Call) {
+        log("requestBodyStart")
+    }
+
+    override fun requestBodyEnd(call: Call, byteCount: Long) {
+        log("requestBodyEnd", "bytes=$byteCount")
+    }
+
+    override fun responseHeadersStart(call: Call) {
+        log("responseHeadersStart")
+    }
+
+    override fun responseHeadersEnd(call: Call, response: Response) {
+        log("responseHeadersEnd", "code=${response.code}, message=${response.message}")
+    }
+
+    override fun responseBodyStart(call: Call) {
+        log("responseBodyStart")
+    }
+
+    override fun responseBodyEnd(call: Call, byteCount: Long) {
+        log("responseBodyEnd", "bytes=$byteCount")
+    }
+
+    override fun callEnd(call: Call) {
+        log("callEnd")
+    }
+
+    override fun callFailed(call: Call, ioe: IOException) {
+        logFailure("callFailed", ioe)
+    }
+}
+
 private object SharedHttpClient {
     val instance: OkHttpClient by lazy {
         UnsafeModelSsl.apply(
@@ -26,6 +203,7 @@ private object SharedHttpClient {
                 // Set long read/write timeouts for streaming responses.
                 .readTimeout(1000, TimeUnit.SECONDS)
                 .writeTimeout(1000, TimeUnit.SECONDS)
+                .eventListenerFactory(LlmNetworkEventListenerFactory)
                 // Use a connection pool to reuse connections, improving latency and reducing resource usage.
                 // Increased idle connections to 10 from the default of 5.
                 .connectionPool(ConnectionPool(10, 5, TimeUnit.MINUTES))

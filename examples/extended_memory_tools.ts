@@ -124,13 +124,30 @@ const ExtendedMemoryTools = (function () {
         data?: any;
     }
 
+    function resolveCallerCardId(): string | undefined {
+        if (typeof getCallerCardId !== 'function') {
+            return undefined;
+        }
+        const callerCardId = String(getCallerCardId() || '').trim();
+        return callerCardId || undefined;
+    }
+
     async function create_memory(params: { title: string; content: string; content_type?: string; source?: string; folder_path?: string; tags?: string }): Promise<ToolResponse> {
-        const result = await Tools.Memory.create(params.title, params.content, params.content_type, params.source, params.folder_path, params.tags);
+        const result = await Tools.Memory.create({
+            title: params.title,
+            content: params.content,
+            contentType: params.content_type,
+            source: params.source,
+            folderPath: params.folder_path,
+            tags: params.tags,
+            callerCardId: resolveCallerCardId(),
+        });
         return { success: typeof result === 'string' && result.length > 0, message: '记忆创建完成', data: result };
     }
 
     async function update_memory(params: { old_title: string; new_title?: string; content?: string; content_type?: string; source?: string; credibility?: number; importance?: number; folder_path?: string; tags?: string }): Promise<ToolResponse> {
-        const result = await Tools.Memory.update(params.old_title, {
+        const result = await Tools.Memory.update({
+            oldTitle: params.old_title,
             newTitle: params.new_title,
             content: params.content,
             contentType: params.content_type,
@@ -139,12 +156,16 @@ const ExtendedMemoryTools = (function () {
             importance: params.importance,
             folderPath: params.folder_path,
             tags: params.tags,
+            callerCardId: resolveCallerCardId(),
         });
         return { success: typeof result === 'string' && result.length > 0, message: '记忆更新完成', data: result };
     }
 
     async function delete_memory(params: { title: string }): Promise<ToolResponse> {
-        const result = await Tools.Memory.deleteMemory(params.title);
+        const result = await Tools.Memory.deleteMemory({
+            title: params.title,
+            callerCardId: resolveCallerCardId(),
+        });
         return { success: typeof result === 'string' && result.length > 0, message: '记忆删除完成', data: result };
     }
 
@@ -152,46 +173,61 @@ const ExtendedMemoryTools = (function () {
         const titles = params.titles
             ? params.titles.split(/[,\n|]/).map(s => s.trim()).filter(Boolean)
             : undefined;
-        const result = await Tools.Memory.move(params.target_folder_path, titles, params.source_folder_path);
+        const result = await Tools.Memory.move({
+            targetFolderPath: params.target_folder_path,
+            titles,
+            sourceFolderPath: params.source_folder_path,
+            callerCardId: resolveCallerCardId(),
+        });
         return { success: typeof result === 'string' && result.length > 0, message: '记忆移动完成', data: result };
     }
 
     async function link_memories(params: { source_title: string; target_title: string; link_type?: string; weight?: number; description?: string }): Promise<ToolResponse> {
-        const result = await Tools.Memory.link(params.source_title, params.target_title, params.link_type, params.weight, params.description);
+        const result = await Tools.Memory.link({
+            sourceTitle: params.source_title,
+            targetTitle: params.target_title,
+            linkType: params.link_type,
+            weight: params.weight,
+            description: params.description,
+            callerCardId: resolveCallerCardId(),
+        });
         return { success: !!result, message: '记忆链接创建完成', data: result };
     }
 
     async function query_memory_links(params: { link_id?: number; source_title?: string; target_title?: string; link_type?: string; limit?: number }): Promise<ToolResponse> {
-        const result = await Tools.Memory.queryLinks(
-            params.link_id,
-            params.source_title,
-            params.target_title,
-            params.link_type,
-            params.limit
-        );
+        const result = await Tools.Memory.queryLinks({
+            linkId: params.link_id,
+            sourceTitle: params.source_title,
+            targetTitle: params.target_title,
+            linkType: params.link_type,
+            limit: params.limit,
+            callerCardId: resolveCallerCardId(),
+        });
         return { success: !!result, message: '记忆链接查询完成', data: result };
     }
 
     async function update_memory_link(params: { link_id?: number; source_title?: string; target_title?: string; link_type?: string; new_link_type?: string; weight?: number; description?: string }): Promise<ToolResponse> {
-        const result = await Tools.Memory.updateLink(
-            params.link_id,
-            params.source_title,
-            params.target_title,
-            params.link_type,
-            params.new_link_type,
-            params.weight,
-            params.description
-        );
+        const result = await Tools.Memory.updateLink({
+            linkId: params.link_id,
+            sourceTitle: params.source_title,
+            targetTitle: params.target_title,
+            linkType: params.link_type,
+            newLinkType: params.new_link_type,
+            weight: params.weight,
+            description: params.description,
+            callerCardId: resolveCallerCardId(),
+        });
         return { success: !!result, message: '记忆链接更新完成', data: result };
     }
 
     async function delete_memory_link(params: { link_id?: number; source_title?: string; target_title?: string; link_type?: string }): Promise<ToolResponse> {
-        const result = await Tools.Memory.deleteLink(
-            params.link_id,
-            params.source_title,
-            params.target_title,
-            params.link_type
-        );
+        const result = await Tools.Memory.deleteLink({
+            linkId: params.link_id,
+            sourceTitle: params.source_title,
+            targetTitle: params.target_title,
+            linkType: params.link_type,
+            callerCardId: resolveCallerCardId(),
+        });
         return { success: typeof result === 'string' ? result.length > 0 : !!result, message: '记忆链接删除完成', data: result };
     }
 

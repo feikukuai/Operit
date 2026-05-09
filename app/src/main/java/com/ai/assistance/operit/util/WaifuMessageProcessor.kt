@@ -16,10 +16,17 @@ import java.io.File
  * 负责将AI回复按句号分割并模拟逐句发送
  */
 object WaifuMessageProcessor {
+    private const val URL_CHARS = "[A-Za-z0-9._~:/?#\\[\\]@!$&'()*+,;=%-]"
     private val SENTENCE_SPLIT_REGEX =
         Regex("(?<=[。！？~～])|(?<=[!?])|(?<=\\.)(?![.\\d])|(?<=\\.)$|(?<=\\.{3})|(?<=[…](?![…]))")
     private val SENTENCE_END_REGEX =
         Regex("(?:[。！？~～.!?…]|\\.{3})\\s*$")
+    private val HORIZONTAL_RULE_REGEX = Regex("^[-_*]{3,}$")
+    private val MARKDOWN_ENTITY_REGEX = Regex("""!?\[[^\]]*?\]\([^)]*?\)""")
+    private val BARE_URL_REGEX = Regex("""https?://$URL_CHARS+""")
+    private val EMAIL_ADDRESS_REGEX = Regex("""[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}""")
+    private val DOMAIN_URL_REGEX =
+        Regex("""(?<![@\w])(?:www\.)?(?:[A-Za-z0-9-]+\.)+[A-Za-z]{2,}(?::\d+)?(?:[/?#]$URL_CHARS*)?""")
     
     private var customEmojiRepository: CustomEmojiRepository? = null
     private var activePromptManager: ActivePromptManager? = null
@@ -159,26 +166,51 @@ object WaifuMessageProcessor {
     ): List<String> {
         if (content.isBlank()) return emptyList()
 
-        // 正则表达式，用于匹配Markdown的图片 ![]() 和链接 []()
-        val markdownEntityRegex = Regex("""!?\[[^\]]*?\]\([^)]*?\)""")
         val entities = mutableListOf<String>()
-        val placeholderPrefix = "{MDENTITY:"
+        val placeholderPrefix = "{WAIFUENTITY:"
         val placeholderSuffix = "}"
 
-        // 1. 将Markdown实体替换为占位符，以保护它们不被错误分割
-        var entityIndex = 0
-        val contentWithPlaceholders = markdownEntityRegex.replace(content) {
-            val placeholder = "$placeholderPrefix${entityIndex++}$placeholderSuffix"
-            entities.add(it.value)
-            placeholder
+        fun createPlaceholder(value: String): String {
+            val placeholder = "$placeholderPrefix${entities.size}$placeholderSuffix"
+            entities.add(value)
+            return placeholder
         }
+
+        fun protectMatches(source: String, regex: Regex): String =
+            regex.replace(source) { matchResult ->
+                val (protectedValue, trailingPunctuation) =
+                    splitTrailingProtectedText(matchResult.value)
+
+                if (protectedValue.isBlank()) {
+                    matchResult.value
+                } else {
+                    createPlaceholder(protectedValue) + trailingPunctuation
+                }
+            }
+
+        // 1. 将Markdown实体、URL和邮箱替换为占位符，以保护它们不被错误分割
+        var contentWithPlaceholders =
+            MARKDOWN_ENTITY_REGEX.replace(content) { createPlaceholder(it.value) }
+        contentWithPlaceholders = protectMatches(contentWithPlaceholders, BARE_URL_REGEX)
+        contentWithPlaceholders = protectMatches(contentWithPlaceholders, EMAIL_ADDRESS_REGEX)
+        contentWithPlaceholders = protectMatches(contentWithPlaceholders, DOMAIN_URL_REGEX)
         
         // 2. 首先分离表情包和文本内容（在处理占位符版本的内容上）
         val segments = splitIntoSegments(contentWithPlaceholders)
+        val hasFollowingVisibleSegment =
+            BooleanArray(segments.size).also { flags ->
+                var seenVisibleSegment = false
+                for (index in segments.indices.reversed()) {
+                    flags[index] = seenVisibleSegment
+                    if (segmentProducesOutput(segments[index])) {
+                        seenVisibleSegment = true
+                    }
+                }
+            }
 
         val resultWithPlaceholders = mutableListOf<String>()
 
-        for (segment in segments) {
+        for ((segmentIndex, segment) in segments.withIndex()) {
             if (segment.isProtected) {
                 val block = segment.content.trim('\n', '\r')
                 if (block.isNotBlank()) {
@@ -204,37 +236,22 @@ object WaifuMessageProcessor {
 
                 if (cleanedContent.isBlank()) continue
 
-                com.ai.assistance.operit.util.AppLogger.d(
-                    "WaifuMessageProcessor",
-                    "分割正则: $SENTENCE_SPLIT_REGEX"
-                )
-                com.ai.assistance.operit.util.AppLogger.d(
-                    "WaifuMessageProcessor",
-                    "待分割内容: '$cleanedContent'"
-                )
+                var sentences = splitPlainTextIntoSentences(cleanedContent, removePunctuation = removePunctuation)
 
-                var sentences =
-                    cleanedContent.split(SENTENCE_SPLIT_REGEX)
-                        .filter { it.isNotBlank() }
-                        .map { it.trim() }
-
-                if (!includeTrailingIncomplete && sentences.isNotEmpty() && !hasStableSentenceEnding(cleanedContent)) {
-                    sentences = sentences.dropLast(1)
+                if (shouldUseStructuredLineFallback(item, sentences)) {
+                    sentences = splitStructuredMarkdownLines(item, removePunctuation = removePunctuation)
                 }
 
-                // 如果需要移除标点符号，则处理每个句子
-                if (removePunctuation) {
-                    sentences =
-                        sentences
-                            .map { sentence ->
-                                // 移除句末标点，但保留省略号"..."
-                                if (sentence.endsWith("...")) {
-                                    sentence.trim()
-                                } else {
-                                    sentence.replace(Regex("[。！？.!?]+$"), "").trim()
-                                }
-                            }
-                            .filter { it.isNotBlank() }
+                if (
+                    !includeTrailingIncomplete &&
+                    sentences.isNotEmpty() &&
+                    !hasStableSentenceEnding(cleanedContent) &&
+                    !lineAllowsStableWithoutSentenceEnding(getLastVisibleLine(item)) &&
+                    !segment.canUseBlockBoundaryAsStableEnding(
+                        hasFollowingVisibleSegment = hasFollowingVisibleSegment[segmentIndex]
+                    )
+                ) {
+                    sentences = sentences.dropLast(1)
                 }
 
                 resultWithPlaceholders.addAll(sentences)
@@ -242,26 +259,7 @@ object WaifuMessageProcessor {
         }
         
         // 3.5. 合并仅包含标点符号的句子到前一句
-        val mergedResultWithPlaceholders = mutableListOf<String>()
-        if (resultWithPlaceholders.isNotEmpty()) {
-            mergedResultWithPlaceholders.add(resultWithPlaceholders[0])
-            for (i in 1 until resultWithPlaceholders.size) {
-                val currentSentence = resultWithPlaceholders[i]
-                val trimmedSentence = currentSentence.trim()
-                // 正则表达式匹配一个或多个结尾标点符号
-                if (trimmedSentence.isNotEmpty() && trimmedSentence.matches(Regex("^[。！？~～.!?…]+$"))) {
-                    val lastIndex = mergedResultWithPlaceholders.size - 1
-                    val lastSentence = mergedResultWithPlaceholders[lastIndex]
-                    if (!lastSentence.contains('\n') && !lastSentence.contains('\r')) {
-                        mergedResultWithPlaceholders[lastIndex] = lastSentence + currentSentence
-                    } else {
-                        mergedResultWithPlaceholders.add(currentSentence)
-                    }
-                } else {
-                    mergedResultWithPlaceholders.add(currentSentence)
-                }
-            }
-        }
+        val mergedResultWithPlaceholders = mergePunctuationOnlySegments(resultWithPlaceholders)
         
         // 4. 将占位符恢复为原始的Markdown实体
         val finalResult = mergedResultWithPlaceholders.map { sentence ->
@@ -286,13 +284,188 @@ object WaifuMessageProcessor {
             currentSentence
         }
 
-        com.ai.assistance.operit.util.AppLogger.d("WaifuMessageProcessor", "分割出${finalResult.size}个结果")
-        
         return finalResult
+    }
+
+    private fun splitTrailingProtectedText(value: String): Pair<String, String> {
+        if (value.isEmpty()) {
+            return "" to ""
+        }
+
+        var splitIndex = value.length
+        while (splitIndex > 0 && value[splitIndex - 1] in TRAILING_PROTECTED_TEXT_CHARS) {
+            splitIndex--
+        }
+
+        return value.substring(0, splitIndex) to value.substring(splitIndex)
+    }
+
+    private fun splitPlainTextIntoSentences(
+        cleanedContent: String,
+        removePunctuation: Boolean,
+    ): List<String> {
+        if (cleanedContent.isBlank()) {
+            return emptyList()
+        }
+
+        var sentences =
+            cleanedContent.split(SENTENCE_SPLIT_REGEX)
+                .filter { it.isNotBlank() }
+                .map { it.trim() }
+
+        if (removePunctuation) {
+            sentences =
+                sentences
+                    .map { sentence ->
+                        if (sentence.endsWith("...")) {
+                            sentence.trim()
+                        } else {
+                            sentence.replace(Regex("[。！？.!?]+$"), "").trim()
+                        }
+                    }
+                    .filter { it.isNotBlank() }
+        }
+
+        return sentences
+    }
+
+    private fun mergePunctuationOnlySegments(segments: List<String>): MutableList<String> {
+        val mergedSegments = mutableListOf<String>()
+        if (segments.isEmpty()) {
+            return mergedSegments
+        }
+
+        mergedSegments.add(segments[0])
+        for (i in 1 until segments.size) {
+            val currentSentence = segments[i]
+            val trimmedSentence = currentSentence.trim()
+            if (trimmedSentence.isNotEmpty() && trimmedSentence.matches(Regex("^[。！？~～.!?…]+$"))) {
+                val lastIndex = mergedSegments.size - 1
+                val lastSentence = mergedSegments[lastIndex]
+                if (!lastSentence.contains('\n') && !lastSentence.contains('\r')) {
+                    mergedSegments[lastIndex] = lastSentence + currentSentence
+                } else {
+                    mergedSegments.add(currentSentence)
+                }
+            } else {
+                mergedSegments.add(currentSentence)
+            }
+        }
+
+        return mergedSegments
+    }
+
+    private fun shouldUseStructuredLineFallback(
+        content: String,
+        sentences: List<String>,
+    ): Boolean {
+        if (sentences.size != 1) {
+            return false
+        }
+
+        val nonEmptyLines =
+            content.lineSequence()
+                .map { it.trim() }
+                .filter { it.isNotEmpty() }
+                .toList()
+
+        if (nonEmptyLines.size < 2) {
+            return false
+        }
+
+        return nonEmptyLines.any { line ->
+            isUrlOrEmailLine(cleanStructuredMarkdownLine(line))
+        }
+    }
+
+    private fun splitStructuredMarkdownLines(
+        content: String,
+        removePunctuation: Boolean,
+    ): List<String> {
+        val results = mutableListOf<String>()
+
+        content.lineSequence().forEach { rawLine ->
+            val trimmedLine = rawLine.trim()
+            if (trimmedLine.isEmpty() || HORIZONTAL_RULE_REGEX.matches(trimmedLine)) {
+                return@forEach
+            }
+
+            val cleanedLine = cleanStructuredMarkdownLine(trimmedLine)
+            if (cleanedLine.isBlank()) {
+                return@forEach
+            }
+
+            val lineContent = cleanContentForWaifu(cleanedLine)
+            results.addAll(splitPlainTextIntoSentences(lineContent, removePunctuation))
+        }
+
+        return mergePunctuationOnlySegments(results)
+    }
+
+    private fun cleanStructuredMarkdownLine(line: String): String =
+        line
+            .trim()
+            .replace(Regex("^#+\\s*"), "")
+            .replace(Regex("^>\\s*"), "")
+            .replace(Regex("^(?:[\\-*+]\\s+|\\d+\\.\\s+)"), "")
+            .replace(Regex("^\\*\\*(.+)\\*\\*$"), "$1")
+            .replace(Regex("^__(.+)__$"), "$1")
+            .replace(Regex("^~~(.+)~~$"), "$1")
+            .trim()
+
+    private fun getLastVisibleLine(content: String): String =
+        content.lineSequence()
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .lastOrNull()
+            ?: ""
+
+    private fun lineAllowsStableWithoutSentenceEnding(line: String): Boolean {
+        val trimmedLine = line.trim()
+        if (trimmedLine.isEmpty()) {
+            return false
+        }
+
+        if (
+            trimmedLine.startsWith("```") ||
+            trimmedLine.startsWith("|") ||
+            trimmedLine.startsWith("$$") ||
+            Regex("^(?:#+\\s*|>\\s*|[-*+]\\s+|\\d+\\.\\s+)").containsMatchIn(trimmedLine)
+        ) {
+            return true
+        }
+
+        return isUrlOrEmailLine(cleanStructuredMarkdownLine(trimmedLine))
+    }
+
+    private fun isUrlOrEmailLine(line: String): Boolean {
+        val trimmedLine = line.trim()
+        if (trimmedLine.isEmpty()) {
+            return false
+        }
+
+        return BARE_URL_REGEX.containsMatchIn(trimmedLine) ||
+            DOMAIN_URL_REGEX.containsMatchIn(trimmedLine) ||
+            EMAIL_ADDRESS_REGEX.containsMatchIn(trimmedLine)
     }
 
     private fun hasStableSentenceEnding(content: String): Boolean {
         return SENTENCE_END_REGEX.containsMatchIn(content.trimEnd())
+    }
+
+    private fun segmentProducesOutput(segment: Segment): Boolean {
+        if (segment.isProtected) {
+            return segment.content.trim('\n', '\r').isNotBlank()
+        }
+
+        val contentWithoutThinking = ChatUtils.removeThinkingContent(segment.content)
+        if (contentWithoutThinking.isBlank()) {
+            return false
+        }
+
+        return separateEmotionAndText(contentWithoutThinking).any { item ->
+            item.startsWith("![") || cleanContentForWaifu(item).isNotBlank()
+        }
     }
 
     fun buildRenderableContentForWaifu(content: String): String {
@@ -375,41 +548,29 @@ object WaifuMessageProcessor {
     
 
     
-    /**
-     * 根据字符数计算句子延迟时间
-     * @param characterCount 字符数
-     * @param baseDelayMs 基础延迟（毫秒/字符）
-     * @return 计算后的延迟时间（毫秒）
-     */
-    fun calculateSentenceDelay(characterCount: Int, baseDelayMs: Long): Long {
-        // 基础计算：字符数 * 基础延迟
-        val baseDelay = characterCount * baseDelayMs
-        
-        // 添加一些变化和限制：
-        // 1. 短句子（<5字符）最少延迟300ms
-        // 2. 长句子（>20字符）有上限3000ms
-        // 3. 添加一些随机变化（±20%）使延迟更自然
-        
-        val minDelay = 300L
-        val maxDelay = 3000L
-        
-        val adjustedDelay = when {
-            characterCount <= 5 -> minDelay
-            baseDelay > maxDelay -> maxDelay
-            else -> baseDelay
+    private data class Segment(
+        val content: String,
+        val isProtected: Boolean,
+        val blockType: MarkdownProcessorType,
+    ) {
+        fun canUseBlockBoundaryAsStableEnding(hasFollowingVisibleSegment: Boolean): Boolean {
+            return hasFollowingVisibleSegment || blockType != MarkdownProcessorType.PLAIN_TEXT
         }
-        
-        // 添加±20%的随机变化
-        val variance = (adjustedDelay * 0.2).toLong()
-        val randomAdjustment = (-variance..variance).random()
-        
-        return (adjustedDelay + randomAdjustment).coerceAtLeast(minDelay)
     }
-    
-    private data class Segment(val content: String, val isProtected: Boolean)
+
+    private val TRAILING_PROTECTED_TEXT_CHARS =
+        setOf('。', '！', '？', '.', '!', '?', '…', '，', ',', '；', ';', '：', ':', ')', '）', ']', '】', '}', '」', '"', '\'')
 
     private fun splitIntoSegments(content: String): List<Segment> {
-        if (content.isEmpty()) return listOf(Segment(content = "", isProtected = false))
+        if (content.isEmpty()) {
+            return listOf(
+                Segment(
+                    content = "",
+                    isProtected = false,
+                    blockType = MarkdownProcessorType.PLAIN_TEXT,
+                )
+            )
+        }
 
         val segments = mutableListOf<Segment>()
 
@@ -430,55 +591,17 @@ object WaifuMessageProcessor {
                             else -> false
                         }
 
-                    segments.add(Segment(content = block, isProtected = isProtected))
+                    segments.add(
+                        Segment(
+                            content = block,
+                            isProtected = isProtected,
+                            blockType = blockType,
+                        )
+                    )
                 }
         }
 
         return segments
-    }
-    
-    /**
-     * 检查内容是否适合进行分句处理
-     * @param content 消息内容
-     * @return 是否适合分句
-     */
-    fun shouldSplitMessage(content: String): Boolean {
-        if (content.isBlank()) return false
-
-        val renderableContent = buildRenderableContentForWaifu(content)
-        val segments = splitIntoSegments(renderableContent)
-        val protectedCount = segments.count { it.isProtected && it.content.isNotBlank() }
-        if (protectedCount > 0) {
-            val hasUnprotected = segments.any { !it.isProtected && it.content.isNotBlank() }
-            if (protectedCount > 1 || hasUnprotected) return true
-            return false
-        }
-        
-        // 检查是否包含表情包标签
-        val hasEmotionTags = renderableContent.contains(Regex("<emotion[^>]*>.*?</emotion>"))
-        
-        // 首先清理内容
-        val cleanedContent = cleanContentForWaifu(renderableContent)
-        if (cleanedContent.isBlank()) return false
-        
-        // 检查是否包含句号、问号、感叹号、波浪号或省略号（与splitMessageBySentences保持一致）
-        val hasSentenceEnders = cleanedContent.contains(Regex("[。！？.!?~～…]|\\Q...\\E"))
-        
-        // 检查内容长度是否足够长（至少10个字符）
-        val isLongEnough = cleanedContent.length >= 10
-        
-        // 检查是否包含多个句子 (这里不考虑标点符号移除，因为是判断是否需要分句)
-        val sentences = splitMessageBySentences(renderableContent, removePunctuation = false)
-        val hasMultipleSentences = sentences.size > 1
-        
-        // 如果有表情包标签，或者满足其他条件，就进行分句处理
-        val shouldSplit = hasEmotionTags || (hasSentenceEnders && isLongEnough && hasMultipleSentences)
-        
-        // 添加调试日志
-        com.ai.assistance.operit.util.AppLogger.d("WaifuMessageProcessor", 
-            "shouldSplitMessage - 包含表情包: $hasEmotionTags, 句子数: ${sentences.size}, 结果: $shouldSplit")
-        
-        return shouldSplit
     }
     
     /**
@@ -569,7 +692,6 @@ object WaifuMessageProcessor {
             result.add(content)
         }
         
-        com.ai.assistance.operit.util.AppLogger.d("WaifuMessageProcessor", "分离表情包和文本: ${result.size}个元素")
         return result
     }
     
@@ -591,7 +713,6 @@ object WaifuMessageProcessor {
                             val randomEmoji = emojis.random()
                             val file = repo.getEmojiFile(activePrompt, randomEmoji)
                             if (file.exists()) {
-                                com.ai.assistance.operit.util.AppLogger.d("WaifuMessageProcessor", "使用自定义表情: ${file.absolutePath}")
                                 return@runBlocking file.absolutePath
                             }
                         }

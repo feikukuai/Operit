@@ -12,9 +12,7 @@ import com.ai.assistance.operit.data.model.ToolInvocation
 import com.ai.assistance.operit.data.model.ToolResult
 import com.ai.assistance.operit.core.tools.packTool.PackageManager
 import com.ai.assistance.operit.util.stream.StreamCollector
-import com.ai.assistance.operit.data.model.CharacterCardMemoryProfileBindingMode
 import com.ai.assistance.operit.data.preferences.CharacterCardToolAccessResolver
-import com.ai.assistance.operit.data.preferences.CharacterCardManager
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.asContextElement
@@ -47,7 +45,6 @@ object ToolExecutionManager {
 
     data class ToolRuntimeContext(
         val callerCardId: String? = null,
-        val memoryProfileId: String? = null,
         val toolExposureMode: ToolExposureMode = ToolExposureMode.FULL
     )
 
@@ -266,28 +263,6 @@ object ToolExecutionManager {
             usePackageSourceName = usePackageSourceName,
             roleCardToolAccess = roleCardToolAccess
         )
-    }
-
-    private suspend fun resolveRoleCardMemoryProfileId(
-        context: Context,
-        callerCardId: String?
-    ): String? {
-        val resolvedCardId = callerCardId?.takeIf { it.isNotBlank() } ?: return null
-        val characterCard =
-            CharacterCardManager.getInstance(context).getCharacterCardFlow(resolvedCardId).first()
-        val bindingMode =
-            CharacterCardMemoryProfileBindingMode.normalize(
-                characterCard.memoryProfileBindingMode
-            )
-        val boundProfileId = characterCard.memoryProfileId?.takeIf { it.isNotBlank() }
-        return if (
-            bindingMode == CharacterCardMemoryProfileBindingMode.FIXED_PROFILE &&
-            boundProfileId != null
-        ) {
-            boundProfileId
-        } else {
-            null
-        }
     }
 
     private fun resolveProxyParameters(tool: AITool): List<ToolParameter> {
@@ -547,7 +522,6 @@ object ToolExecutionManager {
         val toolRuntimeContext =
             ToolRuntimeContext(
                 callerCardId = callerCardId,
-                memoryProfileId = resolveRoleCardMemoryProfileId(context, callerCardId),
                 toolExposureMode = toolExposureMode
             )
 

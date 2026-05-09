@@ -163,6 +163,20 @@ export namespace ToolPkg {
         metadata?: JsonObject;
     }
 
+    export type ActivePromptType =
+        | "character_card"
+        | "character_group";
+
+    export interface ActivePromptSnapshot extends JsonObject {
+        type: ActivePromptType;
+        id: string;
+        name: string;
+    }
+
+    export interface HookMetadata extends JsonObject {
+        activePrompt?: ActivePromptSnapshot;
+    }
+
     export interface ToolLifecycleEventPayload extends JsonObject {
         toolName: string;
         parameters?: { [key: string]: string };
@@ -182,7 +196,7 @@ export namespace ToolPkg {
         preparedHistory?: PromptTurn[];
         systemPrompt?: string;
         toolPrompt?: string;
-        metadata?: JsonObject;
+        metadata?: HookMetadata;
     }
 
     export interface SummaryHookObjectResult extends JsonObject {
@@ -191,7 +205,7 @@ export namespace ToolPkg {
         systemPrompt?: string;
         summaryPrompt?: string;
         summaryResult?: string;
-        metadata?: JsonObject;
+        metadata?: HookMetadata;
     }
 
     export interface PromptHookEventPayload extends JsonObject {
@@ -208,7 +222,7 @@ export namespace ToolPkg {
         toolPrompt?: string;
         modelParameters?: JsonObject[];
         availableTools?: JsonObject[];
-        metadata?: JsonObject;
+        metadata?: HookMetadata;
     }
 
     export interface SummaryGenerateEventPayload extends JsonObject {
@@ -222,7 +236,7 @@ export namespace ToolPkg {
         summaryPrompt?: string;
         summaryResult?: string;
         modelParameters?: JsonObject[];
-        metadata?: JsonObject;
+        metadata?: HookMetadata;
     }
 
     export type ToolLifecycleHookReturn = void | Promise<void>;

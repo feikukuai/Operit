@@ -9,9 +9,11 @@ import com.ai.assistance.operit.core.tools.MemoryLinkQueryResultData
 import com.ai.assistance.operit.core.tools.StringResultData
 import com.ai.assistance.operit.core.tools.ToolExecutor
 import com.ai.assistance.operit.data.model.AITool
+import com.ai.assistance.operit.data.model.CharacterCardMemoryProfileBindingMode
 import com.ai.assistance.operit.data.model.Memory
 import com.ai.assistance.operit.data.model.ToolResult
 import com.ai.assistance.operit.data.model.ToolValidationResult
+import com.ai.assistance.operit.data.preferences.CharacterCardManager
 import com.ai.assistance.operit.data.preferences.MemorySearchSettingsPreferences
 import com.ai.assistance.operit.data.repository.MemoryRepository
 import kotlinx.coroutines.flow.first
@@ -51,24 +53,48 @@ class MemoryQueryToolExecutor(private val context: Context) : ToolExecutor {
         return kotlinx.coroutines.runBlocking { preferencesManager.activeProfileIdFlow.first() }
     }
 
-    private fun resolveActiveProfileId(): String {
+    private fun resolveCallerCardId(tool: AITool): String? {
+        val explicitCallerCardId =
+            tool.parameters
+                .find { it.name == "caller_card_id" }
+                ?.value
+                ?.trim()
+                ?.takeIf { it.isNotBlank() }
+        if (explicitCallerCardId != null) {
+            return explicitCallerCardId
+        }
         return ToolExecutionManager.currentToolRuntimeContext()
-            ?.memoryProfileId
+            ?.callerCardId
+            ?.trim()
             ?.takeIf { it.isNotBlank() }
+    }
+
+    private suspend fun resolveRoleCardProfileId(callerCardId: String?): String? {
+        val resolvedCardId = callerCardId?.takeIf { it.isNotBlank() } ?: return null
+        val characterCard = CharacterCardManager.getInstance(context).getCharacterCard(resolvedCardId)
+        val bindingMode =
+            CharacterCardMemoryProfileBindingMode.normalize(characterCard.memoryProfileBindingMode)
+        val boundProfileId = characterCard.memoryProfileId?.takeIf { it.isNotBlank() }
+        return if (
+            bindingMode == CharacterCardMemoryProfileBindingMode.FIXED_PROFILE &&
+            boundProfileId != null
+        ) {
+            boundProfileId
+        } else {
+            null
+        }
+    }
+
+    private suspend fun resolveActiveProfileId(tool: AITool): String {
+        return resolveRoleCardProfileId(resolveCallerCardId(tool))
             ?: resolveGlobalActiveProfileId()
     }
 
-    private val memoryRepository: MemoryRepository
-        get() {
-            val profileId = resolveActiveProfileId()
-            return memoryRepositories.computeIfAbsent(profileId) { MemoryRepository(context, it) }
-        }
+    private fun getMemoryRepository(profileId: String): MemoryRepository =
+        memoryRepositories.computeIfAbsent(profileId) { MemoryRepository(context, it) }
 
-    private val memorySearchSettingsPreferences: MemorySearchSettingsPreferences
-        get() {
-            val profileId = resolveActiveProfileId()
-            return settingsRepositories.computeIfAbsent(profileId) { MemorySearchSettingsPreferences(context, it) }
-        }
+    private fun getMemorySearchSettingsPreferences(profileId: String): MemorySearchSettingsPreferences =
+        settingsRepositories.computeIfAbsent(profileId) { MemorySearchSettingsPreferences(context, it) }
 
     private fun getQuerySnapshotStore(profileId: String): ConcurrentHashMap<String, QuerySnapshotState> {
         return querySnapshotsByProfile.computeIfAbsent(profileId) { ConcurrentHashMap() }
@@ -183,10 +209,11 @@ class MemoryQueryToolExecutor(private val context: Context) : ToolExecutor {
     }
 
     private suspend fun executeQueryMemory(tool: AITool): ToolResult {
-        val profileId = resolveActiveProfileId()
+        val profileId = resolveActiveProfileId(tool)
+        val memoryRepository = getMemoryRepository(profileId)
         val query = tool.parameters.find { it.name == "query" }?.value ?: ""
         val folderPath = tool.parameters.find { it.name == "folder_path" }?.value
-        val settings = memorySearchSettingsPreferences.load()
+        val settings = getMemorySearchSettingsPreferences(profileId).load()
         val limitParam = tool.parameters.find { it.name == "limit" }?.value
         val limit = limitParam?.toIntOrNull()
         val startTimeParam = tool.parameters.find { it.name == "start_time" }?.value
@@ -292,6 +319,7 @@ class MemoryQueryToolExecutor(private val context: Context) : ToolExecutor {
             }
 
             val formattedResult = buildResultData(
+                memoryRepository = memoryRepository,
                 memories = returnedMemories,
                 query = query,
                 limit = validLimit,
@@ -308,6 +336,8 @@ class MemoryQueryToolExecutor(private val context: Context) : ToolExecutor {
     }
 
     private suspend fun executeGetMemoryByTitle(tool: AITool): ToolResult {
+        val profileId = resolveActiveProfileId(tool)
+        val memoryRepository = getMemoryRepository(profileId)
         val title = tool.parameters.find { it.name == "title" }?.value
         if (title.isNullOrBlank()) {
             return ToolResult(
@@ -339,11 +369,19 @@ class MemoryQueryToolExecutor(private val context: Context) : ToolExecutor {
 
             // 如果是文档节点且提供了分块参数，则进行特殊处理
             if (memory.isDocumentNode && (chunkIndexParam != null || chunkRangeParam != null || queryParam != null)) {
-                return handleDocumentChunkRetrieval(tool.name, memory, chunkIndexParam, chunkRangeParam, queryParam, chunkLimitParam)
+                return handleDocumentChunkRetrieval(
+                    toolName = tool.name,
+                    memoryRepository = memoryRepository,
+                    memory = memory,
+                    chunkIndexParam = chunkIndexParam,
+                    chunkRangeParam = chunkRangeParam,
+                    queryParam = queryParam,
+                    limitParam = chunkLimitParam
+                )
             }
 
             // 默认行为：返回完整记忆
-            val formattedResult = buildResultData(listOf(memory), title, 1)
+            val formattedResult = buildResultData(memoryRepository, listOf(memory), title, 1)
             AppLogger.d(TAG, "Found memory by title '$title':\n$formattedResult")
             ToolResult(
                 toolName = tool.name,
@@ -363,6 +401,7 @@ class MemoryQueryToolExecutor(private val context: Context) : ToolExecutor {
 
     private suspend fun handleDocumentChunkRetrieval(
         toolName: String,
+        memoryRepository: MemoryRepository,
         memory: Memory,
         chunkIndexParam: String?,
         chunkRangeParam: String?,
@@ -473,6 +512,7 @@ class MemoryQueryToolExecutor(private val context: Context) : ToolExecutor {
     }
 
     private suspend fun executeCreateMemory(tool: AITool): ToolResult {
+        val memoryRepository = getMemoryRepository(resolveActiveProfileId(tool))
         val title = tool.parameters.find { it.name == "title" }?.value ?: ""
         val content = tool.parameters.find { it.name == "content" }?.value ?: ""
         
@@ -535,6 +575,7 @@ class MemoryQueryToolExecutor(private val context: Context) : ToolExecutor {
     }
 
     private suspend fun executeUpdateMemory(tool: AITool): ToolResult {
+        val memoryRepository = getMemoryRepository(resolveActiveProfileId(tool))
         val oldTitle = tool.parameters.find { it.name == "old_title" }?.value
         
         if (oldTitle.isNullOrBlank()) {
@@ -610,6 +651,7 @@ class MemoryQueryToolExecutor(private val context: Context) : ToolExecutor {
     }
 
     private suspend fun executeDeleteMemory(tool: AITool): ToolResult {
+        val memoryRepository = getMemoryRepository(resolveActiveProfileId(tool))
         val title = tool.parameters.find { it.name == "title" }?.value
         
         if (title.isNullOrBlank()) {
@@ -664,6 +706,7 @@ class MemoryQueryToolExecutor(private val context: Context) : ToolExecutor {
     }
 
     private suspend fun executeUpdateUserPreferences(tool: AITool): ToolResult {
+        val profileId = resolveActiveProfileId(tool)
         AppLogger.d(TAG, "Executing update user preferences")
 
         return try {
@@ -689,7 +732,7 @@ class MemoryQueryToolExecutor(private val context: Context) : ToolExecutor {
             // 更新用户偏好
             withContext(Dispatchers.IO) {
                 preferencesManager.updateProfileCategory(
-                    profileId = resolveActiveProfileId(),
+                    profileId = profileId,
                     birthDate = birthDate,
                     gender = gender,
                     personality = personality,
@@ -727,6 +770,7 @@ class MemoryQueryToolExecutor(private val context: Context) : ToolExecutor {
     }
 
     private suspend fun executeLinkMemories(tool: AITool): ToolResult {
+        val memoryRepository = getMemoryRepository(resolveActiveProfileId(tool))
         val sourceTitle = tool.parameters.find { it.name == "source_title" }?.value
         val targetTitle = tool.parameters.find { it.name == "target_title" }?.value
         
@@ -807,6 +851,7 @@ class MemoryQueryToolExecutor(private val context: Context) : ToolExecutor {
     }
 
     private suspend fun executeQueryMemoryLinks(tool: AITool): ToolResult {
+        val memoryRepository = getMemoryRepository(resolveActiveProfileId(tool))
         val linkIdRaw = tool.parameters.find { it.name == "link_id" }?.value
         val linkId = linkIdRaw?.toLongOrNull()
         if (!linkIdRaw.isNullOrBlank() && linkId == null) {
@@ -901,6 +946,7 @@ class MemoryQueryToolExecutor(private val context: Context) : ToolExecutor {
     }
 
     private suspend fun executeMoveMemory(tool: AITool): ToolResult {
+        val memoryRepository = getMemoryRepository(resolveActiveProfileId(tool))
         val targetFolderPath = tool.parameters.find { it.name == "target_folder_path" }?.value
         val sourceFolderPath = tool.parameters.find { it.name == "source_folder_path" }?.value
         val hasSourceFolderParam = tool.parameters.any { it.name == "source_folder_path" }
@@ -1001,6 +1047,7 @@ class MemoryQueryToolExecutor(private val context: Context) : ToolExecutor {
     }
 
     private suspend fun executeUpdateMemoryLink(tool: AITool): ToolResult {
+        val memoryRepository = getMemoryRepository(resolveActiveProfileId(tool))
         val linkId = tool.parameters.find { it.name == "link_id" }?.value?.toLongOrNull()
         val sourceTitle = tool.parameters.find { it.name == "source_title" }?.value
         val targetTitle = tool.parameters.find { it.name == "target_title" }?.value
@@ -1117,6 +1164,7 @@ class MemoryQueryToolExecutor(private val context: Context) : ToolExecutor {
     }
 
     private suspend fun executeDeleteMemoryLink(tool: AITool): ToolResult {
+        val memoryRepository = getMemoryRepository(resolveActiveProfileId(tool))
         val linkId = tool.parameters.find { it.name == "link_id" }?.value?.toLongOrNull()
         val sourceTitle = tool.parameters.find { it.name == "source_title" }?.value
         val targetTitle = tool.parameters.find { it.name == "target_title" }?.value
@@ -1203,6 +1251,7 @@ class MemoryQueryToolExecutor(private val context: Context) : ToolExecutor {
     }
 
     private suspend fun buildResultData(
+        memoryRepository: MemoryRepository,
         memories: List<Memory>,
         query: String,
         limit: Int,

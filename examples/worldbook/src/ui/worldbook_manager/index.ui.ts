@@ -1,44 +1,18 @@
 import { resolveWorldBookI18n, type WorldBookI18n } from "../../i18n";
+import {
+  createWorldBookEntry,
+  deleteWorldBookEntry,
+  getWorldBookEntry,
+  listWorldBookCharacterCards,
+  listWorldBookEntries,
+  toggleWorldBookEntry,
+  updateWorldBookEntry,
+  type CharacterCardOption,
+  type WorldBookEntry,
+  type WorldBookListEntry,
+  type WorldBookMutationParams
+} from "../../shared/worldbook_service.js";
 import type { ComposeColor, ComposeDslContext, ComposeNode } from "../../../../types/compose-dsl";
-
-interface WorldBookListEntry {
-  id: string;
-  name: string;
-  enabled: boolean;
-  always_active?: boolean;
-  priority?: number;
-  keywords?: string[];
-  is_regex?: boolean;
-  scan_depth?: number;
-  inject_target?: "system" | "user";
-  character_card_id?: string;
-}
-
-interface WorldBookDetailEntry extends WorldBookListEntry {
-  content?: string;
-  case_sensitive?: boolean;
-}
-
-interface CharacterCardOption {
-  id: string;
-  name: string;
-  description?: string;
-  isDefault?: boolean;
-}
-
-function parseToolResult<T>(value: unknown): T | null {
-  if (!value) {
-    return null;
-  }
-  if (typeof value === "string") {
-    try {
-      return JSON.parse(value) as T;
-    } catch (_error) {
-      return null;
-    }
-  }
-  return value as T;
-}
 
 function resolveText(): WorldBookI18n {
   const rawLocale = getLang();
@@ -73,6 +47,7 @@ export default function Screen(ctx: ComposeDslContext): ComposeNode {
     "availableCards",
     []
   );
+  const [hasLoadedCards, setHasLoadedCards] = ctx.useState("hasLoadedCards", false);
 
   const t = resolveText();
   const colors = ctx.MaterialTheme.colorScheme;
@@ -93,18 +68,12 @@ export default function Screen(ctx: ComposeDslContext): ComposeNode {
     setFormCharacterCardId("");
     setShowCardPicker(false);
     setLoadingCards(false);
-    setAvailableCards([]);
   }
 
   async function loadEntries() {
     setLoading(true);
     try {
-      const result = parseToolResult<{ success?: boolean; entries?: WorldBookListEntry[] }>(
-        await ctx.callTool("worldbook_tools:list_entries", {})
-      );
-      if (result?.success) {
-        setEntries(result.entries || []);
-      }
+      setEntries(await listWorldBookEntries());
     } catch (error) {
       ctx.showToast(`${t.toastLoadFailedPrefix}${String(error)}`);
     } finally {
@@ -113,9 +82,51 @@ export default function Screen(ctx: ComposeDslContext): ComposeNode {
     }
   }
 
+  async function queryCharacterCards(
+    showErrorToast: boolean
+  ): Promise<{ success: boolean; cards: CharacterCardOption[] }> {
+    try {
+      const cards = await listWorldBookCharacterCards();
+      setAvailableCards(cards);
+      setHasLoadedCards(true);
+      return { success: true, cards };
+    } catch (error) {
+      if (showErrorToast) {
+        ctx.showToast(`${t.toastRoleCardLoadFailedPrefix}${String(error)}`);
+      }
+    }
+
+    return { success: false, cards: [] };
+  }
+
+  async function ensureCharacterCardsLoaded(showErrorToast: boolean): Promise<CharacterCardOption[]> {
+    if (hasLoadedCards) {
+      return availableCards;
+    }
+    const result = await queryCharacterCards(showErrorToast);
+    return result.cards;
+  }
+
+  function findCharacterCard(cardId: string): CharacterCardOption | null {
+    const targetId = String(cardId || "").trim();
+    if (!targetId) {
+      return null;
+    }
+    return availableCards.find((card) => String(card.id || "").trim() === targetId) || null;
+  }
+
+  function resolveCharacterCardName(cardId: string): string {
+    const matchedCard = findCharacterCard(cardId);
+    return String(matchedCard?.name || "").trim();
+  }
+
+  function getCharacterCardLabel(cardId: string): string {
+    return resolveCharacterCardName(cardId) || t.dropdownBoundCard;
+  }
+
   async function doToggle(id: string) {
     try {
-      await ctx.callTool("worldbook_tools:toggle_entry", { id });
+      await toggleWorldBookEntry(id);
       ctx.showToast(t.toastToggleDone);
       await loadEntries();
     } catch (error) {
@@ -125,7 +136,7 @@ export default function Screen(ctx: ComposeDslContext): ComposeNode {
 
   async function doDelete(id: string, name: string) {
     try {
-      await ctx.callTool("worldbook_tools:delete_entry", { id });
+      await deleteWorldBookEntry(id);
       ctx.showToast(`${t.toastDeletedPrefix}${name}`);
       await loadEntries();
     } catch (error) {
@@ -135,28 +146,25 @@ export default function Screen(ctx: ComposeDslContext): ComposeNode {
 
   async function doEdit(id: string) {
     try {
-      const result = parseToolResult<{ success?: boolean; entry?: WorldBookDetailEntry }>(
-        await ctx.callTool("worldbook_tools:get_entry", { id })
-      );
-      if (result?.success && result.entry) {
-        const entry = result.entry;
-        setEditId(entry.id);
-        setFormName(entry.name || "");
-        setFormContent(entry.content || "");
-        setFormKeywords((entry.keywords || []).join("，"));
-        setFormIsRegex(entry.is_regex === true);
-        setFormCaseSensitive(entry.case_sensitive === true);
-        setFormAlwaysActive(entry.always_active === true);
-        setFormEnabled(entry.enabled !== false);
-        setFormPriority(String(entry.priority ?? 50));
-        setFormScanDepth(String(entry.scan_depth ?? 0));
-        setFormInjectTarget(entry.inject_target || "system");
-        setFormCharacterCardId(entry.character_card_id || "");
-        setShowCardPicker(false);
-        setLoadingCards(false);
-        setAvailableCards([]);
-        setView("edit");
+      const entry = await getWorldBookEntry(id);
+      setEditId(entry.id);
+      setFormName(entry.name || "");
+      setFormContent(entry.content || "");
+      setFormKeywords((entry.keywords || []).join("，"));
+      setFormIsRegex(entry.is_regex === true);
+      setFormCaseSensitive(entry.case_sensitive === true);
+      setFormAlwaysActive(entry.always_active === true);
+      setFormEnabled(entry.enabled !== false);
+      setFormPriority(String(entry.priority ?? 50));
+      setFormScanDepth(String(entry.scan_depth ?? 0));
+      setFormInjectTarget(entry.inject_target || "system");
+      setFormCharacterCardId(entry.character_card_id || "");
+      setShowCardPicker(false);
+      setLoadingCards(false);
+      if (entry.character_card_id && !findCharacterCard(entry.character_card_id)) {
+        await ensureCharacterCardsLoaded(true);
       }
+      setView("edit");
     } catch (error) {
       ctx.showToast(`${t.toastLoadFailedPrefix}${String(error)}`);
     }
@@ -170,29 +178,15 @@ export default function Screen(ctx: ComposeDslContext): ComposeNode {
     }
 
     setShowCardPicker(true);
+    if (hasLoadedCards) {
+      setLoadingCards(false);
+      return;
+    }
+
     setLoadingCards(true);
-    try {
-      const result = parseToolResult<{
-        success?: boolean;
-        message?: string;
-        cards?: CharacterCardOption[];
-      }>(await ctx.callTool("worldbook_tools:list_character_cards_proxy", {}));
-
-      if (result?.success) {
-        const cards = Array.isArray(result.cards) ? result.cards : [];
-        setAvailableCards(cards);
-        setLoadingCards(false);
-        return;
-      }
-
-      ctx.showToast(result?.message || t.toastRoleCardLoadFailed);
-      setAvailableCards([]);
-      setLoadingCards(false);
-      setShowCardPicker(false);
-    } catch (error) {
-      ctx.showToast(`${t.toastRoleCardLoadFailedPrefix}${String(error)}`);
-      setAvailableCards([]);
-      setLoadingCards(false);
+    const result = await queryCharacterCards(true);
+    setLoadingCards(false);
+    if (!result.success) {
       setShowCardPicker(false);
     }
   }
@@ -213,11 +207,7 @@ export default function Screen(ctx: ComposeDslContext): ComposeNode {
     if (!formCharacterCardId) {
       return t.dropdownNoCharacterCard;
     }
-    const matchedCard = availableCards.find((card) => card.id === formCharacterCardId);
-    if (matchedCard?.name) {
-      return matchedCard.name;
-    }
-    return formCharacterCardId;
+    return getCharacterCardLabel(formCharacterCardId);
   }
 
   function toggleCardPicker() {
@@ -240,8 +230,7 @@ export default function Screen(ctx: ComposeDslContext): ComposeNode {
     }
 
     const isEdit = view === "edit" && !!editId;
-    const action = isEdit ? "worldbook_tools:update_entry" : "worldbook_tools:create_entry";
-    const payload: Record<string, unknown> = {
+    const payload: WorldBookMutationParams = {
       name: formName.trim(),
       content: formContent.trim(),
       keywords: formKeywords.trim(),
@@ -260,17 +249,15 @@ export default function Screen(ctx: ComposeDslContext): ComposeNode {
     }
 
     try {
-      const result = parseToolResult<{ success?: boolean; message?: string }>(
-        await ctx.callTool(action, payload)
-      );
-      if (result?.success) {
-        ctx.showToast(isEdit ? t.toastUpdated : t.toastCreated);
-        setView("list");
-        resetForm();
-        await loadEntries();
-        return;
+      if (isEdit) {
+        await updateWorldBookEntry(payload);
+      } else {
+        await createWorldBookEntry(payload);
       }
-      ctx.showToast(`${t.toastFailedPrefix}${result?.message || t.toastUnknownResult}`);
+      ctx.showToast(isEdit ? t.toastUpdated : t.toastCreated);
+      setView("list");
+      resetForm();
+      await loadEntries();
     } catch (error) {
       ctx.showToast(`${t.toastSaveFailedPrefix}${String(error)}`);
     }
@@ -359,6 +346,7 @@ export default function Screen(ctx: ComposeDslContext): ComposeNode {
   function renderCard(entry: WorldBookListEntry): ComposeNode {
     const keywordText =
       entry.keywords && entry.keywords.length > 0 ? entry.keywords.join("、") : t.keywordEmpty;
+    const characterCardName = resolveCharacterCardName(entry.character_card_id || "");
     const infoPills: ComposeNode[] = [
       renderTag(
         keywordText,
@@ -393,7 +381,7 @@ export default function Screen(ctx: ComposeDslContext): ComposeNode {
           ),
       entry.character_card_id
         ? renderTag(
-            t.tagCharacterCard(entry.character_card_id),
+            characterCardName ? t.tagCharacterCard(characterCardName) : t.dropdownBoundCard,
             colors.primaryContainer.copy({ alpha: 0.7 }),
             colors.onPrimaryContainer
           )
@@ -1128,7 +1116,10 @@ export default function Screen(ctx: ComposeDslContext): ComposeNode {
       spacing: 10,
       padding: { horizontal: 12, vertical: 8 },
       fillMaxSize: true,
-      onLoad: () => loadEntries()
+      onLoad: async () => {
+        await loadEntries();
+        await ensureCharacterCardsLoaded(false);
+      }
     },
     items
   );

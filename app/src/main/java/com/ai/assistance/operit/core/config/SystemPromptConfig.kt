@@ -87,6 +87,7 @@ PACKAGE SYSTEM
         chatModelHasDirectVideo: Boolean,
         safBookmarkNames: List<String>,
         toolVisibility: Map<String, Boolean>,
+        hookMetadata: Map<String, Any?> = emptyMap(),
         dispatchToolPromptComposeHooks: (PromptHookContext) -> PromptHookContext = PromptHookRegistry::dispatchToolPromptComposeHooks
     ): String {
         return SystemToolPrompts.generateToolsPromptEn(
@@ -99,6 +100,7 @@ PACKAGE SYSTEM
             chatModelHasDirectVideo = chatModelHasDirectVideo,
             safBookmarkNames = safBookmarkNames,
             toolVisibility = toolVisibility,
+            hookMetadata = hookMetadata,
             dispatchToolPromptComposeHooks = dispatchToolPromptComposeHooks
         )
     }
@@ -116,6 +118,7 @@ PACKAGE SYSTEM
         chatModelHasDirectVideo: Boolean,
         safBookmarkNames: List<String>,
         toolVisibility: Map<String, Boolean>,
+        hookMetadata: Map<String, Any?> = emptyMap(),
         dispatchToolPromptComposeHooks: (PromptHookContext) -> PromptHookContext = PromptHookRegistry::dispatchToolPromptComposeHooks
     ): String {
         return SystemToolPrompts.generateToolsPromptCn(
@@ -128,6 +131,7 @@ PACKAGE SYSTEM
             chatModelHasDirectVideo = chatModelHasDirectVideo,
             safBookmarkNames = safBookmarkNames,
             toolVisibility = toolVisibility,
+            hookMetadata = hookMetadata,
             dispatchToolPromptComposeHooks = dispatchToolPromptComposeHooks
         )
     }
@@ -255,6 +259,7 @@ AVAILABLE_TOOLS_SECTION""".trimIndent()
           allowedPackageNames: Set<String>? = null,
           allowedSkillNames: Set<String>? = null,
           allowedMcpServerNames: Set<String>? = null,
+          hookMetadata: Map<String, Any?> = emptyMap(),
           dispatchToolPromptComposeHooks: (PromptHookContext) -> PromptHookContext = PromptHookRegistry::dispatchToolPromptComposeHooks
   ): String {
     val enabledPackages = packageManager.getEnabledPackageNames()
@@ -371,6 +376,7 @@ AVAILABLE_TOOLS_SECTION""".trimIndent()
                 chatModelHasDirectVideo = chatModelHasDirectVideo,
                 safBookmarkNames = safBookmarkNames,
                 toolVisibility = toolVisibility,
+                hookMetadata = hookMetadata,
                 dispatchToolPromptComposeHooks = dispatchToolPromptComposeHooks
             )
     )
@@ -385,6 +391,7 @@ AVAILABLE_TOOLS_SECTION""".trimIndent()
                 chatModelHasDirectVideo = chatModelHasDirectVideo,
                 safBookmarkNames = safBookmarkNames,
                 toolVisibility = toolVisibility,
+                hookMetadata = hookMetadata,
                 dispatchToolPromptComposeHooks = dispatchToolPromptComposeHooks
             )
     )
@@ -565,6 +572,7 @@ AVAILABLE_TOOLS_SECTION""".trimIndent()
           enableGroupOrchestrationHint: Boolean = false,
           groupOrchestrationRoleName: String = "",
           groupParticipantNamesText: String = "",
+          hookMetadata: Map<String, Any?> = emptyMap(),
           dispatchSystemPromptComposeHooks: (PromptHookContext) -> PromptHookContext = PromptHookRegistry::dispatchSystemPromptComposeHooks,
           dispatchToolPromptComposeHooks: (PromptHookContext) -> PromptHookContext = PromptHookRegistry::dispatchToolPromptComposeHooks
   ): String {
@@ -596,7 +604,7 @@ AVAILABLE_TOOLS_SECTION""".trimIndent()
                         "enableGroupOrchestrationHint" to enableGroupOrchestrationHint,
                         "groupOrchestrationRoleName" to groupOrchestrationRoleName,
                         "groupParticipantNamesText" to groupParticipantNamesText
-                    )
+                    ) + hookMetadata
             )
         )
 
@@ -622,6 +630,7 @@ AVAILABLE_TOOLS_SECTION""".trimIndent()
             allowedPackageNames = allowedPackageNames,
             allowedSkillNames = allowedSkillNames,
             allowedMcpServerNames = allowedMcpServerNames,
+            hookMetadata = hookMetadata,
             dispatchToolPromptComposeHooks = dispatchToolPromptComposeHooks
         )
 

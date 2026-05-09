@@ -37,4 +37,5 @@ message_insert
 apktool
 remote_operit
 worldbook
+qqbot
 thinking_guidance
