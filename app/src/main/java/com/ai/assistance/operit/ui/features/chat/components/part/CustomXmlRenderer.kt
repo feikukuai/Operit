@@ -719,8 +719,11 @@ class CustomXmlRenderer(
                 )
             }
 
-        // 特殊处理 apply_file 工具
-        if (renderState.displayToolName == "apply_file") {
+        // 特殊处理文件编辑类工具
+        if (renderState.displayToolName == "apply_file" ||
+            renderState.displayToolName == "create_file" ||
+            renderState.displayToolName == "edit_file"
+        ) {
             if (renderState.isClosed) {
                 CompactToolDisplay(
                     toolName = renderState.rawToolName,
@@ -874,7 +877,10 @@ class CustomXmlRenderer(
         val toolName = renderState.toolName.ifBlank { stringResource(R.string.unknown_tool) }
 
         // 检查结果是否为 file-diff
-        if (toolName == "apply_file" && renderState.isSuccess && renderState.resultContent.contains("<file-diff")) {
+        if ((toolName == "apply_file" || toolName == "create_file" || toolName == "edit_file") &&
+            renderState.isSuccess &&
+            renderState.resultContent.contains("<file-diff")
+        ) {
             val (path, details, unescapedDiffContent) =
                 run {
                     val pathRegex = "<file-diff path=\"([^\"]+)\"".toRegex()

@@ -185,6 +185,10 @@ function buildToolSemanticDescription(toolName: string, params: string, useByteS
   return `工具调用: ${toolName}，调用参数: ${summary}`;
 }
 
+function isFileDiffTool(toolName: string) {
+  return toolName === 'apply_file' || toolName === 'create_file' || toolName === 'edit_file';
+}
+
 export function ToolDisplayComponent({ block }: { block: WebMessageContentBlock }) {
   const rawToolName = block.attrs?.name ?? 'tool';
   const rawParams = (block.content ?? '').trim();
@@ -195,7 +199,7 @@ export function ToolDisplayComponent({ block }: { block: WebMessageContentBlock 
   const isClosed = block.closed ?? true;
   const tokenEstimate = useMemo(() => estimateToolParamTokens(displayParams), [displayParams]);
   const useByteSummary =
-    (displayToolName === 'apply_file' && !isClosed) ||
+    (isFileDiffTool(displayToolName) && !isClosed) ||
     (!isClosed && tokenEstimate > TOOL_PARAM_TOKEN_THRESHOLD);
   const summary = useByteSummary
     ? `${calculateToolParamsBytes(displayParams)} B`

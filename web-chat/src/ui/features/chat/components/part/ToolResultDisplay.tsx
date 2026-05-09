@@ -46,6 +46,10 @@ function copyText(text: string) {
   void navigator.clipboard.writeText(text).catch(() => {});
 }
 
+function isFileDiffTool(toolName: string) {
+  return toolName === 'apply_file' || toolName === 'create_file' || toolName === 'edit_file';
+}
+
 function normalizeToolResult(block: WebMessageContentBlock) {
   const toolName = block.attrs?.name?.trim() || '未知工具';
   const status = (block.attrs?.status?.trim()?.toLowerCase() || 'success');
@@ -53,7 +57,7 @@ function normalizeToolResult(block: WebMessageContentBlock) {
   const rawResultContent = extractTaggedContent(outerContent, 'content') || outerContent.trim();
   const isSuccess = status === 'success';
   const fileDiff =
-    toolName === 'apply_file' && isSuccess && rawResultContent.includes('<file-diff')
+    isFileDiffTool(toolName) && isSuccess && rawResultContent.includes('<file-diff')
       ? extractFileDiff(rawResultContent)
       : null;
   const resultContent = isSuccess

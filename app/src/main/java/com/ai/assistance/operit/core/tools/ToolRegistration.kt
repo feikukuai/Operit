@@ -1937,6 +1937,28 @@ fun registerAllTools(handler: AIToolHandler, context: Context) {
                     }
     )
 
+    handler.registerTool(
+            name = "create_file",
+            descriptionGenerator = { tool ->
+                val path = tool.parameters.find { it.name == "path" }?.value ?: ""
+                val environment = tool.parameters.find { it.name == "environment" }?.value
+                val envInfo = formatEnvInfo(environment)
+                "Create file $path$envInfo"
+            },
+            executor = { tool -> runBlocking(Dispatchers.IO) { fileSystemTools.createFile(tool) } }
+    )
+
+    handler.registerTool(
+            name = "edit_file",
+            descriptionGenerator = { tool ->
+                val path = tool.parameters.find { it.name == "path" }?.value ?: ""
+                val environment = tool.parameters.find { it.name == "environment" }?.value
+                val envInfo = formatEnvInfo(environment)
+                "Edit file $path$envInfo"
+            },
+            executor = { tool -> runBlocking(Dispatchers.IO) { fileSystemTools.editFile(tool) } }
+    )
+
     // 压缩文件/目录
     handler.registerTool(
             name = "zip_files",

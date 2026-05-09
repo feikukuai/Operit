@@ -105,6 +105,16 @@ fun getJsToolsDefinition(): String {
                     if (environment) params.environment = environment;
                     return toolCall("apply_file", params);
                 },
+                create: (path, newContent, environment) => {
+                    const params = { path, new: newContent };
+                    if (environment) params.environment = environment;
+                    return toolCall("create_file", params);
+                },
+                edit: (path, oldContent, newContent, environment) => {
+                    const params = { path, old: oldContent, new: newContent };
+                    if (environment) params.environment = environment;
+                    return toolCall("edit_file", params);
+                },
                 zip: (source, destination, environment) => {
                     const params = { source, destination };
                     if (environment) params.environment = environment;

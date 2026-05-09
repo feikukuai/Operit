@@ -182,6 +182,23 @@ export namespace Files {
     function apply(path: string, type: ApplyFileType, old?: string, newContent?: string, environment?: FileEnvironment): Promise<FileApplyResultData>;
 
     /**
+     * Create a new file. Internally delegates to apply_file with type=create.
+     * @param path - Path to file
+     * @param newContent - Full file content
+     * @param environment - Execution environment ("android" or "linux"), default "android"
+     */
+    function create(path: string, newContent: string, environment?: FileEnvironment): Promise<FileApplyResultData>;
+
+    /**
+     * Edit an existing file. Internally delegates to apply_file with type=replace.
+     * @param path - Path to file
+     * @param oldContent - Exact content to match
+     * @param newContent - New content to insert
+     * @param environment - Execution environment ("android" or "linux"), default "android"
+     */
+    function edit(path: string, oldContent: string, newContent: string, environment?: FileEnvironment): Promise<FileApplyResultData>;
+
+    /**
      * Zip files/directories
      * @param source - Source path
      * @param destination - Destination path

@@ -44,7 +44,6 @@ import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.ScreenshotMonitor
-import androidx.compose.material.icons.filled.VideoCameraBack
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -68,12 +67,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
 import com.ai.assistance.operit.R
-import com.ai.assistance.operit.core.tools.AIToolHandler
-import com.ai.assistance.operit.services.core.AttachmentDelegate
-import com.ai.assistance.operit.util.AppLogger
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import java.io.File
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
@@ -100,11 +94,6 @@ fun AttachmentSelectorPanel(
         onDismiss = onDismiss,
     )
 
-    // 获取AttachmentDelegate实例
-    val attachmentManager = remember {
-        AttachmentDelegate(context, AIToolHandler.getInstance(context))
-    }
-
     // 文件/图片选择器启动器
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetMultipleContents()
@@ -112,7 +101,7 @@ fun AttachmentSelectorPanel(
         if (uris.isNotEmpty()) {
             coroutineScope.launch {
                 uris.forEach { uri ->
-                    getFilePathFromUri(context, uri)?.let { path ->
+                    getAttachmentSource(uri)?.let { path ->
                         onAttachImage(path)
                     }
                 }
@@ -127,7 +116,7 @@ fun AttachmentSelectorPanel(
         if (uris.isNotEmpty()) {
             coroutineScope.launch {
                 uris.forEach { uri ->
-                    getFilePathFromUri(context, uri)?.let { path ->
+                    getAttachmentSource(uri)?.let { path ->
                         onAttachFile(path)
                     }
                 }
@@ -340,7 +329,7 @@ fun AttachmentSelectorPopupPanel(
         if (uris.isNotEmpty()) {
             coroutineScope.launch {
                 uris.forEach { uri ->
-                    getFilePathFromUri(context, uri)?.let { path ->
+                    getAttachmentSource(uri)?.let { path ->
                         onAttachImage(path)
                     }
                 }
@@ -355,7 +344,7 @@ fun AttachmentSelectorPopupPanel(
         if (uris.isNotEmpty()) {
             coroutineScope.launch {
                 uris.forEach { uri ->
-                    getFilePathFromUri(context, uri)?.let { path ->
+                    getAttachmentSource(uri)?.let { path ->
                         onAttachFile(path)
                     }
                 }
@@ -557,41 +546,12 @@ private fun createTempCameraUri(context: Context): Uri {
     return FileProvider.getUriForFile(context, authority, tmpFile)
 }
 
-// 添加Uri转换为文件路径的工具函数
-private suspend fun getFilePathFromUri(context: Context, uri: Uri): String? = withContext(Dispatchers.IO) {
-    // 使用ContentResolver获取真实文件路径
-    val contentResolver = context.contentResolver
-
-    // 文件URI直接返回路径
-    if (uri.scheme == "file") {
-        return@withContext uri.path
+private fun getAttachmentSource(uri: Uri): String? {
+    return when (uri.scheme) {
+        "file" -> uri.path
+        "content" -> uri.toString()
+        else -> null
     }
-
-    // 处理content URI
-    if (uri.scheme == "content") {
-        try {
-            // 尝试通过DocumentFile获取路径
-            val cursor = contentResolver.query(uri, null, null, null, null)
-            cursor?.use {
-                if (it.moveToFirst()) {
-                    // 尝试获取_data列（真实路径）
-                    val dataIndex = it.getColumnIndex("_data")
-                    if (dataIndex != -1) {
-                        return@withContext it.getString(dataIndex)
-                    }
-                }
-            }
-
-            // 如果使用_data列无法获取路径，则直接返回URI的字符串表示
-            // 这样应用可以通过ContentResolver直接使用这个URI访问文件
-            AppLogger.d("AttachmentSelector", "使用URI字符串: ${uri.toString()}")
-            return@withContext uri.toString()
-        } catch (e: Exception) {
-            AppLogger.e("AttachmentSelector", "获取文件路径错误", e)
-        }
-    }
-
-    return@withContext null
 }
 
 /** 简约的附件选项组件 */

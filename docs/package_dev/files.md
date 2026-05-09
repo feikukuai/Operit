@@ -86,6 +86,20 @@ apply(path, 'replace' | 'delete' | 'create', old?, newContent?, environment?)
 - `create` / `replace` 通常需要 `newContent`。
 - 返回 `FileApplyResultData`，里面包含 `operation` 与 `aiDiffInstructions`。
 
+#### `create(path, newContent, environment?)`
+
+创建新文件。
+
+- 内部等价于 `apply(path, 'create', undefined, newContent, environment)`。
+- 返回 `FileApplyResultData`。
+
+#### `edit(path, oldContent, newContent, environment?)`
+
+编辑已存在文件。
+
+- 内部等价于 `apply(path, 'replace', oldContent, newContent, environment)`。
+- 返回 `FileApplyResultData`。
+
 ### 删除、移动、复制
 
 #### `deleteFile(path, recursive?, environment?)`

@@ -52,6 +52,8 @@ export interface ToolResultMap {
     'share_file': FileOperationData;
     'download_file': FileOperationData;
     'apply_file': FileApplyResultData;
+    'create_file': FileApplyResultData;
+    'edit_file': FileApplyResultData;
 
     // Network operations
     'http_request': HttpResponseData;

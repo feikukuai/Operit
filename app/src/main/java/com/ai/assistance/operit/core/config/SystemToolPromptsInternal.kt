@@ -26,6 +26,35 @@ object SystemToolPromptsInternal {
                                 )
                         ),
                         ToolPrompt(
+                            name = "apply_file",
+                            description = "Applies edits to a file by finding and replacing/deleting a matched content block.",
+                            parametersStructured =
+                                listOf(
+                                    ToolParameterSchema(name = "path", type = "string", description = "file path", required = true),
+                                    ToolParameterSchema(name = "environment", type = "string", description = "optional, same as read_file environment", required = false),
+                                    ToolParameterSchema(name = "type", type = "string", description = "operation type: replace | delete | create", required = true),
+                                    ToolParameterSchema(name = "old", type = "string", description = "the exact content to be matched and replaced/deleted (required for replace/delete)", required = false),
+                                    ToolParameterSchema(name = "new", type = "string", description = "the new content to insert (required for replace/create)", required = false)
+                                ),
+                            details = """
+  - **How it works**:
+    - The tool finds the best fuzzy match of `old` in the current file content (not by line numbers) and applies the requested operation.
+    - You can call this tool multiple times to apply multiple independent edits.
+
+  - **Parameters**:
+    - `type`:
+      - `replace`: replace the matched `old` content with `new`
+      - `delete`: delete the matched `old` content
+      - `create`: create the file when it does not exist (write `new` as full file content)
+    - `old`: required for `replace` / `delete`
+    - `new`: required for `replace` / `create`
+
+  - **CRITICAL RULES**:
+    1. **If you need to rewrite a whole existing file**: do **NOT** use apply_file to overwrite it. Instead, call `delete_file` first, then use `apply_file` with `type=create`.
+    2. **If you need to modify an existing file**: you **MUST** use `type=replace` (or `type=delete`) and provide `old` / `new`. Do **NOT** delete the whole file and rewrite it.
+"""
+                        ),
+                        ToolPrompt(
                             name = "create_terminal_session",
                             description = "Create or get a terminal session.",
                             parametersStructured =
@@ -2630,6 +2659,35 @@ object SystemToolPromptsInternal {
                                         required = true
                                     )
                                 )
+                        ),
+                        ToolPrompt(
+                            name = "apply_file",
+                            description = "通过查找并替换/删除匹配的内容块来编辑文件。",
+                            parametersStructured =
+                                listOf(
+                                    ToolParameterSchema(name = "path", type = "string", description = "文件路径", required = true),
+                                    ToolParameterSchema(name = "environment", type = "string", description = "可选，同 read_file 的 environment", required = false),
+                                    ToolParameterSchema(name = "type", type = "string", description = "操作类型：replace | delete | create", required = true),
+                                    ToolParameterSchema(name = "old", type = "string", description = "用于匹配/替换/删除的原始内容（replace/delete必填）", required = false),
+                                    ToolParameterSchema(name = "new", type = "string", description = "要插入的新内容（replace/create必填）", required = false)
+                                ),
+                            details = """
+  - **工作原理**:
+    - 工具会在文件当前内容中对 `old` 做最佳的模糊匹配（不依赖行号），然后执行指定操作。
+    - 你可以多次调用本工具，对同一个文件做多处独立修改。
+
+  - **参数**:
+    - `type`:
+      - `replace`: 用 `new` 替换匹配到的 `old`
+      - `delete`: 删除匹配到的 `old`
+      - `create`: 当文件不存在时创建文件（用 `new` 作为完整文件内容）
+    - `old`: `replace` / `delete` 必填
+    - `new`: `replace` / `create` 必填
+
+  - **关键规则**:
+    1. **如果需要重写整个已存在文件**：不要用 apply_file 直接覆盖。请先 `delete_file`，再使用 `apply_file` 且 `type=create`。
+    2. **如果需要修改已存在文件**：必须用 `type=replace`（或 `type=delete`）并提供 `old/new`（或 `old`）。不要删除整个文件再重写。
+"""
                         ),
                         ToolPrompt(
                             name = "create_terminal_session",

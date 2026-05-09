@@ -54,6 +54,8 @@ class WorkspaceBackupManager(private val context: Context) {
         private val WORKSPACE_MUTATING_TOOLS =
             setOf(
                 "apply_file",
+                "create_file",
+                "edit_file",
                 "write_file",
                 "write_file_binary",
                 "move_file",
@@ -254,7 +256,7 @@ class WorkspaceBackupManager(private val context: Context) {
         val defaultEnvironment = tool.parameters.find { it.name == "environment" }?.value
 
         when (tool.name) {
-            "apply_file", "delete_file", "write_file", "write_file_binary" -> {
+            "apply_file", "create_file", "edit_file", "delete_file", "write_file", "write_file_binary" -> {
                 collectPath(
                     tool.parameters.find { it.name == "path" }?.value,
                     defaultEnvironment

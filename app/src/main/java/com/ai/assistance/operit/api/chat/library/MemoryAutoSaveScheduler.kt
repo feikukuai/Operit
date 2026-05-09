@@ -98,10 +98,12 @@ class MemoryAutoSaveScheduler(
             val repository = MemoryAutoSaveCandidateRepository(context, profileId)
             val allCandidates = repository.getPendingAndFailedCandidates()
             if (allCandidates.size < MIN_TOTAL_CANDIDATES_TO_EXTRACT) {
+                val nextRunAt = System.currentTimeMillis() + intervalMs
                 AppLogger.d(
                     TAG,
-                    "候选总条数不足，继续累计: profileId=$profileId, totalCandidates=${allCandidates.size}"
+                    "候选总条数不足，继续累计并重置下次执行时间: profileId=$profileId, totalCandidates=${allCandidates.size}, nextRunAt=$nextRunAt"
                 )
+                scheduleNextRun(profileId, nextRunAt)
                 continue
             }
             val groupedCandidates =

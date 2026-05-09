@@ -22,7 +22,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
@@ -240,12 +239,6 @@ private fun WorkspacePdfPage(
     ) {
         value = withContext(Dispatchers.IO) {
             renderPdfPage(sourceFile, pageIndex)
-        }
-    }
-
-    DisposableEffect(bitmap) {
-        onDispose {
-            bitmap?.recycle()
         }
     }
 

@@ -53,6 +53,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.last
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
@@ -4178,6 +4179,46 @@ open class StandardFileSystemTools(protected val context: Context) {
         } finally {
             ToolProgressBus.clear()
         }
+    }
+
+    /** Create a file by delegating to apply_file with type=create */
+    open suspend fun createFile(tool: AITool): ToolResult {
+        val path = tool.parameters.find { it.name == "path" }?.value ?: ""
+        val environment = tool.parameters.find { it.name == "environment" }?.value
+        val newContent = tool.parameters.find { it.name == "new" }?.value ?: ""
+
+        return applyFile(
+            AITool(
+                name = "apply_file",
+                parameters = listOfNotNull(
+                    ToolParameter("path", path),
+                    ToolParameter("type", "create"),
+                    ToolParameter("new", newContent),
+                    environment?.takeIf { it.isNotBlank() }?.let { ToolParameter("environment", it) }
+                )
+            )
+        ).last()
+    }
+
+    /** Edit a file by delegating to apply_file with type=replace */
+    open suspend fun editFile(tool: AITool): ToolResult {
+        val path = tool.parameters.find { it.name == "path" }?.value ?: ""
+        val environment = tool.parameters.find { it.name == "environment" }?.value
+        val oldContent = tool.parameters.find { it.name == "old" }?.value ?: ""
+        val newContent = tool.parameters.find { it.name == "new" }?.value ?: ""
+
+        return applyFile(
+            AITool(
+                name = "apply_file",
+                parameters = listOfNotNull(
+                    ToolParameter("path", path),
+                    ToolParameter("type", "replace"),
+                    ToolParameter("old", oldContent),
+                    ToolParameter("new", newContent),
+                    environment?.takeIf { it.isNotBlank() }?.let { ToolParameter("environment", it) }
+                )
+            )
+        ).last()
     }
 
     /**
