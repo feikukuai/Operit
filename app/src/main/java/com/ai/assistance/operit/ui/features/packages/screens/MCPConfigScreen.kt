@@ -502,6 +502,12 @@ fun MCPConfigScreen(
                 showRemoteEditDialog = false
                 editingRemoteServer = null
                 Toast.makeText(context, context.getString(R.string.remote_service_updated, updatedServer.name), Toast.LENGTH_SHORT).show()
+            },
+            onRegenerateDescription = { server, pluginName ->
+                viewModel.generatePluginDescription(
+                    server = server,
+                    pluginName = pluginName
+                )
             }
         )
     }
@@ -1683,16 +1689,20 @@ private fun PluginListItem(
 fun RemoteServerEditDialog(
     server: MCPLocalServer.PluginMetadata,
     onDismiss: () -> Unit,
-    onSave: (MCPLocalServer.PluginMetadata) -> Unit
+    onSave: (MCPLocalServer.PluginMetadata) -> Unit,
+    onRegenerateDescription: suspend (MCPLocalServer.PluginMetadata, String) -> Result<String>
 ) {
-    var name by remember { mutableStateOf(server.name) }
-    var description by remember { mutableStateOf(server.description) }
-    var endpoint by remember { mutableStateOf(server.endpoint ?: "") }
-    var connectionType by remember { mutableStateOf(server.connectionType ?: "httpStream") }
-    var bearerToken by remember { mutableStateOf(server.bearerToken ?: "") }
-    var headers by remember { mutableStateOf(server.headers.toEditableHeaders()) }
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var name by remember(server.id) { mutableStateOf(server.name) }
+    var description by remember(server.id) { mutableStateOf(server.description) }
+    var endpoint by remember(server.id) { mutableStateOf(server.endpoint ?: "") }
+    var connectionType by remember(server.id) { mutableStateOf(server.connectionType ?: "httpStream") }
+    var bearerToken by remember(server.id) { mutableStateOf(server.bearerToken ?: "") }
+    var headers by remember(server.id) { mutableStateOf(server.headers.toEditableHeaders()) }
     val connectionTypes = listOf("httpStream", "sse")
-    var expanded by remember { mutableStateOf(false) }
+    var expanded by remember(server.id) { mutableStateOf(false) }
+    var isRegeneratingDescription by remember(server.id) { mutableStateOf(false) }
     val isRemote = server.type == "remote"
 
     AlertDialog(
@@ -1715,6 +1725,64 @@ fun RemoteServerEditDialog(
                     label = { Text(stringResource(R.string.description)) },
                     modifier = Modifier.fillMaxWidth()
                 )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    FilledTonalButton(
+                        onClick = {
+                            scope.launch {
+                                isRegeneratingDescription = true
+                                try {
+                                    onRegenerateDescription(server, name)
+                                        .onSuccess { generatedDescription ->
+                                            description = generatedDescription
+                                            Toast.makeText(
+                                                context,
+                                                context.getString(R.string.mcp_regenerate_description_success),
+                                                Toast.LENGTH_SHORT
+                                            ).show()
+                                        }
+                                        .onFailure { error ->
+                                            Toast.makeText(
+                                                context,
+                                                context.getString(
+                                                    R.string.mcp_regenerate_description_failed,
+                                                    error.message ?: context.getString(R.string.unknown_error)
+                                                ),
+                                                Toast.LENGTH_LONG
+                                            ).show()
+                                        }
+                                } finally {
+                                    isRegeneratingDescription = false
+                                }
+                            }
+                        },
+                        enabled = !isRegeneratingDescription && name.isNotBlank()
+                    ) {
+                        if (isRegeneratingDescription) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(16.dp),
+                                strokeWidth = 2.dp
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Default.AutoAwesome,
+                                contentDescription = null
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = stringResource(
+                                if (isRegeneratingDescription) {
+                                    R.string.mcp_regenerating_description
+                                } else {
+                                    R.string.mcp_regenerate_description
+                                }
+                            )
+                        )
+                    }
+                }
                 if(isRemote) {
                     OutlinedTextField(
                         value = endpoint,
@@ -1773,9 +1841,12 @@ fun RemoteServerEditDialog(
         confirmButton = {
             Button(
                 onClick = {
+                    val normalizedName = name.trim()
+                    val normalizedDescription = description.trim()
                     val updatedServer = server.copy(
-                        name = name,
-                        description = description,
+                        name = normalizedName,
+                        description = normalizedDescription,
+                        longDescription = normalizedDescription,
                         endpoint = if(isRemote) endpoint else server.endpoint,
                         connectionType = if(isRemote) connectionType else server.connectionType,
                         bearerToken = if(isRemote && bearerToken.isNotBlank()) bearerToken else null,
@@ -1783,7 +1854,7 @@ fun RemoteServerEditDialog(
                     )
                     onSave(updatedServer)
                 },
-                enabled = name.isNotBlank() && if(isRemote) endpoint.isNotBlank() else true
+                enabled = !isRegeneratingDescription && name.isNotBlank() && (if (isRemote) endpoint.isNotBlank() else true)
             ) {
                 Text(stringResource(R.string.save))
             }

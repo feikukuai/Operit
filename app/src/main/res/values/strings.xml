@@ -5038,19 +5038,25 @@
     <string name="attachment_photo">照片</string>
     <string name="attachment_camera">拍照</string>
     <string name="attachment_memory">记忆</string>
-    <string name="attachment_audio">音频</string>
     <string name="attachment_file">文件</string>
     <string name="attachment_screen_content">屏幕内容</string>
     <string name="attachment_notifications">当前通知</string>
     <string name="attachment_location">当前位置</string>
-    <string name="attachment_skill">技能</string>
-    <string name="attachment_skill_select_title">选择技能</string>
-    <string name="attachment_skill_empty">暂无可用技能</string>
-    <string name="attachment_skill_added">已添加技能: %1$s</string>
-    <string name="attachment_skill_failed">添加技能失败: %1$s</string>
+    <string name="attachment_package">包</string>
+    <string name="attachment_package_select_title">选择包</string>
+    <string name="attachment_package_empty">暂无可用包</string>
+    <string name="attachment_package_search_placeholder">搜索包名、描述</string>
+    <string name="attachment_package_search_empty">没有匹配的包</string>
+    <string name="attachment_package_added">已添加包: %1$s</string>
+    <string name="attachment_package_failed">添加包失败: %1$s</string>
     <string name="attachments_count">附件 (%1$d)</string>
     
     <!-- Workspace -->
+    <string name="mention_selector_hint">输入包名、文件名或路径</string>
+    <string name="mention_selector_packages_section">Packages</string>
+    <string name="mention_selector_files_section">Files</string>
+    <string name="mention_selector_files_idle">输入名称或路径搜索工作区项目</string>
+    <string name="mention_selector_files_empty">没有匹配的文件或文件夹</string>
     <string name="select_file_to_reference">选择要引用的文件</string>
     <string name="workspace_directory_invalid">工作区目录不存在或无效</string>
     <string name="chat_not_bound_to_workspace">当前对话未绑定工作区</string>
@@ -6132,6 +6138,12 @@
     <string name="mcp_plugin_details">插件详情</string>
     <string name="mcp_config_settings">配置设置</string>
     <string name="mcp_no_description">暂无描述</string>
+    <string name="mcp_regenerate_description">AI 重新生成描述</string>
+    <string name="mcp_regenerating_description">AI 生成中...</string>
+    <string name="mcp_regenerate_description_success">已重新生成描述，请确认后保存</string>
+    <string name="mcp_regenerate_description_failed">重新生成描述失败：%1$s</string>
+    <string name="mcp_regenerate_description_no_tools">当前插件还没有可用的工具信息，请先启动或连接一次后再试</string>
+    <string name="mcp_regenerate_description_empty">AI 未生成可用描述，请稍后重试</string>
     <string name="mcp_manage_env_vars">管理环境变量</string>
     <string name="package_default">默认</string>
     <string name="package_no_tools">暂无可用工具</string>

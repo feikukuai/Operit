@@ -295,6 +295,9 @@ private fun AttachmentPanelOverlay(
             floatContext.onModeChange(FloatingMode.SCREEN_OCR)
             floatContext.showAttachmentPanel = false
         },
+        onAttachPackage = { packageName ->
+            floatContext.onAttachmentRequest?.invoke("package_attach:$packageName")
+        },
         onDismiss = { floatContext.showAttachmentPanel = false }
     )
 }

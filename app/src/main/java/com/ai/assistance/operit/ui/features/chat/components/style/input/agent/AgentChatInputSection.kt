@@ -144,6 +144,7 @@ import com.ai.assistance.operit.ui.features.chat.components.style.input.common.I
 import com.ai.assistance.operit.ui.features.chat.components.style.input.common.PendingMessageQueuePanel
 import com.ai.assistance.operit.ui.features.chat.components.style.input.common.PendingQueueMessageItem
 import com.ai.assistance.operit.ui.features.chat.components.style.input.common.ToolPromptManagerDialog
+import com.ai.assistance.operit.ui.features.chat.components.style.input.common.rememberMentionVisualTransformation
 import com.ai.assistance.operit.ui.features.chat.viewmodel.ChatViewModel
 import com.ai.assistance.operit.ui.floating.FloatingMode
 import com.ai.assistance.operit.ui.permissions.PermissionLevel
@@ -176,7 +177,7 @@ fun AgentChatInputSection(
     onAttachNotifications: () -> Unit = {},
     onAttachLocation: () -> Unit = {},
     onAttachMemory: () -> Unit = {},
-    onAttachSkill: (String) -> Unit = {},
+    onAttachPackage: (String) -> Unit = {},
     onTakePhoto: (Uri) -> Unit,
     hasBackgroundImage: Boolean = false,
     chatInputTransparent: Boolean = false,
@@ -345,6 +346,7 @@ fun AgentChatInputSection(
     )
 
     val inputTextStyle = TextStyle(fontSize = 14.sp, lineHeight = 20.sp)
+    val mentionVisualTransformation = rememberMentionVisualTransformation(inputTextStyle)
     val colorScheme = MaterialTheme.colorScheme
     val typography = MaterialTheme.typography
 
@@ -824,6 +826,7 @@ fun AgentChatInputSection(
                     OutlinedTextField(
                         value = userMessage,
                         onValueChange = onUserMessageChange,
+                        visualTransformation = mentionVisualTransformation,
                         placeholder = {
                             Text(
                                 if (isWorkspaceOpen) {
@@ -1123,6 +1126,7 @@ fun AgentChatInputSection(
                         OutlinedTextField(
                             value = userMessage,
                             onValueChange = onUserMessageChange,
+                            visualTransformation = mentionVisualTransformation,
                             placeholder = {
                                 Text(
                                     if (isWorkspaceOpen) {
@@ -1444,7 +1448,7 @@ fun AgentChatInputSection(
                 onAttachNotifications = onAttachNotifications,
                 onAttachLocation = onAttachLocation,
                 onAttachMemory = onAttachMemory,
-                onAttachSkill = onAttachSkill,
+                onAttachPackage = onAttachPackage,
                 onTakePhoto = onTakePhoto,
                 onDismiss = { setShowAttachmentPanel(false) },
             )

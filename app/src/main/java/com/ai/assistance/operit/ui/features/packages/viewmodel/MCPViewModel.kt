@@ -161,6 +161,16 @@ class MCPViewModel(
         }
     }
 
+    suspend fun generatePluginDescription(
+        server: MCPLocalServer.PluginMetadata,
+        pluginName: String
+    ): Result<String> {
+        return repository.generatePluginDescription(
+            pluginId = server.id,
+            pluginName = pluginName
+        )
+    }
+
     /** 重置安装状态 */
     fun resetInstallState() {
         _installProgress.value = null

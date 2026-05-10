@@ -5,12 +5,15 @@ import android.content.Context
 import android.net.Uri
 import android.os.Environment
 import com.ai.assistance.operit.R
+import com.ai.assistance.operit.api.chat.EnhancedAIService
 import com.ai.assistance.operit.util.AppLogger
 import com.ai.assistance.operit.core.tools.AIToolHandler
 import com.ai.assistance.operit.core.tools.mcp.MCPManager
 import com.ai.assistance.operit.core.tools.mcp.MCPPackage
 import com.ai.assistance.operit.core.tools.mcp.MCPServerConfig
 import com.ai.assistance.operit.core.tools.mcp.MCPToolExecutor
+import com.ai.assistance.operit.data.mcp.plugins.MCPBridgeClient
+import com.ai.assistance.operit.data.mcp.plugins.MCPConfigGenerator
 import com.ai.assistance.operit.data.model.AITool
 import com.ai.assistance.operit.data.model.ToolParameter
 
@@ -1039,6 +1042,88 @@ class MCPRepository(private val context: Context) {
      */
     fun getInstalledPluginInfo(pluginId: String): MCPLocalServer.PluginMetadata? {
         return mcpLocalServer.getPluginMetadata(pluginId)
+    }
+
+    suspend fun generatePluginDescription(
+        pluginId: String,
+        pluginName: String
+    ): Result<String> {
+        return withContext(Dispatchers.IO) {
+            try {
+                val metadata =
+                    mcpLocalServer.getPluginMetadata(pluginId)
+                        ?: return@withContext Result.failure(
+                            IllegalStateException(context.getString(R.string.mcp_repository_server_not_found))
+                        )
+
+                val toolDescriptions = collectToolDescriptionsForDescriptionGeneration(metadata)
+                if (toolDescriptions.isEmpty()) {
+                    return@withContext Result.failure(
+                        IllegalStateException(context.getString(R.string.mcp_regenerate_description_no_tools))
+                    )
+                }
+
+                val targetPluginName = pluginName.trim().ifBlank { metadata.name }
+                val generatedDescription =
+                    EnhancedAIService.generatePackageDescription(
+                        context = context,
+                        pluginName = targetPluginName,
+                        toolDescriptions = toolDescriptions
+                    ).trim()
+
+                if (generatedDescription.isBlank()) {
+                    return@withContext Result.failure(
+                        IllegalStateException(context.getString(R.string.mcp_regenerate_description_empty))
+                    )
+                }
+
+                Result.success(generatedDescription)
+            } catch (e: Exception) {
+                AppLogger.e(TAG, "重新生成插件描述失败: $pluginId", e)
+                Result.failure(e)
+            }
+        }
+    }
+
+    private suspend fun collectToolDescriptionsForDescriptionGeneration(
+        metadata: MCPLocalServer.PluginMetadata
+    ): List<String> {
+        val cachedToolDescriptions =
+            mcpLocalServer.getCachedTools(metadata.id)
+                .orEmpty()
+                .mapNotNull { cachedTool ->
+                    val toolName = cachedTool.name.trim()
+                    if (toolName.isEmpty()) {
+                        null
+                    } else {
+                        cachedTool.description.trim()
+                            .takeIf { it.isNotEmpty() }
+                            ?.let { "$toolName: $it" }
+                            ?: toolName
+                    }
+                }
+        if (cachedToolDescriptions.isNotEmpty()) {
+            return cachedToolDescriptions
+        }
+
+        val serviceName =
+            when (metadata.type) {
+                "remote" -> metadata.name.toServiceName(metadata.id)
+                else -> {
+                    val pluginConfig = mcpLocalServer.getPluginConfig(metadata.id)
+                    MCPConfigGenerator().extractServerNameFromConfig(pluginConfig)
+                        ?: metadata.id.substringAfterLast('/').lowercase()
+                }
+            }
+
+        return MCPBridgeClient(context, serviceName).getToolDescriptions()
+    }
+
+    private fun String.toServiceName(pluginId: String): String {
+        return trim()
+            .replace(" ", "_")
+            .lowercase()
+            .ifBlank { pluginId.substringAfterLast('/').lowercase() }
     }
 
     /**

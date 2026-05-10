@@ -63,8 +63,9 @@ import com.ai.assistance.operit.ui.features.chat.components.ExportCompleteDialog
 import com.ai.assistance.operit.ui.features.chat.components.ExportPlatformDialog
 import com.ai.assistance.operit.ui.features.chat.components.ExportProgressDialog
 import com.ai.assistance.operit.ui.features.chat.components.WindowsExportDialog
+import com.ai.assistance.operit.ui.features.chat.webview.MentionSuggestionPanelStyle
 import com.ai.assistance.operit.ui.features.chat.webview.workspace.WorkspaceScreen
-import com.ai.assistance.operit.ui.features.chat.webview.WorkspaceFileSelector
+import com.ai.assistance.operit.ui.features.chat.webview.MentionSuggestionPanel
 import com.ai.assistance.operit.ui.features.chat.webview.computer.ComputerScreen
 import com.ai.assistance.operit.ui.features.chat.util.ConfigurationStateHolder
 import com.ai.assistance.operit.ui.features.chat.viewmodel.ChatViewModel
@@ -531,9 +532,6 @@ val actualViewModel: ChatViewModel = viewModel ?: viewModel { ChatViewModel(cont
         }
     }
 
-    // Modern chat UI colors - Cursor风格
-    val backgroundColor =
-            if (effectiveHasBackgroundImage) Color.Transparent else MaterialTheme.colorScheme.background
     val defaultUserMessageColor = MaterialTheme.colorScheme.primaryContainer
     val defaultAiMessageColor = MaterialTheme.colorScheme.surface
     val cursorCustomUserMessageColor = cursorUserBubbleColorValue?.let(::Color)
@@ -873,11 +871,6 @@ val actualViewModel: ChatViewModel = viewModel ?: viewModel { ChatViewModel(cont
             0f
         }
     val chatViewportTranslationYPx = inputBarTranslationYPx
-    val inputSurfaceColor = when {
-        chatInputTransparent -> colorScheme.surface.copy(alpha = 0f)
-        effectiveHasBackgroundImage -> colorScheme.surface.copy(alpha = 0.85f)
-        else -> colorScheme.surface
-    }
     Box(modifier = Modifier.fillMaxSize()) {
         CustomScaffold(
                 containerColor = Color.Transparent,
@@ -1199,10 +1192,18 @@ val actualViewModel: ChatViewModel = viewModel ?: viewModel { ChatViewModel(cont
             }
         }
 
-        WorkspaceFileSelectorOverlay(
+        MentionSuggestionOverlay(
             actualViewModel = actualViewModel,
             bottomBarHeightPx = bottomBarHeightPx,
-            backgroundColor = inputSurfaceColor,
+            inputBarTranslationYPx = inputBarTranslationYPx,
+            panelStyle =
+                MentionSuggestionPanelStyle(
+                    hasBackgroundImage = effectiveHasBackgroundImage,
+                    chatInputTransparent = chatInputTransparent,
+                    chatInputFloating = chatInputFloating,
+                    chatInputLiquidGlass = chatInputLiquidGlass,
+                    chatInputWaterGlass = chatInputWaterGlass,
+                ),
         )
 
         val workspaceOverlayModifier =
@@ -1647,7 +1648,7 @@ private fun ChatInputBottomBar(
                 onAttachNotifications = actualViewModel::captureNotifications,
                 onAttachLocation = actualViewModel::captureLocation,
                 onAttachMemory = onShowMemoryFolderDialog,
-                onAttachSkill = actualViewModel::attachSkill,
+                onAttachPackage = actualViewModel::attachPackage,
                 onTakePhoto = actualViewModel::handleTakenPhoto,
                 hasBackgroundImage = hasBackgroundImage,
                 chatInputTransparent = chatInputTransparent,
@@ -1733,7 +1734,7 @@ private fun ChatInputBottomBar(
                 onAttachNotifications = actualViewModel::captureNotifications,
                 onAttachLocation = actualViewModel::captureLocation,
                 onAttachMemory = onShowMemoryFolderDialog,
-                onAttachSkill = actualViewModel::attachSkill,
+                onAttachPackage = actualViewModel::attachPackage,
                 onTakePhoto = actualViewModel::handleTakenPhoto,
                 hasBackgroundImage = hasBackgroundImage,
                 chatInputTransparent = chatInputTransparent,
@@ -1774,17 +1775,18 @@ private fun ChatInputBottomBar(
 }
 
 @Composable
-private fun WorkspaceFileSelectorOverlay(
+private fun MentionSuggestionOverlay(
     actualViewModel: ChatViewModel,
     bottomBarHeightPx: Int,
-    backgroundColor: Color,
+    inputBarTranslationYPx: Float,
+    panelStyle: MentionSuggestionPanelStyle,
 ) {
     val density = LocalDensity.current
-    val showWorkspaceFileSelector by actualViewModel.showWorkspaceFileSelector.collectAsState()
+    val showMentionSuggestionPanel by actualViewModel.showMentionSuggestionPanel.collectAsState()
     val bottomPaddingForSelector = with(density) { bottomBarHeightPx.toDp() }
 
     AnimatedVisibility(
-        visible = showWorkspaceFileSelector,
+        visible = showMentionSuggestionPanel,
         enter = fadeIn(animationSpec = tween(durationMillis = 180)),
         exit = fadeOut(animationSpec = tween(durationMillis = 150)),
     ) {
@@ -1796,50 +1798,32 @@ private fun WorkspaceFileSelectorOverlay(
                 modifier =
                     Modifier
                         .matchParentSize()
-                        .background(Color.Black.copy(alpha = 0.2f))
                         .clickable(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null,
-                            onClick = actualViewModel::hideWorkspaceFileSelector,
+                            onClick = actualViewModel::hideMentionSuggestionPanel,
                         ),
             )
-            WorkspaceFileSelector(
+            MentionSuggestionPanel(
                 modifier =
                     Modifier
-                        .padding(bottom = bottomPaddingForSelector)
+                        .padding(start = 12.dp, end = 12.dp, bottom = bottomPaddingForSelector + 8.dp)
+                        .graphicsLayer { translationY = -inputBarTranslationYPx }
                         .animateEnterExit(
                             enter = slideInVertically(
                                 animationSpec = tween(durationMillis = 240),
-                            ) { it },
+                            ) { it / 4 },
                             exit = slideOutVertically(
                                 animationSpec = tween(durationMillis = 200),
-                            ) { it },
+                            ) { it / 4 },
                         ),
                 viewModel = actualViewModel,
-                onFileSelected = { filePath ->
-                    val currentChat =
-                        actualViewModel.chatHistories.value.find {
-                            it.id == actualViewModel.currentChatId.value
-                        }
-                    val workspacePath = currentChat?.workspace
-                    val relativePath =
-                        if (workspacePath != null) {
-                            File(filePath).relativeTo(File(workspacePath)).path
-                        } else {
-                            filePath
-                        }
-                    val currentText = actualViewModel.userMessage.value.text
-                    val newText = currentText.replaceAfterLast('@', "$relativePath ")
-                    actualViewModel.updateUserMessage(
-                        TextFieldValue(
-                            text = newText,
-                            selection = TextRange(newText.length),
-                        ),
-                    )
-                    actualViewModel.hideWorkspaceFileSelector()
+                panelStyle = panelStyle,
+                onFileSelected = { relativePath ->
+                    actualViewModel.replaceCurrentMentionToken(relativePath)
+                    actualViewModel.hideMentionSuggestionPanel()
                 },
-                onShouldHide = actualViewModel::hideWorkspaceFileSelector,
-                backgroundColor = backgroundColor,
+                onPackageSelected = actualViewModel::selectMentionPackage,
             )
         }
     }

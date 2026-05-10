@@ -72,6 +72,9 @@ import com.ai.assistance.operit.ui.features.chat.webview.workspace.toWorkspaceCo
 import com.ai.assistance.operit.core.tools.system.Terminal
 import com.ai.assistance.operit.util.TtsCleaner
 import com.ai.assistance.operit.util.TtsSegmenter
+import com.ai.assistance.operit.ui.features.chat.util.findMentionTokens
+import com.ai.assistance.operit.ui.features.chat.util.findMentionTokenEndingAtCursor
+import com.ai.assistance.operit.ui.features.chat.util.isMentionContinuation
 import android.net.Uri
 import android.os.Build
 import androidx.annotation.RequiresApi
@@ -89,7 +92,6 @@ import com.ai.assistance.operit.services.ChatServiceCore
 import com.ai.assistance.operit.services.ChatServiceUiBridge
 import com.ai.assistance.operit.services.EmptyChatServiceUiBridge
 import com.ai.assistance.operit.ui.features.chat.util.MessageImageGenerator
-import com.ai.assistance.operit.core.tools.skill.SkillManager
 import com.ai.assistance.operit.ui.features.chat.components.CharacterSelectorTarget
 enum class ChatHistoryDisplayMode {
     BY_CHARACTER_CARD,
@@ -101,9 +103,18 @@ class ChatViewModel(private val context: Context) : ViewModel() {
 
     companion object {
         private const val TAG = "ChatViewModel"
-        private const val MIN_WORKSPACE_FILE_QUERY_LENGTH = 2
         private const val SPEECH_PREVIEW_MAX = 48
     }
+
+    private data class ActiveAtMention(
+        val triggerIndex: Int,
+        val query: String,
+    )
+
+    private data class MentionDeletionNormalization(
+        val value: TextFieldValue,
+        val removedMentionToken: String? = null,
+    )
 
     private fun speechPreview(text: String): String {
         return text.replace("\n", "\\n").take(SPEECH_PREVIEW_MAX)
@@ -435,13 +446,13 @@ class ChatViewModel(private val context: Context) : ViewModel() {
     private val _webViewRefreshCounter = MutableStateFlow(0)
     val webViewRefreshCounter: StateFlow<Int> = _webViewRefreshCounter
 
-    // 控制工作区文件选择器的可见性
-    private val _showWorkspaceFileSelector = MutableStateFlow(false)
-    val showWorkspaceFileSelector: StateFlow<Boolean> = _showWorkspaceFileSelector.asStateFlow()
+    // 控制 @ mention 建议面板的可见性
+    private val _showMentionSuggestionPanel = MutableStateFlow(false)
+    val showMentionSuggestionPanel: StateFlow<Boolean> = _showMentionSuggestionPanel.asStateFlow()
 
-    // 工作区文件搜索词
-    private val _workspaceFileSearchQuery = MutableStateFlow("")
-    val workspaceFileSearchQuery: StateFlow<String> = _workspaceFileSearchQuery.asStateFlow()
+    // 当前 @ mention 的搜索词
+    private val _mentionSearchQuery = MutableStateFlow("")
+    val mentionSearchQuery: StateFlow<String> = _mentionSearchQuery.asStateFlow()
 
     private val _workspaceCommandExecutionState =
         MutableStateFlow<WorkspaceCommandExecutionState?>(null)
@@ -1338,32 +1349,19 @@ class ChatViewModel(private val context: Context) : ViewModel() {
 
     // 消息处理相关方法
     fun updateUserMessage(value: TextFieldValue) {
-        messageProcessingDelegate.updateUserMessage(value)
-        val message = value.text
-        // 当用户输入@且工作-区打开时，显示文件选择器
-        // 新逻辑：提取@后的内容作为搜索词，并根据条件决定是否显示选择器
-        val lastAt = message.lastIndexOf('@')
-        if (isWorkspaceOpen.value && lastAt != -1) {
-            val substringAfterAt = message.substring(lastAt + 1)
-            if (substringAfterAt.any(Char::isWhitespace)) {
-                // 如果@后面出现空白字符，则认为提及结束，隐藏选择器并清空搜索词
-                _showWorkspaceFileSelector.value = false
-                _workspaceFileSearchQuery.value = ""
-            } else {
-                val normalizedQuery = substringAfterAt.trim()
-                if (normalizedQuery.length >= MIN_WORKSPACE_FILE_QUERY_LENGTH) {
-                    _showWorkspaceFileSelector.value = true
-                    _workspaceFileSearchQuery.value = normalizedQuery
-                } else {
-                    _showWorkspaceFileSelector.value = false
-                    _workspaceFileSearchQuery.value = ""
-                }
-            }
-        } else {
-            // 如果没有@或者工作区未打开，则隐藏并清空
-            _showWorkspaceFileSelector.value = false
-            _workspaceFileSearchQuery.value = ""
+        val normalization = normalizeMentionDeletion(userMessage.value, value)
+        val normalizedValue = normalization.value
+        val removedMentionToken = normalization.removedMentionToken
+
+        if (
+            !removedMentionToken.isNullOrBlank() &&
+                !containsMentionToken(normalizedValue.text, removedMentionToken)
+        ) {
+            attachmentDelegate.removePackageAttachment(removedMentionToken)
         }
+
+        messageProcessingDelegate.updateUserMessage(normalizedValue)
+        updateMentionSuggestionState(normalizedValue)
     }
 
     fun insertRoleMention(roleName: String) {
@@ -1393,15 +1391,104 @@ class ChatViewModel(private val context: Context) : ViewModel() {
         updateUserMessage(TextFieldValue(newText, selection = TextRange(newCursor)))
     }
 
+    fun replaceCurrentMentionToken(token: String) {
+        val trimmedToken = token.trim()
+        if (trimmedToken.isEmpty()) return
+
+        val current = userMessage.value
+        val activeMention = findActiveAtMention(current) ?: return
+        val text = current.text
+        val cursor = current.selection.start.coerceIn(0, text.length)
+        val before = text.substring(0, activeMention.triggerIndex)
+        val after = text.substring(cursor)
+        val insertion =
+            buildString {
+                append("@")
+                append(trimmedToken)
+                if (after.isEmpty() || !after.first().isWhitespace()) {
+                    append(' ')
+                }
+            }
+
+        val newText = before + insertion + after
+        val newCursor = (before.length + insertion.length).coerceAtMost(newText.length)
+        updateUserMessage(TextFieldValue(newText, selection = TextRange(newCursor)))
+    }
+
+    fun selectMentionPackage(packageName: String) {
+        val trimmedPackageName = packageName.trim()
+        if (trimmedPackageName.isEmpty()) return
+
+        replaceCurrentMentionToken(trimmedPackageName)
+        attachMentionPackage(trimmedPackageName)
+        hideMentionSuggestionPanel()
+    }
+
     fun sendUserMessage(promptFunctionType: PromptFunctionType = PromptFunctionType.CHAT) {
+        hideMentionSuggestionPanel()
         messageCoordinationDelegate.sendUserMessage(promptFunctionType)
     }
 
     fun sendTextMessage(text: String, promptFunctionType: PromptFunctionType = PromptFunctionType.CHAT) {
+        hideMentionSuggestionPanel()
         messageCoordinationDelegate.sendUserMessage(
             promptFunctionType = promptFunctionType,
             messageTextOverride = text
         )
+    }
+
+    private fun normalizeMentionDeletion(
+        previous: TextFieldValue,
+        proposed: TextFieldValue,
+    ): MentionDeletionNormalization {
+        if (previous.selection.start != previous.selection.end) return MentionDeletionNormalization(proposed)
+        if (proposed.selection.start != proposed.selection.end) return MentionDeletionNormalization(proposed)
+        if (previous.text.length != proposed.text.length + 1) return MentionDeletionNormalization(proposed)
+
+        val oldCursor = previous.selection.start.coerceIn(0, previous.text.length)
+        val newCursor = proposed.selection.start.coerceIn(0, proposed.text.length)
+        if (newCursor != oldCursor - 1) return MentionDeletionNormalization(proposed)
+
+        val expectedText = previous.text.removeRange(newCursor, oldCursor)
+        if (expectedText != proposed.text) return MentionDeletionNormalization(proposed)
+
+        val mentionToken =
+            findMentionTokenEndingAtCursor(previous.text, oldCursor)
+                ?: return MentionDeletionNormalization(proposed)
+        val removedMentionToken =
+            previous.text.substring(mentionToken.start + 1, mentionToken.contentEndExclusive).trim()
+        val normalizedText = previous.text.removeRange(mentionToken.start, mentionToken.endExclusive)
+        return MentionDeletionNormalization(
+            value =
+                proposed.copy(
+                    text = normalizedText,
+                    selection = TextRange(mentionToken.start),
+                ),
+            removedMentionToken = removedMentionToken.ifBlank { null },
+        )
+    }
+
+    private fun attachMentionPackage(packageName: String) {
+        viewModelScope.launch {
+            try {
+                attachmentDelegate.attachPackage(packageName)
+                if (!containsMentionToken(userMessage.value.text, packageName)) {
+                    attachmentDelegate.removePackageAttachment(packageName)
+                }
+            } catch (e: Exception) {
+                AppLogger.e(TAG, "添加 mention 包附件失败", e)
+                uiStateDelegate.showToast(context.getString(R.string.attachment_package_failed, packageName))
+            }
+        }
+    }
+
+    private fun containsMentionToken(text: String, token: String): Boolean {
+        val trimmedToken = token.trim()
+        if (trimmedToken.isEmpty()) return false
+
+        return findMentionTokens(text).any { mentionToken ->
+            text.substring(mentionToken.start + 1, mentionToken.contentEndExclusive) == trimmedToken
+        }
     }
 
     fun cancelCurrentMessage() {
@@ -1545,9 +1632,9 @@ class ChatViewModel(private val context: Context) : ViewModel() {
         uiStateDelegate.showToast(context.getString(R.string.chat_inserted_attachment_ref, attachment.fileName))
     }
 
-    /** 隐藏工作区文件选择器 */
-    fun hideWorkspaceFileSelector() {
-        _showWorkspaceFileSelector.value = false
+    /** 隐藏 @ mention 建议面板 */
+    fun hideMentionSuggestionPanel() {
+        clearMentionSuggestionState()
     }
 
     /** Captures the current screen content and attaches it to the message */
@@ -1681,30 +1768,53 @@ class ChatViewModel(private val context: Context) : ViewModel() {
         }
     }
 
-    /** Attaches a skill's content to the current message as an attachment */
-    fun attachSkill(skillName: String) {
+    /** Attaches a package's prompt content to the current message as an attachment */
+    fun attachPackage(packageName: String) {
         viewModelScope.launch {
             try {
-                val skillManager = SkillManager.getInstance(context)
-                val skillContent = skillManager.getSkillSystemPrompt(skillName)
-                if (skillContent != null) {
-                    val attachment = AttachmentInfo(
-                        filePath = "skill_${skillName}_${System.currentTimeMillis()}",
-                        fileName = "技能: $skillName",
-                        mimeType = "text/plain",
-                        fileSize = skillContent.length.toLong(),
-                        content = skillContent
-                    )
-                    attachmentDelegate.addAttachments(listOf(attachment))
-                    uiStateDelegate.showToast(context.getString(R.string.attachment_skill_added, skillName))
-                } else {
-                    uiStateDelegate.showToast(context.getString(R.string.attachment_skill_failed, skillName))
-                }
+                attachmentDelegate.attachPackage(packageName)
             } catch (e: Exception) {
-                AppLogger.e(TAG, "添加技能附件失败", e)
-                uiStateDelegate.showToast(context.getString(R.string.attachment_skill_failed, skillName))
+                AppLogger.e(TAG, "添加包附件失败", e)
+                uiStateDelegate.showToast(context.getString(R.string.attachment_package_failed, packageName))
             }
         }
+    }
+
+    private fun updateMentionSuggestionState(value: TextFieldValue) {
+        val activeMention = findActiveAtMention(value)
+        if (activeMention == null) {
+            clearMentionSuggestionState()
+            return
+        }
+
+        _showMentionSuggestionPanel.value = true
+        _mentionSearchQuery.value = activeMention.query
+    }
+
+    private fun clearMentionSuggestionState() {
+        _showMentionSuggestionPanel.value = false
+        _mentionSearchQuery.value = ""
+    }
+
+    private fun findActiveAtMention(value: TextFieldValue): ActiveAtMention? {
+        val text = value.text
+        val cursor = value.selection.start.coerceIn(0, text.length)
+        val textBeforeCursor = text.substring(0, cursor)
+        val triggerIndex = textBeforeCursor.lastIndexOf('@')
+        if (triggerIndex == -1) return null
+        if (triggerIndex > 0 && isMentionContinuation(textBeforeCursor[triggerIndex - 1])) {
+            return null
+        }
+
+        val query = textBeforeCursor.substring(triggerIndex + 1)
+        if (query.any(Char::isWhitespace)) {
+            return null
+        }
+
+        return ActiveAtMention(
+            triggerIndex = triggerIndex,
+            query = query.trim(),
+        )
     }
 
     private suspend fun awaitCurrentChat(chatId: String, maxWaitCount: Int = 40): Boolean {

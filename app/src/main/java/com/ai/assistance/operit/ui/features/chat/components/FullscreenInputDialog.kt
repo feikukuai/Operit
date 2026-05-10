@@ -15,6 +15,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.ai.assistance.operit.R
+import com.ai.assistance.operit.ui.features.chat.components.style.input.common.rememberMentionVisualTransformation
 
 @Composable
 fun FullscreenInputDialog(
@@ -23,6 +24,9 @@ fun FullscreenInputDialog(
     onDismiss: () -> Unit,
     onConfirm: () -> Unit
 ) {
+    val mentionVisualTransformation =
+        rememberMentionVisualTransformation(MaterialTheme.typography.bodyLarge)
+
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
@@ -71,6 +75,7 @@ fun FullscreenInputDialog(
                 TextField(
                     value = value,
                     onValueChange = onValueChange,
+                    visualTransformation = mentionVisualTransformation,
                     modifier = Modifier
                         .fillMaxSize()
                         .weight(1f),

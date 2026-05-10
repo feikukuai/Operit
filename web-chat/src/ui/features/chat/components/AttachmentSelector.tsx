@@ -55,12 +55,11 @@ export function AttachmentSelector({
         <AttachmentSelectorButton onClick={() => imageInputRef.current?.click()} title="照片" />
         <AttachmentSelectorButton disabled title="拍照" />
         <AttachmentSelectorButton disabled title="记忆" />
-        <AttachmentSelectorButton disabled title="音频" />
         <AttachmentSelectorButton onClick={() => fileInputRef.current?.click()} title="文件" />
         <AttachmentSelectorButton disabled title="屏幕内容" />
         <AttachmentSelectorButton disabled title="通知" />
         <AttachmentSelectorButton disabled title="定位" />
-        <AttachmentSelectorButton disabled title="技能" />
+        <AttachmentSelectorButton disabled title="包" />
       </div>
 
       <div className="attachment-selector-note">

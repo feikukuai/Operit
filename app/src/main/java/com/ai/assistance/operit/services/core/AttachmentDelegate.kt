@@ -5,12 +5,14 @@ import android.graphics.BitmapFactory
 import android.net.Uri
 import android.provider.OpenableColumns
 import com.ai.assistance.operit.R
+import com.ai.assistance.operit.core.tools.packTool.PackageManager
 import com.ai.assistance.operit.util.AppLogger
 import com.ai.assistance.operit.util.OperitPaths
 import com.ai.assistance.operit.core.tools.AIToolHandler
 import com.ai.assistance.operit.data.model.AITool
 import com.ai.assistance.operit.data.model.AttachmentInfo
 import com.ai.assistance.operit.data.model.ToolParameter
+import com.ai.assistance.operit.data.skill.SkillRepository
 import com.ai.assistance.operit.util.OCRUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -32,6 +34,7 @@ class AttachmentDelegate(private val context: Context, private val toolHandler: 
     companion object {
         private const val TAG = "AttachmentDelegate"
         private const val OCR_INLINE_INSTRUCTION = "Do not read the file, answer the user\'s question directly based on the attachment content and the user\'s question."
+        private const val PACKAGE_ATTACHMENT_PREFIX = "package_attach:"
     }
 
     // State for attachments
@@ -114,21 +117,28 @@ class AttachmentDelegate(private val context: Context, private val toolHandler: 
                 }
             }
 
+    suspend fun attachPackage(packageName: String) =
+            withContext(Dispatchers.IO) { attachPackageInternal(packageName) }
+
     /** Handles a file or image attachment selected by the user 确保在IO线程执行所有文件操作 */
     suspend fun handleAttachment(filePath: String) =
             withContext(Dispatchers.IO) {
                 try {
-                    when (filePath) {
-                        "screen_capture" -> {
+                    when {
+                        filePath == "screen_capture" -> {
                             captureScreenContent()
                             return@withContext
                         }
-                        "notifications_capture" -> {
+                        filePath == "notifications_capture" -> {
                             captureNotifications()
                             return@withContext
                         }
-                        "location_capture" -> {
+                        filePath == "location_capture" -> {
                             captureLocation()
+                            return@withContext
+                        }
+                        filePath.startsWith(PACKAGE_ATTACHMENT_PREFIX) -> {
+                            attachPackageInternal(filePath.removePrefix(PACKAGE_ATTACHMENT_PREFIX).trim())
                             return@withContext
                         }
                     }
@@ -239,6 +249,79 @@ class AttachmentDelegate(private val context: Context, private val toolHandler: 
                     return@withContext null
                 }
             }
+
+    private suspend fun attachPackageInternal(packageName: String) {
+        if (packageName.isBlank()) {
+            _toastEvent.emit(context.getString(R.string.attachment_package_failed, packageName))
+            return
+        }
+
+        val packageManager = PackageManager.getInstance(context, toolHandler)
+        val isStandardPackage =
+            packageManager.getAvailablePackages().containsKey(packageName) &&
+                !packageManager.isToolPkgContainer(packageName)
+        val isSkillPackage =
+            SkillRepository.getInstance(context.applicationContext).getAiVisibleSkillPackages().containsKey(packageName)
+        val isMcpPackage = packageManager.getAvailableServerPackages().containsKey(packageName)
+
+        if (!isStandardPackage && !isSkillPackage && !isMcpPackage) {
+            _toastEvent.emit(context.getString(R.string.attachment_package_failed, packageName))
+            return
+        }
+
+        if (isStandardPackage) {
+            packageManager.enablePackage(packageName)
+        }
+
+        val packageContent = packageManager.usePackage(packageName)
+        if (isPackageAttachmentError(packageName, packageContent)) {
+            AppLogger.w(TAG, "添加包附件失败: $packageName, reason=$packageContent")
+            _toastEvent.emit(context.getString(R.string.attachment_package_failed, packageName))
+            return
+        }
+
+        val attachmentInfo =
+            AttachmentInfo(
+                filePath = packageAttachmentPath(packageName),
+                fileName = packageAttachmentDisplayName(packageName),
+                mimeType = "text/plain",
+                fileSize = packageContent.length.toLong(),
+                content = packageContent
+            )
+        _attachments.value =
+            _attachments.value.filterNot { it.filePath == attachmentInfo.filePath } + attachmentInfo
+        _toastEvent.emit(context.getString(R.string.attachment_package_added, packageName))
+    }
+
+    fun removePackageAttachment(packageName: String) {
+        val normalizedPackageName = packageName.trim()
+        if (normalizedPackageName.isEmpty()) return
+
+        removeAttachment(packageAttachmentPath(normalizedPackageName))
+    }
+
+    private fun packageAttachmentPath(packageName: String): String {
+        return "$PACKAGE_ATTACHMENT_PREFIX$packageName"
+    }
+
+    private fun packageAttachmentDisplayName(packageName: String): String {
+        return "包: $packageName"
+    }
+
+    private fun isPackageAttachmentError(packageName: String, packageContent: String): Boolean {
+        if (packageContent.isBlank()) {
+            return true
+        }
+        return packageContent.startsWith("Package not found: ") ||
+            packageContent.startsWith("Failed to load package data for: ") ||
+            packageContent.startsWith("Missing required environment variables for package ") ||
+            packageContent.startsWith("ToolPkg container '") ||
+            packageContent.contains(" is inactive.") ||
+            packageContent.startsWith("MCP server '") ||
+            packageContent.startsWith("Cannot connect to MCP server") ||
+            packageContent.startsWith("Cannot get MCP server configuration") ||
+            packageContent == "Skill '$packageName' is set to not show to AI"
+    }
 
     /** Removes an attachment by its file path */
     fun removeAttachment(filePath: String) {
