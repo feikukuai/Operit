@@ -409,6 +409,7 @@ fun ChatArea(
                             chatStyle = chatStyle,
                             showMessageTokenStats = showMessageTokenStats,
                             showMessageTimingStats = showMessageTimingStats,
+                            showMessageTimestamp = showMessageTimestamp,
                             cursorUserBubbleLiquidGlass = cursorUserBubbleLiquidGlass,
                             cursorUserBubbleWaterGlass = cursorUserBubbleWaterGlass,
                             bubbleUserBubbleLiquidGlass = bubbleUserBubbleLiquidGlass,
@@ -573,6 +574,7 @@ private fun MessageItem(
     chatStyle: ChatStyle, // 新增参数
     showMessageTokenStats: Boolean = false,
     showMessageTimingStats: Boolean = false,
+    showMessageTimestamp: Boolean = false,
     cursorUserBubbleLiquidGlass: Boolean = false,
     cursorUserBubbleWaterGlass: Boolean = false,
     bubbleUserBubbleLiquidGlass: Boolean = false,
