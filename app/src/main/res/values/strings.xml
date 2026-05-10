@@ -5043,6 +5043,11 @@
     <string name="attachment_screen_content">屏幕内容</string>
     <string name="attachment_notifications">当前通知</string>
     <string name="attachment_location">当前位置</string>
+    <string name="attachment_skill">技能</string>
+    <string name="attachment_skill_select_title">选择技能</string>
+    <string name="attachment_skill_empty">暂无可用技能</string>
+    <string name="attachment_skill_added">已添加技能: %1$s</string>
+    <string name="attachment_skill_failed">添加技能失败: %1$s</string>
     <string name="attachments_count">附件 (%1$d)</string>
     
     <!-- Workspace -->

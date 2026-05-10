@@ -96,6 +96,7 @@ fun ClassicChatInputSection(
     onAttachNotifications: () -> Unit = {},
     onAttachLocation: () -> Unit = {},
     onAttachMemory: () -> Unit = {},
+    onAttachSkill: (String) -> Unit = {},
     onTakePhoto: (Uri) -> Unit,
     hasBackgroundImage: Boolean = false,
     chatInputTransparent: Boolean = false,
@@ -750,6 +751,7 @@ fun ClassicChatInputSection(
                 onAttachNotifications = onAttachNotifications,
                 onAttachLocation = onAttachLocation,
                 onAttachMemory = onAttachMemory,
+                onAttachSkill = onAttachSkill,
                 onTakePhoto = onTakePhoto,
                 userQuery = userMessage.text,
                 onDismiss = { setShowAttachmentPanel(false) }
