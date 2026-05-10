@@ -54,6 +54,7 @@ fun GlobalDisplaySettingsScreen(
     val showUserName by displayPreferencesManager.showUserName.collectAsState(initial = false)
     val showMessageTokenStats by displayPreferencesManager.showMessageTokenStats.collectAsState(initial = false)
     val showMessageTimingStats by displayPreferencesManager.showMessageTimingStats.collectAsState(initial = false)
+    val showMessageTimestamp by displayPreferencesManager.showMessageTimestamp.collectAsState(initial = false)
     val toolCollapseMode by displayPreferencesManager.toolCollapseMode.collectAsState(initial = ToolCollapseMode.ALL)
     val showFpsCounter by displayPreferencesManager.showFpsCounter.collectAsState(initial = false)
     val enableReplyNotification by displayPreferencesManager.enableReplyNotification.collectAsState(initial = true)
@@ -258,6 +259,18 @@ fun GlobalDisplaySettingsScreen(
                 onCheckedChange = {
                     scope.launch {
                         displayPreferencesManager.saveDisplaySettings(showMessageTimingStats = it)
+                    }
+                },
+                backgroundColor = componentBackgroundColor
+            )
+
+            DisplayToggleItem(
+                title = stringResource(R.string.show_message_timestamp),
+                subtitle = stringResource(R.string.show_message_timestamp_description),
+                checked = showMessageTimestamp,
+                onCheckedChange = {
+                    scope.launch {
+                        displayPreferencesManager.saveDisplaySettings(showMessageTimestamp = it)
                     }
                 },
                 backgroundColor = componentBackgroundColor

@@ -45,6 +45,7 @@ class DisplayPreferencesManager private constructor(private val context: Context
         private val KEY_SHOW_USER_NAME = booleanPreferencesKey("show_user_name")
         private val KEY_SHOW_MESSAGE_TOKEN_STATS = booleanPreferencesKey("show_message_token_stats")
         private val KEY_SHOW_MESSAGE_TIMING_STATS = booleanPreferencesKey("show_message_timing_stats")
+        private val KEY_SHOW_MESSAGE_TIMESTAMP = booleanPreferencesKey("show_message_timestamp")
         
         // 全局用户设置的 Key
         private val KEY_GLOBAL_USER_AVATAR_URI = stringPreferencesKey("global_user_avatar_uri")
@@ -133,6 +134,15 @@ class DisplayPreferencesManager private constructor(private val context: Context
     val showMessageTimingStats: Flow<Boolean> =
         context.displayPreferencesDataStore.data.map { preferences ->
             preferences[KEY_SHOW_MESSAGE_TIMING_STATS] ?: false
+        }
+
+    /**
+     * 是否显示消息时间
+     * 默认值：false
+     */
+    val showMessageTimestamp: Flow<Boolean> =
+        context.displayPreferencesDataStore.data.map { preferences ->
+            preferences[KEY_SHOW_MESSAGE_TIMESTAMP] ?: false
         }
 
     /**
@@ -260,6 +270,7 @@ class DisplayPreferencesManager private constructor(private val context: Context
         showUserName: Boolean? = null,
         showMessageTokenStats: Boolean? = null,
         showMessageTimingStats: Boolean? = null,
+        showMessageTimestamp: Boolean? = null,
         globalUserAvatarUri: String? = null,
         globalUserName: String? = null,
         showFpsCounter: Boolean? = null,
@@ -285,6 +296,7 @@ class DisplayPreferencesManager private constructor(private val context: Context
             showUserName?.let { preferences[KEY_SHOW_USER_NAME] = it }
             showMessageTokenStats?.let { preferences[KEY_SHOW_MESSAGE_TOKEN_STATS] = it }
             showMessageTimingStats?.let { preferences[KEY_SHOW_MESSAGE_TIMING_STATS] = it }
+            showMessageTimestamp?.let { preferences[KEY_SHOW_MESSAGE_TIMESTAMP] = it }
             globalUserAvatarUri?.let { preferences[KEY_GLOBAL_USER_AVATAR_URI] = it }
             globalUserName?.let { preferences[KEY_GLOBAL_USER_NAME] = it }
             showFpsCounter?.let { preferences[KEY_SHOW_FPS_COUNTER] = it }

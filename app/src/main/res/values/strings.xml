@@ -5077,8 +5077,11 @@
     <string name="show_message_token_stats_description">在 AI 消息底部显示简洁的 token 上下行与缓存信息</string>
     <string name="show_message_timing_stats">显示消息耗时简报</string>
     <string name="show_message_timing_stats_description">在 AI 消息底部显示首包与生成耗时</string>
+    <string name="show_message_timestamp">显示消息时间</string>
+    <string name="show_message_timestamp_description">在 AI 消息底部显示该条消息的时间</string>
     <string name="chat_message_token_stats_compact">token: %1$d ↑ %3$d (cache: %2$d) ↓ %4$d</string>
     <string name="chat_message_timing_stats_compact">time: %1$s (首 %2$s 生成 %3$s)</string>
+    <string name="chat_message_timestamp_compact">时间: %1$s</string>
     <string name="global_user_name">全局用户名字</string>
     <string name="system_display_settings">系统显示设置</string>
     <string name="show_fps_counter_description">在屏幕上显示帧率性能指标</string>

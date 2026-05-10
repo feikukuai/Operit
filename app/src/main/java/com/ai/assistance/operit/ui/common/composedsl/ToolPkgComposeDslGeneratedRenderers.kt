@@ -38,6 +38,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.text.TextRange
@@ -446,10 +447,13 @@ internal fun renderTextFieldNode(
 ) {
     val props = node.props
     val actionId = ToolPkgComposeDslParser.extractActionId(props["onValueChange"])
+    val onTextInputAction = LocalComposeDslTextInputActionHandler.current
+    val flushTextInputState = LocalComposeDslFlushTextInputHandler.current
     val label = props.stringOrNull("label")
     val placeholder = props.stringOrNull("placeholder")
     val externalValue = props.string("value")
     val isPassword = props.bool("isPassword", false)
+    val textFieldIdentity = props["key"]?.toString()?.trim()?.ifBlank { null } ?: nodePath
     val styleMap = props["style"] as? Map<*, *>
     val hasLabelSlot = node.slotChildren("label").isNotEmpty()
     val hasPlaceholderSlot = node.slotChildren("placeholder").isNotEmpty()
@@ -459,7 +463,7 @@ internal fun renderTextFieldNode(
     val hasTrailingIconSlot = node.slotChildren("trailingIcon").isNotEmpty()
     val hasSupportingTextSlot = node.slotChildren("supportingText").isNotEmpty()
 
-    var textFieldValue by remember(nodePath) {
+    var textFieldValue by remember(textFieldIdentity) {
         mutableStateOf(
             TextFieldValue(
                 text = externalValue,
@@ -467,26 +471,41 @@ internal fun renderTextFieldNode(
             )
         )
     }
-    LaunchedEffect(nodePath, externalValue) {
-        if (externalValue != textFieldValue.text) {
-            val start = textFieldValue.selection.start.coerceIn(0, externalValue.length)
-            val end = textFieldValue.selection.end.coerceIn(0, externalValue.length)
-            textFieldValue =
-                TextFieldValue(
-                    text = externalValue,
-                    selection = TextRange(start, end)
-                )
+    var isFocused by remember(textFieldIdentity) { mutableStateOf(false) }
+
+    LaunchedEffect(textFieldIdentity, externalValue, isFocused) {
+        if (externalValue == textFieldValue.text || isFocused) {
+            return@LaunchedEffect
         }
+        val start = textFieldValue.selection.start.coerceIn(0, externalValue.length)
+        val end = textFieldValue.selection.end.coerceIn(0, externalValue.length)
+        textFieldValue =
+            TextFieldValue(
+                text = externalValue,
+                selection = TextRange(start, end)
+            )
     }
     val textStyle =
         composeDslTextFieldStyleFromValue(styleMap)
+    val textFieldModifier =
+        applyScopedCommonModifier(Modifier.fillMaxWidth(), props, modifierResolver)
+            .onFocusChanged { focusState ->
+                val nextFocused = focusState.isFocused
+                if (isFocused && !nextFocused && externalValue != textFieldValue.text) {
+                    flushTextInputState()
+                }
+                isFocused = nextFocused
+            }
 
     OutlinedTextField(
         value = textFieldValue,
         onValueChange = { nextValue ->
             if (!actionId.isNullOrBlank()) {
+                val previousText = textFieldValue.text
                 textFieldValue = nextValue
-                onAction(actionId, nextValue.text)
+                if (nextValue.text != previousText) {
+                    onTextInputAction(actionId, nextValue.text)
+                }
             }
         },
         label =
@@ -583,7 +602,7 @@ internal fun renderTextFieldNode(
         } else {
             androidx.compose.ui.text.input.VisualTransformation.None
         },
-        modifier = applyScopedCommonModifier(Modifier.fillMaxWidth(), props, modifierResolver)
+        modifier = textFieldModifier
     )
 }
 

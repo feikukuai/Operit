@@ -101,6 +101,25 @@ internal fun buildComposeDslRuntimeWrappedScript(script: String): String {
                 return __operit_build_compose_response(__bundle, __entry);
             }
 
+            function __operit_rerender_compose_dsl(__runtimeOptions) {
+                var __root = typeof globalThis !== 'undefined'
+                    ? globalThis
+                    : (typeof window !== 'undefined' ? window : this);
+                var __bundle = __root.__operit_compose_bundle;
+                var __entry = __root.__operit_compose_entry;
+                if (!__bundle || typeof __entry !== 'function') {
+                    throw new Error('compose_dsl runtime is not initialized, render first');
+                }
+                var __activeCallRuntime =
+                    typeof __root.__operit_call_runtime_ref === 'object' && __root.__operit_call_runtime_ref
+                        ? __root.__operit_call_runtime_ref
+                        : null;
+                if (__activeCallRuntime && typeof __bundle.setCallRuntime === 'function') {
+                    __bundle.setCallRuntime(__activeCallRuntime);
+                }
+                return __operit_build_compose_response(__bundle, __entry);
+            }
+
             function __operit_dispatch_compose_dsl_action(__actionRequest) {
                 var __root = typeof globalThis !== 'undefined'
                     ? globalThis
@@ -298,11 +317,13 @@ internal fun buildComposeDslRuntimeWrappedScript(script: String): String {
 
             if (typeof exports !== 'undefined' && exports) {
                 exports.__operit_render_compose_dsl = __operit_render_compose_dsl;
+                exports.__operit_rerender_compose_dsl = __operit_rerender_compose_dsl;
                 exports.__operit_dispatch_compose_dsl_action =
                     __operit_dispatch_compose_dsl_action;
             }
             if (typeof module !== 'undefined' && module && module.exports) {
                 module.exports.__operit_render_compose_dsl = __operit_render_compose_dsl;
+                module.exports.__operit_rerender_compose_dsl = __operit_rerender_compose_dsl;
                 module.exports.__operit_dispatch_compose_dsl_action =
                     __operit_dispatch_compose_dsl_action;
             }
@@ -310,6 +331,7 @@ internal fun buildComposeDslRuntimeWrappedScript(script: String): String {
                 ? globalThis
                 : (typeof window !== 'undefined' ? window : this);
             __root.__operit_render_compose_dsl = __operit_render_compose_dsl;
+            __root.__operit_rerender_compose_dsl = __operit_rerender_compose_dsl;
             __root.__operit_dispatch_compose_dsl_action =
                 __operit_dispatch_compose_dsl_action;
         })();

@@ -843,7 +843,16 @@ internal fun buildComposeDslContextBridgeDefinition(): String {
                         if (typeof handler !== 'function') {
                             throw new Error('compose action not found: ' + id);
                         }
-                        return handler(payload);
+                        var normalizedPayload = payload;
+                        if (
+                            normalizedPayload &&
+                            typeof normalizedPayload === 'object' &&
+                            normalizedPayload.__composeTextFieldPayload === true &&
+                            Object.prototype.hasOwnProperty.call(normalizedPayload, 'value')
+                        ) {
+                            normalizedPayload = normalizedPayload.value;
+                        }
+                        return handler(normalizedPayload);
                     },
                     subscribeStateChange: subscribeStateChange,
                     flushStateChanges: flushPendingStateChanges

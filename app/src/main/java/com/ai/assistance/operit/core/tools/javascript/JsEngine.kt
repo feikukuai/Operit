@@ -1776,6 +1776,18 @@ class JsEngine(private val context: Context) {
         )
     }
 
+    fun rerenderComposeDslTree(
+            runtimeOptions: Map<String, Any?> = emptyMap(),
+            envOverrides: Map<String, String> = emptyMap()
+    ): Any? {
+        return executeScriptFunction(
+                script = "",
+                functionName = "__operit_rerender_compose_dsl",
+                params = runtimeOptions,
+                envOverrides = envOverrides
+        )
+    }
+
     fun dispatchComposeDslActionAsync(
             actionId: String,
             payload: Any? = null,

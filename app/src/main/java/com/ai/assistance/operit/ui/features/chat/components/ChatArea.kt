@@ -94,6 +94,8 @@ import com.ai.assistance.operit.ui.features.chat.components.style.bubble.BubbleI
 import com.ai.assistance.operit.ui.features.chat.components.style.bubble.BubbleStyleChatMessage
 import com.ai.assistance.operit.util.ChatMarkupRegex
 import com.ai.assistance.operit.util.WaifuMessageProcessor
+import java.text.SimpleDateFormat
+import java.util.Date
 import java.util.Locale
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
@@ -216,6 +218,8 @@ fun ChatArea(
         displayPreferencesManager.showMessageTokenStats.collectAsState(initial = false)
     val showMessageTimingStats by
         displayPreferencesManager.showMessageTimingStats.collectAsState(initial = false)
+    val showMessageTimestamp by
+        displayPreferencesManager.showMessageTimestamp.collectAsState(initial = false)
     var viewportHeightPx by remember { mutableStateOf(0) }
     val messageAnchors = remember(currentChatId) { mutableStateMapOf<Long, ChatScrollMessageAnchor>() }
     var pendingJumpToMessageTimestamp by remember(currentChatId) { mutableStateOf<Long?>(null) }
@@ -690,13 +694,15 @@ private fun MessageItem(
                 (
                     message.variantCount > 1 ||
                         (showMessageTokenStats && hasDisplayableTokenStats(message)) ||
-                        (showMessageTimingStats && hasDisplayableTimingStats(message))
+                        (showMessageTimingStats && hasDisplayableTimingStats(message)) ||
+                        (showMessageTimestamp && hasDisplayableMessageTimestamp(message))
                 )
             ) {
                 MessageFooterBar(
                     message = message,
                     showMessageTokenStats = showMessageTokenStats,
                     showMessageTimingStats = showMessageTimingStats,
+                    showMessageTimestamp = showMessageTimestamp,
                     onSelectVariant = { targetVariantIndex ->
                         onSwitchMessageVariant?.invoke(index, targetVariantIndex)
                     },
@@ -1143,6 +1149,10 @@ private fun hasDisplayableTimingStats(message: ChatMessage): Boolean {
     return message.waitDurationMs > 0L || message.outputDurationMs > 0L
 }
 
+private fun hasDisplayableMessageTimestamp(message: ChatMessage): Boolean {
+    return message.timestamp > 0L
+}
+
 private fun formatCompactDuration(durationMs: Long): String {
     if (durationMs <= 0L) return "0ms"
     return if (durationMs >= 1000L) {
@@ -1156,11 +1166,17 @@ private fun formatCompactDuration(durationMs: Long): String {
     }
 }
 
+private fun formatCompactTimestamp(timestamp: Long): String {
+    if (timestamp <= 0L) return ""
+    return SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date(timestamp))
+}
+
 @Composable
 private fun MessageFooterBar(
     message: ChatMessage,
     showMessageTokenStats: Boolean,
     showMessageTimingStats: Boolean,
+    showMessageTimestamp: Boolean,
     onSelectVariant: (Int) -> Unit,
 ) {
     val hasPrevious = message.selectedVariantIndex > 0
@@ -1185,6 +1201,13 @@ private fun MessageFooterBar(
                 formatCompactDuration(totalDuration),
                 formatCompactDuration(message.waitDurationMs),
                 formatCompactDuration(message.outputDurationMs),
+            )
+        }
+    val messageTimeSummary =
+        remember(message.timestamp) {
+            context.getString(
+                R.string.chat_message_timestamp_compact,
+                formatCompactTimestamp(message.timestamp),
             )
         }
     val statsTextColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.68f)
@@ -1254,6 +1277,14 @@ private fun MessageFooterBar(
         if (showMessageTimingStats && hasDisplayableTimingStats(message)) {
             Text(
                 text = timeSummary,
+                style = MaterialTheme.typography.labelSmall,
+                color = statsTextColor,
+            )
+        }
+
+        if (showMessageTimestamp && hasDisplayableMessageTimestamp(message)) {
+            Text(
+                text = messageTimeSummary,
                 style = MaterialTheme.typography.labelSmall,
                 color = statsTextColor,
             )

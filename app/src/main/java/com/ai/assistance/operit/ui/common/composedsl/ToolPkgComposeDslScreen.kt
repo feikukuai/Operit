@@ -164,6 +164,7 @@ import com.ai.assistance.operit.ui.theme.loadCustomFontFamily
 import com.ai.assistance.operit.util.AppLogger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Mutex
@@ -184,6 +185,7 @@ import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeoutException
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 
 private const val TAG = "ToolPkgComposeDslScreen"
@@ -327,6 +329,13 @@ fun ToolPkgComposeDslToolScreen(
             mutableStateOf(false)
         }
     var nextDispatchTicket by remember(containerPackageName, uiModuleId) { mutableStateOf(1L) }
+    var pendingTreeRerenderJob by remember(containerPackageName, uiModuleId) { mutableStateOf<Job?>(null) }
+    val nextTextInputSyncTicket =
+        remember(containerPackageName, uiModuleId) { AtomicLong(1L) }
+    val pendingTextInputSyncs =
+        remember(containerPackageName, uiModuleId) {
+            linkedMapOf<Long, CompletableDeferred<Unit>>()
+        }
     val settledDispatchTickets = remember(containerPackageName, uiModuleId) { mutableSetOf<Long>() }
     val requiresWebViewImeResize =
         remember(renderResult?.tree) {
@@ -422,16 +431,94 @@ fun ToolPkgComposeDslToolScreen(
             )
         }
 
+    suspend fun rerenderComposeDslTreeInternal(source: String) {
+        val rawResult =
+            withContext(Dispatchers.IO) {
+                jsEngine.rerenderComposeDslTree(
+                    runtimeOptions = buildActionRuntimeOptions()
+                )
+            }
+        val parsed = ToolPkgComposeDslParser.parseRenderResult(rawResult)
+        if (parsed == null) {
+            val rawText = rawResult?.toString()?.trim().orEmpty()
+            AppLogger.e(
+                TAG,
+                "compose_dsl tree rerender failed: source=$source, raw=${rawText.ifBlank { "<empty>" }}"
+            )
+            updateDebugSnapshot(
+                phase = "tree_rerender_invalid:$source",
+                rawRenderResult = rawResult,
+                parsedRenderResult = renderResult,
+                error = errorMessage
+            )
+            return
+        }
+        renderResult = parsed
+        errorMessage = null
+        updateDebugSnapshot(
+            phase = "tree_rerender:$source",
+            rawRenderResult = rawResult,
+            parsedRenderResult = parsed,
+            error = null
+        )
+    }
+
+    fun requestComposeDslTreeRerender(immediate: Boolean = false) {
+        pendingTreeRerenderJob?.cancel()
+        pendingTreeRerenderJob =
+            scope.launch {
+                if (!immediate) {
+                    withFrameNanos { }
+                }
+                renderMutex.withLock {
+                    rerenderComposeDslTreeInternal(
+                        source = if (immediate) "immediate" else "next_frame"
+                    )
+                }
+            }
+    }
+
+    fun hasPendingTextInputSyncs(): Boolean = pendingTextInputSyncs.isNotEmpty()
+
+    suspend fun awaitPendingTextInputSyncs() {
+        val pendingCompletions = pendingTextInputSyncs.values.toList()
+        pendingCompletions.forEach { completion ->
+            runCatching { completion.await() }
+        }
+    }
+
+    fun flushTextInputSyncsAndRerender() {
+        scope.launch {
+            awaitPendingTextInputSyncs()
+            requestComposeDslTreeRerender(true)
+        }
+    }
+
     fun dispatchActionInternal(
         actionId: String,
         payload: Any? = null,
-        onSettled: (() -> Unit)? = null
+        onSettled: (() -> Unit)? = null,
+        flushPendingTextInputs: Boolean = true
     ): Boolean {
         val normalizedActionId = actionId.trim()
         if (normalizedActionId.isBlank()) {
             onSettled?.invoke()
             return false
         }
+        if (flushPendingTextInputs && hasPendingTextInputSyncs()) {
+            scope.launch {
+                awaitPendingTextInputSyncs()
+                dispatchActionInternal(
+                    actionId = normalizedActionId,
+                    payload = payload,
+                    onSettled = onSettled,
+                    flushPendingTextInputs = false
+                )
+            }
+            return true
+        }
+        pendingTreeRerenderJob?.cancel()
+        pendingTreeRerenderJob = null
         AppLogger.d(
             TAG,
             "compose_dsl dispatchAction: routeInstanceId=$routeInstanceId, package=$containerPackageName, uiModuleId=$uiModuleId, actionId=$normalizedActionId, payload=$payload"
@@ -528,6 +615,35 @@ fun ToolPkgComposeDslToolScreen(
         dispatchActionInternal(actionId = actionId, payload = payload)
     }
 
+    fun dispatchTextInputAction(actionId: String, text: String) {
+        val normalizedActionId = actionId.trim()
+        if (normalizedActionId.isBlank()) {
+            return
+        }
+        val syncTicket = nextTextInputSyncTicket.getAndIncrement()
+        val completion = CompletableDeferred<Unit>()
+        pendingTextInputSyncs[syncTicket] = completion
+        dispatchActionInternal(
+            actionId = normalizedActionId,
+            payload =
+                mapOf(
+                    "__composeTextFieldPayload" to true,
+                    "__no_render" to true,
+                    "value" to text
+                ),
+            onSettled = {
+                pendingTextInputSyncs.remove(syncTicket)
+                if (!completion.isCompleted) {
+                    completion.complete(Unit)
+                }
+                if (!hasPendingTextInputSyncs()) {
+                    requestComposeDslTreeRerender(false)
+                }
+            },
+            flushPendingTextInputs = false
+        )
+    }
+
     suspend fun dispatchActionAwait(actionId: String, payload: Any? = null) {
         val completion = CompletableDeferred<Unit>()
         dispatchActionInternal(
@@ -553,6 +669,8 @@ fun ToolPkgComposeDslToolScreen(
                 TopBarTitleContent {
                     CompositionLocalProvider(
                         LocalComposeDslActionHandler provides ::dispatchAction,
+                        LocalComposeDslTextInputActionHandler provides ::dispatchTextInputAction,
+                        LocalComposeDslFlushTextInputHandler provides ::flushTextInputSyncsAndRerender,
                         LocalComposeDslSuspendingActionHandler provides ::dispatchActionAwait,
                         LocalComposeDslRouteInstanceId provides routeInstanceId,
                         LocalComposeDslWebViewHost provides webViewHostContext
@@ -585,6 +703,14 @@ fun ToolPkgComposeDslToolScreen(
         var snapshotError: String? = null
         renderMutex.withLock {
             try {
+                pendingTreeRerenderJob?.cancel()
+                pendingTreeRerenderJob = null
+                pendingTextInputSyncs.values.forEach { completion ->
+                    if (!completion.isCompleted) {
+                        completion.complete(Unit)
+                    }
+                }
+                pendingTextInputSyncs.clear()
                 isLoading = true
                 dispatchingCount = 0
                 isDispatching = false
@@ -699,6 +825,14 @@ fun ToolPkgComposeDslToolScreen(
 
     DisposableEffect(executionContextKey) {
         onDispose {
+            pendingTreeRerenderJob?.cancel()
+            pendingTreeRerenderJob = null
+            pendingTextInputSyncs.values.forEach { completion ->
+                if (!completion.isCompleted) {
+                    completion.complete(Unit)
+                }
+            }
+            pendingTextInputSyncs.clear()
             setTopBarTitleContent(null)
             ToolPkgComposeDslDebugSnapshotStore.clear(routeInstanceId)
             ComposeDslWebViewHostRegistry.clearExecutionContext(executionContextKey)
@@ -763,6 +897,8 @@ fun ToolPkgComposeDslToolScreen(
                 rootNode != null -> {
                     CompositionLocalProvider(
                         LocalComposeDslActionHandler provides ::dispatchAction,
+                        LocalComposeDslTextInputActionHandler provides ::dispatchTextInputAction,
+                        LocalComposeDslFlushTextInputHandler provides ::flushTextInputSyncsAndRerender,
                         LocalComposeDslSuspendingActionHandler provides ::dispatchActionAwait,
                         LocalComposeDslRouteInstanceId provides routeInstanceId,
                         LocalComposeDslWebViewHost provides webViewHostContext
@@ -793,6 +929,8 @@ fun RenderToolPkgComposeDslNode(
 ) {
     CompositionLocalProvider(
         LocalComposeDslActionHandler provides onAction,
+        LocalComposeDslTextInputActionHandler provides { _, _ -> },
+        LocalComposeDslFlushTextInputHandler provides { },
         LocalComposeDslSuspendingActionHandler provides { actionId, payload ->
             onAction(actionId, payload)
         },
@@ -811,6 +949,13 @@ fun RenderToolPkgComposeDslNode(
 
 internal val LocalComposeDslActionHandler = staticCompositionLocalOf<(String, Any?) -> Unit> {
     { _, _ -> }
+}
+internal val LocalComposeDslTextInputActionHandler =
+    staticCompositionLocalOf<(String, String) -> Unit> {
+        { _, _ -> }
+    }
+internal val LocalComposeDslFlushTextInputHandler = staticCompositionLocalOf<() -> Unit> {
+    { }
 }
 internal val LocalComposeDslSuspendingActionHandler =
     staticCompositionLocalOf<suspend (String, Any?) -> Unit> {
