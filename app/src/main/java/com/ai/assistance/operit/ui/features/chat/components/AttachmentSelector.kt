@@ -44,12 +44,16 @@ import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.ScreenshotMonitor
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -67,6 +71,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
 import com.ai.assistance.operit.R
+import com.ai.assistance.operit.core.tools.skill.SkillPackage
+import com.ai.assistance.operit.data.skill.SkillRepository
 import kotlinx.coroutines.launch
 import java.io.File
 import androidx.core.content.ContextCompat
@@ -83,6 +89,7 @@ fun AttachmentSelectorPanel(
         onAttachNotifications: () -> Unit = {},
         onAttachLocation: () -> Unit = {},
         onAttachMemory: () -> Unit = {},
+        onAttachSkill: (String) -> Unit = {},
         onTakePhoto: (Uri) -> Unit,
         userQuery: String = "",
         onDismiss: () -> Unit
@@ -93,6 +100,8 @@ fun AttachmentSelectorPanel(
         onTakePhoto = onTakePhoto,
         onDismiss = onDismiss,
     )
+
+    var showSkillDialog by remember { mutableStateOf(false) }
 
     // 文件/图片选择器启动器
     val imagePickerLauncher = rememberLauncherForActivityResult(
@@ -212,15 +221,20 @@ fun AttachmentSelectorPanel(
                                             onAttachLocation()
                                             onDismiss()
                                         }
+                                ),
+                                AttachmentPanelItem(
+                                        icon = Icons.Default.AutoAwesome,
+                                        label = context.getString(R.string.attachment_skill),
+                                        onClick = { showSkillDialog = true }
                                 )
                         )
 
-                val pages = panelItems.chunked(8).ifEmpty { listOf(emptyList()) }
+                val pages = panelItems.chunked(9).ifEmpty { listOf(emptyList()) }
                 val pagerState = rememberPagerState(pageCount = { pages.size })
 
                 HorizontalPager(state = pagerState, modifier = Modifier.fillMaxWidth()) { pageIndex ->
                     val pageItems = pages[pageIndex]
-                    val paddedItems = pageItems + List(8 - pageItems.size) { null }
+                    val paddedItems = pageItems + List(9 - pageItems.size) { null }
 
                     Column(modifier = Modifier.fillMaxWidth()) {
                         // 第一行选项
@@ -231,7 +245,7 @@ fun AttachmentSelectorPanel(
                                 horizontalArrangement = Arrangement.SpaceEvenly,
                                 verticalAlignment = Alignment.CenterVertically
                         ) {
-                            paddedItems.take(4).forEach { item ->
+                            paddedItems.take(3).forEach { item ->
                                 if (item == null) {
                                     AttachmentOptionPlaceholder()
                                 } else {
@@ -254,7 +268,30 @@ fun AttachmentSelectorPanel(
                                 horizontalArrangement = Arrangement.SpaceEvenly,
                                 verticalAlignment = Alignment.CenterVertically
                         ) {
-                            paddedItems.drop(4).take(4).forEach { item ->
+                            paddedItems.drop(3).take(3).forEach { item ->
+                                if (item == null) {
+                                    AttachmentOptionPlaceholder()
+                                } else {
+                                    AttachmentOption(
+                                            icon = item.icon,
+                                            label = item.label,
+                                            onClick = item.onClick
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        // 第三行选项
+                        Row(
+                                modifier =
+                                        Modifier.fillMaxWidth().padding(horizontal = 16.dp)
+                                                .heightIn(min = 96.dp),
+                                horizontalArrangement = Arrangement.SpaceEvenly,
+                                verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            paddedItems.drop(6).take(3).forEach { item ->
                                 if (item == null) {
                                     AttachmentOptionPlaceholder()
                                 } else {
@@ -298,9 +335,18 @@ fun AttachmentSelectorPanel(
             }
         }
     }
-}
 
-/** Agent 模式用的附件弹窗（上方悬浮样式，功能与经典模式 8 项保持一致） */
+    // 技能选择对话框
+    SkillSelectorDialog(
+        visible = showSkillDialog,
+        onDismiss = { showSkillDialog = false },
+        onSkillSelected = { skillName ->
+            onAttachSkill(skillName)
+            showSkillDialog = false
+            onDismiss()
+        }
+    )
+}
 @Composable
 fun AttachmentSelectorPopupPanel(
         visible: Boolean,
@@ -311,6 +357,7 @@ fun AttachmentSelectorPopupPanel(
         onAttachNotifications: () -> Unit = {},
         onAttachLocation: () -> Unit = {},
         onAttachMemory: () -> Unit = {},
+        onAttachSkill: (String) -> Unit = {},
         onTakePhoto: (Uri) -> Unit,
         onDismiss: () -> Unit
 ) {
@@ -322,6 +369,8 @@ fun AttachmentSelectorPopupPanel(
             onTakePhoto = onTakePhoto,
             onDismiss = onDismiss,
     )
+
+    var showSkillDialog by remember { mutableStateOf(false) }
 
     val imagePickerLauncher = rememberLauncherForActivityResult(
             contract = ActivityResultContracts.GetMultipleContents()
@@ -406,6 +455,11 @@ fun AttachmentSelectorPopupPanel(
                                 onAttachLocation()
                                 onDismiss()
                             }
+                    ),
+                    AttachmentPanelItem(
+                            icon = Icons.Default.AutoAwesome,
+                            label = context.getString(R.string.attachment_skill),
+                            onClick = { showSkillDialog = true }
                     )
             )
 
@@ -476,6 +530,17 @@ fun AttachmentSelectorPopupPanel(
             }
         }
     }
+
+    // 技能选择对话框
+    SkillSelectorDialog(
+        visible = showSkillDialog,
+        onDismiss = { showSkillDialog = false },
+        onSkillSelected = { skillName ->
+            onAttachSkill(skillName)
+            showSkillDialog = false
+            onDismiss()
+        }
+    )
 }
 
 private data class AttachmentPanelItem(
@@ -600,4 +665,95 @@ private fun AttachmentOption(icon: ImageVector, label: String, onClick: () -> Un
 @Composable
 private fun AttachmentOptionPlaceholder() {
     Spacer(modifier = Modifier.width(70.dp).padding(horizontal = 8.dp, vertical = 8.dp))
+}
+
+/** 技能选择对话框 */
+@Composable
+fun SkillSelectorDialog(
+        visible: Boolean,
+        onDismiss: () -> Unit,
+        onSkillSelected: (String) -> Unit
+) {
+    if (!visible) return
+
+    val context = LocalContext.current
+    val skillRepository = remember { SkillRepository.getInstance(context) }
+    var skills by remember { mutableStateOf<Map<String, SkillPackage>>(emptyMap()) }
+
+    LaunchedEffect(visible) {
+        if (visible) {
+            skills = skillRepository.getAiVisibleSkillPackages()
+        }
+    }
+
+    AlertDialog(
+            onDismissRequest = onDismiss,
+            title = {
+                Text(
+                        text = context.getString(R.string.attachment_skill_select_title),
+                        style = MaterialTheme.typography.titleMedium
+                )
+            },
+            text = {
+                if (skills.isEmpty()) {
+                    Box(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp),
+                            contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                                text = context.getString(R.string.attachment_skill_empty),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                } else {
+                    Column(
+                            modifier = Modifier.fillMaxWidth().heightIn(max = 400.dp).verticalScroll(rememberScrollState())
+                    ) {
+                        skills.forEach { (skillName, skillPackage) ->
+                            Surface(
+                                    modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = Color.Transparent,
+                                    onClick = { onSkillSelected(skillName) }
+                            ) {
+                                Row(
+                                        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 10.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                            imageVector = Icons.Default.AutoAwesome,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(20.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                                text = skillName,
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                        if (skillPackage.description.isNotBlank()) {
+                                            Text(
+                                                    text = skillPackage.description,
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    maxLines = 2,
+                                                    overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = onDismiss) {
+                    Text(context.getString(R.string.cancel))
+                }
+            }
+    )
 }

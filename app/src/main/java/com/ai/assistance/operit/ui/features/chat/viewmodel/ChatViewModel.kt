@@ -89,6 +89,7 @@ import com.ai.assistance.operit.services.ChatServiceCore
 import com.ai.assistance.operit.services.ChatServiceUiBridge
 import com.ai.assistance.operit.services.EmptyChatServiceUiBridge
 import com.ai.assistance.operit.ui.features.chat.util.MessageImageGenerator
+import com.ai.assistance.operit.core.tools.skill.SkillManager
 import com.ai.assistance.operit.ui.features.chat.components.CharacterSelectorTarget
 enum class ChatHistoryDisplayMode {
     BY_CHARACTER_CARD,
@@ -1677,6 +1678,32 @@ class ChatViewModel(private val context: Context) : ViewModel() {
     fun handleTakenPhoto(uri: Uri) {
         viewModelScope.launch {
             attachmentDelegate.handleTakenPhoto(uri)
+        }
+    }
+
+    /** Attaches a skill's content to the current message as an attachment */
+    fun attachSkill(skillName: String) {
+        viewModelScope.launch {
+            try {
+                val skillManager = SkillManager.getInstance(context)
+                val skillContent = skillManager.getSkillSystemPrompt(skillName)
+                if (skillContent != null) {
+                    val attachment = AttachmentInfo(
+                        filePath = "skill_${skillName}_${System.currentTimeMillis()}",
+                        fileName = "技能: $skillName",
+                        mimeType = "text/plain",
+                        fileSize = skillContent.length.toLong(),
+                        content = skillContent
+                    )
+                    attachmentDelegate.addAttachments(listOf(attachment))
+                    uiStateDelegate.showToast(context.getString(R.string.attachment_skill_added, skillName))
+                } else {
+                    uiStateDelegate.showToast(context.getString(R.string.attachment_skill_failed, skillName))
+                }
+            } catch (e: Exception) {
+                AppLogger.e(TAG, "添加技能附件失败", e)
+                uiStateDelegate.showToast(context.getString(R.string.attachment_skill_failed, skillName))
+            }
         }
     }
 

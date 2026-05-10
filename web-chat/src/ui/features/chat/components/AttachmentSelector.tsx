@@ -60,6 +60,7 @@ export function AttachmentSelector({
         <AttachmentSelectorButton disabled title="屏幕内容" />
         <AttachmentSelectorButton disabled title="通知" />
         <AttachmentSelectorButton disabled title="定位" />
+        <AttachmentSelectorButton disabled title="技能" />
       </div>
 
       <div className="attachment-selector-note">
