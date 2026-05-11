@@ -299,6 +299,42 @@
       ]
     },
     {
+      "name": "import_entries",
+      "description": {
+        "zh": "从世界书 JSON 文件或 JSON 内容导入条目。兼容 Operit、SillyTavern lorebook，以及角色卡内嵌 character_book。",
+        "en": "Import entries from a world book JSON file or JSON content. Supports Operit, SillyTavern lorebooks, and embedded character_book formats."
+      },
+      "parameters": [
+        {
+          "name": "path",
+          "description": {
+            "zh": "导入文件路径，支持普通文件路径或 content:// URI；与 content 二选一。",
+            "en": "Import file path, supports normal file paths or content:// URIs; mutually exclusive with content."
+          },
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "content",
+          "description": {
+            "zh": "原始 JSON 文本；与 path 二选一。",
+            "en": "Raw JSON text; mutually exclusive with path."
+          },
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "character_card_id",
+          "description": {
+            "zh": "可选，导入后统一绑定到指定角色卡。",
+            "en": "Optional; bind all imported entries to the specified character card."
+          },
+          "type": "string",
+          "required": false
+        }
+      ]
+    },
+    {
       "name": "list_character_cards_proxy",
       "description": {
         "zh": "通过代理列出所有角色卡，用于世界书 UI 选择角色卡。",
@@ -314,10 +350,13 @@ import {
   createWorldBookEntry,
   deleteWorldBookEntry,
   getWorldBookEntry,
+  importWorldBookEntries,
   listWorldBookCharacterCards,
   listWorldBookEntries,
   toggleWorldBookEntry,
   updateWorldBookEntry,
+  type WorldBookError,
+  type WorldBookImportParams,
   type WorldBookMutationParams
 } from "../shared/worldbook_service.js";
 import { ensureWorldBookStorage } from "../shared/worldbook_storage.js";
@@ -327,8 +366,8 @@ async function wrap<TParams>(handler: (params: TParams) => Promise<unknown>, par
     const result = await handler(params);
     complete(result);
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    complete({ success: false, message: `执行失败: ${message}` });
+    const handledError = error as WorldBookError;
+    complete({ success: false, code: handledError.code, message: handledError.message });
   }
 }
 
@@ -366,6 +405,18 @@ async function toggleEntry(params: Pick<WorldBookMutationParams, "id">): Promise
   };
 }
 
+async function importEntries(params: WorldBookImportParams): Promise<unknown> {
+  const result = await importWorldBookEntries(params);
+  return {
+    success: true,
+    message:
+      result.warning_count > 0
+        ? `已导入 ${result.imported_count} 个条目，并产生 ${result.warning_count} 条兼容性提示`
+        : `已导入 ${result.imported_count} 个条目`,
+    result
+  };
+}
+
 async function listCharacterCardsProxy(): Promise<unknown> {
   const cards = await listWorldBookCharacterCards();
   return { success: true, totalCount: cards.length, cards };
@@ -377,6 +428,7 @@ exports.create_entry = (params: WorldBookMutationParams) => wrap(createEntry, pa
 exports.update_entry = (params: WorldBookMutationParams) => wrap(updateEntry, params);
 exports.delete_entry = (params: Pick<WorldBookMutationParams, "id">) => wrap(deleteEntry, params);
 exports.toggle_entry = (params: Pick<WorldBookMutationParams, "id">) => wrap(toggleEntry, params);
+exports.import_entries = (params: WorldBookImportParams) => wrap(importEntries, params);
 exports.list_character_cards_proxy = (params: never) =>
   wrap(listCharacterCardsProxy as (params: never) => Promise<unknown>, params);
 

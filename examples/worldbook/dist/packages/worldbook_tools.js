@@ -300,6 +300,42 @@
       ]
     },
     {
+      "name": "import_entries",
+      "description": {
+        "zh": "从世界书 JSON 文件或 JSON 内容导入条目。兼容 Operit、SillyTavern lorebook，以及角色卡内嵌 character_book。",
+        "en": "Import entries from a world book JSON file or JSON content. Supports Operit, SillyTavern lorebooks, and embedded character_book formats."
+      },
+      "parameters": [
+        {
+          "name": "path",
+          "description": {
+            "zh": "导入文件路径，支持普通文件路径或 content:// URI；与 content 二选一。",
+            "en": "Import file path, supports normal file paths or content:// URIs; mutually exclusive with content."
+          },
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "content",
+          "description": {
+            "zh": "原始 JSON 文本；与 path 二选一。",
+            "en": "Raw JSON text; mutually exclusive with path."
+          },
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "character_card_id",
+          "description": {
+            "zh": "可选，导入后统一绑定到指定角色卡。",
+            "en": "Optional; bind all imported entries to the specified character card."
+          },
+          "type": "string",
+          "required": false
+        }
+      ]
+    },
+    {
       "name": "list_character_cards_proxy",
       "description": {
         "zh": "通过代理列出所有角色卡，用于世界书 UI 选择角色卡。",
@@ -319,8 +355,8 @@ async function wrap(handler, params) {
         complete(result);
     }
     catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        complete({ success: false, message: `执行失败: ${message}` });
+        const handledError = error;
+        complete({ success: false, code: handledError.code, message: handledError.message });
     }
 }
 async function listEntries() {
@@ -351,6 +387,16 @@ async function toggleEntry(params) {
         entry
     };
 }
+async function importEntries(params) {
+    const result = await (0, worldbook_service_js_1.importWorldBookEntries)(params);
+    return {
+        success: true,
+        message: result.warning_count > 0
+            ? `已导入 ${result.imported_count} 个条目，并产生 ${result.warning_count} 条兼容性提示`
+            : `已导入 ${result.imported_count} 个条目`,
+        result
+    };
+}
 async function listCharacterCardsProxy() {
     const cards = await (0, worldbook_service_js_1.listWorldBookCharacterCards)();
     return { success: true, totalCount: cards.length, cards };
@@ -361,5 +407,6 @@ exports.create_entry = (params) => wrap(createEntry, params);
 exports.update_entry = (params) => wrap(updateEntry, params);
 exports.delete_entry = (params) => wrap(deleteEntry, params);
 exports.toggle_entry = (params) => wrap(toggleEntry, params);
+exports.import_entries = (params) => wrap(importEntries, params);
 exports.list_character_cards_proxy = (params) => wrap(listCharacterCardsProxy, params);
 void (0, worldbook_storage_js_1.ensureWorldBookStorage)();

@@ -880,7 +880,7 @@ internal object JsJavaBridgeDelegates {
     private fun failure(message: String): String {
         return JSONObject()
             .put("success", false)
-            .put("error", message)
+            .put("message", message)
             .toString()
     }
 
@@ -1856,7 +1856,7 @@ internal object JsJavaBridgeDelegates {
                 BridgeResponse(
                     success = token.optBoolean("success", false),
                     dataRaw = token.opt("data"),
-                    error = token.optString("error").ifBlank { null }
+                    error = token.optString("message").ifBlank { null }
                 )
             } else {
                 BridgeResponse(

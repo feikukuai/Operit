@@ -92,9 +92,9 @@ internal class JsToolPkgRegistrationSession {
         append(RegistrationBucket.AI_PROVIDER, specJson)
 
     fun finish(executionResult: Any?): ToolPkgMainRegistrationCapture {
-        if (executionResult is String && executionResult.trim().startsWith("Error:", ignoreCase = true)) {
-            val message = executionResult.substringAfter(':', executionResult).trim()
-            throw IllegalStateException(message.ifBlank { "toolpkg main registration failed" })
+        val errorMessage = extractJsExecutionErrorMessage(executionResult)
+        if (errorMessage != null) {
+            throw IllegalStateException(errorMessage)
         }
         synchronized(lock) {
             val current = capture.orEmpty()

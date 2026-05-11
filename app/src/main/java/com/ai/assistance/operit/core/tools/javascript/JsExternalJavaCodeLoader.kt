@@ -384,7 +384,7 @@ internal class JsExternalJavaCodeLoader(private val context: Context) {
     private fun failure(message: String): String {
         return JSONObject()
             .put("success", false)
-            .put("error", message)
+            .put("message", message)
             .toString()
     }
 }

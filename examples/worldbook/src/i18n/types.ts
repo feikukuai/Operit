@@ -11,6 +11,8 @@ export interface WorldBookI18n {
   toastContentRequired: string;
   toastUpdated: string;
   toastCreated: string;
+  toastImportPathRequired: string;
+  toastImportDone: (importedCount: number, warningCount: number) => string;
   toastFailedPrefix: string;
   toastUnknownResult: string;
   toastSaveFailedPrefix: string;
@@ -24,9 +26,19 @@ export interface WorldBookI18n {
   tagCharacterCard: (value: string) => string;
   tagPinned: string;
   tagRegex: string;
+  buttonImport: string;
   buttonEdit: string;
   buttonDelete: string;
   buttonBack: string;
+  buttonPickImportFile: string;
+  sectionImport: string;
+  sectionImportDesc: string;
+  fieldImportPath: string;
+  fieldImportPathPlaceholder: string;
+  importFormatsTitle: string;
+  importFormatsDesc: string;
+  importPathHint: string;
+  importActionButton: string;
   sectionBasicInfo: string;
   sectionBasicInfoDesc: string;
   fieldEntryName: string;

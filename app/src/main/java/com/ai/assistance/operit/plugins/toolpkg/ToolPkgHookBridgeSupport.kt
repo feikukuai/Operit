@@ -3,6 +3,7 @@ package com.ai.assistance.operit.plugins.toolpkg
 import com.ai.assistance.operit.core.application.OperitApplication
 import com.ai.assistance.operit.core.tools.AIToolHandler
 import com.ai.assistance.operit.core.tools.javascript.JsJavaBridgeDelegates
+import com.ai.assistance.operit.core.tools.javascript.extractJsExecutionErrorMessage
 import com.ai.assistance.operit.core.tools.packTool.PackageManager
 import org.json.JSONArray
 import org.json.JSONObject
@@ -81,8 +82,9 @@ internal fun decodeToolPkgHookResult(raw: Any?): Any? {
     if (normalized.isEmpty()) {
         return text
     }
-    if (normalized.startsWith("Error:", ignoreCase = true)) {
-        throw IllegalStateException(normalized.substringAfter(":", normalized).trim().ifEmpty { normalized })
+    val errorMessage = extractJsExecutionErrorMessage(normalized)
+    if (errorMessage != null) {
+        throw IllegalStateException(errorMessage)
     }
     return try {
         JSONTokener(normalized).nextValue()

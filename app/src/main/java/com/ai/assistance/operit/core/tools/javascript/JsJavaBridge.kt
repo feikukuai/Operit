@@ -482,9 +482,9 @@ internal fun buildJavaClassBridgeDefinition(): String {
 
                 if (!parsed || parsed.success !== true) {
                     var message =
-                        parsed && typeof parsed.error === 'string' && parsed.error.length > 0
-                            ? parsed.error
-                            : ('Bridge call failed: ' + methodName);
+                        parsed && typeof parsed.message === 'string' && parsed.message.length > 0
+                            ? parsed.message
+                            : '';
                     throw new Error(message);
                 }
 

@@ -302,7 +302,7 @@ class JsToolManager private constructor(
                     "Script execution failed: package=$packageName, function=$functionName, error=${e.message}",
                     e
                 )
-                "Error: ${e.message}"
+                buildJsExecutionErrorPayload(e.message.orEmpty())
             }
         }
     }
@@ -356,10 +356,7 @@ class JsToolManager private constructor(
                         executionListener = traceListener
                     )
 
-                    val normalizedError = result?.toString()
-                        ?.takeIf { it.startsWith("Error:", ignoreCase = true) }
-                        ?.removePrefix("Error:")
-                        ?.trim()
+                    val normalizedError = extractJsExecutionErrorMessage(result)
                     if (normalizedError != null) {
                         send(failure(tool.name, normalizedError))
                     } else {
@@ -424,7 +421,7 @@ class JsToolManager private constructor(
                 )?.toString() ?: "null"
             } catch (e: Exception) {
                 AppLogger.e(TAG, "Compose DSL execution failed: ${e.message}", e)
-                "Error: ${e.message}"
+                buildJsExecutionErrorPayload(e.message.orEmpty())
             }
         }
     }

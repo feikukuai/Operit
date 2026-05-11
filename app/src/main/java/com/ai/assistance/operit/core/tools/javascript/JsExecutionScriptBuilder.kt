@@ -393,7 +393,13 @@ internal fun buildExecutionRuntimeBridgeScript(): String {
                         ? root.__operitRegisterCallSession
                         : null;
                 if (typeof registerCallSession !== 'function') {
-                    NativeInterface.setCallError(callId, 'JS execution runtime bridge is unavailable');
+                    NativeInterface.setCallError(
+                        callId,
+                        JSON.stringify({
+                            success: false,
+                            message: 'JS execution runtime bridge is unavailable'
+                        })
+                    );
                     return;
                 }
 
@@ -490,7 +496,13 @@ internal fun buildExecutionRuntimeBridgeScript(): String {
                         return;
                     }
                     state.completed = true;
-                    NativeInterface.setCallError(callId, text(message || 'Unknown error'));
+                    NativeInterface.setCallError(
+                        callId,
+                        JSON.stringify({
+                            success: false,
+                            message: text(message)
+                        })
+                    );
                     finalizeCall();
                 }
 
@@ -534,13 +546,14 @@ internal fun buildExecutionRuntimeBridgeScript(): String {
                         emitSerializedResult(serializeOrThrow(normalizeComposeResult(value)));
                     } catch (error) {
                         var report = callRuntimeReport(error, 'Result Serialization Failure');
-                        emitError(
-                            JSON.stringify({
-                                error: 'Result serialization failed',
-                                details: report.details,
-                                formatted: report.formatted
-                            })
-                        );
+                        var serializationMessage =
+                            report &&
+                            report.details &&
+                            typeof report.details.message === 'string' &&
+                            report.details.message
+                                ? report.details.message
+                                : text(error && error.message ? error.message : error);
+                        emitError('Result serialization failed: ' + serializationMessage);
                     }
                 }
 
@@ -559,15 +572,14 @@ internal fun buildExecutionRuntimeBridgeScript(): String {
                                 return;
                             }
                             var report = callRuntimeReport(error, 'Async Promise Rejection');
-                            emitError(
-                                report && report.formatted
-                                    ? JSON.stringify({
-                                        error: 'Promise rejection',
-                                        details: report.details,
-                                        formatted: report.formatted
-                                    })
-                                    : 'Promise rejection: ' + text(error && error.stack ? error.stack : error)
-                            );
+                            var rejectionMessage =
+                                report &&
+                                report.details &&
+                                typeof report.details.message === 'string' &&
+                                report.details.message
+                                    ? report.details.message
+                                    : text(error && error.message ? error.message : error);
+                            emitError(rejectionMessage || 'Promise rejection');
                         });
                     return true;
                 }
@@ -699,10 +711,10 @@ internal fun buildExecutionRuntimeBridgeScript(): String {
                     if (!parsed || parsed.success !== true) {
                         var message =
                             parsed &&
-                            typeof parsed.error === 'string' &&
-                            parsed.error.trim().length > 0
-                                ? parsed.error.trim()
-                                : actionLabel + ' failed';
+                            typeof parsed.message === 'string' &&
+                            parsed.message.trim().length > 0
+                                ? parsed.message.trim()
+                                : '';
                         throw new Error(message);
                     }
                     return parsed;

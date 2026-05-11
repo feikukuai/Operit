@@ -160,11 +160,7 @@ internal fun buildComposeDslContextBridgeDefinition(): String {
                     typeof parsed === 'object' &&
                     parsed.success === false
                 ) {
-                    var message =
-                        typeof parsed.error === 'string' && parsed.error
-                            ? parsed.error
-                            : (label || 'native bridge call failed');
-                    throw new Error(message);
+                    throw createUserFacingError(parsed.message, parsed);
                 }
                 if (
                     parsed &&
@@ -174,6 +170,17 @@ internal fun buildComposeDslContextBridgeDefinition(): String {
                     return parsed.data;
                 }
                 return parsed;
+            }
+
+            function createUserFacingError(message, detailData) {
+                return {
+                    name: 'Error',
+                    message: String(message || '').trim(),
+                    data: detailData,
+                    toString: function() {
+                        return this.message;
+                    }
+                };
             }
 
             function createContext(runtimeOptions) {
@@ -441,7 +448,7 @@ internal fun buildComposeDslContextBridgeDefinition(): String {
                                 !NativeInterface ||
                                 typeof NativeInterface.composeWebViewControllerCommandSuspend !== 'function'
                             ) {
-                                reject(new Error('NativeInterface.composeWebViewControllerCommandSuspend is unavailable'));
+                                reject(createUserFacingError('NativeInterface.composeWebViewControllerCommandSuspend is unavailable'));
                                 return;
                             }
                             var root = typeof globalThis !== 'undefined'
@@ -453,18 +460,7 @@ internal fun buildComposeDslContextBridgeDefinition(): String {
                                 delete callbackTarget[callbackId];
                                 try {
                                     if (isError) {
-                                        var errorMessage =
-                                            result &&
-                                            typeof result === 'object' &&
-                                            typeof result.error === 'string' &&
-                                            result.error
-                                                ? result.error
-                                                : String(
-                                                    result == null
-                                                        ? 'compose webview controller command failed'
-                                                        : result
-                                                );
-                                        reject(new Error(errorMessage));
+                                        reject(createUserFacingError(result.message, result));
                                         return;
                                     }
                                     resolve(
@@ -678,7 +674,7 @@ internal fun buildComposeDslContextBridgeDefinition(): String {
                     navigate: function(route, args) {
                         var routeId = String(route || '').trim();
                         if (!routeId) {
-                            return Promise.reject(new Error('route is required'));
+                            return Promise.reject(createUserFacingError('route is required'));
                         }
                         invokeNative('navigateToRoute', [
                             routeId,
@@ -719,6 +715,64 @@ internal fun buildComposeDslContextBridgeDefinition(): String {
                     },
                     createWebViewController: function(key) {
                         return createWebViewController(key);
+                    },
+                    openFilePicker: function(options) {
+                        if (typeof Promise !== 'function') {
+                            throw new Error('Promise is required for openFilePicker');
+                        }
+                        return new Promise(function(resolve, reject) {
+                            if (
+                                typeof NativeInterface === 'undefined' ||
+                                !NativeInterface ||
+                                typeof NativeInterface.composeOpenFilePickerSuspend !== 'function'
+                            ) {
+                                reject(createUserFacingError('NativeInterface.composeOpenFilePickerSuspend is unavailable'));
+                                return;
+                            }
+                            var root = typeof globalThis !== 'undefined'
+                                ? globalThis
+                                : (typeof window !== 'undefined' ? window : this);
+                            var callbackTarget = typeof window !== 'undefined' ? window : root;
+                            var callbackId =
+                                '__operit_compose_file_picker_' +
+                                Date.now() +
+                                '_' +
+                                Math.random().toString(36).slice(2, 10);
+                            callbackTarget[callbackId] = function(result, isError) {
+                                delete callbackTarget[callbackId];
+                                try {
+                                    if (isError) {
+                                        reject(createUserFacingError(result.message, result));
+                                        return;
+                                    }
+                                    resolve(
+                                        unwrapNativeResult(
+                                            result,
+                                            'openFilePicker failed'
+                                        )
+                                    );
+                                } catch (callbackError) {
+                                    reject(callbackError);
+                                }
+                            };
+                            try {
+                                NativeInterface.composeOpenFilePickerSuspend(
+                                    JSON.stringify({
+                                        routeInstanceId: runtime.routeInstanceId || '',
+                                        executionContextKey: runtime.executionContextKey || '',
+                                        options: normalizePropValue(
+                                            options && typeof options === 'object'
+                                                ? options
+                                                : {}
+                                        )
+                                    }),
+                                    callbackId
+                                );
+                            } catch (invokeError) {
+                                delete callbackTarget[callbackId];
+                                reject(invokeError);
+                            }
+                        });
                     },
                     measureText: function(options) {
                         var payload = options && typeof options === 'object' ? options : {};

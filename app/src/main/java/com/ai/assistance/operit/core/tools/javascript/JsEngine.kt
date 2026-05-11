@@ -16,6 +16,7 @@ import com.ai.assistance.operit.ui.main.navigation.AppRouteDiscoveryGateway
 import com.ai.assistance.operit.ui.main.navigation.AppRouterGateway
 import com.ai.assistance.operit.ui.main.navigation.RouteEntrySource
 import com.ai.assistance.operit.ui.main.navigation.RouteRuntime
+import com.ai.assistance.operit.ui.common.composedsl.ComposeDslFilePickerHostRegistry
 import com.ai.assistance.operit.ui.common.composedsl.ComposeDslWebViewHostRegistry
 import com.ai.assistance.operit.util.AppLogger
 import com.ai.assistance.operit.util.ImagePoolManager
@@ -321,7 +322,7 @@ class JsEngine(private val context: Context) {
                 request.future.complete(
                     JSONObject()
                         .put("success", false)
-                        .put("error", reason)
+                        .put("message", reason)
                         .toString()
                 )
             }
@@ -403,7 +404,7 @@ class JsEngine(private val context: Context) {
         activeExecutionSessions.clear()
         sessions.forEach { session ->
             if (!session.future.isDone) {
-                session.future.complete("Error: $reason")
+                session.future.complete(buildJsExecutionErrorPayload(reason))
             }
             cancelExecutionSessionInJs(
                 callId = session.callId,
@@ -540,14 +541,14 @@ class JsEngine(private val context: Context) {
         if (Looper.myLooper() == Looper.getMainLooper()) {
             return JSONObject()
                 .put("success", false)
-                .put("error", "java bridge callback cannot synchronously invoke JS on main thread")
+                .put("message", "java bridge callback cannot synchronously invoke JS on main thread")
                 .toString()
         }
 
         if (Thread.currentThread() === quickJsThread) {
             return JSONObject()
                 .put("success", false)
-                .put("error", "java bridge callback cannot synchronously invoke JS from quickjs thread")
+                .put("message", "java bridge callback cannot synchronously invoke JS from quickjs thread")
                 .toString()
         }
 
@@ -555,7 +556,7 @@ class JsEngine(private val context: Context) {
         if (quickJs == null || !jsEnvironmentInitialized) {
             return JSONObject()
                 .put("success", false)
-                .put("error", "java bridge callback runtime unavailable")
+                .put("message", "java bridge callback runtime unavailable")
                 .toString()
         }
 
@@ -576,7 +577,7 @@ class JsEngine(private val context: Context) {
         } catch (e: Exception) {
             JSONObject()
                 .put("success", false)
-                .put("error", "java bridge callback wait failed: ${e.message ?: e.javaClass.simpleName}")
+                .put("message", "java bridge callback wait failed: ${e.message ?: e.javaClass.simpleName}")
                 .toString()
         } finally {
             pendingJsBridgeCallbackMap.remove(request.requestId)
@@ -641,7 +642,7 @@ class JsEngine(private val context: Context) {
             if (token is JSONObject) {
                 val success = token.optBoolean("success", false)
                 val data = token.opt("data")
-                val error = token.optString("error").ifBlank { null }
+                val error = token.optString("message").ifBlank { null }
                 if (success) {
                     Pair(null, data)
                 } else {
@@ -738,7 +739,7 @@ class JsEngine(private val context: Context) {
                         details = "function=$functionName, plugin=$timingPluginId, success=false, reason=$failureReason"
                     )
                 }
-                return "Error: $failureReason"
+                return buildJsExecutionErrorPayload(failureReason)
             }
         }
 
@@ -788,9 +789,9 @@ class JsEngine(private val context: Context) {
                     e
                 )
                 removeExecutionSession(callId)
-                session.executionListener?.onFailed(callId, "Error: ${e.message ?: "dispatch failed"}")
+                session.executionListener?.onFailed(callId, e.message ?: "dispatch failed")
                 if (!session.future.isDone) {
-                    session.future.complete("Error: ${e.message ?: "dispatch failed"}")
+                    session.future.complete(buildJsExecutionErrorPayload(e.message ?: "dispatch failed"))
                 }
             }
         )
@@ -844,7 +845,7 @@ class JsEngine(private val context: Context) {
             )
             removeExecutionSession(callId)
             cancelExecutionSessionInJs(callId, failureReason)
-            session.executionListener?.onFailed(callId, "Error: $failureReason")
+            session.executionListener?.onFailed(callId, failureReason)
             if (shouldLogTiming) {
                 logMessageTiming(
                     stage = "toolpkg.jsEngine.waitResult",
@@ -857,7 +858,7 @@ class JsEngine(private val context: Context) {
                     details = "function=$functionName, plugin=$timingPluginId, callId=$callId, success=false, reason=$failureReason"
                 )
             }
-            "Error: $failureReason"
+            buildJsExecutionErrorPayload(failureReason)
         } finally {
             preTimeoutTimer.cancel()
         }
@@ -944,10 +945,7 @@ class JsEngine(private val context: Context) {
     }
 
     private fun buildToolPkgGlobalBridgeError(message: String): String {
-        return JSONObject()
-            .put("success", false)
-            .put("error", message)
-            .toString()
+        return buildJsExecutionErrorPayload(message)
     }
 
     private fun executeToolPkgGlobalBridgeScript(
@@ -981,10 +979,9 @@ class JsEngine(private val context: Context) {
         if (text.isEmpty()) {
             return buildToolPkgGlobalBridgeError("global toolpkg bridge returned empty result")
         }
-        if (text.startsWith("Error:", ignoreCase = true)) {
-            return buildToolPkgGlobalBridgeError(
-                text.removePrefix("Error:").trim().ifBlank { "global toolpkg bridge failed" }
-            )
+        val errorMessage = extractJsExecutionErrorMessage(text)
+        if (errorMessage != null) {
+            return buildToolPkgGlobalBridgeError(errorMessage)
         }
         return text
     }
@@ -1760,7 +1757,7 @@ class JsEngine(private val context: Context) {
     ): Any? {
         val normalizedActionId = actionId.trim()
         if (normalizedActionId.isBlank()) {
-            return "Error: compose action id is required"
+            return buildJsExecutionErrorPayload("compose action id is required")
         }
         val params = runtimeOptions.toMutableMap()
         params["__action_id"] = normalizedActionId
@@ -1825,12 +1822,7 @@ class JsEngine(private val context: Context) {
                     return@Thread
                 }
 
-            val errorText =
-                result?.toString()
-                    ?.takeIf { it.startsWith("Error:", ignoreCase = true) }
-                    ?.removePrefix("Error:")
-                    ?.trim()
-                    ?.ifBlank { "compose action dispatch failed" }
+            val errorText = extractJsExecutionErrorMessage(result)
             ContextCompat.getMainExecutor(context).execute {
                 if (errorText != null) {
                     AppLogger.e(
@@ -1865,7 +1857,7 @@ class JsEngine(private val context: Context) {
             AppLogger.e(TAG, "Failed to expose NativeInterface bridge object: ${error.message}", error)
             JSONObject()
                 .put("success", false)
-                .put("error", error.message ?: "failed to expose NativeInterface bridge object")
+                .put("message", error.message ?: "failed to expose NativeInterface bridge object")
                 .toString()
         }
     }
@@ -1922,7 +1914,7 @@ class JsEngine(private val context: Context) {
         matchingSessions.forEach { session ->
             removeExecutionSession(session.callId)
             if (!session.future.isDone) {
-                session.future.complete("Error: $reason")
+                session.future.complete(buildJsExecutionErrorPayload(reason))
             }
             cancelExecutionSessionInJs(
                 callId = session.callId,
@@ -2259,13 +2251,38 @@ class JsEngine(private val context: Context) {
                     )
                     sendToolResult(
                         normalizedCallback,
-                        error.message?.trim().orEmpty().ifBlank {
-                            "compose webview controller command failed"
-                        },
+                        buildJsExecutionErrorPayload(
+                            error.message?.trim().orEmpty().ifBlank {
+                                "compose webview controller command failed"
+                            }
+                        ),
                         true
                     )
                 }
             }.start()
+        }
+
+        @JavascriptInterface
+        fun composeOpenFilePickerSuspend(payloadJson: String, callbackId: String) {
+            val normalizedCallback = callbackId.trim()
+            if (normalizedCallback.isEmpty()) {
+                return
+            }
+            ComposeDslFilePickerHostRegistry.openPicker(
+                payloadJson = payloadJson,
+                onSuccess = { result ->
+                    sendToolResult(normalizedCallback, result, false)
+                },
+                onError = { errorMessage ->
+                    sendToolResult(
+                        normalizedCallback,
+                        buildJsExecutionErrorPayload(
+                            errorMessage.trim().ifBlank { "compose file picker failed" }
+                        ),
+                        true
+                    )
+                }
+            )
         }
 
         private fun buildRoutesJson(includeOnlyNative: Boolean): String {
@@ -2403,7 +2420,7 @@ class JsEngine(private val context: Context) {
                 AppLogger.e(TAG, "$failureLabel: ${e.message}", e)
                 JSONObject()
                     .put("success", false)
-                    .put("error", e.message ?: failureLabel.lowercase())
+                    .put("message", e.message ?: failureLabel.lowercase())
                     .toString()
             }
         }
@@ -2486,9 +2503,9 @@ class JsEngine(private val context: Context) {
                     }
 
                     var message =
-                        parsed && typeof parsed.error === 'string' && parsed.error.length > 0
-                            ? parsed.error
-                            : 'bridge call failed';
+                        parsed && typeof parsed.message === 'string' && parsed.message.length > 0
+                            ? parsed.message
+                            : '';
                     return invoke($safeCallbackId, '', [message, null]);
                 })();
             """.trimIndent()
@@ -2538,7 +2555,7 @@ class JsEngine(private val context: Context) {
             val activity = ActivityLifecycleManager.getCurrentActivity()
                 ?: return JSONObject()
                     .put("success", false)
-                    .put("error", "current activity is null")
+                    .put("message", "current activity is null")
                     .toString()
             return exposeJavaObject(
                 target = activity,
@@ -2909,11 +2926,11 @@ class JsEngine(private val context: Context) {
                 val logMessage = extractErrorLogMessage(error)
                 val enrichedLogMessage = withToolPkgCodeContext(session, logMessage)
                 AppLogger.e(TOOLPKG_TAG, withToolPkgPluginTag(session, "JS ERROR: $enrichedLogMessage"))
-                session.executionListener?.onFailed(callId, error)
+                session.executionListener?.onFailed(callId, logMessage)
 
                 completeCallFuture(
                     session = session,
-                    value = "Error: ${withToolPkgCodeContext(session, error)}",
+                    value = error,
                     failureMessage = "Error completing error callback"
                 )
             } catch (e: Exception) {
@@ -2949,21 +2966,8 @@ class JsEngine(private val context: Context) {
                     if (errorJson.has("formatted")) {
                         return errorJson.getString("formatted")
                     }
-                    if (errorJson.has("error") && errorJson.has("message")) {
-                        val errorType = errorJson.getString("error")
-                        val errorMsg = errorJson.getString("message")
-                        var message = "$errorType: $errorMsg"
-                        if (errorJson.has("details")) {
-                            val details = errorJson.getJSONObject("details")
-                            if (details.has("fileName") && details.has("lineNumber")) {
-                                message +=
-                                    "\nAt ${details.getString("fileName")}:${details.getString("lineNumber")}"
-                            }
-                            if (details.has("stack")) {
-                                message += "\nStack: ${details.getString("stack")}"
-                            }
-                        }
-                        return message
+                    if (errorJson.has("message")) {
+                        return errorJson.getString("message")
                     }
                 }
                 error

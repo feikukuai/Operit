@@ -239,13 +239,8 @@ class ScriptExecutionReceiver : BroadcastReceiver() {
                             executionListener = traceRecorder
                         )
                 }
-            val success = !result.toString().startsWith("Error:", ignoreCase = true)
-            val error =
-                if (success) {
-                    null
-                } else {
-                    result?.toString()?.removePrefix("Error:")?.trim().orEmpty()
-                }
+            val error = extractJsExecutionErrorMessage(result)
+            val success = error == null
             traceRecorder.writeTo(
                 resultFile,
                 traceRecorder.buildPayload(

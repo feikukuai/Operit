@@ -11,10 +11,15 @@ function resolveText() {
 }
 function Screen(ctx) {
     const [entries, setEntries] = ctx.useState("entries", []);
-    const [loading, setLoading] = ctx.useState("loading", true);
+    const [loading, setLoading] = ctx.useState("loading", false);
     const [hasLoadedOnce, setHasLoadedOnce] = ctx.useState("hasLoadedOnce", false);
+    const [initialLoadInFlight, setInitialLoadInFlight] = ctx.useState("initialLoadInFlight", false);
     const [view, setView] = ctx.useState("view", "list");
+    const [deletingEntryId, setDeletingEntryId] = ctx.useState("deletingEntryId", "");
+    const [togglingEntryId, setTogglingEntryId] = ctx.useState("togglingEntryId", "");
+    const [importing, setImporting] = ctx.useState("importing", false);
     const [editId, setEditId] = ctx.useState("editId", "");
+    const [importPath, setImportPath] = ctx.useState("importPath", "");
     const [formName, setFormName] = ctx.useState("formName", "");
     const [formContent, setFormContent] = ctx.useState("formContent", "");
     const [formKeywords, setFormKeywords] = ctx.useState("formKeywords", "");
@@ -49,13 +54,20 @@ function Screen(ctx) {
         setShowCardPicker(false);
         setLoadingCards(false);
     }
-    async function loadEntries() {
+    function resetImportForm() {
+        setImportPath("");
+        setImporting(false);
+    }
+    async function loadEntries(force = false) {
+        if (loading || (hasLoadedOnce && !force)) {
+            return;
+        }
         setLoading(true);
         try {
             setEntries(await (0, worldbook_service_js_1.listWorldBookEntries)());
         }
         catch (error) {
-            ctx.showToast(`${t.toastLoadFailedPrefix}${String(error)}`);
+            ctx.showToast(`${t.toastLoadFailedPrefix}${error.message}`);
         }
         finally {
             setLoading(false);
@@ -71,7 +83,7 @@ function Screen(ctx) {
         }
         catch (error) {
             if (showErrorToast) {
-                ctx.showToast(`${t.toastRoleCardLoadFailedPrefix}${String(error)}`);
+                ctx.showToast(`${t.toastRoleCardLoadFailedPrefix}${error.message}`);
             }
         }
         return { success: false, cards: [] };
@@ -98,23 +110,37 @@ function Screen(ctx) {
         return resolveCharacterCardName(cardId) || t.dropdownBoundCard;
     }
     async function doToggle(id) {
+        if (togglingEntryId === id) {
+            return;
+        }
+        setTogglingEntryId(id);
         try {
             await (0, worldbook_service_js_1.toggleWorldBookEntry)(id);
             ctx.showToast(t.toastToggleDone);
-            await loadEntries();
+            await loadEntries(true);
         }
         catch (error) {
-            ctx.showToast(`${t.toastActionFailedPrefix}${String(error)}`);
+            ctx.showToast(`${t.toastActionFailedPrefix}${error.message}`);
+        }
+        finally {
+            setTogglingEntryId("");
         }
     }
     async function doDelete(id, name) {
+        if (deletingEntryId === id) {
+            return;
+        }
+        setDeletingEntryId(id);
         try {
             await (0, worldbook_service_js_1.deleteWorldBookEntry)(id);
             ctx.showToast(`${t.toastDeletedPrefix}${name}`);
-            await loadEntries();
+            await loadEntries(true);
         }
         catch (error) {
-            ctx.showToast(`${t.toastDeleteFailedPrefix}${String(error)}`);
+            ctx.showToast(`${t.toastDeleteFailedPrefix}${error.message}`);
+        }
+        finally {
+            setDeletingEntryId("");
         }
     }
     async function doEdit(id) {
@@ -140,7 +166,7 @@ function Screen(ctx) {
             setView("edit");
         }
         catch (error) {
-            ctx.showToast(`${t.toastLoadFailedPrefix}${String(error)}`);
+            ctx.showToast(`${t.toastLoadFailedPrefix}${error.message}`);
         }
     }
     async function loadCardPicker() {
@@ -184,6 +210,52 @@ function Screen(ctx) {
         resetForm();
         setView("create");
     }
+    function doOpenImport() {
+        resetImportForm();
+        setView("import");
+    }
+    async function doPickImportFile() {
+        try {
+            const result = await ctx.openFilePicker({
+                mimeTypes: ["application/json", "text/plain", "*/*"],
+                allowMultiple: false,
+                persistPermission: true
+            });
+            if (result.cancelled || result.files.length === 0) {
+                return;
+            }
+            setImportPath(String(result.files[0]?.path || result.files[0]?.uri || "").trim());
+        }
+        catch (error) {
+            ctx.showToast(`${t.toastFailedPrefix}${error.message}`);
+        }
+    }
+    async function doImport() {
+        if (importing) {
+            return;
+        }
+        if (!importPath.trim()) {
+            ctx.showToast(t.toastImportPathRequired);
+            return;
+        }
+        const payload = {
+            path: importPath.trim()
+        };
+        setImporting(true);
+        try {
+            const result = await (0, worldbook_service_js_1.importWorldBookEntries)(payload);
+            ctx.showToast(t.toastImportDone(result.imported_count, result.warning_count));
+            setView("list");
+            resetImportForm();
+            await loadEntries(true);
+        }
+        catch (error) {
+            ctx.showToast(`${t.toastFailedPrefix}${error.message}`);
+        }
+        finally {
+            setImporting(false);
+        }
+    }
     async function doSave() {
         if (!formName.trim()) {
             ctx.showToast(t.toastNameRequired);
@@ -223,7 +295,7 @@ function Screen(ctx) {
             await loadEntries();
         }
         catch (error) {
-            ctx.showToast(`${t.toastSaveFailedPrefix}${String(error)}`);
+            ctx.showToast(`${t.toastSaveFailedPrefix}${error.message}`);
         }
     }
     function renderTag(label, backgroundColor, textColor) {
@@ -283,6 +355,9 @@ function Screen(ctx) {
         ]);
     }
     function renderCard(entry) {
+        const isDeleting = deletingEntryId === entry.id;
+        const isToggling = togglingEntryId === entry.id;
+        const isEntryBusy = isDeleting || isToggling;
         const keywordText = entry.keywords && entry.keywords.length > 0 ? entry.keywords.join("、") : t.keywordEmpty;
         const characterCardName = resolveCharacterCardName(entry.character_card_id || "");
         const infoPills = [
@@ -301,7 +376,12 @@ function Screen(ctx) {
             key: entry.id,
             containerColor: colors.surface,
             elevation: 1,
-            modifier: ctx.Modifier.fillMaxWidth().clickable(() => doEdit(entry.id))
+            modifier: ctx.Modifier.fillMaxWidth().clickable(() => {
+                if (!isEntryBusy) {
+                    return doEdit(entry.id);
+                }
+                return undefined;
+            })
         }, [
             UI.Column({
                 padding: 12,
@@ -354,7 +434,7 @@ function Screen(ctx) {
                     UI.Switch({
                         checked: entry.enabled,
                         onCheckedChange: (_checked) => doToggle(entry.id),
-                        enabled: true,
+                        enabled: !isEntryBusy,
                         checkedThumbColor: colors.primary,
                         checkedTrackColor: colors.primaryContainer,
                         uncheckedThumbColor: colors.outline,
@@ -368,7 +448,12 @@ function Screen(ctx) {
                         .fillMaxWidth()
                         .clip({ cornerRadius: 12 })
                         .background(colors.surfaceVariant.copy({ alpha: 0.18 }))
-                        .clickable(() => doEdit(entry.id))
+                        .clickable(() => {
+                        if (!isEntryBusy) {
+                            return doEdit(entry.id);
+                        }
+                        return undefined;
+                    })
                         .padding({ horizontal: 8, vertical: 6 })
                 }, [
                     UI.Row({
@@ -394,6 +479,7 @@ function Screen(ctx) {
                 }, [
                     UI.OutlinedButton({
                         onClick: () => doEdit(entry.id),
+                        enabled: !isEntryBusy,
                         weight: 1,
                         height: 32,
                         contentPadding: { horizontal: 12 }
@@ -406,6 +492,7 @@ function Screen(ctx) {
                     ]),
                     UI.OutlinedButton({
                         onClick: () => doDelete(entry.id, entry.name),
+                        enabled: !isEntryBusy,
                         weight: 1,
                         height: 32,
                         contentPadding: { horizontal: 12 }
@@ -757,6 +844,104 @@ function Screen(ctx) {
             })
         ]);
     }
+    function renderImportForm() {
+        return UI.Column({
+            padding: 12,
+            spacing: 12,
+            fillMaxWidth: true
+        }, [
+            UI.Row({
+                fillMaxWidth: true
+            }, [
+                UI.OutlinedButton({
+                    onClick: () => setView("list"),
+                    shape: { cornerRadius: 12 }
+                }, [
+                    UI.Row({
+                        spacing: 6,
+                        verticalAlignment: "center"
+                    }, [
+                        UI.Icon({
+                            name: "arrowBack",
+                            size: 16,
+                            tint: colors.onSurface
+                        }),
+                        UI.Text({
+                            text: t.buttonBack,
+                            color: colors.onSurface,
+                            fontWeight: "bold"
+                        })
+                    ])
+                ])
+            ]),
+            UI.Card({
+                containerColor: colors.surface,
+                shape: { cornerRadius: 18 },
+                fillMaxWidth: true
+            }, [
+                UI.Column({
+                    padding: 16,
+                    spacing: 12,
+                    fillMaxWidth: true
+                }, [
+                    UI.Text({
+                        text: t.sectionImport,
+                        style: "titleMedium",
+                        fontWeight: "bold",
+                        color: colors.onSurface
+                    }),
+                    UI.Text({
+                        text: t.sectionImportDesc,
+                        style: "bodySmall",
+                        color: colors.onSurfaceVariant
+                    }),
+                    UI.TextField({
+                        label: t.fieldImportPath,
+                        placeholder: t.fieldImportPathPlaceholder,
+                        value: importPath,
+                        onValueChange: setImportPath,
+                        singleLine: false,
+                        minLines: 2,
+                        fillMaxWidth: true
+                    }),
+                    UI.OutlinedButton({
+                        onClick: () => doPickImportFile(),
+                        enabled: !importing,
+                        fillMaxWidth: true,
+                        shape: { cornerRadius: 12 }
+                    }, [
+                        UI.Text({
+                            text: t.buttonPickImportFile,
+                            fontWeight: "bold"
+                        })
+                    ]),
+                    UI.Text({
+                        text: t.importFormatsTitle,
+                        style: "labelMedium",
+                        fontWeight: "bold",
+                        color: colors.onSurface
+                    }),
+                    UI.Text({
+                        text: t.importFormatsDesc,
+                        style: "bodySmall",
+                        color: colors.onSurfaceVariant
+                    }),
+                    UI.Text({
+                        text: t.importPathHint,
+                        style: "bodySmall",
+                        color: colors.onSurfaceVariant
+                    })
+                ])
+            ]),
+            UI.Button({
+                text: importing ? `${t.importActionButton}...` : t.importActionButton,
+                onClick: () => doImport(),
+                enabled: !importing,
+                fillMaxWidth: true,
+                shape: { cornerRadius: 14 }
+            })
+        ]);
+    }
     const items = [
         UI.Row({
             key: "actions",
@@ -784,6 +969,27 @@ function Screen(ctx) {
                         fontWeight: "bold"
                     })
                 ])
+            ]),
+            UI.Spacer({ width: 8 }),
+            UI.FilledTonalButton({
+                onClick: doOpenImport,
+                height: 36
+            }, [
+                UI.Row({
+                    spacing: 6,
+                    verticalAlignment: "center"
+                }, [
+                    UI.Icon({
+                        name: "uploadFile",
+                        tint: colors.onSecondaryContainer,
+                        size: 18
+                    }),
+                    UI.Text({
+                        text: t.buttonImport,
+                        color: colors.onSecondaryContainer,
+                        fontWeight: "bold"
+                    })
+                ])
             ])
         ])
     ];
@@ -793,6 +999,13 @@ function Screen(ctx) {
             spacing: 12,
             padding: { horizontal: 12, vertical: 8 }
         }, [renderForm()]);
+    }
+    if (view === "import") {
+        return UI.LazyColumn({
+            fillMaxSize: true,
+            spacing: 12,
+            padding: { horizontal: 12, vertical: 8 }
+        }, [renderImportForm()]);
     }
     if (loading || !hasLoadedOnce) {
         items.push(UI.Column({
@@ -855,8 +1068,17 @@ function Screen(ctx) {
         padding: { horizontal: 12, vertical: 8 },
         fillMaxSize: true,
         onLoad: async () => {
-            await loadEntries();
-            await ensureCharacterCardsLoaded(false);
+            if (hasLoadedOnce || initialLoadInFlight) {
+                return;
+            }
+            setInitialLoadInFlight(true);
+            try {
+                await loadEntries(true);
+                await ensureCharacterCardsLoaded(false);
+            }
+            finally {
+                setInitialLoadInFlight(false);
+            }
         }
     }, items);
 }

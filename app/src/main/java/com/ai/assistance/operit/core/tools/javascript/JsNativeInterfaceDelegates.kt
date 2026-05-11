@@ -63,7 +63,7 @@ internal object JsNativeInterfaceDelegates {
             JsonElement.serializer(),
             buildJsonObject {
                 put("success", JsonPrimitive(false))
-                put("error", JsonPrimitive(message))
+                put("message", JsonPrimitive(message))
             }
         )
     }
@@ -119,7 +119,7 @@ internal object JsNativeInterfaceDelegates {
             buildJsonObject {
                 put("success", JsonPrimitive(result.success))
                 if (!result.success) {
-                    put("error", JsonPrimitive(result.error ?: "Unknown error"))
+                    put("message", JsonPrimitive(result.error.orEmpty()))
                 }
                 put("data", serializedData.data)
                 serializedData.dataType?.let { put("dataType", JsonPrimitive(it)) }
@@ -250,21 +250,21 @@ internal object JsNativeInterfaceDelegates {
     }
 
     fun importPackage(packageManager: PackageManager, packageName: String): String {
-        return guard("Error: package import failed", "Error importing package from JS: $packageName") {
+        return guard("package import failed", "Error importing package from JS: $packageName") {
             val normalized = normalizeNonBlank(packageName) ?: return@guard "Package name is required"
             packageManager.enablePackage(normalized)
         }
     }
 
     fun removePackage(packageManager: PackageManager, packageName: String): String {
-        return guard("Error: package removal failed", "Error removing package from JS: $packageName") {
+        return guard("package removal failed", "Error removing package from JS: $packageName") {
             val normalized = normalizeNonBlank(packageName) ?: return@guard "Package name is required"
             packageManager.disablePackage(normalized)
         }
     }
 
     fun usePackage(packageManager: PackageManager, packageName: String): String {
-        return guard("Error: package activation failed", "Error using package from JS: $packageName") {
+        return guard("package activation failed", "Error using package from JS: $packageName") {
             val normalized = normalizeNonBlank(packageName) ?: return@guard "Package name is required"
             packageManager.usePackage(normalized)
         }
@@ -511,7 +511,7 @@ internal object JsNativeInterfaceDelegates {
     ): String {
         if (toolName.trim().isEmpty()) {
             AppLogger.e(TAG, "Tool name cannot be empty")
-            return "Error: Tool name cannot be empty"
+            return buildToolErrorJson("Tool name cannot be empty")
         }
 
         return try {
@@ -529,7 +529,7 @@ internal object JsNativeInterfaceDelegates {
             )
         } catch (e: Exception) {
             AppLogger.e(TAG, "[Sync] Error in tool call: ${e.message}", e)
-            buildToolErrorJson("Error: ${e.message}")
+            buildToolErrorJson(e.message.orEmpty())
         }
     }
 
@@ -549,16 +549,9 @@ internal object JsNativeInterfaceDelegates {
                 parseToolCall(toolType, toolName, paramsJson)
             } catch (e: Exception) {
                 AppLogger.e(TAG, "[Async] Error preparing tool call: ${e.message}", e)
-                val rawMessage = e.message?.trim().orEmpty()
-                val finalMessage =
-                    if (rawMessage.equals("Tool name cannot be empty", ignoreCase = true)) {
-                        "Tool name cannot be empty"
-                    } else {
-                        "Error: ${if (rawMessage.isBlank()) "Unknown error" else rawMessage}"
-                    }
                 sendToolResult(
                     callbackId,
-                    buildToolErrorJson(finalMessage),
+                    buildToolErrorJson(e.message.orEmpty()),
                     true
                 )
                 return
@@ -584,7 +577,7 @@ internal object JsNativeInterfaceDelegates {
                 AppLogger.e(TAG, "[Async] Error in async tool execution: ${e.message}", e)
                 sendToolResult(
                     callbackId,
-                    buildToolErrorJson("Error: ${e.message}"),
+                    buildToolErrorJson(e.message.orEmpty()),
                     true
                 )
             }
@@ -611,7 +604,7 @@ internal object JsNativeInterfaceDelegates {
                 AppLogger.e(TAG, "[AsyncStream] Error preparing tool call: ${e.message}", e)
                 sendToolResult(
                     callbackId,
-                    buildToolErrorJson("Error: ${e.message ?: "Unknown error"}"),
+                    buildToolErrorJson(e.message.orEmpty()),
                     true
                 )
                 return
@@ -658,7 +651,7 @@ internal object JsNativeInterfaceDelegates {
                 AppLogger.e(TAG, "[AsyncStream] Error in async streaming tool execution: ${e.message}", e)
                 sendToolResult(
                     callbackId,
-                    buildToolErrorJson("Error: ${e.message}"),
+                    buildToolErrorJson(e.message.orEmpty()),
                     true
                 )
             }

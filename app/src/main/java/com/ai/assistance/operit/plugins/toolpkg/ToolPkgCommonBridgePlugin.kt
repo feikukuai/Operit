@@ -29,6 +29,7 @@ import com.ai.assistance.operit.util.AppLogger
 import com.ai.assistance.operit.util.stream.Stream
 import com.ai.assistance.operit.core.tools.packTool.ToolPkgXmlRenderHookComposeDslResult
 import com.ai.assistance.operit.core.tools.packTool.ToolPkgXmlRenderHookObjectResult
+import com.ai.assistance.operit.core.tools.javascript.extractJsExecutionErrorMessage
 import com.ai.assistance.operit.util.stream.stream
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
@@ -59,8 +60,9 @@ private fun decodeHookResult(raw: Any?): Any? {
     if (normalized.isEmpty()) {
         return text
     }
-    if (normalized.startsWith("Error:", ignoreCase = true)) {
-        throw IllegalStateException(normalized.substringAfter(":", normalized).trim().ifEmpty { normalized })
+    val errorMessage = extractJsExecutionErrorMessage(normalized)
+    if (errorMessage != null) {
+        throw IllegalStateException(errorMessage)
     }
     return try {
         JSONTokener(normalized).nextValue()

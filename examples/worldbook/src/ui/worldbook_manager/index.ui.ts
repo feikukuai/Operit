@@ -3,11 +3,14 @@ import {
   createWorldBookEntry,
   deleteWorldBookEntry,
   getWorldBookEntry,
+  importWorldBookEntries,
   listWorldBookCharacterCards,
   listWorldBookEntries,
   toggleWorldBookEntry,
   updateWorldBookEntry,
   type CharacterCardOption,
+  type WorldBookError,
+  type WorldBookImportParams,
   type WorldBookEntry,
   type WorldBookListEntry,
   type WorldBookMutationParams
@@ -23,10 +26,15 @@ function resolveText(): WorldBookI18n {
 
 export default function Screen(ctx: ComposeDslContext): ComposeNode {
   const [entries, setEntries] = ctx.useState<WorldBookListEntry[]>("entries", []);
-  const [loading, setLoading] = ctx.useState("loading", true);
+  const [loading, setLoading] = ctx.useState("loading", false);
   const [hasLoadedOnce, setHasLoadedOnce] = ctx.useState("hasLoadedOnce", false);
-  const [view, setView] = ctx.useState<"list" | "create" | "edit">("view", "list");
+  const [initialLoadInFlight, setInitialLoadInFlight] = ctx.useState("initialLoadInFlight", false);
+  const [view, setView] = ctx.useState<"list" | "create" | "edit" | "import">("view", "list");
+  const [deletingEntryId, setDeletingEntryId] = ctx.useState("deletingEntryId", "");
+  const [togglingEntryId, setTogglingEntryId] = ctx.useState("togglingEntryId", "");
+  const [importing, setImporting] = ctx.useState("importing", false);
   const [editId, setEditId] = ctx.useState("editId", "");
+  const [importPath, setImportPath] = ctx.useState("importPath", "");
   const [formName, setFormName] = ctx.useState("formName", "");
   const [formContent, setFormContent] = ctx.useState("formContent", "");
   const [formKeywords, setFormKeywords] = ctx.useState("formKeywords", "");
@@ -70,12 +78,20 @@ export default function Screen(ctx: ComposeDslContext): ComposeNode {
     setLoadingCards(false);
   }
 
-  async function loadEntries() {
+  function resetImportForm() {
+    setImportPath("");
+    setImporting(false);
+  }
+
+  async function loadEntries(force = false) {
+    if (loading || (hasLoadedOnce && !force)) {
+      return;
+    }
     setLoading(true);
     try {
       setEntries(await listWorldBookEntries());
     } catch (error) {
-      ctx.showToast(`${t.toastLoadFailedPrefix}${String(error)}`);
+      ctx.showToast(`${t.toastLoadFailedPrefix}${(error as WorldBookError).message}`);
     } finally {
       setLoading(false);
       setHasLoadedOnce(true);
@@ -92,7 +108,7 @@ export default function Screen(ctx: ComposeDslContext): ComposeNode {
       return { success: true, cards };
     } catch (error) {
       if (showErrorToast) {
-        ctx.showToast(`${t.toastRoleCardLoadFailedPrefix}${String(error)}`);
+        ctx.showToast(`${t.toastRoleCardLoadFailedPrefix}${(error as WorldBookError).message}`);
       }
     }
 
@@ -125,22 +141,34 @@ export default function Screen(ctx: ComposeDslContext): ComposeNode {
   }
 
   async function doToggle(id: string) {
+    if (togglingEntryId === id) {
+      return;
+    }
+    setTogglingEntryId(id);
     try {
       await toggleWorldBookEntry(id);
       ctx.showToast(t.toastToggleDone);
-      await loadEntries();
+      await loadEntries(true);
     } catch (error) {
-      ctx.showToast(`${t.toastActionFailedPrefix}${String(error)}`);
+      ctx.showToast(`${t.toastActionFailedPrefix}${(error as WorldBookError).message}`);
+    } finally {
+      setTogglingEntryId("");
     }
   }
 
   async function doDelete(id: string, name: string) {
+    if (deletingEntryId === id) {
+      return;
+    }
+    setDeletingEntryId(id);
     try {
       await deleteWorldBookEntry(id);
       ctx.showToast(`${t.toastDeletedPrefix}${name}`);
-      await loadEntries();
+      await loadEntries(true);
     } catch (error) {
-      ctx.showToast(`${t.toastDeleteFailedPrefix}${String(error)}`);
+      ctx.showToast(`${t.toastDeleteFailedPrefix}${(error as WorldBookError).message}`);
+    } finally {
+      setDeletingEntryId("");
     }
   }
 
@@ -166,7 +194,7 @@ export default function Screen(ctx: ComposeDslContext): ComposeNode {
       }
       setView("edit");
     } catch (error) {
-      ctx.showToast(`${t.toastLoadFailedPrefix}${String(error)}`);
+      ctx.showToast(`${t.toastLoadFailedPrefix}${(error as WorldBookError).message}`);
     }
   }
 
@@ -219,6 +247,55 @@ export default function Screen(ctx: ComposeDslContext): ComposeNode {
     setView("create");
   }
 
+  function doOpenImport() {
+    resetImportForm();
+    setView("import");
+  }
+
+  async function doPickImportFile() {
+    try {
+      const result = await ctx.openFilePicker({
+        mimeTypes: ["application/json", "text/plain", "*/*"],
+        allowMultiple: false,
+        persistPermission: true
+      });
+      if (result.cancelled || result.files.length === 0) {
+        return;
+      }
+      setImportPath(String(result.files[0]?.path || result.files[0]?.uri || "").trim());
+    } catch (error) {
+      ctx.showToast(`${t.toastFailedPrefix}${(error as WorldBookError).message}`);
+    }
+  }
+
+  async function doImport() {
+    if (importing) {
+      return;
+    }
+
+    if (!importPath.trim()) {
+      ctx.showToast(t.toastImportPathRequired);
+      return;
+    }
+
+    const payload: WorldBookImportParams = {
+      path: importPath.trim()
+    };
+
+    setImporting(true);
+    try {
+      const result = await importWorldBookEntries(payload);
+      ctx.showToast(t.toastImportDone(result.imported_count, result.warning_count));
+      setView("list");
+      resetImportForm();
+      await loadEntries(true);
+    } catch (error) {
+      ctx.showToast(`${t.toastFailedPrefix}${(error as WorldBookError).message}`);
+    } finally {
+      setImporting(false);
+    }
+  }
+
   async function doSave() {
     if (!formName.trim()) {
       ctx.showToast(t.toastNameRequired);
@@ -259,7 +336,7 @@ export default function Screen(ctx: ComposeDslContext): ComposeNode {
       resetForm();
       await loadEntries();
     } catch (error) {
-      ctx.showToast(`${t.toastSaveFailedPrefix}${String(error)}`);
+      ctx.showToast(`${t.toastSaveFailedPrefix}${(error as WorldBookError).message}`);
     }
   }
 
@@ -344,6 +421,9 @@ export default function Screen(ctx: ComposeDslContext): ComposeNode {
   }
 
   function renderCard(entry: WorldBookListEntry): ComposeNode {
+    const isDeleting = deletingEntryId === entry.id;
+    const isToggling = togglingEntryId === entry.id;
+    const isEntryBusy = isDeleting || isToggling;
     const keywordText =
       entry.keywords && entry.keywords.length > 0 ? entry.keywords.join("、") : t.keywordEmpty;
     const characterCardName = resolveCharacterCardName(entry.character_card_id || "");
@@ -393,7 +473,12 @@ export default function Screen(ctx: ComposeDslContext): ComposeNode {
         key: entry.id,
         containerColor: colors.surface,
         elevation: 1,
-        modifier: ctx.Modifier.fillMaxWidth().clickable(() => doEdit(entry.id))
+        modifier: ctx.Modifier.fillMaxWidth().clickable(() => {
+          if (!isEntryBusy) {
+            return doEdit(entry.id);
+          }
+          return undefined;
+        })
       },
       [
         UI.Column(
@@ -468,7 +553,7 @@ export default function Screen(ctx: ComposeDslContext): ComposeNode {
                 UI.Switch({
                   checked: entry.enabled,
                   onCheckedChange: (_checked) => doToggle(entry.id),
-                  enabled: true,
+                  enabled: !isEntryBusy,
                   checkedThumbColor: colors.primary,
                   checkedTrackColor: colors.primaryContainer,
                   uncheckedThumbColor: colors.outline,
@@ -484,7 +569,12 @@ export default function Screen(ctx: ComposeDslContext): ComposeNode {
                   .fillMaxWidth()
                   .clip({ cornerRadius: 12 })
                   .background(colors.surfaceVariant.copy({ alpha: 0.18 }))
-                  .clickable(() => doEdit(entry.id))
+                  .clickable(() => {
+                    if (!isEntryBusy) {
+                      return doEdit(entry.id);
+                    }
+                    return undefined;
+                  })
                   .padding({ horizontal: 8, vertical: 6 })
               },
               [
@@ -521,6 +611,7 @@ export default function Screen(ctx: ComposeDslContext): ComposeNode {
                 UI.OutlinedButton(
                   {
                     onClick: () => doEdit(entry.id),
+                    enabled: !isEntryBusy,
                     weight: 1,
                     height: 32,
                     contentPadding: { horizontal: 12 }
@@ -536,6 +627,7 @@ export default function Screen(ctx: ComposeDslContext): ComposeNode {
                 UI.OutlinedButton(
                   {
                     onClick: () => doDelete(entry.id, entry.name),
+                    enabled: !isEntryBusy,
                     weight: 1,
                     height: 32,
                     contentPadding: { horizontal: 12 }
@@ -989,6 +1081,126 @@ export default function Screen(ctx: ComposeDslContext): ComposeNode {
     );
   }
 
+  function renderImportForm(): ComposeNode {
+    return UI.Column(
+      {
+        padding: 12,
+        spacing: 12,
+        fillMaxWidth: true
+      },
+      [
+        UI.Row(
+          {
+            fillMaxWidth: true
+          },
+          [
+            UI.OutlinedButton(
+              {
+                onClick: () => setView("list"),
+                shape: { cornerRadius: 12 }
+              },
+              [
+                UI.Row(
+                  {
+                    spacing: 6,
+                    verticalAlignment: "center"
+                  },
+                  [
+                    UI.Icon({
+                      name: "arrowBack",
+                      size: 16,
+                      tint: colors.onSurface
+                    }),
+                    UI.Text({
+                      text: t.buttonBack,
+                      color: colors.onSurface,
+                      fontWeight: "bold"
+                    })
+                  ]
+                )
+              ]
+            )
+          ]
+        ),
+        UI.Card(
+          {
+            containerColor: colors.surface,
+            shape: { cornerRadius: 18 },
+            fillMaxWidth: true
+          },
+          [
+            UI.Column(
+              {
+                padding: 16,
+                spacing: 12,
+                fillMaxWidth: true
+              },
+              [
+                UI.Text({
+                  text: t.sectionImport,
+                  style: "titleMedium",
+                  fontWeight: "bold",
+                  color: colors.onSurface
+                }),
+                UI.Text({
+                  text: t.sectionImportDesc,
+                  style: "bodySmall",
+                  color: colors.onSurfaceVariant
+                }),
+                    UI.TextField({
+                        label: t.fieldImportPath,
+                        placeholder: t.fieldImportPathPlaceholder,
+                        value: importPath,
+                        onValueChange: setImportPath,
+                  singleLine: false,
+                        minLines: 2,
+                        fillMaxWidth: true
+                    }),
+                    UI.OutlinedButton(
+                      {
+                        onClick: () => doPickImportFile(),
+                        enabled: !importing,
+                        fillMaxWidth: true,
+                        shape: { cornerRadius: 12 }
+                      },
+                      [
+                        UI.Text({
+                          text: t.buttonPickImportFile,
+                          fontWeight: "bold"
+                        })
+                      ]
+                    ),
+                    UI.Text({
+                        text: t.importFormatsTitle,
+                        style: "labelMedium",
+                  fontWeight: "bold",
+                  color: colors.onSurface
+                }),
+                UI.Text({
+                  text: t.importFormatsDesc,
+                  style: "bodySmall",
+                  color: colors.onSurfaceVariant
+                }),
+                UI.Text({
+                  text: t.importPathHint,
+                  style: "bodySmall",
+                  color: colors.onSurfaceVariant
+                })
+              ]
+            )
+          ]
+        ),
+        UI.Button({
+          text: importing ? `${t.importActionButton}...` : t.importActionButton,
+          onClick: () => doImport(),
+          enabled: !importing,
+          fillMaxWidth: true,
+          shape: { cornerRadius: 14 }
+        })
+      ]
+    );
+  }
+
   const items: ComposeNode[] = [
     UI.Row(
       {
@@ -1024,6 +1236,33 @@ export default function Screen(ctx: ComposeDslContext): ComposeNode {
               ]
             )
           ]
+        ),
+        UI.Spacer({ width: 8 }),
+        UI.FilledTonalButton(
+          {
+            onClick: doOpenImport,
+            height: 36
+          },
+          [
+            UI.Row(
+              {
+                spacing: 6,
+                verticalAlignment: "center"
+              },
+              [
+                UI.Icon({
+                  name: "uploadFile",
+                  tint: colors.onSecondaryContainer,
+                  size: 18
+                }),
+                UI.Text({
+                  text: t.buttonImport,
+                  color: colors.onSecondaryContainer,
+                  fontWeight: "bold"
+                })
+              ]
+            )
+          ]
         )
       ]
     )
@@ -1037,6 +1276,17 @@ export default function Screen(ctx: ComposeDslContext): ComposeNode {
         padding: { horizontal: 12, vertical: 8 }
       },
       [renderForm()]
+    );
+  }
+
+  if (view === "import") {
+    return UI.LazyColumn(
+      {
+        fillMaxSize: true,
+        spacing: 12,
+        padding: { horizontal: 12, vertical: 8 }
+      },
+      [renderImportForm()]
     );
   }
 
@@ -1117,8 +1367,16 @@ export default function Screen(ctx: ComposeDslContext): ComposeNode {
       padding: { horizontal: 12, vertical: 8 },
       fillMaxSize: true,
       onLoad: async () => {
-        await loadEntries();
-        await ensureCharacterCardsLoaded(false);
+        if (hasLoadedOnce || initialLoadInFlight) {
+          return;
+        }
+        setInitialLoadInFlight(true);
+        try {
+          await loadEntries(true);
+          await ensureCharacterCardsLoaded(false);
+        } finally {
+          setInitialLoadInFlight(false);
+        }
       }
     },
     items

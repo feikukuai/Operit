@@ -2,7 +2,9 @@ package com.ai.assistance.operit.ui.common.composedsl
 
 import android.graphics.Color as AndroidColor
 import android.content.Intent
+import android.database.Cursor
 import android.net.Uri
+import android.provider.OpenableColumns
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
@@ -148,6 +150,7 @@ import androidx.webkit.WebViewFeature
 import com.ai.assistance.operit.core.tools.AIToolHandler
 import com.ai.assistance.operit.core.tools.javascript.JsEngine
 import com.ai.assistance.operit.core.tools.javascript.JsJavaBridgeDelegates
+import com.ai.assistance.operit.core.tools.javascript.extractJsExecutionErrorMessage
 import com.ai.assistance.operit.core.tools.packTool.PackageManager
 import com.ai.assistance.operit.core.tools.packTool.ToolPkgComposeDslNode
 import com.ai.assistance.operit.core.tools.packTool.ToolPkgComposeDslParser
@@ -162,6 +165,7 @@ import com.ai.assistance.operit.ui.features.token.webview.WebViewConfig
 import com.ai.assistance.operit.ui.theme.getSystemFontFamily
 import com.ai.assistance.operit.ui.theme.loadCustomFontFamily
 import com.ai.assistance.operit.util.AppLogger
+import com.ai.assistance.operit.util.OperitPaths
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Job
@@ -189,6 +193,200 @@ import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 
 private const val TAG = "ToolPkgComposeDslScreen"
+private val composeDslFilePickerMainHandler by lazy { Handler(Looper.getMainLooper()) }
+
+internal data class ComposeDslFilePickerRequest(
+    val routeInstanceId: String,
+    val executionContextKey: String,
+    val mimeTypes: List<String>,
+    val allowMultiple: Boolean,
+    val persistPermission: Boolean
+)
+
+private data class ComposeDslPendingFilePickerLaunch(
+    val request: ComposeDslFilePickerRequest,
+    val onComplete: (Result<String>) -> Unit
+)
+
+internal object ComposeDslFilePickerHostRegistry {
+    private val launchers =
+        ConcurrentHashMap<String, (ComposeDslFilePickerRequest, (Result<String>) -> Unit) -> Unit>()
+
+    fun bind(
+        executionContextKey: String,
+        launcher: (ComposeDslFilePickerRequest, (Result<String>) -> Unit) -> Unit
+    ) {
+        if (executionContextKey.isBlank()) {
+            return
+        }
+        launchers[executionContextKey] = launcher
+    }
+
+    fun unbind(executionContextKey: String) {
+        if (executionContextKey.isBlank()) {
+            return
+        }
+        launchers.remove(executionContextKey)
+    }
+
+    fun openPicker(
+        payloadJson: String,
+        onSuccess: (String) -> Unit,
+        onError: (String) -> Unit
+    ) {
+        val payload =
+            runCatching { JSONObject(payloadJson) }
+                .getOrElse { error ->
+                    onError(error.message?.trim().orEmpty().ifBlank { "Invalid file picker payload" })
+                    return
+                }
+        val executionContextKey = payload.optString("executionContextKey").trim()
+        if (executionContextKey.isBlank()) {
+            onError("compose file picker executionContextKey is required")
+            return
+        }
+        val launcher = launchers[executionContextKey]
+        if (launcher == null) {
+            onError("compose file picker host is unavailable")
+            return
+        }
+        val options = payload.optJSONObject("options")
+        val mimeTypesJson = options?.optJSONArray("mimeTypes")
+        val mimeTypes =
+            buildList {
+                if (mimeTypesJson != null) {
+                    for (index in 0 until mimeTypesJson.length()) {
+                        val value = mimeTypesJson.optString(index).trim()
+                        if (value.isNotEmpty()) {
+                            add(value)
+                        }
+                    }
+                }
+            }.ifEmpty { listOf("*/*") }
+        val request =
+            ComposeDslFilePickerRequest(
+                routeInstanceId = payload.optString("routeInstanceId").trim(),
+                executionContextKey = executionContextKey,
+                mimeTypes = mimeTypes,
+                allowMultiple = options?.optBoolean("allowMultiple", false) == true,
+                persistPermission = options?.optBoolean("persistPermission", true) != false
+            )
+        composeDslFilePickerMainHandler.post {
+            launcher(request) { result ->
+                result.fold(
+                    onSuccess = onSuccess,
+                    onFailure = { error ->
+                        onError(error.message?.trim().orEmpty().ifBlank { "compose file picker failed" })
+                    }
+                )
+            }
+        }
+    }
+}
+
+private fun Cursor.getColumnIndexOrNull(name: String): Int? {
+    val index = getColumnIndex(name)
+    return if (index >= 0) index else null
+}
+
+private fun queryComposeDslPickedFileMeta(
+    context: android.content.Context,
+    uri: Uri,
+    copiedFile: File
+): JSONObject {
+    val resolver = context.contentResolver
+    var name: String? = null
+    var size: Long? = null
+    runCatching {
+        resolver.query(uri, null, null, null, null)?.use { cursor ->
+            if (cursor.moveToFirst()) {
+                cursor.getColumnIndexOrNull(OpenableColumns.DISPLAY_NAME)?.let { columnIndex ->
+                    if (!cursor.isNull(columnIndex)) {
+                        name = cursor.getString(columnIndex)?.trim()?.ifBlank { null }
+                    }
+                }
+                cursor.getColumnIndexOrNull(OpenableColumns.SIZE)?.let { columnIndex ->
+                    if (!cursor.isNull(columnIndex)) {
+                        size = cursor.getLong(columnIndex)
+                    }
+                }
+            }
+        }
+    }
+    return JSONObject()
+        .put("uri", uri.toString())
+        .put("path", copiedFile.absolutePath)
+        .put("name", name ?: JSONObject.NULL)
+        .put("mimeType", resolver.getType(uri) ?: JSONObject.NULL)
+        .put("size", size ?: copiedFile.length())
+}
+
+private fun buildComposeDslFilePickerResultJson(
+    context: android.content.Context,
+    copiedFiles: List<Pair<Uri, File>>,
+    cancelled: Boolean
+): String {
+    val files = JSONArray()
+    copiedFiles.forEach { (uri, copiedFile) ->
+        files.put(queryComposeDslPickedFileMeta(context, uri, copiedFile))
+    }
+    return JSONObject()
+        .put("cancelled", cancelled)
+        .put("files", files)
+        .toString()
+}
+
+private fun sanitizeComposeDslPickedFileName(rawName: String): String {
+    val sanitized =
+        rawName
+            .replace(Regex("""[\\/:*?"<>|\u0000-\u001F]"""), "_")
+            .trim()
+            .ifBlank { "picked_file" }
+    return sanitized.takeLast(120)
+}
+
+private fun extractComposeDslPickedFileExtension(fileName: String): String {
+    val dotIndex = fileName.lastIndexOf('.')
+    if (dotIndex <= 0 || dotIndex >= fileName.length - 1) {
+        return ""
+    }
+    val extension =
+        fileName.substring(dotIndex + 1)
+            .trim()
+            .take(16)
+    return extension
+        .takeIf { it.matches(Regex("[A-Za-z0-9_-]+")) }
+        .orEmpty()
+}
+
+private fun stageComposeDslPickedFile(
+    context: android.content.Context,
+    uri: Uri,
+    displayName: String?
+): File {
+    val stagingDir = File(OperitPaths.cleanOnExitInternalDir(context), "compose_file_picker").apply { mkdirs() }
+    val safeBaseName = sanitizeComposeDslPickedFileName(displayName ?: uri.lastPathSegment ?: "picked_file")
+    val extension = extractComposeDslPickedFileExtension(safeBaseName)
+    val targetFileName =
+        buildString {
+            append("picked_")
+            append(System.currentTimeMillis())
+            append("_")
+            append(UUID.randomUUID().toString().replace("-", "").take(12))
+            if (extension.isNotEmpty()) {
+                append(".")
+                append(extension)
+            }
+        }
+    val targetFile = File(stagingDir, targetFileName)
+    context.contentResolver.openInputStream(uri)?.use { input ->
+        targetFile.outputStream().use { output ->
+            input.copyTo(output)
+        }
+    } ?: throw IllegalStateException("无法打开所选文件")
+    return targetFile
+}
+
 private fun ToolPkgComposeDslNode.containsNodeType(typeToken: String): Boolean {
     if (normalizeToken(type) == typeToken) {
         return true
@@ -311,6 +509,73 @@ fun ToolPkgComposeDslToolScreen(
             routeInstanceId = routeInstanceId
         )
     }
+    var pendingFilePickerLaunch by remember(executionContextKey) {
+        mutableStateOf<ComposeDslPendingFilePickerLaunch?>(null)
+    }
+    val filePickerLauncher =
+        rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            val pending = pendingFilePickerLaunch
+            pendingFilePickerLaunch = null
+            if (pending == null) {
+                return@rememberLauncherForActivityResult
+            }
+            if (result.resultCode != android.app.Activity.RESULT_OK) {
+                pending.onComplete(Result.success(buildComposeDslFilePickerResultJson(context, emptyList(), true)))
+                return@rememberLauncherForActivityResult
+            }
+            val data = result.data
+            val selectedUris =
+                buildList {
+                    data?.data?.let(::add)
+                    val clipData = data?.clipData
+                    if (clipData != null) {
+                        for (index in 0 until clipData.itemCount) {
+                            clipData.getItemAt(index)?.uri?.let(::add)
+                        }
+                    }
+                }.distinctBy { uri -> uri.toString() }
+            if (selectedUris.isEmpty()) {
+                pending.onComplete(Result.success(buildComposeDslFilePickerResultJson(context, emptyList(), true)))
+                return@rememberLauncherForActivityResult
+            }
+            if (pending.request.persistPermission) {
+                val flags =
+                    (data?.flags ?: 0) and
+                        (Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+                if (flags != 0) {
+                    selectedUris.forEach { uri ->
+                        runCatching {
+                            context.contentResolver.takePersistableUriPermission(uri, flags)
+                        }
+                    }
+                }
+            }
+            runCatching {
+                val copiedFiles =
+                    selectedUris.map { uri ->
+                        val copiedFile = stageComposeDslPickedFile(context, uri, null)
+                        uri to copiedFile
+                    }
+                buildComposeDslFilePickerResultJson(
+                    context = context,
+                    copiedFiles = copiedFiles,
+                    cancelled = false
+                )
+            }.fold(
+                onSuccess = { resultJson ->
+                    pending.onComplete(Result.success(resultJson))
+                },
+                onFailure = { error ->
+                    pending.onComplete(
+                        Result.failure(
+                            IllegalStateException(
+                                error.message?.trim().orEmpty().ifBlank { "复制所选文件到临时目录失败" }
+                            )
+                        )
+                    )
+                }
+            )
+        }
     val jsEngine = remember(packageManager, executionContextKey) {
         packageManager.getToolPkgExecutionEngine(executionContextKey)
     }
@@ -779,11 +1044,12 @@ fun ToolPkgComposeDslToolScreen(
                 val parsed = ToolPkgComposeDslParser.parseRenderResult(rawResult)
                 if (parsed == null) {
                     val normalizedError =
-                        when {
-                            rawText.startsWith("Error:", ignoreCase = true) -> rawText
-                            rawText.isNotBlank() -> "Invalid compose_dsl result: $rawText"
-                            else -> "Invalid compose_dsl result"
-                        }
+                        extractJsExecutionErrorMessage(rawResult)
+                            ?: if (rawText.isNotBlank()) {
+                                "Invalid compose_dsl result: $rawText"
+                            } else {
+                                "Invalid compose_dsl result"
+                            }
                     renderResult = null
                     errorMessage = normalizedError
                     snapshotPhase = "render_invalid_result"
@@ -824,7 +1090,25 @@ fun ToolPkgComposeDslToolScreen(
     }
 
     DisposableEffect(executionContextKey) {
+        ComposeDslFilePickerHostRegistry.bind(executionContextKey) { request, onComplete ->
+            pendingFilePickerLaunch = ComposeDslPendingFilePickerLaunch(request = request, onComplete = onComplete)
+            val intent =
+                Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                    addCategory(Intent.CATEGORY_OPENABLE)
+                    type = if (request.mimeTypes.size == 1) request.mimeTypes.first() else "*/*"
+                    putExtra(Intent.EXTRA_ALLOW_MULTIPLE, request.allowMultiple)
+                    if (request.mimeTypes.size > 1) {
+                        putExtra(Intent.EXTRA_MIME_TYPES, request.mimeTypes.toTypedArray())
+                    }
+                }
+            filePickerLauncher.launch(intent)
+        }
         onDispose {
+            pendingFilePickerLaunch?.onComplete?.invoke(
+                Result.failure(IllegalStateException("compose file picker disposed"))
+            )
+            pendingFilePickerLaunch = null
+            ComposeDslFilePickerHostRegistry.unbind(executionContextKey)
             pendingTreeRerenderJob?.cancel()
             pendingTreeRerenderJob = null
             pendingTextInputSyncs.values.forEach { completion ->

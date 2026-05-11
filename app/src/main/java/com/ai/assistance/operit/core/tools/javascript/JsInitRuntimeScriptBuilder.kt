@@ -396,33 +396,41 @@ private fun buildRuntimeToolCallScript(): String {
                 }
             }
 
-            function buildToolError(result, fallbackMessage) {
-                var message = asString((result && result.error) || fallbackMessage || 'Unknown error');
-                if (result && typeof result === 'object' && Object.prototype.hasOwnProperty.call(result, 'data')) {
-                    var detailText = stringifyToolResultDetail(result.data);
-                    if (detailText) {
-                        message += '\n\nTool output:\n' + detailText;
+            function createUserFacingError(message, detailData) {
+                return {
+                    name: 'Error',
+                    message: asString(message).trim(),
+                    data: detailData,
+                    toString: function() {
+                        return this.message;
                     }
-                }
-                var error = new Error(message);
-                if (result && typeof result === 'object' && Object.prototype.hasOwnProperty.call(result, 'data')) {
-                    error.data = result.data;
-                }
-                return error;
+                };
+            }
+
+            function buildToolError(result) {
+                var message = asString(result && result.message).trim();
+                var detailData =
+                    result && typeof result === 'object' && Object.prototype.hasOwnProperty.call(result, 'data')
+                        ? result.data
+                        : undefined;
+                return createUserFacingError(message, detailData);
             }
 
             function parseToolResult(result, isError) {
                 if (isError) {
                     if (result && typeof result === 'object' && result.success === false) {
-                        throw buildToolError(result, 'Unknown error');
+                        throw buildToolError(result);
                     }
-                    throw new Error(typeof result === 'string' ? result : JSON.stringify(result));
+                    throw createUserFacingError(
+                        typeof result === 'string' ? result : JSON.stringify(result),
+                        result && typeof result === 'object' ? result : undefined
+                    );
                 }
                 if (result && typeof result === 'object' && Object.prototype.hasOwnProperty.call(result, 'success')) {
                     if (result.success) {
                         return result.data;
                     }
-                    throw buildToolError(result, 'Unknown error');
+                    throw buildToolError(result);
                 }
                 if (typeof result === 'string' && result.length > 1) {
                     var first = result.charAt(0);
