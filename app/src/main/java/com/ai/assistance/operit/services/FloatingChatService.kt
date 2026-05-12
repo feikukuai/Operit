@@ -107,6 +107,7 @@ class FloatingChatService : Service(), FloatingWindowCallback {
         const val EXTRA_WAKE_LAUNCHED = "WAKE_LAUNCHED"
         const val EXTRA_AUTO_EXIT_AFTER_MS = "AUTO_EXIT_AFTER_MS"
         const val EXTRA_KEEP_IF_EXISTS = "KEEP_IF_EXISTS"
+        const val EXTRA_BACKGROUND_MODE = "BACKGROUND_MODE"
 
         fun getInstance(): FloatingChatService? = instance
     }
@@ -372,6 +373,22 @@ class FloatingChatService : Service(), FloatingWindowCallback {
 
         try {
             acquireWakeLock()
+
+            // Handle background mode - set persistent hidden flag BEFORE show() to prevent flash
+            val isBackgroundMode = intent?.getBooleanExtra(EXTRA_BACKGROUND_MODE, false) == true
+            if (isBackgroundMode) {
+                AppLogger.d(TAG, "Background mode requested - hiding floating window")
+                // Synchronously set flag before show() so the view is born hidden
+                if (::windowManager.isInitialized) {
+                    windowManager.setFloatingWindowPersistentHidden(true)
+                }
+            } else {
+                // Non-background mode: ensure floating window can be shown
+                // (reset flag that may have been set by a previous background mode request)
+                if (::windowManager.isInitialized) {
+                    windowManager.setFloatingWindowPersistentHidden(false)
+                }
+            }
 
             val keepIfExists = intent?.getBooleanExtra(EXTRA_KEEP_IF_EXISTS, false) == true
             val isFirstStart = !hasHandledStartCommand

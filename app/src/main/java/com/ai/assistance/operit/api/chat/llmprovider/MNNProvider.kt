@@ -19,7 +19,11 @@ import com.ai.assistance.operit.data.model.ToolPrompt
 import com.ai.assistance.operit.util.stream.Stream
 import com.ai.assistance.operit.util.stream.stream
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.channels.Channel
 import java.io.File
 import java.io.FileOutputStream
 import kotlinx.coroutines.runBlocking
@@ -256,9 +260,35 @@ class MNNProvider(
                 ModelCapabilities(isVisual = false, isAudio = false)
             } else {
                 val json = JSONObject(configFile.readText())
+                val configVisual = json.optBoolean("is_visual", false)
+                val configAudio = json.optBoolean("is_audio", false)
+                // Fallback: auto-detect vision/audio from model name if config doesn't declare it
+                // This handles models like Qwen-VL, InternVL, etc. that may not have is_visual set
+                val modelNameLower = modelName.lowercase()
+                val nameHasVision = !configVisual && (
+                    modelNameLower.contains("vl") ||
+                    modelNameLower.contains("vision") ||
+                    modelNameLower.contains("visual") ||
+                    modelNameLower.contains("omni") ||
+                    modelNameLower.contains("internvl") ||
+                    modelNameLower.contains("llava") ||
+                    modelNameLower.contains("qwen2-vl") ||
+                    modelNameLower.contains("qwen2_5_vl") ||
+                    modelNameLower.contains("qwen3-vl") ||
+                    modelNameLower.contains("qwen2.5-vl") ||
+                    modelNameLower.contains("qwen3.5-vl") ||
+                    modelNameLower.contains("glm-4v") ||
+                    modelNameLower.contains("minicpm-v")
+                )
+                val nameHasAudio = !configAudio && (
+                    modelNameLower.contains("omni") ||
+                    modelNameLower.contains("audio") ||
+                    modelNameLower.contains("qwen2_5_omni") ||
+                    modelNameLower.contains("qwen2.5-omni")
+                )
                 ModelCapabilities(
-                    isVisual = json.optBoolean("is_visual", false),
-                    isAudio = json.optBoolean("is_audio", false)
+                    isVisual = configVisual || nameHasVision,
+                    isAudio = configAudio || nameHasAudio
                 )
             }
         } catch (_: Exception) {
@@ -676,6 +706,21 @@ class MNNProvider(
             val toolCallOutputBuffer = StringBuilder()
             val finalOutputBuffer = StringBuilder()
             val emitDirectly = !useInternalToolCall
+
+            // 使用 Channel 缓冲 token，避免 generateStream 回调中 runBlocking 阻塞
+            // generateStream 是同步阻塞调用，回调中直接 runBlocking { emit() } 可能导致
+            // 与下游 shareRevisable 的 Channel.send 挂起产生时序问题
+            val tokenChannel = Channel<String>(capacity = Channel.UNLIMITED)
+
+            // 在另一个协程中异步消费 token 并 emit
+            val emitScope = CoroutineScope(Dispatchers.Unconfined + SupervisorJob())
+            val emitJob = emitScope.launch {
+                for (token in tokenChannel) {
+                    emit(token)
+                }
+            }
+
+            try {
             val success = session.generateStream(safeHistory, requestedMaxNewTokens) { token ->
                 if (isCancelled) {
                     false
@@ -685,13 +730,14 @@ class MNNProvider(
 
                     if (emitDirectly) {
                         finalOutputBuffer.append(token)
-                        runBlocking { emit(token) }
+                        // 非阻塞地将 token 放入 Channel，由异步协程消费并 emit
+                        tokenChannel.trySend(token)
                     } else {
                         toolCallOutputBuffer.append(token)
                     }
 
                     kotlin.runCatching {
-                        kotlinx.coroutines.runBlocking {
+                        runBlocking {
                             onTokensUpdated(_inputTokenCount, 0, _outputTokenCount)
                         }
                     }
@@ -699,6 +745,10 @@ class MNNProvider(
                     true
                 }
             }
+
+            // 关闭 Channel，通知异步 emit 协程结束
+            tokenChannel.close()
+            emitJob.join()
 
             if (useInternalToolCall && toolCallOutputBuffer.isNotEmpty()) {
                 val converted = StructuredToolCallBridge.convertToolCallPayloadToXml(toolCallOutputBuffer.toString())
@@ -710,6 +760,11 @@ class MNNProvider(
 
             if (!success && !isCancelled) {
                 emit(context.getString(R.string.mnn_reasoning_error))
+            }
+            } catch (e: Exception) {
+                tokenChannel.close()
+                emitJob.cancel()
+                throw e
             }
 
             AppLogger.i(TAG, "MNN LLM推理完成，输出token数: $_outputTokenCount")

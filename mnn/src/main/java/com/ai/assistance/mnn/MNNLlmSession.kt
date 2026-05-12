@@ -84,8 +84,40 @@ class MNNLlmSession private constructor(
             Log.i(TAG, "LLM session created and loaded successfully")
             return MNNLlmSession(llmPtr, modelDir)
         }
+
+        /**
+         * 通过配置文件路径检查模型是否为嵌入模型（不需要创建 session）
+         * @param modelDir 模型目录路径
+         * @return true 如果是嵌入模型
+         */
+    @JvmStatic
+    fun isEmbeddingModelByDir(modelDir: String): Boolean {
+        val configFile = File(modelDir, "llm_config.json")
+        if (configFile.exists()) {
+            if (MNNLlmNative.nativeIsEmbeddingModelByConfig(configFile.absolutePath)) {
+                return true
+            }
+        }
+        // Fallback: auto-detect from model directory name (e.g., BGE, E5, GTE models)
+        return isEmbeddingModelByName(File(modelDir).name)
     }
-    
+
+    /**
+     * Auto-detect embedding models by name pattern.
+     * Covers common embedding model families that may not have is_embedding flag in config.
+     */
+    @JvmStatic
+    fun isEmbeddingModelByName(modelName: String): Boolean {
+        val lower = modelName.lowercase()
+        return lower.contains("bge") ||
+                lower.contains("embedding") ||
+                lower.contains("e5-") ||
+                lower.contains("gte-") ||
+                lower.contains("sentence-transformers") ||
+                lower.contains("jina-embedding")
+    }
+    }
+
     @Volatile
     private var released = false
 
@@ -285,6 +317,27 @@ class MNNLlmSession private constructor(
         return generateStream(history, maxTokens, onToken)
     }
     
+    /**
+     * 检查当前模型是否为嵌入模型
+     * @return true 如果是嵌入模型
+     */
+    fun isEmbeddingModel(): Boolean {
+        return withActiveCall { ptr ->
+            MNNLlmNative.nativeIsEmbeddingModel(ptr)
+        }
+    }
+
+    /**
+     * 获取文本的嵌入向量（仅对嵌入模型有效，如 BGE）
+     * @param text 输入文本
+     * @return 嵌入向量（FloatArray），失败返回 null
+     */
+    fun getEmbedding(text: String): FloatArray? {
+        return withActiveCall { ptr ->
+            MNNLlmNative.nativeGetEmbedding(ptr, text)
+        }
+    }
+
     /**
      * 重置会话（清除历史和 KV-Cache）
      */

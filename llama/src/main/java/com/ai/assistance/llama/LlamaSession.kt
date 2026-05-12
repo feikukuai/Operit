@@ -171,6 +171,19 @@ class LlamaSession private constructor(
         }
     }
 
+    /**
+     * Compute embedding vector for the given text using a GGUF model file.
+     * This is a standalone operation that creates a temporary embedding context.
+     * Does not require an active session - this is a static-like operation.
+     * @param pathModel Absolute path to the GGUF model file
+     * @param text Input text to embed
+     * @param nThreads Number of threads to use (default: 4)
+     * @return Embedding vector as FloatArray, or null on failure
+     */
+    fun getEmbedding(pathModel: String, text: String, nThreads: Int = 4): FloatArray? {
+        return LlamaNative.nativeGetEmbedding(pathModel, text, nThreads)
+    }
+
     fun release() {
         val ptr: Long
         synchronized(lock) {

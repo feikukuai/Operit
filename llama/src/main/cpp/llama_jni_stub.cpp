@@ -327,6 +327,16 @@ Java_com_ai_assistance_llama_LlamaNative_nativeGenerateStream(JNIEnv * env, jcla
     return JNI_FALSE;
 }
 
+extern "C" JNIEXPORT jfloatArray JNICALL
+Java_com_ai_assistance_llama_LlamaNative_nativeGetEmbedding(JNIEnv * env, jclass clazz, jstring pathModel, jstring text, jint nThreads) {
+    (void) env;
+    (void) clazz;
+    (void) pathModel;
+    (void) text;
+    (void) nThreads;
+    return nullptr;
+}
+
 extern "C" JNIEXPORT jboolean JNICALL
 Java_com_ai_assistance_llama_LlamaNative_nativeSetToolCallGrammar(
         JNIEnv * env,
@@ -1372,6 +1382,136 @@ Java_com_ai_assistance_llama_LlamaNative_nativeGenerateStream(JNIEnv * env, jcla
     }
 
     return JNI_TRUE;
+}
+
+// =======================
+// Embedding Support
+// =======================
+
+extern "C" JNIEXPORT jfloatArray JNICALL
+Java_com_ai_assistance_llama_LlamaNative_nativeGetEmbedding(
+    JNIEnv * env, jclass clazz, jstring pathModel, jstring jtext, jint nThreads) {
+    (void) clazz;
+
+    if (pathModel == nullptr || jtext == nullptr) return nullptr;
+
+    const std::string modelPath = jstringToString(env, pathModel);
+    const std::string textStr = jstringToString(env, jtext);
+    const int32_t effectiveThreads = positiveOrDefaultInt(nThreads, 4);
+
+    if (modelPath.empty() || textStr.empty()) return nullptr;
+
+    ensureBackendInit();
+
+    // Load model
+    auto mparams = llama_model_default_params();
+    mparams.n_gpu_layers = 0; // CPU only for embedding
+    llama_model * model = llama_model_load_from_file(modelPath.c_str(), mparams);
+    if (!model) {
+        LOGE("nativeGetEmbedding: failed to load model from %s", modelPath.c_str());
+        return nullptr;
+    }
+
+    // Create context with pooling type MEAN for embedding
+    auto cparams = llama_context_default_params();
+    cparams.n_threads = effectiveThreads;
+    cparams.n_threads_batch = effectiveThreads;
+    cparams.n_ctx = 2048;
+    cparams.n_batch = 512;
+    cparams.embeddings = true;
+    cparams.pooling_type = LLAMA_POOLING_TYPE_MEAN;
+
+    llama_context * ctx = llama_init_from_model(model, cparams);
+    if (!ctx) {
+        LOGE("nativeGetEmbedding: failed to create context");
+        llama_model_free(model);
+        return nullptr;
+    }
+
+    // Tokenize the input text
+    const llama_vocab * vocab = llama_model_get_vocab(model);
+    int32_t capacity = static_cast<int32_t>(textStr.size()) + 8;
+    std::vector<llama_token> tokens;
+    tokens.resize(std::max(16, capacity));
+    int32_t nTokens = llama_tokenize(
+        vocab,
+        textStr.c_str(),
+        static_cast<int32_t>(textStr.size()),
+        tokens.data(),
+        static_cast<int32_t>(tokens.size()),
+        true,
+        false  // Don't add BOS for embedding - let llama.cpp handle it
+    );
+    if (nTokens < 0) {
+        tokens.resize(static_cast<size_t>(-nTokens));
+        nTokens = llama_tokenize(
+            vocab,
+            textStr.c_str(),
+            static_cast<int32_t>(textStr.size()),
+            tokens.data(),
+            static_cast<int32_t>(tokens.size()),
+            true,
+            false
+        );
+    }
+    if (nTokens <= 0) {
+        LOGE("nativeGetEmbedding: tokenization failed");
+        llama_free(ctx);
+        llama_model_free(model);
+        return nullptr;
+    }
+    tokens.resize(static_cast<size_t>(nTokens));
+
+    // Create batch and decode
+    llama_batch batch = llama_batch_get_one(tokens.data(), static_cast<int32_t>(tokens.size()));
+
+    int32_t ret = llama_decode(ctx, batch);
+    if (ret != 0) {
+        LOGE("nativeGetEmbedding: llama_decode failed with ret=%d", ret);
+        llama_free(ctx);
+        llama_model_free(model);
+        return nullptr;
+    }
+
+    // Get the embedding vector
+    const float * embeddings = llama_get_embeddings_seq(ctx, 0);
+    if (!embeddings) {
+        // Fallback: try getting embeddings from the last token
+        embeddings = llama_get_embeddings_ith(ctx, static_cast<int32_t>(tokens.size()) - 1);
+    }
+    if (!embeddings) {
+        LOGE("nativeGetEmbedding: failed to get embeddings");
+        llama_free(ctx);
+        llama_model_free(model);
+        return nullptr;
+    }
+
+    // Get embedding dimension
+    const int32_t n_embd = llama_model_n_embd(model);
+    if (n_embd <= 0 || n_embd > 65536) {
+        LOGE("nativeGetEmbedding: invalid embedding dimension %d", n_embd);
+        llama_free(ctx);
+        llama_model_free(model);
+        return nullptr;
+    }
+
+    // Create Java float array and copy data
+    jfloatArray resultArray = env->NewFloatArray(n_embd);
+    if (resultArray == nullptr) {
+        LOGE("nativeGetEmbedding: failed to create float array");
+        llama_free(ctx);
+        llama_model_free(model);
+        return nullptr;
+    }
+
+    env->SetFloatArrayRegion(resultArray, 0, n_embd, embeddings);
+
+    // Cleanup
+    llama_free(ctx);
+    llama_model_free(model);
+
+    LOGI("nativeGetEmbedding: returned embedding with dim=%d", n_embd);
+    return resultArray;
 }
 
 #endif

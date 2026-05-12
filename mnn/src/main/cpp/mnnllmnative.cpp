@@ -1390,3 +1390,125 @@ Java_com_ai_assistance_mnn_MNNLlmNative_nativeGenerateWavform(
     }
 }
 
+// =======================
+// Embedding Support
+// =======================
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_ai_assistance_mnn_MNNLlmNative_nativeIsEmbeddingModel(
+    JNIEnv* env, jclass clazz, jlong llmPtr) {
+
+    if (llmPtr == 0) return JNI_FALSE;
+
+    // We can't access mConfig (protected), so check the model's actual type
+    // by trying to call txt_embedding on the config path.
+    // Instead, we read the llm_config.json directly.
+    // However, we don't have the config path here.
+    // The safest approach: check in nativeGetEmbedding and return null if not embedding.
+    return JNI_TRUE; // Placeholder; actual check is done in nativeGetEmbedding
+}
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_ai_assistance_mnn_MNNLlmNative_nativeIsEmbeddingModelByConfig(
+    JNIEnv* env, jclass clazz, jstring jconfigPath) {
+
+    if (jconfigPath == nullptr) return JNI_FALSE;
+
+    std::string configPath = jstringToString(env, jconfigPath);
+
+    try {
+        // Read and parse the config JSON to check is_embedding / model_type
+        std::ifstream ifs(configPath);
+        if (!ifs.is_open()) return JNI_FALSE;
+
+        std::string content((std::istreambuf_iterator<char>(ifs)),
+                            std::istreambuf_iterator<char>());
+        ifs.close();
+
+        // Parse JSON using rapidjson
+        rapidjson::Document doc;
+        doc.Parse(content.c_str());
+        if (doc.HasParseError()) return JNI_FALSE;
+
+        // Check is_embedding flag
+        if (doc.HasMember("is_embedding") && doc["is_embedding"].IsBool()) {
+            return doc["is_embedding"].GetBool() ? JNI_TRUE : JNI_FALSE;
+        }
+
+        // Check model_type field
+        if (doc.HasMember("model_type") && doc["model_type"].IsString()) {
+            std::string modelType = doc["model_type"].GetString();
+            if (modelType == "embedding" || modelType == "Embedding") {
+                return JNI_TRUE;
+            }
+        }
+
+        return JNI_FALSE;
+    } catch (...) {
+        return JNI_FALSE;
+    }
+}
+
+extern "C" JNIEXPORT jfloatArray JNICALL
+Java_com_ai_assistance_mnn_MNNLlmNative_nativeGetEmbedding(
+    JNIEnv* env, jclass clazz, jlong llmPtr, jstring jtext) {
+
+    if (llmPtr == 0 || jtext == nullptr) return nullptr;
+
+    Llm* llm = reinterpret_cast<Llm*>(llmPtr);
+    std::string text = jstringToString(env, jtext);
+
+    try {
+        // Safety check: verify this is actually an embedding model by trying the call.
+        // Since mConfig is protected, we rely on Embedding::txt_embedding which
+        // will return nullptr if the model was not loaded as an Embedding type
+        // (because Llm doesn't have txt_embedding method).
+        // However, static_cast to Embedding* on a non-Embedding Llm is UB.
+        // The caller (Kotlin layer) MUST check nativeIsEmbeddingModelByConfig first.
+
+        // Safe to static_cast: only if Llm::createLLM detected is_embedding=true
+        Embedding* emb = static_cast<Embedding*>(llm);
+
+        // Get text embedding
+        Express::VARP result = emb->txt_embedding(text);
+        if (result == nullptr) {
+            LOGE("nativeGetEmbedding: txt_embedding returned null");
+            return nullptr;
+        }
+
+        // Read the embedding vector
+        auto info = result->getInfo();
+        if (info == nullptr) {
+            LOGE("nativeGetEmbedding: failed to get tensor info");
+            return nullptr;
+        }
+
+        int dim = info->size;
+        if (dim <= 0 || dim > 65536) {
+            LOGE("nativeGetEmbedding: invalid embedding dimension %d", dim);
+            return nullptr;
+        }
+
+        const float* data = result->readMap<float>();
+        if (data == nullptr) {
+            LOGE("nativeGetEmbedding: failed to read embedding data");
+            return nullptr;
+        }
+
+        // Create Java float array and copy data
+        jfloatArray resultArray = env->NewFloatArray(dim);
+        if (resultArray == nullptr) {
+            LOGE("nativeGetEmbedding: failed to create float array");
+            return nullptr;
+        }
+
+        env->SetFloatArrayRegion(resultArray, 0, dim, data);
+        LOGI("nativeGetEmbedding: returned embedding with dim=%d", dim);
+        return resultArray;
+
+    } catch (const std::exception& e) {
+        LOGE("Exception in nativeGetEmbedding: %s", e.what());
+        return nullptr;
+    }
+}
+

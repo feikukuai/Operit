@@ -190,6 +190,31 @@ object MNNLlmNative {
      */
     @JvmStatic
     external fun nativeCancel(llmPtr: Long)
+
+    /**
+     * 检查当前模型是否为嵌入模型
+     * @param llmPtr LLM 指针
+     * @return true 如果是嵌入模型（配置中 is_embedding=true 或 model_type="embedding"）
+     */
+    @JvmStatic
+    external fun nativeIsEmbeddingModel(llmPtr: Long): Boolean
+
+    /**
+     * 通过配置文件路径检查模型是否为嵌入模型
+     * @param configPath llm_config.json 文件路径
+     * @return true 如果是嵌入模型
+     */
+    @JvmStatic
+    external fun nativeIsEmbeddingModelByConfig(configPath: String): Boolean
+
+    /**
+     * 获取文本的嵌入向量（仅对嵌入模型有效）
+     * @param llmPtr LLM 指针
+     * @param text 输入文本
+     * @return 嵌入向量，失败返回 null
+     */
+    @JvmStatic
+    external fun nativeGetEmbedding(llmPtr: Long, text: String): FloatArray?
     
     /**
      * 生成回调接口

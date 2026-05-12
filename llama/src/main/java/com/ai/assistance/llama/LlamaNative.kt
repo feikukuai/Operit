@@ -75,6 +75,21 @@ object LlamaNative {
         content: String
     ): String?
 
+    /**
+     * Compute embedding vector for the given text using a GGUF model file.
+     * Creates a temporary embedding context with pooling_type=MEAN.
+     * @param pathModel Absolute path to the GGUF model file
+     * @param text Input text to embed
+     * @param nThreads Number of threads to use
+     * @return Embedding vector as FloatArray, or null on failure
+     */
+    @JvmStatic
+    external fun nativeGetEmbedding(
+        pathModel: String,
+        text: String,
+        nThreads: Int
+    ): FloatArray?
+
     interface GenerationCallback {
         fun onToken(token: String): Boolean
     }

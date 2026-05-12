@@ -536,6 +536,7 @@ object ModelListFetcher {
     /**
      * 获取本地MNN模型列表
      * 从固定目录读取已下载的MNN模型文件夹
+     * 通过 llm_config.json 识别有效模型（同时支持语言模型和嵌入模型）
      */
     suspend fun getMnnLocalModels(context: Context): Result<List<ModelOption>> {
         return withContext(Dispatchers.IO) {
@@ -556,22 +557,31 @@ object ModelListFetcher {
                 val models = modelsDir.listFiles { file -> 
                     file.isDirectory
                 }?.mapNotNull { folder ->
-                    // 在文件夹中查找 llm.mnn 主文件
-                    val mnnFile = File(folder, "llm.mnn")
-                    val mnnWeightFile = File(folder, "llm.mnn.weight")
+                    // 通过 llm_config.json 识别有效 MNN 模型（语言模型和嵌入模型都包含此文件）
+                    val configFile = File(folder, "llm_config.json")
                     
-                    if (mnnFile.exists()) {
+                    if (configFile.exists()) {
                         // 计算文件夹总大小
                         val totalSize = folder.listFiles()?.sumOf { it.length() } ?: 0L
                         
-                        AppLogger.d(TAG, "找到MNN模型: ${folder.name}, 主文件: ${mnnFile.exists()}, 权重文件: ${mnnWeightFile.exists()}, 总大小: ${formatFileSize(totalSize)}")
+                        // 检查是否为嵌入模型
+                        val isEmbedding = try {
+                            com.ai.assistance.mnn.MNNLlmSession.isEmbeddingModelByDir(folder.absolutePath)
+                        } catch (e: Exception) {
+                            AppLogger.w(TAG, "检查模型类型失败: ${folder.name}, ${e.message}")
+                            false
+                        }
+                        
+                        val typeTag = if (isEmbedding) "[Embedding] " else ""
+                        
+                        AppLogger.d(TAG, "找到MNN模型: ${folder.name}, 类型: ${if (isEmbedding) "嵌入" else "语言"}, 总大小: ${formatFileSize(totalSize)}")
                         
                         ModelOption(
-                            id = folder.name,  // 使用文件夹名称作为ID（与其他提供商保持一致）
-                            name = "${folder.name} (${formatFileSize(totalSize)})"
+                            id = folder.name,
+                            name = "${typeTag}${folder.name} (${formatFileSize(totalSize)})"
                         )
                     } else {
-                        AppLogger.w(TAG, "文件夹 ${folder.name} 中未找到 llm.mnn 文件")
+                        AppLogger.w(TAG, "文件夹 ${folder.name} 中未找到 llm_config.json")
                         null
                     }
                 }?.sortedBy { it.name } ?: emptyList()

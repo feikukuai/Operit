@@ -186,6 +186,9 @@ class FloatingWindowManager(
             val params = createLayoutParams()
             windowManager.addView(composeView, params)
             isViewAdded = true
+            // Apply visibility flags (e.g., windowPersistentHidden) immediately after adding
+            // so the view is born with correct visibility and never flashes
+            refreshWindowAndIndicatorVisibility()
             AppLogger.d(TAG, "Floating view added at (${params.x}, ${params.y})")
             return true
         } catch (e: Exception) {
@@ -352,6 +355,7 @@ class FloatingWindowManager(
         val indicatorShouldShow = when {
             !indicatorDisplayEnabled && !indicatorPersistentEnabled -> false
             indicatorPersistentEnabled -> true
+            windowPersistentHidden -> false // Don't show indicator in background mode
             else -> !windowVisible &&
                     (currentMode == FloatingMode.FULLSCREEN || currentMode == FloatingMode.WINDOW)
         }
