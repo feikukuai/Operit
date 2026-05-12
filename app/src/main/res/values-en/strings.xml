@@ -7599,4 +7599,24 @@
     <string name="onnx_tts_error_config_invalid_int">ONNX TTS parameter is not an integer: %1$s</string>
     <string name="onnx_tts_error_config_invalid_float">ONNX TTS parameter is not a number: %1$s</string>
     <string name="onnx_tts_error_config_invalid_bool">ONNX TTS parameter is not a boolean: %1$s</string>
+
+    <string name="market_review_changes_requested">Changes Requested</string>
+    <string name="market_review_rejected">Rejected</string>
+    <string name="market_review_status_label">Review Status</string>
+    <string name="market_review_reasons_label">Reasons for Rejection</string>
+    <string name="market_review_reason_metadata_incomplete">Incomplete Metadata</string>
+    <string name="market_review_reason_install_config_invalid">Invalid Installation Configuration</string>
+    <string name="market_review_reason_repository_unreachable">Repository Unreachable</string>
+    <string name="market_review_reason_repository_content_invalid">Non-compliant Repository Content</string>
+    <string name="market_review_reason_entry_unusable">Unusable Entry</string>
+    <string name="market_review_reason_quality_too_low">Quality Too Low</string>
+    <string name="market_review_reason_ai_hallucination">AI Hallucination Issue</string>
+    <string name="market_review_reason_security_risk">Security Risk</string>
+    <string name="market_review_reason_duplicate_submission">Duplicate Submission</string>
+    <string name="market_review_reason_policy_violation">Policy Violation</string>
+    <string name="mention_selector_hint">Enter package name, file name, or path</string>
+    <string name="mention_selector_packages_section">Packages</string>
+    <string name="mention_selector_files_section">Files</string>
+    <string name="mention_selector_files_idle">Enter name or path to search workspace items</string>
+    <string name="mention_selector_files_empty">No matching files or folders</string>
 </resources>

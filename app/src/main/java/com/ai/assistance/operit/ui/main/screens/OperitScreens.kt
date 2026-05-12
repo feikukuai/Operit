@@ -371,7 +371,7 @@ sealed class Screen(
                 },
                 onNavigateToPublish = { navigateTo(SkillPublish) },
                 onNavigateToDetail = { issue ->
-                    navigateTo(SkillDetail(issue))
+                    navigateTo(SkillDetail(issue, fromManage = true))
                 }
             )
         }
@@ -411,7 +411,10 @@ sealed class Screen(
         }
     }
 
-    data class SkillDetail(val issue: com.ai.assistance.operit.data.api.GitHubIssue) :
+    data class SkillDetail(
+        val issue: com.ai.assistance.operit.data.api.GitHubIssue,
+        val fromManage: Boolean = false
+    ) :
             Screen(navItem = NavItem.Packages) {
         @Composable
         override fun Content(
@@ -425,6 +428,7 @@ sealed class Screen(
         ) {
             SkillDetailScreen(
                 issue = issue,
+                fromManage = fromManage,
                 onNavigateBack = onGoBack
             )
         }
@@ -461,7 +465,10 @@ sealed class Screen(
                 onNavigateToEdit = { issue ->
                     navigateTo(MCPEditPlugin(issue))
                 },
-                onNavigateToPublish = { navigateTo(MCPPublish) }
+                onNavigateToPublish = { navigateTo(MCPPublish) },
+                onNavigateToDetail = { issue ->
+                    navigateTo(MCPPluginDetail(issue, fromManage = true))
+                }
             )
         }
     }
@@ -1470,7 +1477,10 @@ sealed class Screen(
     }
 
     // MCP 插件详情页面
-    data class MCPPluginDetail(val issue: com.ai.assistance.operit.data.api.GitHubIssue) :
+    data class MCPPluginDetail(
+        val issue: com.ai.assistance.operit.data.api.GitHubIssue,
+        val fromManage: Boolean = false
+    ) :
             Screen(navItem = NavItem.Packages) {
         @Composable
         override fun Content(
@@ -1484,6 +1494,7 @@ sealed class Screen(
         ) {
             MCPPluginDetailScreen(
                 issue = issue,
+                fromManage = fromManage,
                 onNavigateBack = onGoBack
             )
         }

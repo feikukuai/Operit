@@ -934,12 +934,18 @@
 }
 
 .markdown-inline-code {
+  display: inline-block;
+  max-width: 100%;
   padding: 1px 4px;
   border-radius: 6px;
   background: color-mix(in srgb, var(--chat-surface-variant-color) 46%, transparent);
   color: var(--chat-text-main);
   font-family: var(--chat-mono-font);
   font-size: 12px;
+  white-space: break-spaces;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  vertical-align: baseline;
 }
 
 .markdown-image-shell {
@@ -1079,6 +1085,8 @@
   text-align: left;
   vertical-align: top;
   line-height: 1.45;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .markdown-table-head-cell:last-child,

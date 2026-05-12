@@ -6816,4 +6816,30 @@ Agora é possível usar o modo AutoGLM na interface de diálogo.</string>
     <string name="onnx_tts_error_scales_not_set">O modelo ONNX TTS requer entrada scales. Informe %1$s nos parâmetros ONNX.</string>
     <string name="onnx_tts_error_speaker_required">O modelo ONNX TTS requer um speaker id. Informe um Speaker ID numérico.</string>
     <string name="onnx_tts_error_tokenize_failed">Falha ao converter texto para token no ONNX TTS: %1$s</string>
+
+    <string name="market_review_changes_requested">Solicitadas alterações</string>
+    <string name="market_review_rejected">Rejeitado</string>
+    <string name="market_review_status_label">Status da revisão</string>
+    <string name="market_review_reasons_label">Motivos da reprovação</string>
+    <string name="market_review_reason_metadata_incomplete">Metadados incompletos</string>
+    <string name="market_review_reason_install_config_invalid">Configuração de instalação inválida</string>
+    <string name="market_review_reason_repository_unreachable">Repositório inacessível</string>
+    <string name="market_review_reason_repository_content_invalid">Conteúdo do repositório irregular</string>
+    <string name="market_review_reason_entry_unusable">Entrada inutilizável</string>
+    <string name="market_review_reason_quality_too_low">Qualidade muito baixa</string>
+    <string name="market_review_reason_ai_hallucination">Problema de alucinação de IA</string>
+    <string name="market_review_reason_security_risk">Risco de segurança</string>
+    <string name="market_review_reason_duplicate_submission">Submissão duplicada</string>
+    <string name="market_review_reason_policy_violation">Violação das políticas da plataforma</string>
+    <string name="mention_selector_hint">Digite o nome do pacote, nome do arquivo ou caminho</string>
+    <string name="mention_selector_packages_section">Pacotes</string>
+    <string name="mention_selector_files_section">Arquivos</string>
+    <string name="mention_selector_files_idle">Digite o nome ou caminho para pesquisar itens do espaço de trabalho</string>
+    <string name="mention_selector_files_empty">Nenhum arquivo ou pasta correspondente</string>
+    <string name="mcp_regenerate_description">Regenerar descrição com IA</string>
+    <string name="mcp_regenerating_description">Gerando com IA...</string>
+    <string name="mcp_regenerate_description_success">Descrição regenerada. Confirme e salve.</string>
+    <string name="mcp_regenerate_description_failed">Falha ao regenerar descrição: %1$s</string>
+    <string name="mcp_regenerate_description_no_tools">Este plugin ainda não possui informações de ferramentas disponíveis. Conecte-se ou inicie-o primeiro e tente novamente.</string>
+    <string name="mcp_regenerate_description_empty">A IA não gerou uma descrição utilizável. Tente novamente mais tarde.</string>
 </resources>

@@ -385,6 +385,8 @@ class MessageCoordinationDelegate(
             resolveRoleCardChatModelOverrides(roleCardId)
         val resolvedPreferenceProfileIdOverride =
             resolveRoleCardMemoryProfileOverride(roleCardId)
+        val chatContextSettings =
+            resolveChatContextSettingsForRequest(resolvedChatModelConfigIdOverride)
 
         try {
             messageProcessingDelegate.regenerateAiMessageVariant(
@@ -398,8 +400,8 @@ class MessageCoordinationDelegate(
                 currentRoleName = currentRoleName,
                 enableThinking = apiConfigDelegate.enableThinkingMode.value,
                 enableMemoryAutoUpdate = apiConfigDelegate.enableMemoryAutoUpdate.value,
-                maxTokens = (apiConfigDelegate.contextLength.value * 1024).toInt(),
-                tokenUsageThreshold = apiConfigDelegate.summaryTokenThreshold.value.toDouble(),
+                maxTokens = (chatContextSettings.effectiveContextLength * 1024).toInt(),
+                tokenUsageThreshold = chatContextSettings.summaryTokenThreshold.toDouble(),
                 chatModelConfigIdOverride = resolvedChatModelConfigIdOverride,
                 chatModelIndexOverride = resolvedChatModelIndexOverride,
                 preferenceProfileIdOverride = resolvedPreferenceProfileIdOverride,
@@ -580,6 +582,10 @@ class MessageCoordinationDelegate(
         val resolvedChatModelConfigIdOverride = resolvedOverrides.first
         val resolvedChatModelIndexOverride = resolvedOverrides.second
         val resolvedPreferenceProfileIdOverride = resolvedOverrides.third
+        val chatContextSettings =
+            runBlocking {
+                resolveChatContextSettingsForRequest(resolvedChatModelConfigIdOverride)
+            }
 
         if (!isAutoContinuation) {
             currentChatModelConfigIdOverride = resolvedChatModelConfigIdOverride
@@ -588,22 +594,22 @@ class MessageCoordinationDelegate(
         }
 
         // 当前请求使用的Token使用率阈值，默认使用配置值
-        var tokenUsageThresholdForSend = apiConfigDelegate.summaryTokenThreshold.value.toDouble()
+        var tokenUsageThresholdForSend = chatContextSettings.summaryTokenThreshold.toDouble()
+        val maxTokensForSend = (chatContextSettings.effectiveContextLength * 1024).toInt()
 
         // 如果不是续写，检查是否需要总结
         if (turnOptions.persistTurn && !isBackgroundSend && !isContinuation && !skipSummaryCheck) {
             val currentMessages = runBlocking { chatHistoryDelegate.getCurrentRuntimeChatHistorySnapshot() }
             val currentTokens = tokenStatsDelegate.currentWindowSizeFlow.value
-            val maxTokens = (apiConfigDelegate.contextLength.value * 1024).toInt()
 
             val isShouldGenerateSummary = AIMessageManager.shouldGenerateSummary(
                 messages = currentMessages,
                 currentTokens = currentTokens,
-                maxTokens = maxTokens,
+                maxTokens = maxTokensForSend,
                 tokenUsageThreshold = tokenUsageThresholdForSend,
-                enableSummary = apiConfigDelegate.enableSummary.value,
-                enableSummaryByMessageCount = apiConfigDelegate.enableSummaryByMessageCount.value,
-                summaryMessageCountThreshold = apiConfigDelegate.summaryMessageCountThreshold.value
+                enableSummary = chatContextSettings.enableSummary,
+                enableSummaryByMessageCount = chatContextSettings.enableSummaryByMessageCount,
+                summaryMessageCountThreshold = chatContextSettings.summaryMessageCountThreshold
             )
 
             if (isShouldGenerateSummary) {
@@ -651,11 +657,11 @@ class MessageCoordinationDelegate(
             enableThinking = apiConfigDelegate.enableThinkingMode.value,
             enableMemoryAutoUpdate = shouldEnableMemoryAutoUpdate,
             enableWorkspaceAttachment = !workspacePath.isNullOrBlank(),
-            maxTokens = (apiConfigDelegate.contextLength.value * 1024).toInt(),
+            maxTokens = maxTokensForSend,
             tokenUsageThreshold = tokenUsageThresholdForSend,
             replyToMessage = if (isBackgroundSend) null else uiBridge.getReplyToMessage(),
             isAutoContinuation = isAutoContinuation,
-            enableSummary = !forceDisableSummary && !isBackgroundSend && apiConfigDelegate.enableSummary.value,
+            enableSummary = !forceDisableSummary && !isBackgroundSend && chatContextSettings.enableSummary,
             chatModelConfigIdOverride = resolvedChatModelConfigIdOverride,
             chatModelIndexOverride = resolvedChatModelIndexOverride,
             preferenceProfileIdOverride = resolvedPreferenceProfileIdOverride,
@@ -1269,19 +1275,21 @@ class MessageCoordinationDelegate(
         chatId: String,
         promptFunctionType: PromptFunctionType
     ) {
-        if (!apiConfigDelegate.enableSummary.value) return
+        val chatContextSettings =
+            resolveChatContextSettingsForRequest(currentChatModelConfigIdOverride)
+        if (!chatContextSettings.enableSummary) return
 
         val currentMessages = chatHistoryDelegate.getRuntimeChatHistory(chatId)
         val currentTokens = tokenStatsDelegate.getLastCurrentWindowSize(chatId)
-        val maxTokens = (apiConfigDelegate.contextLength.value * 1024).toInt()
+        val maxTokens = (chatContextSettings.effectiveContextLength * 1024).toInt()
         val shouldSummarize = AIMessageManager.shouldGenerateSummary(
             messages = currentMessages,
             currentTokens = currentTokens,
             maxTokens = maxTokens,
-            tokenUsageThreshold = apiConfigDelegate.summaryTokenThreshold.value.toDouble(),
-            enableSummary = apiConfigDelegate.enableSummary.value,
-            enableSummaryByMessageCount = apiConfigDelegate.enableSummaryByMessageCount.value,
-            summaryMessageCountThreshold = apiConfigDelegate.summaryMessageCountThreshold.value
+            tokenUsageThreshold = chatContextSettings.summaryTokenThreshold.toDouble(),
+            enableSummary = chatContextSettings.enableSummary,
+            enableSummaryByMessageCount = chatContextSettings.enableSummaryByMessageCount,
+            summaryMessageCountThreshold = chatContextSettings.summaryMessageCountThreshold
         )
         if (shouldSummarize) {
             // 群组编排后的总结，标记为群聊模式
@@ -1321,6 +1329,12 @@ class MessageCoordinationDelegate(
         } else {
             null
         }
+    }
+
+    private suspend fun resolveChatContextSettingsForRequest(
+        chatModelConfigIdOverride: String?
+    ): ChatContextSettings {
+        return apiConfigDelegate.resolveChatContextSettings(chatModelConfigIdOverride)
     }
 
     /**

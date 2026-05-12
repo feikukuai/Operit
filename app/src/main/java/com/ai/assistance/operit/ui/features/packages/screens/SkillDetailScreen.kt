@@ -13,6 +13,7 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.ThumbUp
 import androidx.compose.material.icons.filled.Update
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -29,6 +30,7 @@ import com.ai.assistance.operit.data.api.GitHubIssue
 import com.ai.assistance.operit.data.preferences.GitHubAuthPreferences
 import com.ai.assistance.operit.data.skill.SkillRepository
 import com.ai.assistance.operit.ui.features.packages.market.UnifiedMarketDetailAction
+import com.ai.assistance.operit.ui.features.packages.market.UnifiedMarketDetailBanner
 import com.ai.assistance.operit.ui.features.packages.market.UnifiedMarketDetailCommentDialog
 import com.ai.assistance.operit.ui.features.packages.market.UnifiedMarketDetailCommentsState
 import com.ai.assistance.operit.ui.features.packages.market.UnifiedMarketDetailHeader
@@ -42,7 +44,10 @@ import com.ai.assistance.operit.ui.features.packages.market.UnifiedMarketDetailS
 import com.ai.assistance.operit.ui.features.packages.market.buildMarketCommentReplyDraft
 import com.ai.assistance.operit.ui.features.packages.market.formatMarketDetailCompactDate
 import com.ai.assistance.operit.ui.features.packages.market.formatMarketDetailDate
+import com.ai.assistance.operit.ui.features.packages.market.labelResId
 import com.ai.assistance.operit.ui.features.packages.market.marketDetailInitial
+import com.ai.assistance.operit.ui.features.packages.market.MarketReviewState
+import com.ai.assistance.operit.ui.features.packages.market.resolveSkillReviewSnapshot
 import com.ai.assistance.operit.ui.features.packages.market.resolveSkillMarketEntryId
 import com.ai.assistance.operit.ui.features.packages.screens.skill.viewmodel.SkillMarketViewModel
 import com.ai.assistance.operit.ui.features.packages.utils.SkillIssueParser
@@ -50,6 +55,7 @@ import com.ai.assistance.operit.ui.features.packages.utils.SkillIssueParser
 @Composable
 fun SkillDetailScreen(
     issue: GitHubIssue,
+    fromManage: Boolean = false,
     onNavigateBack: () -> Unit = {}
 ) {
     val context = LocalContext.current
@@ -75,6 +81,7 @@ fun SkillDetailScreen(
     val marketStats by viewModel.marketStats.collectAsState()
 
     val skillInfo = remember(issue) { SkillIssueParser.parseSkillInfo(issue) }
+    val review = remember(issue) { issue.resolveSkillReviewSnapshot() }
     val repoUrl = skillInfo.repositoryUrl
     val entryId = remember(issue) { resolveSkillMarketEntryId(issue) }
     val currentComments = commentsMap[issue.number].orEmpty()
@@ -89,6 +96,9 @@ fun SkillDetailScreen(
     val hasHeart = currentUserLogin != null && currentReactions.any { it.content == "heart" && it.user.login == currentUserLogin }
     val isInstalling = repoUrl.isNotBlank() && repoUrl in installingSkills
     val isInstalled = (repoUrl.isNotBlank() && repoUrl in installedSkillRepoUrls) || issue.title in installedSkillNames
+    val isPreviewMode = fromManage && issue.state == "open" && review.state != MarketReviewState.APPROVED
+    val previewBannerContainerColor = androidx.compose.material3.MaterialTheme.colorScheme.tertiaryContainer
+    val previewBannerContentColor = androidx.compose.material3.MaterialTheme.colorScheme.onTertiaryContainer
 
     var showCommentDialog by remember { mutableStateOf(false) }
     var commentText by remember { mutableStateOf("") }
@@ -208,6 +218,24 @@ fun SkillDetailScreen(
             }
             add(
                 UnifiedMarketDetailInfoRow(
+                    label = stringResource(R.string.market_review_status_label),
+                    value = stringResource(review.state.labelResId()),
+                    icon = Icons.Default.Check
+                )
+            )
+            if (review.reasons.isNotEmpty()) {
+                add(
+                    UnifiedMarketDetailInfoRow(
+                        label = stringResource(R.string.market_review_reasons_label),
+                        value = review.reasons.joinToString(separator = " / ") { reason ->
+                            context.getString(reason.labelResId())
+                        },
+                        icon = Icons.Default.Info
+                    )
+                )
+            }
+            add(
+                UnifiedMarketDetailInfoRow(
                     label = stringResource(R.string.market_detail_published_label),
                     value = formatMarketDetailDate(issue.created_at),
                     icon = Icons.Default.CalendarToday
@@ -275,13 +303,30 @@ fun SkillDetailScreen(
             }
         )
 
+    val previewBanner =
+        remember(isPreviewMode, review.state, review.reasons) {
+            if (!isPreviewMode) {
+                null
+            } else {
+                UnifiedMarketDetailBanner(
+                    title = context.getString(R.string.market_detail_preview_title),
+                    message = buildPreviewBannerMessage(context, review.state, review.reasons),
+                    icon = Icons.Default.Warning,
+                    containerColor = previewBannerContainerColor,
+                    contentColor = previewBannerContentColor
+                )
+            }
+        }
+
     UnifiedMarketDetailScreen(
         onNavigateBack = onNavigateBack,
         header = header,
+        banner = previewBanner,
         primaryAction =
             UnifiedMarketDetailAction(
                 label =
                     when {
+                        isPreviewMode -> stringResource(R.string.market_detail_preview_action_label)
                         isInstalled -> stringResource(R.string.installed)
                         isInstalling -> stringResource(R.string.installing_progress)
                         else -> stringResource(R.string.install)
@@ -293,10 +338,11 @@ fun SkillDetailScreen(
                         viewModel.installSkillFromIssue(issue)
                     }
                 },
-                enabled = issue.state == "open" && !isInstalled && !isInstalling,
+                enabled = issue.state == "open" && !isPreviewMode && !isInstalled && !isInstalling,
                 isLoading = isInstalling,
                 icon =
                     when {
+                        isPreviewMode -> Icons.Default.Warning
                         isInstalling -> null
                         isInstalled -> Icons.Default.Check
                         else -> Icons.Default.Download
@@ -363,4 +409,29 @@ private fun openExternalUrl(
     url: String
 ) {
     context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+}
+
+private fun buildPreviewBannerMessage(
+    context: Context,
+    reviewState: MarketReviewState,
+    reasons: List<com.ai.assistance.operit.ui.features.packages.market.MarketReviewReason>
+): String {
+    val baseMessage =
+        when (reviewState) {
+            MarketReviewState.PENDING -> context.getString(R.string.market_detail_preview_pending_message)
+            MarketReviewState.APPROVED -> context.getString(R.string.market_detail_preview_approved_message)
+            MarketReviewState.CHANGES_REQUESTED -> context.getString(R.string.market_detail_preview_changes_requested_message)
+            MarketReviewState.REJECTED -> context.getString(R.string.market_detail_preview_rejected_message)
+        }
+    if (reasons.isEmpty() ||
+        (reviewState != MarketReviewState.CHANGES_REQUESTED && reviewState != MarketReviewState.REJECTED)
+    ) {
+        return baseMessage
+    }
+
+    val reasonText =
+        reasons.joinToString(separator = " / ") { reason ->
+            context.getString(reason.labelResId())
+        }
+    return "$baseMessage\n${context.getString(R.string.market_review_reasons_label)}：$reasonText"
 }

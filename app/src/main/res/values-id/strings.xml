@@ -6981,4 +6981,30 @@ Sekarang Anda dapat menggunakan mode AutoGLM di antarmuka percakapan.</string>
     <string name="onnx_tts_error_scales_not_set">Model ONNX TTS memerlukan input scales, silakan isi %1$s di parameter ONNX.</string>
     <string name="onnx_tts_error_speaker_required">Model ONNX TTS memerlukan speaker id, silakan isi ID Speaker numerik.</string>
     <string name="onnx_tts_error_tokenize_failed">Gagal mengonversi teks ONNX TTS ke token: %1$s</string>
+
+    <string name="market_review_changes_requested">Diminta perubahan</string>
+    <string name="market_review_rejected">Ditolak</string>
+    <string name="market_review_status_label">Status tinjauan</string>
+    <string name="market_review_reasons_label">Alasan tidak lolos</string>
+    <string name="market_review_reason_metadata_incomplete">Metadata tidak lengkap</string>
+    <string name="market_review_reason_install_config_invalid">Konfigurasi instalasi tidak valid</string>
+    <string name="market_review_reason_repository_unreachable">Repositori tidak dapat diakses</string>
+    <string name="market_review_reason_repository_content_invalid">Konten repositori tidak sesuai</string>
+    <string name="market_review_reason_entry_unusable">Entri tidak dapat digunakan</string>
+    <string name="market_review_reason_quality_too_low">Kualitas terlalu rendah</string>
+    <string name="market_review_reason_ai_hallucination">Mengandung masalah halusinasi AI</string>
+    <string name="market_review_reason_security_risk">Mengandung risiko keamanan</string>
+    <string name="market_review_reason_duplicate_submission">Pengiriman duplikat</string>
+    <string name="market_review_reason_policy_violation">Melanggar kebijakan platform</string>
+    <string name="mention_selector_hint">Masukkan nama paket, nama file, atau jalur</string>
+    <string name="mention_selector_packages_section">Paket</string>
+    <string name="mention_selector_files_section">File</string>
+    <string name="mention_selector_files_idle">Masukkan nama atau jalur untuk mencari item ruang kerja</string>
+    <string name="mention_selector_files_empty">Tidak ada file atau folder yang cocok</string>
+    <string name="mcp_regenerate_description">Hasilkan ulang deskripsi oleh AI</string>
+    <string name="mcp_regenerating_description">AI sedang menghasilkan...</string>
+    <string name="mcp_regenerate_description_success">Deskripsi telah dihasilkan ulang, silakan konfirmasi lalu simpan</string>
+    <string name="mcp_regenerate_description_failed">Gagal menghasilkan ulang deskripsi: %1$s</string>
+    <string name="mcp_regenerate_description_no_tools">Plugin saat ini belum memiliki informasi alat yang tersedia, silakan mulai atau sambungkan sekali lagi</string>
+    <string name="mcp_regenerate_description_empty">AI tidak menghasilkan deskripsi yang dapat digunakan, silakan coba lagi nanti</string>
 </resources>

@@ -36,6 +36,7 @@ import com.ai.assistance.operit.ui.features.packages.market.GitHubIssueMarketDef
 import com.ai.assistance.operit.ui.features.packages.market.GitHubIssueMarketService
 import com.ai.assistance.operit.ui.features.packages.market.IssueInteractionController
 import com.ai.assistance.operit.ui.features.packages.market.IssueInteractionMessages
+import com.ai.assistance.operit.ui.features.packages.market.MARKET_REVIEW_STATUS_LABELS
 import com.ai.assistance.operit.ui.features.packages.market.MarketEntryStats
 import com.ai.assistance.operit.ui.features.packages.market.SkillMarketBrowseItem
 import com.ai.assistance.operit.ui.features.packages.market.MarketSortOption
@@ -45,6 +46,7 @@ import com.ai.assistance.operit.ui.features.packages.market.loadMarketStatsMap
 import com.ai.assistance.operit.ui.features.packages.market.normalizeMarketArtifactId
 import com.ai.assistance.operit.ui.features.packages.utils.IssueBodyMetadataParser
 import com.ai.assistance.operit.ui.features.packages.market.resolveMarketDownloadTarget
+import com.ai.assistance.operit.ui.features.packages.market.resolveSkillReviewSnapshot
 import com.ai.assistance.operit.ui.features.packages.market.resolveSkillMarketEntryId
 import com.ai.assistance.operit.ui.features.packages.market.toMarketEntryStats
 import com.ai.assistance.operit.ui.features.packages.market.toRankMetric
@@ -246,13 +248,21 @@ class SkillMarketViewModel(
         }
 
         try {
-            val result = marketService.searchOpenIssues(rawQuery = rawQuery, page = 1)
+            val result = marketService.searchIssues(
+                rawQuery = rawQuery,
+                page = 1,
+                openOnly = true,
+                excludedLabels = MARKET_REVIEW_STATUS_LABELS.toList()
+            )
 
             if (rawQuery != _searchQuery.value.trim()) return
 
             result.fold(
                 onSuccess = { issues ->
-                    _searchResultItems.value = issues.map { it.toSkillMarketBrowseItem() }
+                    _searchResultItems.value =
+                        issues
+                            .filter { issue -> issue.resolveSkillReviewSnapshot().isPubliclyApproved }
+                            .map { it.toSkillMarketBrowseItem() }
                 },
                 onFailure = { error ->
                     val msg = error.message ?: "Unknown error"
@@ -513,8 +523,7 @@ class SkillMarketViewModel(
                 }
 
                 val finalResult = marketService.getUserPublishedIssues(
-                    creator = userInfo.login,
-                    fallbackWithoutLabel = true
+                    creator = userInfo.login
                 )
 
                 finalResult.fold(

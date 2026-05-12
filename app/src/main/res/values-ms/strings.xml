@@ -6979,4 +6979,30 @@ Kini anda boleh menggunakan mod AutoGLM di antara muka perbualan.</string>
     <string name="onnx_tts_error_scales_not_set">Model ONNX TTS memerlukan input scales, sila isi %1$s dalam parameter ONNX.</string>
     <string name="onnx_tts_error_speaker_required">Model ONNX TTS memerlukan ID pembicara, sila isi ID Pembicara angka.</string>
     <string name="onnx_tts_error_tokenize_failed">Gagal menukar teks ONNX TTS ke token: %1$s</string>
+
+    <string name="market_review_changes_requested">Diminta perubahan</string>
+    <string name="market_review_rejected">Ditolak</string>
+    <string name="market_review_status_label">Status semakan</string>
+    <string name="market_review_reasons_label">Sebab tidak lulus</string>
+    <string name="market_review_reason_metadata_incomplete">Metadata tidak lengkap</string>
+    <string name="market_review_reason_install_config_invalid">Konfigurasi pemasangan tidak sah</string>
+    <string name="market_review_reason_repository_unreachable">Repositori tidak boleh diakses</string>
+    <string name="market_review_reason_repository_content_invalid">Kandungan repositori tidak mematuhi peraturan</string>
+    <string name="market_review_reason_entry_unusable">Entri tidak boleh digunakan</string>
+    <string name="market_review_reason_quality_too_low">Kualiti terlalu rendah</string>
+    <string name="market_review_reason_ai_hallucination">Mengandungi masalah halusinasi AI</string>
+    <string name="market_review_reason_security_risk">Mengandungi risiko keselamatan</string>
+    <string name="market_review_reason_duplicate_submission">Penghantaran ulangan</string>
+    <string name="market_review_reason_policy_violation">Melanggar dasar platform</string>
+    <string name="mention_selector_hint">Masukkan nama pakej, nama fail atau laluan</string>
+    <string name="mention_selector_packages_section">Pakej</string>
+    <string name="mention_selector_files_section">Fail</string>
+    <string name="mention_selector_files_idle">Masukkan nama atau laluan untuk mencari item ruang kerja</string>
+    <string name="mention_selector_files_empty">Tiada fail atau folder yang sepadan</string>
+    <string name="mcp_regenerate_description">Jana semula penerangan AI</string>
+    <string name="mcp_regenerating_description">AI sedang menjana...</string>
+    <string name="mcp_regenerate_description_success">Penerangan telah dijana semula, sila sahkan dan simpan</string>
+    <string name="mcp_regenerate_description_failed">Gagal menjana semula penerangan: %1$s</string>
+    <string name="mcp_regenerate_description_no_tools">Plugin semasa belum mempunyai maklumat alat yang tersedia, sila mulakan atau sambung sekali lagi</string>
+    <string name="mcp_regenerate_description_empty">AI tidak menghasilkan penerangan yang boleh digunakan, sila cuba lagi kemudian</string>
 </resources>

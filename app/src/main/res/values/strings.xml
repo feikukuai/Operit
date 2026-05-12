@@ -4250,6 +4250,20 @@
     <string name="removed">已移除</string>
     <string name="market_review_approved">已通过</string>
     <string name="market_review_pending">待审核</string>
+    <string name="market_review_changes_requested">已打回</string>
+    <string name="market_review_rejected">已拒绝</string>
+    <string name="market_review_status_label">审核状态</string>
+    <string name="market_review_reasons_label">未通过原因</string>
+    <string name="market_review_reason_metadata_incomplete">元数据不完整</string>
+    <string name="market_review_reason_install_config_invalid">安装配置无效</string>
+    <string name="market_review_reason_repository_unreachable">仓库不可访问</string>
+    <string name="market_review_reason_repository_content_invalid">仓库内容不合规</string>
+    <string name="market_review_reason_entry_unusable">条目不可用</string>
+    <string name="market_review_reason_quality_too_low">质量过低</string>
+    <string name="market_review_reason_ai_hallucination">存在 AI 幻觉问题</string>
+    <string name="market_review_reason_security_risk">存在安全风险</string>
+    <string name="market_review_reason_duplicate_submission">重复投稿</string>
+    <string name="market_review_reason_policy_violation">违反平台规范</string>
     <string name="remove">移除</string>
     <string name="republish">重新发布</string>
 
@@ -4362,6 +4376,12 @@
     <string name="invalid_artifact_metadata">该市场条目的元数据无效，无法展示详情。</string>
     <string name="artifact_publication_pending_review_waiting_schedule">审核中，请等待排期发布</string>
     <string name="artifact_publication_approved_waiting_schedule">审核通过，请等待排期发布</string>
+    <string name="market_detail_preview_title">预览页</string>
+    <string name="market_detail_preview_action_label">预览中</string>
+    <string name="market_detail_preview_pending_message">当前条目还未正式发布，页面展示的是提交内容预览。</string>
+    <string name="market_detail_preview_approved_message">当前条目已审核通过，但正式发布数据尚未生效，页面展示的是发布前预览。</string>
+    <string name="market_detail_preview_changes_requested_message">当前条目已被打回修改，页面展示的是最近一次提交的预览内容。</string>
+    <string name="market_detail_preview_rejected_message">当前条目已被拒绝，页面展示的是最近一次提交的预览内容。</string>
     <string name="get_mcp">获取MCP</string>
     <string name="plugin_name_description">只允许英文字母、数字和下划线，此名称将作为插件ID使用</string>
     <string name="choose_mcp_community_to_get_plugins">选择以下优质MCP社区获取插件：</string>

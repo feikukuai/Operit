@@ -13,6 +13,7 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.ThumbUp
 import androidx.compose.material.icons.filled.Update
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -30,6 +31,7 @@ import com.ai.assistance.operit.data.mcp.InstallProgress
 import com.ai.assistance.operit.data.mcp.MCPRepository
 import com.ai.assistance.operit.data.preferences.GitHubAuthPreferences
 import com.ai.assistance.operit.ui.features.packages.market.UnifiedMarketDetailAction
+import com.ai.assistance.operit.ui.features.packages.market.UnifiedMarketDetailBanner
 import com.ai.assistance.operit.ui.features.packages.market.UnifiedMarketDetailCommentDialog
 import com.ai.assistance.operit.ui.features.packages.market.UnifiedMarketDetailCommentsState
 import com.ai.assistance.operit.ui.features.packages.market.UnifiedMarketDetailHeader
@@ -43,7 +45,10 @@ import com.ai.assistance.operit.ui.features.packages.market.UnifiedMarketDetailS
 import com.ai.assistance.operit.ui.features.packages.market.buildMarketCommentReplyDraft
 import com.ai.assistance.operit.ui.features.packages.market.formatMarketDetailCompactDate
 import com.ai.assistance.operit.ui.features.packages.market.formatMarketDetailDate
+import com.ai.assistance.operit.ui.features.packages.market.labelResId
 import com.ai.assistance.operit.ui.features.packages.market.marketDetailInitial
+import com.ai.assistance.operit.ui.features.packages.market.MarketReviewState
+import com.ai.assistance.operit.ui.features.packages.market.resolveMcpReviewSnapshot
 import com.ai.assistance.operit.ui.features.packages.market.resolveMcpMarketEntryId
 import com.ai.assistance.operit.ui.features.packages.screens.mcp.viewmodel.MCPMarketViewModel
 import com.ai.assistance.operit.ui.features.packages.utils.MCPPluginParser
@@ -51,6 +56,7 @@ import com.ai.assistance.operit.ui.features.packages.utils.MCPPluginParser
 @Composable
 fun MCPPluginDetailScreen(
     issue: GitHubIssue,
+    fromManage: Boolean = false,
     onNavigateBack: () -> Unit = {}
 ) {
     val context = LocalContext.current
@@ -76,6 +82,7 @@ fun MCPPluginDetailScreen(
     val installedPluginIds by viewModel.installedPluginIds.collectAsState()
 
     val pluginInfo = remember(issue) { MCPPluginParser.parsePluginInfo(issue) }
+    val review = remember(issue) { issue.resolveMcpReviewSnapshot() }
     val pluginId = remember(pluginInfo.title) { pluginInfo.title.replace("[^a-zA-Z0-9_]".toRegex(), "_") }
     val entryId = remember(issue) { resolveMcpMarketEntryId(issue) }
     val currentComments = commentsMap[issue.number].orEmpty()
@@ -91,6 +98,9 @@ fun MCPPluginDetailScreen(
     val isInstalling = pluginId in installingPlugins
     val isInstalled = pluginId in installedPluginIds
     val currentProgress = installProgress[pluginId]
+    val isPreviewMode = fromManage && issue.state == "open" && review.state != MarketReviewState.APPROVED
+    val previewBannerContainerColor = androidx.compose.material3.MaterialTheme.colorScheme.tertiaryContainer
+    val previewBannerContentColor = androidx.compose.material3.MaterialTheme.colorScheme.onTertiaryContainer
 
     var commentText by remember { mutableStateOf("") }
     var showCommentDialog by remember { mutableStateOf(false) }
@@ -219,6 +229,24 @@ fun MCPPluginDetailScreen(
             }
             add(
                 UnifiedMarketDetailInfoRow(
+                    label = stringResource(R.string.market_review_status_label),
+                    value = stringResource(review.state.labelResId()),
+                    icon = Icons.Default.Check
+                )
+            )
+            if (review.reasons.isNotEmpty()) {
+                add(
+                    UnifiedMarketDetailInfoRow(
+                        label = stringResource(R.string.market_review_reasons_label),
+                        value = review.reasons.joinToString(separator = " / ") { reason ->
+                            context.getString(reason.labelResId())
+                        },
+                        icon = Icons.Default.Info
+                    )
+                )
+            }
+            add(
+                UnifiedMarketDetailInfoRow(
                     label = stringResource(R.string.market_detail_published_label),
                     value = formatMarketDetailDate(issue.created_at),
                     icon = Icons.Default.CalendarToday
@@ -286,22 +314,40 @@ fun MCPPluginDetailScreen(
             }
         )
 
+    val previewBanner =
+        remember(isPreviewMode, review.state, review.reasons) {
+            if (!isPreviewMode) {
+                null
+            } else {
+                UnifiedMarketDetailBanner(
+                    title = context.getString(R.string.market_detail_preview_title),
+                    message = buildPreviewBannerMessage(context, review.state, review.reasons),
+                    icon = Icons.Default.Warning,
+                    containerColor = previewBannerContainerColor,
+                    contentColor = previewBannerContentColor
+                )
+            }
+        }
+
     UnifiedMarketDetailScreen(
         onNavigateBack = onNavigateBack,
         header = header,
+        banner = previewBanner,
         primaryAction =
             UnifiedMarketDetailAction(
                 label =
                     when {
+                        isPreviewMode -> stringResource(R.string.market_detail_preview_action_label)
                         isInstalled -> stringResource(R.string.mcp_plugin_installed)
                         isInstalling -> mcpInstallLabel(context, currentProgress)
                         else -> stringResource(R.string.mcp_plugin_install)
                     },
                 onClick = { viewModel.installMCPFromIssue(issue) },
-                enabled = issue.state == "open" && !isInstalled && !isInstalling,
+                enabled = issue.state == "open" && !isPreviewMode && !isInstalled && !isInstalling,
                 isLoading = isInstalling,
                 icon =
                     when {
+                        isPreviewMode -> Icons.Default.Warning
                         isInstalling -> null
                         isInstalled -> Icons.Default.Check
                         else -> Icons.Default.Download
@@ -385,4 +431,29 @@ private fun openExternalUrl(
     url: String
 ) {
     context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+}
+
+private fun buildPreviewBannerMessage(
+    context: Context,
+    reviewState: MarketReviewState,
+    reasons: List<com.ai.assistance.operit.ui.features.packages.market.MarketReviewReason>
+): String {
+    val baseMessage =
+        when (reviewState) {
+            MarketReviewState.PENDING -> context.getString(R.string.market_detail_preview_pending_message)
+            MarketReviewState.APPROVED -> context.getString(R.string.market_detail_preview_approved_message)
+            MarketReviewState.CHANGES_REQUESTED -> context.getString(R.string.market_detail_preview_changes_requested_message)
+            MarketReviewState.REJECTED -> context.getString(R.string.market_detail_preview_rejected_message)
+        }
+    if (reasons.isEmpty() ||
+        (reviewState != MarketReviewState.CHANGES_REQUESTED && reviewState != MarketReviewState.REJECTED)
+    ) {
+        return baseMessage
+    }
+
+    val reasonText =
+        reasons.joinToString(separator = " / ") { reason ->
+            context.getString(reason.labelResId())
+        }
+    return "$baseMessage\n${context.getString(R.string.market_review_reasons_label)}：$reasonText"
 }

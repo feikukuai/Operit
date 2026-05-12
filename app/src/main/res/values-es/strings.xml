@@ -7048,4 +7048,30 @@ Ahora puede usar el modo AutoGLM en la interfaz de conversación.</string>
     <string name="onnx_tts_error_scales_not_set">El modelo ONNX TTS requiere la entrada scales. Indica %1$s en los parámetros ONNX.</string>
     <string name="onnx_tts_error_speaker_required">El modelo ONNX TTS requiere un speaker id. Indica un número de Speaker ID.</string>
     <string name="onnx_tts_error_tokenize_failed">Error al convertir texto a tokens en ONNX TTS: %1$s</string>
+
+    <string name="market_review_changes_requested">Devuelto para cambios</string>
+    <string name="market_review_rejected">Rechazado</string>
+    <string name="market_review_status_label">Estado de revisión</string>
+    <string name="market_review_reasons_label">Motivos de no aprobación</string>
+    <string name="market_review_reason_metadata_incomplete">Metadatos incompletos</string>
+    <string name="market_review_reason_install_config_invalid">Configuración de instalación no válida</string>
+    <string name="market_review_reason_repository_unreachable">Repositorio inaccesible</string>
+    <string name="market_review_reason_repository_content_invalid">Contenido del repositorio no conforme</string>
+    <string name="market_review_reason_entry_unusable">Entrada no utilizable</string>
+    <string name="market_review_reason_quality_too_low">Calidad demasiado baja</string>
+    <string name="market_review_reason_ai_hallucination">Problema de alucinación de IA</string>
+    <string name="market_review_reason_security_risk">Riesgo de seguridad</string>
+    <string name="market_review_reason_duplicate_submission">Envío duplicado</string>
+    <string name="market_review_reason_policy_violation">Infracción de las normas de la plataforma</string>
+    <string name="mention_selector_hint">Ingrese nombre del paquete, nombre de archivo o ruta</string>
+    <string name="mention_selector_packages_section">Paquetes</string>
+    <string name="mention_selector_files_section">Archivos</string>
+    <string name="mention_selector_files_idle">Ingrese nombre o ruta para buscar elementos del espacio de trabajo</string>
+    <string name="mention_selector_files_empty">No se encontraron archivos o carpetas coincidentes</string>
+    <string name="mcp_regenerate_description">Regenerar descripción con IA</string>
+    <string name="mcp_regenerating_description">Generando con IA...</string>
+    <string name="mcp_regenerate_description_success">Descripción regenerada. Confirme y guarde.</string>
+    <string name="mcp_regenerate_description_failed">Error al regenerar la descripción: %1$s</string>
+    <string name="mcp_regenerate_description_no_tools">El complemento actual aún no tiene información de herramientas disponible. Inícielo o conéctelo primero e intente de nuevo.</string>
+    <string name="mcp_regenerate_description_empty">La IA no generó una descripción utilizable. Intente de nuevo más tarde.</string>
 </resources>

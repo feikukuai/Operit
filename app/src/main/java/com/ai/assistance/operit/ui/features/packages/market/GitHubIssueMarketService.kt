@@ -22,7 +22,9 @@ class GitHubIssueMarketService(
 ) {
     fun buildQualifiedSearchQuery(
         rawQuery: String,
-        openOnly: Boolean = true
+        openOnly: Boolean = true,
+        requiredLabels: List<String> = listOf(definition.label),
+        excludedLabels: List<String> = emptyList()
     ): String {
         return buildString {
             append(rawQuery)
@@ -34,10 +36,22 @@ class GitHubIssueMarketService(
             if (openOnly) {
                 append(" is:open")
             }
-            if (definition.label.isNotBlank()) {
-                append(" label:")
-                append(definition.label)
-            }
+            requiredLabels
+                .map { it.trim() }
+                .filter(String::isNotBlank)
+                .distinct()
+                .forEach { label ->
+                    append(" label:")
+                    append(quoteSearchLabel(label))
+                }
+            excludedLabels
+                .map { it.trim() }
+                .filter(String::isNotBlank)
+                .distinct()
+                .forEach { label ->
+                    append(" -label:")
+                    append(quoteSearchLabel(label))
+                }
         }
     }
 
@@ -62,10 +76,18 @@ class GitHubIssueMarketService(
     suspend fun searchIssues(
         rawQuery: String,
         page: Int = 1,
-        openOnly: Boolean = true
+        openOnly: Boolean = true,
+        requiredLabels: List<String> = listOf(definition.label),
+        excludedLabels: List<String> = emptyList()
     ): Result<List<GitHubIssue>> {
         return githubApiService.searchIssues(
-            query = buildQualifiedSearchQuery(rawQuery, openOnly = openOnly),
+            query =
+                buildQualifiedSearchQuery(
+                    rawQuery = rawQuery,
+                    openOnly = openOnly,
+                    requiredLabels = requiredLabels,
+                    excludedLabels = excludedLabels
+                ),
             sort = "updated",
             order = "desc",
             page = page,
@@ -166,38 +188,15 @@ class GitHubIssueMarketService(
 
     suspend fun getUserPublishedIssues(
         creator: String,
-        fallbackWithoutLabel: Boolean = false,
         perPage: Int = 100
     ): Result<List<GitHubIssue>> {
-        val labeledResult = githubApiService.getRepositoryIssues(
+        return githubApiService.getRepositoryIssues(
             owner = definition.owner,
             repo = definition.repo,
             state = "all",
-            labels = definition.label.takeIf { it.isNotBlank() },
+            labels = null,
             creator = creator,
             perPage = perPage
-        )
-
-        if (!fallbackWithoutLabel) {
-            return labeledResult
-        }
-
-        return labeledResult.fold(
-            onSuccess = { issues ->
-                if (issues.isNotEmpty()) {
-                    Result.success(issues)
-                } else {
-                    githubApiService.getRepositoryIssues(
-                        owner = definition.owner,
-                        repo = definition.repo,
-                        state = "all",
-                        labels = null,
-                        creator = creator,
-                        perPage = perPage
-                    )
-                }
-            },
-            onFailure = { Result.failure(it) }
         )
     }
 
@@ -332,5 +331,10 @@ class GitHubIssueMarketService(
 
     private fun normalizeIssueTitle(title: String): String {
         return title.trim().replace(Regex("\\s+"), " ").lowercase()
+    }
+
+    private fun quoteSearchLabel(label: String): String {
+        val escaped = label.replace("\"", "\\\"")
+        return "\"" + escaped + "\""
     }
 }

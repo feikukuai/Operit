@@ -43,7 +43,9 @@ import com.ai.assistance.operit.ui.features.packages.market.MarketSortOption
 import com.ai.assistance.operit.ui.features.packages.market.MarketStatsType
 import com.ai.assistance.operit.ui.features.packages.market.buildMarketDisplayState
 import com.ai.assistance.operit.ui.features.packages.market.loadMarketStatsMap
+import com.ai.assistance.operit.ui.features.packages.market.MARKET_REVIEW_STATUS_LABELS
 import com.ai.assistance.operit.ui.features.packages.market.resolveMarketDownloadTarget
+import com.ai.assistance.operit.ui.features.packages.market.resolveMcpReviewSnapshot
 import com.ai.assistance.operit.ui.features.packages.market.resolveMcpMarketEntryId
 import com.ai.assistance.operit.ui.features.packages.market.toMarketEntryStats
 import com.ai.assistance.operit.ui.features.packages.market.toMcpMarketBrowseItem
@@ -283,13 +285,21 @@ class MCPMarketViewModel(
         }
 
         try {
-            val result = marketService.searchOpenIssues(rawQuery = rawQuery, page = 1)
+            val result = marketService.searchIssues(
+                rawQuery = rawQuery,
+                page = 1,
+                openOnly = true,
+                excludedLabels = MARKET_REVIEW_STATUS_LABELS.toList()
+            )
 
             if (rawQuery != _searchQuery.value.trim()) return
 
             result.fold(
                 onSuccess = { issues ->
-                    _searchResultItems.value = issues.map { it.toMcpMarketBrowseItem() }
+                    _searchResultItems.value =
+                        issues
+                            .filter { issue -> issue.resolveMcpReviewSnapshot().isPubliclyApproved }
+                            .map { it.toMcpMarketBrowseItem() }
                 },
                 onFailure = { error ->
                     val errorMessage = error.message ?: ""
@@ -786,8 +796,7 @@ class MCPMarketViewModel(
                 }
 
                 val result = marketService.getUserPublishedIssues(
-                    creator = userInfo.login,
-                    fallbackWithoutLabel = true
+                    creator = userInfo.login
                 )
 
                 result.fold(

@@ -47,6 +47,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.ai.assistance.operit.R
 import com.ai.assistance.operit.ui.components.CustomScaffold
+import com.ai.assistance.operit.ui.features.packages.market.MarketReviewReason
+import com.ai.assistance.operit.ui.features.packages.market.MarketReviewState
+import com.ai.assistance.operit.ui.features.packages.market.labelResId
 
 @Composable
 fun MarketManageScaffold(
@@ -250,32 +253,46 @@ fun MarketManageGitHubLabelChip(
 
 @Composable
 fun MarketManageReviewStatusChip(
-    isApproved: Boolean,
+    reviewState: MarketReviewState,
     modifier: Modifier = Modifier
 ) {
     val label =
-        if (isApproved) {
-            stringResource(R.string.market_review_approved)
-        } else {
-            stringResource(R.string.market_review_pending)
-        }
+        stringResource(reviewState.labelResId())
     val containerColor =
-        if (isApproved) {
-            MaterialTheme.colorScheme.secondaryContainer
-        } else {
-            MaterialTheme.colorScheme.tertiaryContainer
+        when (reviewState) {
+            MarketReviewState.PENDING -> MaterialTheme.colorScheme.tertiaryContainer
+            MarketReviewState.APPROVED -> MaterialTheme.colorScheme.secondaryContainer
+            MarketReviewState.CHANGES_REQUESTED -> MaterialTheme.colorScheme.primaryContainer
+            MarketReviewState.REJECTED -> MaterialTheme.colorScheme.errorContainer
         }
     val contentColor =
-        if (isApproved) {
-            MaterialTheme.colorScheme.onSecondaryContainer
-        } else {
-            MaterialTheme.colorScheme.onTertiaryContainer
+        when (reviewState) {
+            MarketReviewState.PENDING -> MaterialTheme.colorScheme.onTertiaryContainer
+            MarketReviewState.APPROVED -> MaterialTheme.colorScheme.onSecondaryContainer
+            MarketReviewState.CHANGES_REQUESTED -> MaterialTheme.colorScheme.onPrimaryContainer
+            MarketReviewState.REJECTED -> MaterialTheme.colorScheme.onErrorContainer
         }
 
     MarketManageLabelChip(
         text = label,
         containerColor = containerColor,
         contentColor = contentColor,
+        modifier = modifier
+    )
+}
+
+@Composable
+fun MarketManageReviewReasonChip(
+    reason: MarketReviewReason,
+    modifier: Modifier = Modifier
+) {
+    val label =
+        stringResource(reason.labelResId())
+
+    MarketManageLabelChip(
+        text = label,
+        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = modifier
     )
 }
