@@ -2140,27 +2140,6 @@ class JsEngine(private val context: Context) {
         }
 
         @JavascriptInterface
-        fun invokeGlobalToolPkgModuleFunctionAsync(
-            callbackId: String,
-            packageTarget: String,
-            modulePath: String,
-            memberPathJson: String,
-            argsJson: String
-        ) {
-            launchGlobalBridgeInvocation(
-                callbackId = callbackId,
-                failureMessage = "invoke global toolpkg module function failed"
-            ) {
-                this@JsEngine.invokeGlobalToolPkgModuleFunction(
-                    packageTarget = packageTarget,
-                    modulePath = modulePath,
-                    memberPathJson = memberPathJson,
-                    argsJson = argsJson
-                )
-            }
-        }
-
-        @JavascriptInterface
         fun writeGlobalToolPkgModuleMember(
             packageTarget: String,
             modulePath: String,
@@ -2201,54 +2180,6 @@ class JsEngine(private val context: Context) {
                 memberPathJson = memberPathJson,
                 argsJson = argsJson
             )
-        }
-
-        @JavascriptInterface
-        fun invokeGlobalToolPkgHandleFunctionAsync(
-            callbackId: String,
-            packageTarget: String,
-            handleId: String,
-            memberPathJson: String,
-            argsJson: String
-        ) {
-            launchGlobalBridgeInvocation(
-                callbackId = callbackId,
-                failureMessage = "invoke global toolpkg handle function failed"
-            ) {
-                this@JsEngine.invokeGlobalToolPkgHandleFunction(
-                    packageTarget = packageTarget,
-                    handleId = handleId,
-                    memberPathJson = memberPathJson,
-                    argsJson = argsJson
-                )
-            }
-        }
-
-        private fun launchGlobalBridgeInvocation(
-            callbackId: String,
-            failureMessage: String,
-            block: () -> String
-        ) {
-            val normalizedCallback = callbackId.trim()
-            if (normalizedCallback.isEmpty()) {
-                return
-            }
-            Thread {
-                val responseJson =
-                    try {
-                        block()
-                    } catch (error: Throwable) {
-                        AppLogger.e(
-                            TAG,
-                            "Global bridge async invocation failed: ${error.message}",
-                            error
-                        )
-                        buildToolPkgGlobalBridgeError(
-                            error.message?.trim().orEmpty().ifBlank { failureMessage }
-                        )
-                    }
-                sendGlobalBridgeResult(normalizedCallback, responseJson)
-            }.start()
         }
 
         @JavascriptInterface
@@ -2414,11 +2345,6 @@ class JsEngine(private val context: Context) {
         @JavascriptInterface
         fun registerToolPkgInputMenuTogglePlugin(specJson: String) {
             toolPkgRegistrationSession.appendInputMenuTogglePlugin(specJson)
-        }
-
-        @JavascriptInterface
-        fun registerToolPkgChatInputHook(specJson: String) {
-            toolPkgRegistrationSession.appendChatInputHook(specJson)
         }
 
         @JavascriptInterface
@@ -2954,54 +2880,6 @@ class JsEngine(private val context: Context) {
             } catch (e: Exception) {
                 AppLogger.e(TAG, "Error sending tool result to JavaScript: ${e.message}", e)
             }
-        }
-
-        private fun sendGlobalBridgeResult(callbackId: String, responseJson: String) {
-            if (!canScheduleQuickJsWork()) {
-                AppLogger.d(TAG, "Drop global bridge result after JsEngine destroyed: callbackId=$callbackId")
-                return
-            }
-            try {
-                ensureQuickJs()
-                launchQuickJsEvaluation(
-                    script = buildGlobalBridgeResultCallbackScript(callbackId, responseJson),
-                    fileName = "quickjs/runtime/global-bridge-callback.js",
-                    onError = { error ->
-                        AppLogger.e(
-                            TAG,
-                            "Error sending global bridge result to JavaScript: ${error.message}",
-                            error
-                        )
-                    }
-                )
-            } catch (error: Exception) {
-                AppLogger.e(
-                    TAG,
-                    "Error scheduling global bridge result delivery: ${error.message}",
-                    error
-                )
-            }
-        }
-
-        private fun buildGlobalBridgeResultCallbackScript(
-            callbackId: String,
-            responseJson: String
-        ): String {
-            val safeCallbackId = JSONObject.quote(callbackId.trim())
-            val safeResponseJson = JSONObject.quote(responseJson)
-            return """
-                (function() {
-                    var root = typeof globalThis !== 'undefined'
-                        ? globalThis
-                        : (typeof window !== 'undefined' ? window : this);
-                    var callback = root[$safeCallbackId];
-                    if (typeof callback === 'function') {
-                        callback($safeResponseJson);
-                        return;
-                    }
-                    console.error('Callback not found: ' + $safeCallbackId);
-                })();
-            """.trimIndent()
         }
 
         @JavascriptInterface

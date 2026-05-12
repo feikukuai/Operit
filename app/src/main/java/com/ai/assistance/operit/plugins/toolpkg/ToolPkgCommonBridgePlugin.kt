@@ -868,7 +868,6 @@ object ToolPkgCommonBridgePlugin : OperitPlugin {
         ToolPkgPromptHookBridge.register()
         ToolPkgSummaryHookBridge.register()
         ToolPkgToolLifecycleBridge.register()
-        ToolPkgChatInputHookBridge.register()
         ToolPkgAiProviderRegistry.register()
 
         val manager = toolPkgPackageManager()

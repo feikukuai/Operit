@@ -364,7 +364,7 @@ private fun stageComposeDslPickedFile(
     uri: Uri,
     displayName: String?
 ): File {
-    val stagingDir = File(OperitPaths.cleanOnExitDir(), "compose_file_picker").apply { mkdirs() }
+    val stagingDir = File(OperitPaths.cleanOnExitInternalDir(context), "compose_file_picker").apply { mkdirs() }
     val safeBaseName = sanitizeComposeDslPickedFileName(displayName ?: uri.lastPathSegment ?: "picked_file")
     val extension = extractComposeDslPickedFileExtension(safeBaseName)
     val targetFileName =

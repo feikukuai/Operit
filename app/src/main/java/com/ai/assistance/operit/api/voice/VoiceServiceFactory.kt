@@ -20,8 +20,8 @@ object VoiceServiceFactory {
         /** MiniMax TTS 服务 */
         MINIMAX_TTS,
         OPENAI_TTS,
-        /** 基于 VITS/Piper ONNX Runtime 推理形态的本地 TTS 服务 */
-        VITS_TTS,
+        /** 基于 ONNX Runtime 的本地 TTS 服务 */
+        ONNX_TTS,
     }
 
     /**
@@ -89,11 +89,11 @@ object VoiceServiceFactory {
                         initialVoiceId = httpConfig.voiceId
                     )
                 }
-                VoiceServiceType.VITS_TTS -> {
-                    val vitsConfig = prefs.ttsVitsPackageConfigFlow.first()
-                    VitsVoiceProvider(
+                VoiceServiceType.ONNX_TTS -> {
+                    val httpConfig = prefs.ttsHttpConfigFlow.first()
+                    OnnxVoiceProvider(
                         context = context,
-                        config = vitsConfig
+                        config = httpConfig
                     )
                 }
             }

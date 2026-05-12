@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
@@ -53,10 +52,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.ai.assistance.operit.R
-import java.time.Instant
-import java.time.LocalDate
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
 
 data class MarketBrowseCardModel(
     val title: String,
@@ -100,7 +95,6 @@ fun <T> MarketBrowseList(
     @StringRes emptySearchTitleRes: Int,
     @StringRes emptyDefaultTitleRes: Int,
     itemKey: (T) -> Any,
-    updatedAtSelector: (T) -> String,
     itemContent: @Composable (T) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -140,17 +134,8 @@ fun <T> MarketBrowseList(
                         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        if (sortOption == MarketSortOption.UPDATED) {
-                            groupedMarketItems(
-                                items = items,
-                                itemKey = itemKey,
-                                updatedAtSelector = updatedAtSelector,
-                                itemContent = itemContent
-                            )
-                        } else {
-                            items(items, key = itemKey) { item ->
-                                itemContent(item)
-                            }
+                        items(items, key = itemKey) { item ->
+                            itemContent(item)
                         }
 
                         if (isLoadingMore) {
@@ -252,62 +237,6 @@ fun <T> MarketBrowseList(
         }
     }
 }
-
-private fun <T> LazyListScope.groupedMarketItems(
-    items: List<T>,
-    itemKey: (T) -> Any,
-    updatedAtSelector: (T) -> String,
-    itemContent: @Composable (T) -> Unit
-) {
-    val groupedItems =
-        items.groupBy { item ->
-            resolveMarketUpdatedDateLabel(updatedAtSelector(item))
-        }
-
-    groupedItems.forEach { (dateLabel, groupItems) ->
-        item(key = "date-header-$dateLabel") {
-            MarketBrowseDateHeader(dateLabel = dateLabel)
-        }
-        items(groupItems, key = itemKey) { item ->
-            itemContent(item)
-        }
-    }
-}
-
-@Composable
-private fun MarketBrowseDateHeader(dateLabel: String) {
-    Text(
-        text = dateLabel,
-        modifier = Modifier.padding(top = 10.dp, bottom = 2.dp, start = 4.dp),
-        style = MaterialTheme.typography.labelLarge,
-        fontWeight = FontWeight.SemiBold,
-        color = MaterialTheme.colorScheme.onSurfaceVariant
-    )
-}
-
-private fun resolveMarketUpdatedDateLabel(rawUpdatedAt: String): String {
-    val trimmed = rawUpdatedAt.trim()
-    if (trimmed.isBlank()) {
-        return "更早"
-    }
-
-    parseMarketUpdatedDate(trimmed)?.let { date ->
-        return MARKET_UPDATED_DATE_FORMATTER.format(date)
-    }
-
-    return trimmed.take(10)
-}
-
-private fun parseMarketUpdatedDate(value: String): LocalDate? {
-    return runCatching {
-        Instant.parse(value).atZone(ZoneId.systemDefault()).toLocalDate()
-    }.recoverCatching {
-        LocalDate.parse(value.take(10))
-    }.getOrNull()
-}
-
-private val MARKET_UPDATED_DATE_FORMATTER: DateTimeFormatter =
-    DateTimeFormatter.ofPattern("yyyy-MM-dd")
 
 @Composable
 fun MarketBrowseCard(

@@ -601,6 +601,91 @@ class StandardChatManagerTool(private val context: Context) {
     }
 
     /**
+     * 确保服务已连接（后台模式，不显示浮窗）
+     * 用于 OpenAI 兼容代理等不需要 UI 的场景
+     * @return 是否成功连接
+     */
+    suspend fun ensureBackgroundServiceConnected(): Boolean {
+        // 如果已经连接，直接返回
+        if (isBound && chatCore != null) {
+            return true
+        }
+
+        val prefs = appContext.getSharedPreferences("floating_chat_prefs", Context.MODE_PRIVATE)
+        if (prefs.getBoolean("service_disabled_due_to_crashes", false)) {
+            AppLogger.w(TAG, "FloatingChatService is disabled due to frequent crashes")
+            return false
+        }
+
+        // 如果正在连接中，等待连接完成
+        if (!connectionDeferred.isCompleted) {
+            return try {
+                withTimeout(SERVICE_CONNECTION_TIMEOUT) {
+                    connectionDeferred.await()
+                }
+            } catch (e: Exception) {
+                AppLogger.e(TAG, "Background service connection timeout", e)
+                if (!connectionDeferred.isCompleted) {
+                    connectionDeferred.complete(false)
+                }
+                false
+            }
+        }
+
+        // 启动服务并绑定（不显示浮窗）
+        return try {
+            connectionDeferred = CompletableDeferred()
+
+            val intent = Intent(appContext, FloatingChatService::class.java)
+            intent.putExtra(FloatingChatService.EXTRA_KEEP_IF_EXISTS, true)
+            intent.putExtra(FloatingChatService.EXTRA_BACKGROUND_MODE, true)
+
+            val bound =
+                withContext(Dispatchers.Main) {
+                    // 启动前台服务
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        appContext.startForegroundService(intent)
+                    } else {
+                        appContext.startService(intent)
+                    }
+
+                    // 绑定服务
+                    appContext.bindService(
+                        intent,
+                        serviceConnection,
+                        Context.BIND_AUTO_CREATE
+                    )
+                }
+
+            if (!bound) {
+                AppLogger.e(TAG, "Failed to bind service in background mode")
+                connectionDeferred.complete(false)
+                return false
+            }
+
+            // 等待连接完成
+            val connected = withTimeout(SERVICE_CONNECTION_TIMEOUT) {
+                connectionDeferred.await()
+            }
+
+            if (connected) {
+                // 后台模式：隐藏浮窗
+                try {
+                    floatingService?.setFloatingWindowPersistentHidden(true)
+                } catch (e: Exception) {
+                    AppLogger.w(TAG, "Failed to hide floating window in background mode", e)
+                }
+            }
+
+            connected
+        } catch (e: Exception) {
+            AppLogger.e(TAG, "Failed to ensure background service connected", e)
+            connectionDeferred.completeExceptionally(e)
+            false
+        }
+    }
+
+    /**
      * 确保服务已连接
      * @return 是否成功连接
      */
@@ -1367,6 +1452,8 @@ class StandardChatManagerTool(private val context: Context) {
                         chatIdOverride = preflightChatId,
                         messageTextOverride = message,
                         proxySenderNameOverride = proxySenderName,
+                        chatModelConfigIdOverride = tool.parameters.find { it.name == "model_config_id" }?.value?.trim()?.takeIf { it.isNotBlank() },
+                        chatModelIndexOverride = tool.parameters.find { it.name == "model_index" }?.value?.trim()?.toIntOrNull(),
                         turnOptions = turnOptions
                     )
                 } else {
@@ -1376,6 +1463,8 @@ class StandardChatManagerTool(private val context: Context) {
                         roleCardIdOverride = roleCardId,
                         messageTextOverride = message,
                         proxySenderNameOverride = proxySenderName,
+                        chatModelConfigIdOverride = tool.parameters.find { it.name == "model_config_id" }?.value?.trim()?.takeIf { it.isNotBlank() },
+                        chatModelIndexOverride = tool.parameters.find { it.name == "model_index" }?.value?.trim()?.toIntOrNull(),
                         turnOptions = turnOptions
                     )
                 }
@@ -1716,4 +1805,5 @@ class StandardChatManagerTool(private val context: Context) {
             )
         }
     }
+
 }

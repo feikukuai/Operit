@@ -2570,7 +2570,7 @@
     <string name="speech_services_tts_type_minimax">MiniMax TTS</string>
     <string name="speech_services_tts_type_openai_ws">OpenAI Realtime (WebSocket)</string>
     <string name="speech_services_tts_type_openai">OpenAI 语音 (HTTP)</string>
-    <string name="speech_services_tts_type_vits">VITS/Piper TTS (本地)</string>
+    <string name="speech_services_tts_type_onnx">ONNX TTS (本地)</string>
     
     <!-- STT Service Types -->
     <string name="speech_services_stt_type_sherpa">Sherpa NCNN (本地)</string>
@@ -2611,18 +2611,21 @@
     <string name="speech_services_http_request_body">请求体模板</string>
     <string name="speech_services_http_request_body_placeholder">{\"text\": \"{text}\"}</string>
 
-    <!-- VITS/Piper TTS Configuration -->
-    <string name="speech_services_vits_config">VITS/Piper TTS 配置</string>
-    <string name="speech_services_vits_package_path">VITS/Piper 模型包路径</string>
-    <string name="speech_services_vits_package_path_placeholder">例如：/sdcard/Download/tts/voice.zip</string>
-    <string name="speech_services_vits_package_path_hint">填写模型包 .zip 文件或已解压目录路径。包内应包含 .onnx、配置 JSON，按需包含 lexicon.txt。</string>
-    <string name="speech_services_vits_speaker_id">Speaker ID</string>
-    <string name="speech_services_vits_speaker_id_placeholder">例如：0</string>
-    <string name="speech_services_vits_speaker_id_hint">多说话人模型需要填写数字 speaker id；单说话人模型可留空。</string>
-    <string name="speech_services_vits_options">VITS/Piper 参数 (JSON)</string>
-    <string name="speech_services_vits_options_placeholder">{\"sample_rate\":\"22050\",\"noise_scale\":\"0.667\",\"length_scale\":\"1.0\",\"noise_w\":\"0.8\",\"frontend\":\"lexicon\"}</string>
-    <string name="speech_services_vits_options_hint">可选：sample_rate、threads、noise_scale、length_scale、noise_w、frontend、text_mode、speaker_count、input 名称、blank/bos/eos token、model_path、config_path、lexicon_path 等。</string>
-    <string name="speech_services_vits_options_error">无效的 VITS/Piper 参数 JSON</string>
+    <!-- ONNX TTS Configuration -->
+    <string name="speech_services_onnx_config">ONNX TTS 配置</string>
+    <string name="speech_services_onnx_model_path">ONNX 模型路径</string>
+    <string name="speech_services_onnx_model_path_placeholder">例如：/sdcard/Download/tts/model.onnx</string>
+    <string name="speech_services_onnx_model_path_hint">填写设备本地可读的 .onnx 文件路径。</string>
+    <string name="speech_services_onnx_config_path">Tokenizer/Config 路径</string>
+    <string name="speech_services_onnx_config_path_placeholder">例如：/sdcard/Download/tts/config.json</string>
+    <string name="speech_services_onnx_config_path_hint">填写包含 sample_rate 与 token/phoneme id 映射的 JSON 配置文件路径。</string>
+    <string name="speech_services_onnx_speaker_id">Speaker ID</string>
+    <string name="speech_services_onnx_speaker_id_placeholder">例如：0</string>
+    <string name="speech_services_onnx_speaker_id_hint">多说话人模型需要填写数字 speaker id；单说话人模型可留空。</string>
+    <string name="speech_services_onnx_options">ONNX 参数 (JSON)</string>
+    <string name="speech_services_onnx_options_placeholder">{\"sample_rate\":\"22050\",\"noise_scale\":\"0.667\",\"length_scale\":\"1.0\",\"noise_w\":\"0.8\"}</string>
+    <string name="speech_services_onnx_options_hint">可选：sample_rate、threads、noise_scale、length_scale、noise_w、text_mode、speaker_count、input 名称、blank/bos/eos token 等。</string>
+    <string name="speech_services_onnx_headers_error">无效的 ONNX 参数 JSON</string>
     
     <!-- SiliconFlow TTS Configuration -->
     <string name="speech_services_siliconflow_config">硅基流动 TTS 配置</string>
@@ -3292,6 +3295,7 @@
     <string name="settings_custom_headers_subtitle">API请求头字段配置</string>
     <string name="headers_configured_count">已配置 %1$d 条</string>
     <string name="screen_title_external_http_chat_settings">外部 HTTP 调用</string>
+    <string name="screen_title_openai_compat_settings">OpenAI 兼容接口</string>
     <string name="settings_system_prompts_subtitle">系统和模型提示词</string>
     <string name="settings_functional_prompts_subtitle">功能专用提示词模板</string>
     <string name="settings_context_length">上下文长度</string>
@@ -3340,6 +3344,8 @@
     <string name="settings_tool_permissions_subtitle">工具权限和安全设置</string>
     <string name="settings_external_http_chat">外部 HTTP 调用</string>
     <string name="settings_external_http_chat_subtitle">监听 0.0.0.0 的 HTTP 聊天接口、端口和 Bearer Token</string>
+    <string name="settings_openai_compat">OpenAI 兼容接口</string>
+    <string name="settings_openai_compat_subtitle">对外暴露 OpenAI API 兼容接口，支持模型列表和 Chat Completions</string>
     <string name="settings_data_backup_subtitle">聊天记录备份管理</string>
     <string name="settings_token_usage_stats">Token使用统计</string>
     <string name="settings_function_label">功能</string>
@@ -4247,20 +4253,6 @@
     <string name="removed">已移除</string>
     <string name="market_review_approved">已通过</string>
     <string name="market_review_pending">待审核</string>
-    <string name="market_review_changes_requested">已打回</string>
-    <string name="market_review_rejected">已拒绝</string>
-    <string name="market_review_status_label">审核状态</string>
-    <string name="market_review_reasons_label">未通过原因</string>
-    <string name="market_review_reason_metadata_incomplete">元数据不完整</string>
-    <string name="market_review_reason_install_config_invalid">安装配置无效</string>
-    <string name="market_review_reason_repository_unreachable">仓库不可访问</string>
-    <string name="market_review_reason_repository_content_invalid">仓库内容不合规</string>
-    <string name="market_review_reason_entry_unusable">条目不可用</string>
-    <string name="market_review_reason_quality_too_low">质量过低</string>
-    <string name="market_review_reason_ai_hallucination">存在 AI 幻觉问题</string>
-    <string name="market_review_reason_security_risk">存在安全风险</string>
-    <string name="market_review_reason_duplicate_submission">重复投稿</string>
-    <string name="market_review_reason_policy_violation">违反平台规范</string>
     <string name="remove">移除</string>
     <string name="republish">重新发布</string>
 
@@ -4373,12 +4365,6 @@
     <string name="invalid_artifact_metadata">该市场条目的元数据无效，无法展示详情。</string>
     <string name="artifact_publication_pending_review_waiting_schedule">审核中，请等待排期发布</string>
     <string name="artifact_publication_approved_waiting_schedule">审核通过，请等待排期发布</string>
-    <string name="market_detail_preview_title">预览页</string>
-    <string name="market_detail_preview_action_label">预览中</string>
-    <string name="market_detail_preview_pending_message">当前条目还未正式发布，页面展示的是提交内容预览。</string>
-    <string name="market_detail_preview_approved_message">当前条目已审核通过，但正式发布数据尚未生效，页面展示的是发布前预览。</string>
-    <string name="market_detail_preview_changes_requested_message">当前条目已被打回修改，页面展示的是最近一次提交的预览内容。</string>
-    <string name="market_detail_preview_rejected_message">当前条目已被拒绝，页面展示的是最近一次提交的预览内容。</string>
     <string name="get_mcp">获取MCP</string>
     <string name="plugin_name_description">只允许英文字母、数字和下划线，此名称将作为插件ID使用</string>
     <string name="choose_mcp_community_to_get_plugins">选择以下优质MCP社区获取插件：</string>
@@ -7109,46 +7095,33 @@
     <string name="openai_realtime_tts_error_send_failed">向 OpenAI Realtime WebSocket 发送消息失败</string>
     <string name="openai_realtime_tts_error_empty_audio">OpenAI Realtime 未返回可播放音频</string>
 
-    <!-- VitsVoiceProvider -->
-    <string name="vits_tts_error_package_path_not_set">VITS/Piper TTS 模型包路径未设置，请填写本地 .zip 模型包或已解压目录路径。</string>
-    <string name="vits_tts_error_package_file_not_found">VITS/Piper TTS 模型包文件不存在：%1$s</string>
-    <string name="vits_tts_error_package_path_invalid">VITS/Piper TTS 模型包路径无效，仅支持 .zip 文件或目录：%1$s</string>
-    <string name="vits_tts_error_package_extract_failed">VITS/Piper TTS 模型包解压失败</string>
-    <string name="vits_tts_error_package_path_unsafe">VITS/Piper TTS 模型包路径必须指向包内文件：%1$s</string>
-    <string name="vits_tts_error_package_zip_entry_unsafe">VITS/Piper TTS 模型包包含不安全路径：%1$s</string>
-    <string name="vits_tts_error_package_zip_read_failed">VITS/Piper TTS 模型包读取失败</string>
-    <string name="vits_tts_error_package_model_not_found">VITS/Piper TTS 模型包中没有找到 .onnx 模型文件。</string>
-    <string name="vits_tts_error_package_model_ambiguous">VITS/Piper TTS 模型包中找到多个 .onnx 模型文件，请在 manifest 或 options 中指定 model_path：%1$s</string>
-    <string name="vits_tts_error_package_config_not_found">VITS/Piper TTS 模型包中没有找到可识别的配置 JSON。</string>
-    <string name="vits_tts_error_package_config_ambiguous">VITS/Piper TTS 模型包中找到多个配置 JSON，请在 manifest 或 options 中指定 config_path：%1$s</string>
-    <string name="vits_tts_error_package_lexicon_ambiguous">VITS/Piper TTS 模型包中找到多个 lexicon.txt，请在 manifest 或 options 中指定 lexicon_path：%1$s</string>
-    <string name="vits_tts_error_config_parse_failed">VITS/Piper TTS 配置文件解析失败</string>
-    <string name="vits_tts_error_sample_rate_not_set">VITS/Piper TTS sample_rate 未设置，请在配置 JSON 或参数中填写。</string>
-    <string name="vits_tts_error_init_failed">初始化 VITS/Piper TTS 服务时发生意外错误</string>
-    <string name="vits_tts_error_request_failed">执行 VITS/Piper TTS 推理失败</string>
-    <string name="vits_tts_error_output_empty">VITS/Piper TTS 未返回可播放音频</string>
-    <string name="vits_tts_error_output_unsupported">VITS/Piper TTS 输出格式不受支持，仅支持 float/PCM 张量。</string>
-    <string name="vits_tts_error_playback_failed">VITS/Piper TTS 播放失败，AudioTrack 写入错误：%1$d</string>
-    <string name="vits_tts_error_input_not_found">VITS/Piper TTS 模型中找不到输入：%1$s</string>
-    <string name="vits_tts_error_input_name_not_resolved">VITS/Piper TTS 无法识别 %1$s 输入名，模型输入包括：%2$s</string>
-    <string name="vits_tts_error_tensor_info_missing">VITS/Piper TTS 输入缺少 TensorInfo：%1$s</string>
-    <string name="vits_tts_error_unsupported_input_type">VITS/Piper TTS 输入 %1$s 的类型不受支持：%2$s</string>
-    <string name="vits_tts_error_shape_unsupported">VITS/Piper TTS 输入 %1$s 的 shape 与当前数据长度不匹配。</string>
-    <string name="vits_tts_error_integer_out_of_range">VITS/Piper TTS 输入 %1$s 的 token id 超出 INT32 范围。</string>
-    <string name="vits_tts_error_scales_not_set">VITS/Piper TTS 模型需要 scales 输入，请在参数中填写 %1$s。</string>
-    <string name="vits_tts_error_speaker_required">VITS/Piper TTS 模型需要 speaker id，请填写数字 Speaker ID。</string>
-    <string name="vits_tts_error_tokenize_failed">VITS/Piper TTS 文本转 token 失败：%1$s</string>
-    <string name="vits_tts_error_unknown_token">VITS/Piper TTS 配置中找不到字符或 phoneme 的 id：%1$s</string>
-    <string name="vits_tts_error_raw_text_requires_lexicon">VITS/Piper TTS 当前配置需要 lexicon.txt 才能把原始文本转换为 token。请把 lexicon.txt 放入模型包，或把 frontend 设为 direct_symbols，或把 text_mode 设为 token_ids/phoneme_ids。</string>
-    <string name="vits_tts_error_frontend_unsupported">VITS/Piper TTS 不支持当前 frontend：%1$s</string>
-    <string name="vits_tts_error_lexicon_parse_failed">VITS/Piper TTS lexicon.txt 解析失败，行号：%1$d</string>
-    <string name="vits_tts_error_lexicon_duplicate_word">VITS/Piper TTS lexicon.txt 中存在重复词条：%1$s</string>
-    <string name="vits_tts_error_lexicon_unknown_token">VITS/Piper TTS lexicon.txt 中的 token 不在配置映射里：%1$s</string>
-    <string name="vits_tts_error_blank_token_not_set">VITS/Piper TTS 配置要求插入 blank token，但没有设置 blank_token_id。</string>
-    <string name="vits_tts_error_config_invalid_id">VITS/Piper TTS 配置中的 id 无效：%1$s</string>
-    <string name="vits_tts_error_config_invalid_int">VITS/Piper TTS 参数不是整数：%1$s</string>
-    <string name="vits_tts_error_config_invalid_float">VITS/Piper TTS 参数不是数字：%1$s</string>
-    <string name="vits_tts_error_config_invalid_bool">VITS/Piper TTS 参数不是布尔值：%1$s</string>
+    <!-- OnnxVoiceProvider -->
+    <string name="onnx_tts_error_model_path_not_set">ONNX TTS 模型路径未设置，请填写本地 .onnx 文件路径。</string>
+    <string name="onnx_tts_error_config_path_not_set">ONNX TTS Tokenizer/Config 路径未设置，请填写本地 JSON 配置文件路径。</string>
+    <string name="onnx_tts_error_model_file_not_found">ONNX TTS 模型文件不存在：%1$s</string>
+    <string name="onnx_tts_error_config_file_not_found">ONNX TTS 配置文件不存在：%1$s</string>
+    <string name="onnx_tts_error_config_parse_failed">ONNX TTS 配置文件解析失败</string>
+    <string name="onnx_tts_error_sample_rate_not_set">ONNX TTS sample_rate 未设置，请在配置 JSON 或 ONNX 参数中填写。</string>
+    <string name="onnx_tts_error_init_failed">初始化 ONNX TTS 服务时发生意外错误</string>
+    <string name="onnx_tts_error_request_failed">执行 ONNX TTS 推理失败</string>
+    <string name="onnx_tts_error_output_empty">ONNX TTS 未返回可播放音频</string>
+    <string name="onnx_tts_error_output_unsupported">ONNX TTS 输出格式不受支持，仅支持 float/PCM 张量。</string>
+    <string name="onnx_tts_error_playback_failed">ONNX TTS 播放失败，AudioTrack 写入错误：%1$d</string>
+    <string name="onnx_tts_error_input_not_found">ONNX TTS 模型中找不到输入：%1$s</string>
+    <string name="onnx_tts_error_input_name_not_resolved">ONNX TTS 无法识别 %1$s 输入名，模型输入包括：%2$s</string>
+    <string name="onnx_tts_error_tensor_info_missing">ONNX TTS 输入缺少 TensorInfo：%1$s</string>
+    <string name="onnx_tts_error_unsupported_input_type">ONNX TTS 输入 %1$s 的类型不受支持：%2$s</string>
+    <string name="onnx_tts_error_shape_unsupported">ONNX TTS 输入 %1$s 的 shape 与当前数据长度不匹配。</string>
+    <string name="onnx_tts_error_integer_out_of_range">ONNX TTS 输入 %1$s 的 token id 超出 INT32 范围。</string>
+    <string name="onnx_tts_error_scales_not_set">ONNX TTS 模型需要 scales 输入，请在 ONNX 参数中填写 %1$s。</string>
+    <string name="onnx_tts_error_speaker_required">ONNX TTS 模型需要 speaker id，请填写数字 Speaker ID。</string>
+    <string name="onnx_tts_error_tokenize_failed">ONNX TTS 文本转 token 失败：%1$s</string>
+    <string name="onnx_tts_error_unknown_token">ONNX TTS 配置中找不到字符或 phoneme 的 id：%1$s</string>
+    <string name="onnx_tts_error_blank_token_not_set">ONNX TTS 配置要求插入 blank token，但没有设置 blank_token_id。</string>
+    <string name="onnx_tts_error_config_invalid_id">ONNX TTS 配置中的 id 无效：%1$s</string>
+    <string name="onnx_tts_error_config_invalid_int">ONNX TTS 参数不是整数：%1$s</string>
+    <string name="onnx_tts_error_config_invalid_float">ONNX TTS 参数不是数字：%1$s</string>
+    <string name="onnx_tts_error_config_invalid_bool">ONNX TTS 参数不是布尔值：%1$s</string>
 
     <!-- ConversationService -->
     <string name="conversation_language_chinese">中文</string>
@@ -7618,4 +7591,41 @@
     <string name="package_conflict_delete_source">删除源文件</string>
     <string name="package_conflict_delete_success">冲突包源文件已删除</string>
     <string name="package_conflict_delete_failed">删除冲突包源文件失败</string>
+
+    <!-- OpenAI兼容接口设置 -->
+    <string name="openai_compat_enable">启用 OpenAI 兼容服务</string>
+    <string name="openai_compat_enable_desc">开启后会启动 OpenAI API 兼容 HTTP 服务，外部应用可通过标准 OpenAI 接口访问本应用内的 AI 模型</string>
+    <string name="openai_compat_port">监听端口</string>
+    <string name="openai_compat_port_desc">默认 8095。服务会监听 0.0.0.0:端口；保存后会在启用状态下自动重启服务</string>
+    <string name="openai_compat_save_port">保存端口</string>
+    <string name="openai_compat_port_saved">端口已保存</string>
+    <string name="openai_compat_invalid_port">端口无效，请输入 1-65535</string>
+    <string name="openai_compat_api_key">API Key</string>
+    <string name="openai_compat_api_key_desc">客户端需要在 Authorization 头中携带 Bearer Token，格式与 OpenAI 一致；首次启用时自动生成</string>
+    <string name="openai_compat_api_key_not_generated">尚未生成，请先启用服务</string>
+    <string name="openai_compat_copy_api_key">复制 API Key</string>
+    <string name="openai_compat_reset_api_key">重置 API Key</string>
+    <string name="openai_compat_api_key_copied">API Key 已复制</string>
+    <string name="openai_compat_api_key_reset">API Key 已重置并复制</string>
+    <string name="openai_compat_status">服务状态</string>
+    <string name="openai_compat_status_running">服务运行中，监听 0.0.0.0:%1$d</string>
+    <string name="openai_compat_status_stopped">服务未运行</string>
+    <string name="openai_compat_status_error">服务异常：%1$s</string>
+    <string name="openai_compat_service_enabled">服务已启用</string>
+    <string name="openai_compat_service_disabled">服务已停用</string>
+    <string name="openai_compat_restart_service">重启服务</string>
+    <string name="openai_compat_access_urls">当前检测到的局域网地址</string>
+    <string name="openai_compat_bind_hint">服务实际监听 0.0.0.0:%1$d，表示会接收设备所有网络接口上的请求。下方仅列出当前检测到的局域网 IPv4，方便复制。</string>
+    <string name="openai_compat_no_lan_ip">暂未检测到可用的局域网 IPv4 地址；这不影响服务监听 0.0.0.0，请确认设备已联网或改用其他可达地址</string>
+    <string name="openai_compat_endpoints_title">API 端点</string>
+    <string name="openai_compat_endpoints_desc">与 OpenAI API 完全兼容，可直接使用 OpenAI SDK 或其他兼容客户端连接</string>
+    <string name="openai_compat_models_endpoint">GET /v1/models — 获取可用模型列表</string>
+    <string name="openai_compat_chat_endpoint">POST /v1/chat/completions — 对话补全（支持流式）</string>
+    <string name="openai_compat_list_models_example">获取模型列表示例</string>
+    <string name="openai_compat_chat_example">对话补全示例</string>
+    <string name="openai_compat_stream_example">流式对话示例</string>
+    <string name="openai_compat_copy_example">复制示例</string>
+    <string name="openai_compat_example_copied">示例命令已复制</string>
+    <string name="openai_compat_description_title">使用说明</string>
+    <string name="openai_compat_description_content">此服务对外暴露标准 OpenAI API 兼容接口，外部应用可使用 OpenAI SDK 或任意兼容客户端直接连接。\n\n模型 ID 格式：\n• 云端模型：cloud/{配置ID}/{模型名}\n• MNN 本地模型：mnn/{模型目录名}\n• LLaMA 本地模型：llama/{模型文件名}\n\n支持的功能：\n• GET /v1/models — 获取所有可用模型列表（含云端、MNN、LLaMA）\n• POST /v1/chat/completions — 对话补全，支持 stream 参数进行流式输出\n• 认证方式：Authorization: Bearer {API Key}\n\n注意：本接口使用应用内当前激活的模型配置进行推理，通过 model 参数可指定使用特定模型。</string>
 </resources>

@@ -224,7 +224,8 @@ class ModelConfigManager(private val context: Context) {
                             id = config.id,
                             name = config.name,
                             modelName = config.modelName,
-                            apiEndpoint = config.apiEndpoint
+                            apiEndpoint = config.apiEndpoint,
+                            apiProviderType = config.apiProviderType
                     )
             )
         }

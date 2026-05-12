@@ -128,6 +128,7 @@ class ExternalChatRequestExecutor(context: Context) {
 
         val chatTool = StandardChatManagerTool(appContext)
 
+        // Ensure the chat service is running before proceeding
         if (request.showFloating) {
             val params = mutableListOf<ToolParameter>()
             request.initialMode?.trim()?.takeIf { it.isNotBlank() }?.let {
@@ -149,6 +150,19 @@ class ExternalChatRequestExecutor(context: Context) {
                         success = false,
                         error = startResult.error?.takeIf { it.isNotBlank() }
                             ?: "Failed to start chat service"
+                    )
+                )
+            }
+        } else {
+            // For non-floating mode (e.g., OpenAI compat proxy), connect to service
+            // in background mode without showing the floating window
+            val connected = chatTool.ensureBackgroundServiceConnected()
+            if (!connected) {
+                return PreparationResult.Failed(
+                    ExternalChatResult(
+                        requestId = requestId,
+                        success = false,
+                        error = "Failed to connect to chat service in background mode"
                     )
                 )
             }
@@ -191,6 +205,13 @@ class ExternalChatRequestExecutor(context: Context) {
         }
         if (request.timeoutMs > 0) {
             sendParams += ToolParameter(name = "timeout_ms", value = request.timeoutMs.toString())
+        }
+        // Pass model config override if specified
+        request.chatModelConfigIdOverride?.trim()?.takeIf { it.isNotBlank() }?.let {
+            sendParams += ToolParameter(name = "model_config_id", value = it)
+        }
+        request.chatModelIndexOverride?.let {
+            sendParams += ToolParameter(name = "model_index", value = it.toString())
         }
 
         return PreparationResult.Ready(

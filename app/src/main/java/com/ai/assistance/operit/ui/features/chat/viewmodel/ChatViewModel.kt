@@ -220,24 +220,16 @@ class ChatViewModel(private val context: Context) : ViewModel() {
     val disableUserPreferenceDescription: StateFlow<Boolean> by lazy {
         apiConfigDelegate.disableUserPreferenceDescription
     }
-    val summaryTokenThreshold: StateFlow<Float> by lazy { apiConfigDelegate.effectiveSummaryTokenThreshold }
-    val enableSummary: StateFlow<Boolean> by lazy { apiConfigDelegate.effectiveEnableSummary }
-    val enableSummaryByMessageCount: StateFlow<Boolean> by lazy {
-        apiConfigDelegate.effectiveEnableSummaryByMessageCount
-    }
-    val summaryMessageCountThreshold: StateFlow<Int> by lazy {
-        apiConfigDelegate.effectiveSummaryMessageCountThreshold
-    }
+    val summaryTokenThreshold: StateFlow<Float> by lazy { apiConfigDelegate.summaryTokenThreshold }
+    val enableSummary: StateFlow<Boolean> by lazy { apiConfigDelegate.enableSummary }
+    val enableSummaryByMessageCount: StateFlow<Boolean> by lazy { apiConfigDelegate.enableSummaryByMessageCount }
+    val summaryMessageCountThreshold: StateFlow<Int> by lazy { apiConfigDelegate.summaryMessageCountThreshold }
 
     // 上下文长度
-    val maxWindowSizeInK: StateFlow<Float> by lazy { apiConfigDelegate.effectiveContextLength }
-    val baseContextLengthInK: StateFlow<Float> by lazy { apiConfigDelegate.effectiveBaseContextLength }
-    val maxContextLengthInK: StateFlow<Float> by lazy {
-        apiConfigDelegate.effectiveMaxContextLengthSetting
-    }
-    val enableMaxContextMode: StateFlow<Boolean> by lazy {
-        apiConfigDelegate.effectiveEnableMaxContextMode
-    }
+    val maxWindowSizeInK: StateFlow<Float> by lazy { apiConfigDelegate.contextLength }
+    val baseContextLengthInK: StateFlow<Float> by lazy { apiConfigDelegate.baseContextLength }
+    val maxContextLengthInK: StateFlow<Float> by lazy { apiConfigDelegate.maxContextLengthSetting }
+    val enableMaxContextMode: StateFlow<Boolean> by lazy { apiConfigDelegate.enableMaxContextMode }
 
     // 聊天历史相关
     val chatHistory: StateFlow<List<ChatMessage>> by lazy { chatHistoryDelegate.chatHistory }

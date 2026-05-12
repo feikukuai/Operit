@@ -192,7 +192,8 @@ class ArtifactMarketViewModel(
 
                 aggregateResults { service ->
                     service.getUserPublishedIssues(
-                        creator = userInfo.login
+                        creator = userInfo.login,
+                        fallbackWithoutLabel = true
                     )
                 }.fold(
                     onSuccess = { issues ->

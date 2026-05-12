@@ -34,14 +34,11 @@ import com.ai.assistance.operit.ui.features.packages.components.MarketManageDele
 import com.ai.assistance.operit.ui.features.packages.components.MarketManageGitHubLabelChip
 import com.ai.assistance.operit.ui.features.packages.components.MarketManageItemCard
 import com.ai.assistance.operit.ui.features.packages.components.MarketManagePrimaryActionButton
-import com.ai.assistance.operit.ui.features.packages.components.MarketManageReviewReasonChip
 import com.ai.assistance.operit.ui.features.packages.components.MarketManageReviewStatusChip
 import com.ai.assistance.operit.ui.features.packages.components.MarketManageScaffold
 import com.ai.assistance.operit.ui.features.packages.components.MarketManageSecondaryActionButton
-import com.ai.assistance.operit.ui.features.packages.market.MARKET_REVIEW_REASON_LABELS
-import com.ai.assistance.operit.ui.features.packages.market.MARKET_REVIEW_STATUS_LABELS
 import com.ai.assistance.operit.ui.features.packages.market.MCP_MARKET_VISIBILITY_LABEL
-import com.ai.assistance.operit.ui.features.packages.market.resolveMcpReviewSnapshot
+import com.ai.assistance.operit.ui.features.packages.market.hasAnyLabelName
 import com.ai.assistance.operit.ui.features.packages.market.withoutLabelNames
 import com.ai.assistance.operit.ui.features.packages.screens.mcp.viewmodel.MCPMarketViewModel
 import com.ai.assistance.operit.ui.features.packages.utils.MCPPluginParser
@@ -51,8 +48,7 @@ import com.ai.assistance.operit.ui.features.packages.utils.MCPPluginParser
 fun MCPManageScreen(
     onNavigateBack: () -> Unit,
     onNavigateToEdit: (GitHubIssue) -> Unit,
-    onNavigateToPublish: () -> Unit,
-    onNavigateToDetail: (GitHubIssue) -> Unit
+    onNavigateToPublish: () -> Unit
 ) {
     val context = LocalContext.current
     val mcpRepository = remember { MCPRepository(context.applicationContext) }
@@ -108,13 +104,8 @@ fun MCPManageScreen(
                 val pluginInfo = remember(plugin) {
                     MCPPluginParser.parsePluginInfo(plugin)
                 }
-                val review = remember(plugin) { plugin.resolveMcpReviewSnapshot() }
-                val displayLabels =
-                    plugin.labels.withoutLabelNames(
-                        setOf(MCP_MARKET_VISIBILITY_LABEL) +
-                            MARKET_REVIEW_STATUS_LABELS +
-                            MARKET_REVIEW_REASON_LABELS
-                    )
+                val isApproved = plugin.hasAnyLabelName(setOf(MCP_MARKET_VISIBILITY_LABEL))
+                val displayLabels = plugin.labels.withoutLabelNames(setOf(MCP_MARKET_VISIBILITY_LABEL))
                 val description =
                     pluginInfo.description.take(150) +
                         if (pluginInfo.description.length > 150) "..." else ""
@@ -124,10 +115,9 @@ fun MCPManageScreen(
                     description = description,
                     issueNumber = plugin.number,
                     isOpen = plugin.state == "open",
-                    onClick = { onNavigateToDetail(plugin) },
                     supportingContent = {
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            MarketManageReviewStatusChip(reviewState = review.state)
+                            MarketManageReviewStatusChip(isApproved = isApproved)
                             displayLabels.take(2).forEach { label ->
                                 MarketManageGitHubLabelChip(
                                     text = label.name,
@@ -140,13 +130,6 @@ fun MCPManageScreen(
                                 text = "+${displayLabels.size - 2}",
                                 colorHex = "9e9e9e"
                             )
-                        }
-                        if (review.reasons.isNotEmpty()) {
-                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                review.reasons.take(2).forEach { reason ->
-                                    MarketManageReviewReasonChip(reason = reason)
-                                }
-                            }
                         }
                     },
                     actions = {

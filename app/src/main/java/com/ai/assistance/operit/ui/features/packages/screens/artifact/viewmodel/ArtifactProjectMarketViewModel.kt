@@ -16,11 +16,9 @@ import com.ai.assistance.operit.ui.features.packages.market.GitHubIssueMarketSer
 import com.ai.assistance.operit.ui.features.packages.market.installArtifactProjectNode
 import com.ai.assistance.operit.ui.features.packages.market.LocalArtifactInstallStateKind
 import com.ai.assistance.operit.ui.features.packages.market.LocalInstalledArtifactSnapshot
-import com.ai.assistance.operit.ui.features.packages.market.MARKET_REVIEW_STATUS_LABELS
 import com.ai.assistance.operit.ui.features.packages.market.MarketSortOption
 import com.ai.assistance.operit.ui.features.packages.market.PublishArtifactType
 import com.ai.assistance.operit.ui.features.packages.market.getInstalledArtifactSnapshots
-import com.ai.assistance.operit.ui.features.packages.market.resolveArtifactReviewSnapshot
 import com.ai.assistance.operit.ui.features.packages.market.resolveLocalArtifactInstallState
 import com.ai.assistance.operit.ui.features.packages.market.sameArtifactRuntimePackageId
 import com.ai.assistance.operit.ui.features.packages.market.toMarketStatsType
@@ -258,19 +256,12 @@ class ArtifactProjectMarketViewModel(
         try {
             val issues =
                 aggregateResults { service ->
-                    service.searchIssues(
-                        rawQuery = query,
-                        page = 1,
-                        openOnly = true,
-                        excludedLabels = MARKET_REVIEW_STATUS_LABELS.toList()
-                    )
+                    service.searchOpenIssues(rawQuery = query, page = 1)
                 }.getOrElse { error ->
                     throw error
                 }
-            val publiclyApprovedIssues =
-                issues.filter { issue -> issue.resolveArtifactReviewSnapshot().isPubliclyApproved }
             val browseByProject = _browseItems.value.associateBy { it.projectId }
-            val grouped = publiclyApprovedIssues.groupBy { issue ->
+            val grouped = issues.groupBy { issue ->
                 val parsed = ArtifactIssueParser.parseArtifactInfo(issue)
                 parsed.projectId.ifBlank { parsed.normalizedId }
             }

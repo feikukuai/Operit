@@ -49,6 +49,7 @@ import com.ai.assistance.operit.ui.features.settings.screens.ChatBackupSettingsS
 import com.ai.assistance.operit.ui.features.settings.screens.ChatHistorySettingsScreen
 import com.ai.assistance.operit.ui.features.settings.screens.ContextSummarySettingsScreen
 import com.ai.assistance.operit.ui.features.settings.screens.ExternalHttpChatSettingsScreen
+import com.ai.assistance.operit.ui.features.settings.screens.OpenAiCompatSettingsScreen
 import com.ai.assistance.operit.ui.features.settings.screens.FunctionalConfigScreen
 import com.ai.assistance.operit.ui.features.settings.screens.GlobalDisplaySettingsScreen
 import com.ai.assistance.operit.ui.features.settings.screens.GitHubAccountScreen
@@ -371,7 +372,7 @@ sealed class Screen(
                 },
                 onNavigateToPublish = { navigateTo(SkillPublish) },
                 onNavigateToDetail = { issue ->
-                    navigateTo(SkillDetail(issue, fromManage = true))
+                    navigateTo(SkillDetail(issue))
                 }
             )
         }
@@ -411,10 +412,7 @@ sealed class Screen(
         }
     }
 
-    data class SkillDetail(
-        val issue: com.ai.assistance.operit.data.api.GitHubIssue,
-        val fromManage: Boolean = false
-    ) :
+    data class SkillDetail(val issue: com.ai.assistance.operit.data.api.GitHubIssue) :
             Screen(navItem = NavItem.Packages) {
         @Composable
         override fun Content(
@@ -428,7 +426,6 @@ sealed class Screen(
         ) {
             SkillDetailScreen(
                 issue = issue,
-                fromManage = fromManage,
                 onNavigateBack = onGoBack
             )
         }
@@ -465,10 +462,7 @@ sealed class Screen(
                 onNavigateToEdit = { issue ->
                     navigateTo(MCPEditPlugin(issue))
                 },
-                onNavigateToPublish = { navigateTo(MCPPublish) },
-                onNavigateToDetail = { issue ->
-                    navigateTo(MCPPluginDetail(issue, fromManage = true))
-                }
+                onNavigateToPublish = { navigateTo(MCPPublish) }
             )
         }
     }
@@ -561,6 +555,7 @@ sealed class Screen(
                     navigateToLanguageSettings = { navigateTo(LanguageSettings) },
                     navigateToSpeechServicesSettings = { navigateTo(SpeechServicesSettings) },
                     navigateToExternalHttpChatSettings = { navigateTo(ExternalHttpChatSettings) },
+                    navigateToOpenAiCompatSettings = { navigateTo(OpenAiCompatSettings) },
                     navigateToPersonaCardGeneration = { navigateTo(PersonaCardGeneration) },
                     navigateToWaifuModeSettings = { navigateTo(WaifuModeSettings) },
                     navigateToTokenUsageStatistics = { navigateTo(TokenUsageStatistics) },
@@ -836,6 +831,23 @@ sealed class Screen(
             onGestureConsumed: (Boolean) -> Unit
         ) {
             ExternalHttpChatSettingsScreen(onBackPressed = onGoBack)
+        }
+    }
+
+    // OpenAI兼容接口设置屏幕
+    data object OpenAiCompatSettings :
+        Screen(navItem = NavItem.Settings, titleRes = R.string.screen_title_openai_compat_settings) {
+        @Composable
+        override fun Content(
+            navController: NavController,
+            navigateTo: ScreenNavigationHandler,
+            onGoBack: () -> Unit,
+            hasBackgroundImage: Boolean,
+            onLoading: (Boolean) -> Unit,
+            onError: (String) -> Unit,
+            onGestureConsumed: (Boolean) -> Unit
+        ) {
+            OpenAiCompatSettingsScreen(onBackPressed = onGoBack)
         }
     }
     
@@ -1477,10 +1489,7 @@ sealed class Screen(
     }
 
     // MCP 插件详情页面
-    data class MCPPluginDetail(
-        val issue: com.ai.assistance.operit.data.api.GitHubIssue,
-        val fromManage: Boolean = false
-    ) :
+    data class MCPPluginDetail(val issue: com.ai.assistance.operit.data.api.GitHubIssue) :
             Screen(navItem = NavItem.Packages) {
         @Composable
         override fun Content(
@@ -1494,7 +1503,6 @@ sealed class Screen(
         ) {
             MCPPluginDetailScreen(
                 issue = issue,
-                fromManage = fromManage,
                 onNavigateBack = onGoBack
             )
         }

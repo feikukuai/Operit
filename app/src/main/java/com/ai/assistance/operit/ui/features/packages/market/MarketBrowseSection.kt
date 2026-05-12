@@ -31,7 +31,6 @@ fun <T> MarketBrowseSection(
     onLoadMore: () -> Unit,
     config: MarketBrowseSectionConfig,
     itemKey: (T) -> Any,
-    updatedAtSelector: (T) -> String,
     entryFactory: @Composable (T) -> MarketBrowseEntry,
     modifier: Modifier = Modifier
 ) {
@@ -51,7 +50,6 @@ fun <T> MarketBrowseSection(
         emptySearchTitleRes = config.emptySearchTitleRes,
         emptyDefaultTitleRes = config.emptyDefaultTitleRes,
         itemKey = itemKey,
-        updatedAtSelector = updatedAtSelector,
         itemContent = { item ->
             val entry = entryFactory(item)
             MarketBrowseCard(

@@ -39,13 +39,6 @@ internal data class ToolPkgInputMenuToggleHookRegistration(
     val functionSource: String? = null
 )
 
-internal data class ToolPkgChatInputHookRegistration(
-    val containerPackageName: String,
-    val hookId: String,
-    val functionName: String,
-    val functionSource: String? = null
-)
-
 internal data class ToolPkgToolLifecycleHookRegistration(
     val containerPackageName: String,
     val hookId: String,

@@ -18,15 +18,15 @@ internal class WebChatInputSettingsBridge(
         val apiConfigDelegate = core.getApiConfigDelegate()
         val permissionLevel = core.getUiStateDelegate().masterPermissionLevel.first()
         val currentWindowTokens = core.currentWindowSizeFlow.first()
-        val baseContextLengthK = apiConfigDelegate.effectiveBaseContextLength.first()
-        val maxContextLengthK = apiConfigDelegate.effectiveMaxContextLengthSetting.first()
-        val activeContextLengthK = apiConfigDelegate.effectiveContextLength.first()
+        val baseContextLengthK = apiConfigDelegate.baseContextLength.first()
+        val maxContextLengthK = apiConfigDelegate.maxContextLengthSetting.first()
+        val activeContextLengthK = apiConfigDelegate.contextLength.first()
         return WebInputSettingsState(
             enableThinkingMode = apiConfigDelegate.enableThinkingMode.first(),
             thinkingQualityLevel = apiConfigDelegate.thinkingQualityLevel.first(),
             enableMemoryAutoUpdate = apiConfigDelegate.enableMemoryAutoUpdate.first(),
             enableAutoRead = apiConfigDelegate.enableAutoRead.first(),
-            enableMaxContextMode = apiConfigDelegate.effectiveEnableMaxContextMode.first(),
+            enableMaxContextMode = apiConfigDelegate.enableMaxContextMode.first(),
             enableTools = apiConfigDelegate.enableTools.first(),
             disableStreamOutput = apiConfigDelegate.disableStreamOutput.first(),
             disableUserPreferenceDescription = apiConfigDelegate.disableUserPreferenceDescription.first(),
@@ -65,7 +65,7 @@ internal class WebChatInputSettingsBridge(
             }
         }
         request.enableMaxContextMode?.let { target ->
-            if (apiConfigDelegate.effectiveEnableMaxContextMode.value != target) {
+            if (apiConfigDelegate.enableMaxContextMode.value != target) {
                 apiConfigDelegate.toggleEnableMaxContextMode()
             }
         }

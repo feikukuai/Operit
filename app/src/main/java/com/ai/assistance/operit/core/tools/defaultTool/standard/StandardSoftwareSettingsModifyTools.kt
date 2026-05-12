@@ -31,7 +31,6 @@ import com.ai.assistance.operit.core.tools.SpeechServicesTtsPlaybackTestResultDa
 import com.ai.assistance.operit.core.tools.SpeechServicesUpdateResultData
 import com.ai.assistance.operit.core.tools.SpeechSttHttpConfigResultItem
 import com.ai.assistance.operit.core.tools.SpeechTtsHttpConfigResultItem
-import com.ai.assistance.operit.core.tools.SpeechTtsVitsPackageConfigResultItem
 import com.ai.assistance.operit.core.tools.StringResultData
 import com.ai.assistance.operit.core.tools.javascript.JsEngine
 import com.ai.assistance.operit.core.tools.javascript.JsExecutionTraceRecorder
@@ -425,7 +424,6 @@ class StandardSoftwareSettingsModifyTools(private val context: Context) {
             val prefs = SpeechServicesPreferences(context)
             val ttsServiceType = prefs.ttsServiceTypeFlow.first()
             val ttsHttpConfig = prefs.ttsHttpConfigFlow.first()
-            val ttsVitsConfig = prefs.ttsVitsPackageConfigFlow.first()
             val ttsCleanerRegexs = prefs.ttsCleanerRegexsFlow.first()
             val ttsSpeechRate = prefs.ttsSpeechRateFlow.first()
             val ttsPitch = prefs.ttsPitchFlow.first()
@@ -452,12 +450,6 @@ class StandardSoftwareSettingsModifyTools(private val context: Context) {
                                 voiceId = ttsHttpConfig.voiceId,
                                 modelName = ttsHttpConfig.modelName,
                                 responsePipeline = ttsHttpConfig.responsePipeline
-                            ),
-                        ttsVitsPackageConfig =
-                            SpeechTtsVitsPackageConfigResultItem(
-                                packagePath = ttsVitsConfig.packagePath,
-                                speakerId = ttsVitsConfig.speakerId,
-                                options = ttsVitsConfig.options
                             ),
                         ttsCleanerRegexs = ttsCleanerRegexs,
                         ttsSpeechRate = ttsSpeechRate,
@@ -488,7 +480,6 @@ class StandardSoftwareSettingsModifyTools(private val context: Context) {
 
             val currentTtsServiceType = prefs.ttsServiceTypeFlow.first()
             val currentTtsHttpConfig = prefs.ttsHttpConfigFlow.first()
-            val currentTtsVitsConfig = prefs.ttsVitsPackageConfigFlow.first()
             val currentTtsCleanerRegexs = prefs.ttsCleanerRegexsFlow.first()
             val currentTtsSpeechRate = prefs.ttsSpeechRateFlow.first()
             val currentTtsPitch = prefs.ttsPitchFlow.first()
@@ -653,45 +644,6 @@ class StandardSoftwareSettingsModifyTools(private val context: Context) {
                     responsePipeline = ttsResponsePipeline
                 )
 
-            val ttsVitsOptions =
-                if (hasField("tts_vits_options")) {
-                    val raw = getParameterValue(tool, "tts_vits_options").orEmpty().trim()
-                    if (raw.isBlank()) {
-                        emptyMap()
-                    } else {
-                        val jsonObj =
-                            try {
-                                JSONObject(raw)
-                            } catch (_: Exception) {
-                                throw IllegalArgumentException("Invalid JSON object parameter: tts_vits_options")
-                            }
-                        val options = mutableMapOf<String, String>()
-                        jsonObj.keys().forEach { key ->
-                            options[key] = jsonObj.optString(key, "")
-                        }
-                        options
-                    }
-                } else {
-                    currentTtsVitsConfig.options
-                }
-
-            val ttsVitsConfig =
-                currentTtsVitsConfig.copy(
-                    packagePath =
-                        if (hasField("tts_vits_package_path")) {
-                            getParameterValue(tool, "tts_vits_package_path").orEmpty().trim()
-                        } else {
-                            currentTtsVitsConfig.packagePath
-                        },
-                    speakerId =
-                        if (hasField("tts_vits_speaker_id")) {
-                            getParameterValue(tool, "tts_vits_speaker_id").orEmpty().trim()
-                        } else {
-                            currentTtsVitsConfig.speakerId
-                        },
-                    options = ttsVitsOptions
-                )
-
             val sttHttpConfig =
                 currentSttHttpConfig.copy(
                     endpointUrl =
@@ -727,9 +679,6 @@ class StandardSoftwareSettingsModifyTools(private val context: Context) {
                     "tts_voice_id",
                     "tts_model_name",
                     "tts_response_pipeline",
-                    "tts_vits_package_path",
-                    "tts_vits_speaker_id",
-                    "tts_vits_options",
                     "tts_cleaner_regexs",
                     "tts_speech_rate",
                     "tts_pitch",
@@ -752,7 +701,6 @@ class StandardSoftwareSettingsModifyTools(private val context: Context) {
             prefs.saveTtsSettings(
                 serviceType = ttsServiceType,
                 httpConfig = ttsHttpConfig,
-                vitsConfig = ttsVitsConfig,
                 cleanerRegexs = ttsCleanerRegexs,
                 speechRate = ttsSpeechRate,
                 pitch = ttsPitch

@@ -58,6 +58,7 @@ fun SettingsScreen(
         navigateToLanguageSettings: () -> Unit,
         navigateToSpeechServicesSettings: () -> Unit,
         navigateToExternalHttpChatSettings: () -> Unit,
+        navigateToOpenAiCompatSettings: () -> Unit,
         navigateToPersonaCardGeneration: () -> Unit,
         navigateToWaifuModeSettings: () -> Unit,
         navigateToTokenUsageStatistics: () -> Unit,
@@ -299,6 +300,13 @@ fun SettingsScreen(
                                 subtitle = stringResource(id = R.string.settings_external_http_chat_subtitle),
                                 icon = Icons.Default.SettingsEthernet,
                                 onClick = navigateToExternalHttpChatSettings
+                        )
+
+                        CompactSettingsItem(
+                                title = stringResource(id = R.string.settings_openai_compat),
+                                subtitle = stringResource(id = R.string.settings_openai_compat_subtitle),
+                                icon = Icons.Default.Api,
+                                onClick = navigateToOpenAiCompatSettings
                         )
                 }
 

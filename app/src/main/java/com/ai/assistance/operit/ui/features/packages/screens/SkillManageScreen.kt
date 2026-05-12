@@ -2,7 +2,6 @@ package com.ai.assistance.operit.ui.features.packages.screens
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -31,11 +30,11 @@ import com.ai.assistance.operit.ui.features.github.GitHubLoginWebViewDialog
 import com.ai.assistance.operit.ui.features.packages.components.MarketManageDangerActionButton
 import com.ai.assistance.operit.ui.features.packages.components.MarketManageDeleteDialog
 import com.ai.assistance.operit.ui.features.packages.components.MarketManageItemCard
-import com.ai.assistance.operit.ui.features.packages.components.MarketManageReviewReasonChip
 import com.ai.assistance.operit.ui.features.packages.components.MarketManageReviewStatusChip
 import com.ai.assistance.operit.ui.features.packages.components.MarketManageScaffold
 import com.ai.assistance.operit.ui.features.packages.components.MarketManageSecondaryActionButton
-import com.ai.assistance.operit.ui.features.packages.market.resolveSkillReviewSnapshot
+import com.ai.assistance.operit.ui.features.packages.market.SKILL_MARKET_VISIBILITY_LABEL
+import com.ai.assistance.operit.ui.features.packages.market.hasAnyLabelName
 import com.ai.assistance.operit.ui.features.packages.screens.skill.viewmodel.SkillMarketViewModel
 import com.ai.assistance.operit.ui.features.packages.utils.SkillIssueParser
 
@@ -100,7 +99,7 @@ fun SkillManageScreen(
         ) {
             items(userPublishedSkills, key = { it.id }) { issue ->
                 val info = remember(issue) { SkillIssueParser.parseSkillInfo(issue) }
-                val review = remember(issue) { issue.resolveSkillReviewSnapshot() }
+                val isApproved = issue.hasAnyLabelName(setOf(SKILL_MARKET_VISIBILITY_LABEL))
 
                 MarketManageItemCard(
                     title = issue.title,
@@ -109,14 +108,7 @@ fun SkillManageScreen(
                     isOpen = issue.state == "open",
                     onClick = { onNavigateToDetail(issue) },
                     supportingContent = {
-                        MarketManageReviewStatusChip(reviewState = review.state)
-                        if (review.reasons.isNotEmpty()) {
-                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                review.reasons.take(2).forEach { reason ->
-                                    MarketManageReviewReasonChip(reason = reason)
-                                }
-                            }
-                        }
+                        MarketManageReviewStatusChip(isApproved = isApproved)
                     },
                     actions = {
                         MarketManageSecondaryActionButton(

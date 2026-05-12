@@ -55,10 +55,6 @@ import com.ai.assistance.operit.ui.components.ErrorDialog
 import com.ai.assistance.operit.ui.features.chat.components.*
 import com.ai.assistance.operit.ui.features.chat.components.style.input.agent.AgentChatInputSection
 import com.ai.assistance.operit.ui.features.chat.components.style.input.classic.ClassicChatInputSection
-import com.ai.assistance.operit.ui.features.chat.components.style.input.common.ChatInputEvents
-import com.ai.assistance.operit.ui.features.chat.components.style.input.common.ChatInputHookContext
-import com.ai.assistance.operit.ui.features.chat.components.style.input.common.ChatInputHookRegistry
-import com.ai.assistance.operit.ui.features.chat.components.style.input.common.ChatInputSubmitActions
 import com.ai.assistance.operit.ui.features.chat.components.style.input.classic.ClassicChatSettingsBar
 import com.ai.assistance.operit.ui.features.chat.components.style.input.common.PendingQueueMessageItem
 import com.ai.assistance.operit.ui.features.chat.components.style.bubble.BubbleImageStyleConfig
@@ -1542,57 +1538,6 @@ private fun ChatInputBottomBar(
     val latestQueueBlocked = rememberUpdatedState(isQueueBlocked)
     val latestCurrentChatId = rememberUpdatedState(currentChatId)
 
-    fun buildChatInputHookContext(
-        eventName: String,
-        text: String = userMessage.text,
-        selectionStart: Int = userMessage.selection.start,
-        selectionEnd: Int = userMessage.selection.end,
-        source: String = inputStyle,
-        submitSource: String = ""
-    ): ChatInputHookContext {
-        val normalizedSelectionStart = selectionStart.coerceIn(0, text.length)
-        val normalizedSelectionEnd = selectionEnd.coerceIn(0, text.length)
-        return ChatInputHookContext(
-            context = context,
-            eventName = eventName,
-            chatId = currentChatId,
-            text = text,
-            selectionStart = normalizedSelectionStart,
-            selectionEnd = normalizedSelectionEnd,
-            hasAttachments = attachments.isNotEmpty(),
-            attachmentCount = attachments.size,
-            isProcessing = isMessageProcessing,
-            inputStyle = inputStyle,
-            source = source,
-            submitSource = submitSource
-        )
-    }
-
-    fun handleUserMessageChange(value: TextFieldValue) {
-        actualViewModel.updateUserMessage(value)
-        ChatInputHookRegistry.dispatchNotification(
-            buildChatInputHookContext(
-                eventName = ChatInputEvents.INPUT_CHANGED,
-                text = value.text,
-                selectionStart = value.selection.start,
-                selectionEnd = value.selection.end
-            )
-        )
-    }
-
-    fun showChatInputHookMessage(message: String?) {
-        val normalizedMessage = message?.trim().orEmpty()
-        if (normalizedMessage.isNotBlank()) {
-            Toast.makeText(context, normalizedMessage, Toast.LENGTH_SHORT).show()
-        }
-    }
-
-    fun restorePendingQueueItem(item: PendingQueueMessageItem) {
-        if (pendingQueueMessages.none { it.id == item.id }) {
-            pendingQueueMessages.add(0, item)
-        }
-    }
-
     fun removePendingQueueMessageById(id: Long): PendingQueueMessageItem? {
         val index = pendingQueueMessages.indexOfFirst { it.id == id }
         if (index < 0) return null
@@ -1602,29 +1547,6 @@ private fun ChatInputBottomBar(
     val sendQueuedItemNow: (PendingQueueMessageItem, Boolean) -> Unit =
         { item, cancelCurrentConversation ->
             coroutineScope.launch {
-                val submitDecision =
-                    ChatInputHookRegistry.dispatchSubmitRequested(
-                        buildChatInputHookContext(
-                            eventName = ChatInputEvents.SUBMIT_REQUESTED,
-                            text = item.text,
-                            selectionStart = item.text.length,
-                            selectionEnd = item.text.length,
-                            source = "queue",
-                            submitSource = "queue"
-                        )
-                    )
-                when (submitDecision.action) {
-                    ChatInputSubmitActions.BLOCK -> {
-                        restorePendingQueueItem(item)
-                        showChatInputHookMessage(submitDecision.message)
-                        return@launch
-                    }
-                    ChatInputSubmitActions.CONSUME -> {
-                        showChatInputHookMessage(submitDecision.message)
-                        return@launch
-                    }
-                }
-                val finalText = submitDecision.text ?: item.text
                 val shouldWaitForCancel = cancelCurrentConversation && latestQueueBlocked.value
                 if (shouldWaitForCancel) {
                     suppressNextAutoDequeue = true
@@ -1647,18 +1569,8 @@ private fun ChatInputBottomBar(
                 }
 
                 focusManager.clearFocus()
-                actualViewModel.sendTextMessage(finalText)
+                actualViewModel.sendTextMessage(item.text)
                 onRequestAutoScrollToBottom()
-                ChatInputHookRegistry.dispatchNotification(
-                    buildChatInputHookContext(
-                        eventName = ChatInputEvents.SUBMITTED,
-                        text = finalText,
-                        selectionStart = finalText.length,
-                        selectionEnd = finalText.length,
-                        source = "queue",
-                        submitSource = "queue"
-                    )
-                )
             }
         }
 
@@ -1693,57 +1605,26 @@ private fun ChatInputBottomBar(
         actualViewModel.showToast(context.getString(R.string.chat_queue_added))
     }
 
-    val sendMessage: () -> Unit = {
-        coroutineScope.launch {
+    val sendMessage = remember(
+        currentChatId,
+        actualViewModel,
+        context,
+        focusManager,
+        onRequestAutoScrollToBottom,
+    ) {
+        {
             if (currentChatId.isNullOrBlank()) {
                 Toast.makeText(
                     context,
                     context.getString(R.string.chat_please_create_new_chat),
                     Toast.LENGTH_SHORT,
                 ).show()
-                return@launch
+            } else {
+                focusManager.clearFocus()
+                actualViewModel.sendUserMessage()
+                actualViewModel.resetAttachmentPanelState()
+                onRequestAutoScrollToBottom()
             }
-
-            val submitDecision =
-                ChatInputHookRegistry.dispatchSubmitRequested(
-                    buildChatInputHookContext(
-                        eventName = ChatInputEvents.SUBMIT_REQUESTED,
-                        submitSource = "send"
-                    )
-                )
-            when (submitDecision.action) {
-                ChatInputSubmitActions.BLOCK -> {
-                    showChatInputHookMessage(submitDecision.message)
-                    return@launch
-                }
-                ChatInputSubmitActions.CONSUME -> {
-                    showChatInputHookMessage(submitDecision.message)
-                    return@launch
-                }
-            }
-
-            val finalText = submitDecision.text ?: userMessage.text
-            if (finalText != userMessage.text) {
-                actualViewModel.updateUserMessage(
-                    TextFieldValue(
-                        text = finalText,
-                        selection = TextRange(finalText.length)
-                    )
-                )
-            }
-            focusManager.clearFocus()
-            actualViewModel.sendUserMessage()
-            actualViewModel.resetAttachmentPanelState()
-            onRequestAutoScrollToBottom()
-            ChatInputHookRegistry.dispatchNotification(
-                buildChatInputHookContext(
-                    eventName = ChatInputEvents.SUBMITTED,
-                    text = finalText,
-                    selectionStart = finalText.length,
-                    selectionEnd = finalText.length,
-                    submitSource = "send"
-                )
-            )
         }
     }
 
@@ -1751,7 +1632,7 @@ private fun ChatInputBottomBar(
         AgentChatInputSection(
                 actualViewModel = actualViewModel,
                 userMessage = userMessage,
-                onUserMessageChange = { value -> handleUserMessageChange(value) },
+                onUserMessageChange = actualViewModel::updateUserMessage,
                 enableEnterToSend = enableEnterToSend,
                 onSendMessage = sendMessage,
                 onQueueMessage = { enqueueDraftToPendingQueue() },
@@ -1837,7 +1718,7 @@ private fun ChatInputBottomBar(
         ClassicChatInputSection(
                 actualViewModel = actualViewModel,
                 userMessage = userMessage,
-                onUserMessageChange = { value -> handleUserMessageChange(value) },
+                onUserMessageChange = actualViewModel::updateUserMessage,
                 enableEnterToSend = enableEnterToSend,
                 onSendMessage = sendMessage,
                 onQueueMessage = { enqueueDraftToPendingQueue() },

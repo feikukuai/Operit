@@ -41,9 +41,13 @@ import com.ai.assistance.operit.core.application.ActivityLifecycleManager
 import com.ai.assistance.operit.core.application.ForegroundServiceCompat
 import com.ai.assistance.operit.data.preferences.ExternalHttpApiConfig
 import com.ai.assistance.operit.data.preferences.ExternalHttpApiPreferences
+import com.ai.assistance.operit.data.preferences.OpenAiCompatConfig
+import com.ai.assistance.operit.data.preferences.OpenAiCompatPreferences
 import com.ai.assistance.operit.data.preferences.SpeechServicesPreferences
 import com.ai.assistance.operit.integrations.http.ExternalChatHttpServer
 import com.ai.assistance.operit.integrations.http.ExternalChatHttpState
+import com.ai.assistance.operit.integrations.openai.OpenAiCompatHttpServer
+import com.ai.assistance.operit.integrations.openai.OpenAiCompatHttpState
 import com.ai.assistance.operit.services.FloatingChatService
 import com.ai.assistance.operit.services.UIDebuggerService
 import com.ai.assistance.operit.data.preferences.DisplayPreferencesManager
@@ -135,6 +139,10 @@ class AIForegroundService : Service() {
             "com.ai.assistance.operit.action.START_OR_REFRESH_EXTERNAL_HTTP"
         private const val ACTION_STOP_EXTERNAL_HTTP =
             "com.ai.assistance.operit.action.STOP_EXTERNAL_HTTP"
+        private const val ACTION_START_OR_REFRESH_OPENAI_COMPAT =
+            "com.ai.assistance.operit.action.START_OR_REFRESH_OPENAI_COMPAT"
+        private const val ACTION_STOP_OPENAI_COMPAT =
+            "com.ai.assistance.operit.action.STOP_OPENAI_COMPAT"
 
         @Volatile
         private var lastRequestedImeVisible: Boolean = false
@@ -144,6 +152,9 @@ class AIForegroundService : Service() {
         private val activeReplyNotificationTags = ConcurrentHashMap.newKeySet<String>()
         private val externalHttpStateFlow = MutableStateFlow(ExternalChatHttpState())
         val externalHttpState = externalHttpStateFlow.asStateFlow()
+
+        private val openAiCompatStateFlow = MutableStateFlow(OpenAiCompatHttpState())
+        val openAiCompatState = openAiCompatStateFlow.asStateFlow()
         
         // Intent extras keys
         const val EXTRA_CHARACTER_NAME = "extra_character_name"
@@ -478,6 +489,19 @@ class AIForegroundService : Service() {
             startServiceForAction(context, ACTION_STOP_EXTERNAL_HTTP)
         }
 
+        fun ensureRunningForOpenAiCompat(context: Context) {
+            startServiceForAction(context, ACTION_START_OR_REFRESH_OPENAI_COMPAT)
+        }
+
+        fun stopOpenAiCompat(context: Context) {
+            openAiCompatStateFlow.value =
+                openAiCompatStateFlow.value.copy(isRunning = false, lastError = null)
+            if (!isRunning.get()) {
+                return
+            }
+            startServiceForAction(context, ACTION_STOP_OPENAI_COMPAT)
+        }
+
         private fun startServiceForAction(context: Context, action: String) {
             val appContext = context.applicationContext
             val intent = Intent(appContext, AIForegroundService::class.java).apply {
@@ -513,7 +537,12 @@ class AIForegroundService : Service() {
                     config.enabled && ExternalHttpApiPreferences.isValidPort(config.port)
                 }
             }.getOrDefault(false)
-            return alwaysListeningEnabled || backgroundKeepAliveEnabled || externalHttpEnabled
+            val openAiCompatEnabled = runCatching {
+                OpenAiCompatPreferences.getInstance(appContext).getConfigSync().let { config ->
+                    config.enabled && OpenAiCompatPreferences.isValidPort(config.port)
+                }
+            }.getOrDefault(false)
+            return alwaysListeningEnabled || backgroundKeepAliveEnabled || externalHttpEnabled || openAiCompatEnabled
         }
     }
 
@@ -725,6 +754,7 @@ class AIForegroundService : Service() {
     private var wakeSpeechProvider: SpeechService? = null
     private val workflowRepository by lazy { WorkflowRepository(applicationContext) }
     private val externalHttpPreferences by lazy { ExternalHttpApiPreferences.getInstance(applicationContext) }
+    private val openAiCompatPreferences by lazy { OpenAiCompatPreferences.getInstance(applicationContext) }
 
     private val mainHandler by lazy { Handler(Looper.getMainLooper()) }
     private var keepAliveOverlayView: View? = null
@@ -732,6 +762,7 @@ class AIForegroundService : Service() {
 
     private var wakeMonitorJob: Job? = null
     private var externalHttpMonitorJob: Job? = null
+    private var openAiCompatMonitorJob: Job? = null
     private var wakeListeningJob: Job? = null
     private var wakeResumeJob: Job? = null
 
@@ -773,6 +804,9 @@ class AIForegroundService : Service() {
     private var audioRecordingCallback: AudioManager.AudioRecordingCallback? = null
     private var externalHttpServer: ExternalChatHttpServer? = null
     private var externalHttpCurrentPort: Int? = null
+
+    private var openAiCompatServer: OpenAiCompatHttpServer? = null
+    private var openAiCompatCurrentPort: Int? = null
 
     private var lastWakeTriggerAtMs: Long = 0L
 
@@ -903,7 +937,8 @@ class AIForegroundService : Service() {
     private fun stopSelfIfIdle(ignoreAppForeground: Boolean = false) {
         val alwaysListeningEnabled = wakeListeningEnabled || isAlwaysListeningEnabledNow()
         val externalHttpEnabled = externalHttpStateFlow.value.isRunning || isExternalHttpEnabledNow()
-        if (isAiBusy || alwaysListeningEnabled || backgroundKeepAliveEnabled || externalHttpEnabled) {
+        val openAiCompatEnabled = openAiCompatStateFlow.value.isRunning || isOpenAiCompatEnabledNow()
+        if (isAiBusy || alwaysListeningEnabled || backgroundKeepAliveEnabled || externalHttpEnabled || openAiCompatEnabled) {
             return
         }
         if (!ignoreAppForeground && ActivityLifecycleManager.getCurrentActivity() != null) {
@@ -935,7 +970,7 @@ class AIForegroundService : Service() {
             notification = notification,
             types = ForegroundServiceCompat.buildTypes(
                 dataSync = true,
-                specialUse = runCatching { externalHttpPreferences.getEnabled() }.getOrDefault(false)
+                specialUse = runCatching { externalHttpPreferences.getEnabled() || openAiCompatPreferences.getEnabled() }.getOrDefault(false)
             )
         )
         observeRuntimeTaskViewPreference()
@@ -943,6 +978,7 @@ class AIForegroundService : Service() {
         observeChatRuntimeStats()
         startWakeMonitoring()
         startExternalHttpMonitoring()
+        startOpenAiCompatMonitoring()
         AppLogger.d(TAG, "AI 前台服务已启动。")
     }
 
@@ -1102,6 +1138,7 @@ class AIForegroundService : Service() {
             }
 
             stopExternalHttpServer(lastError = null)
+            stopOpenAiCompatServer(lastError = null)
 
             try {
                 val activity = ActivityLifecycleManager.getCurrentActivity()
@@ -1162,6 +1199,18 @@ class AIForegroundService : Service() {
         if (intent?.action == ACTION_STOP_EXTERNAL_HTTP) {
             val configuredPort = runCatching { externalHttpPreferences.getPort() }.getOrNull()
             stopExternalHttpServer(portOverride = configuredPort, lastError = null)
+            stopSelfIfIdle(ignoreAppForeground = true)
+            return START_NOT_STICKY
+        }
+
+        if (intent?.action == ACTION_START_OR_REFRESH_OPENAI_COMPAT) {
+            startOrRefreshOpenAiCompatServer()
+            return if (openAiCompatStateFlow.value.isRunning) START_STICKY else START_NOT_STICKY
+        }
+
+        if (intent?.action == ACTION_STOP_OPENAI_COMPAT) {
+            val configuredPort = runCatching { openAiCompatPreferences.getPort() }.getOrNull()
+            stopOpenAiCompatServer(portOverride = configuredPort, lastError = null)
             stopSelfIfIdle(ignoreAppForeground = true)
             return START_NOT_STICKY
         }
@@ -1253,10 +1302,13 @@ class AIForegroundService : Service() {
                 val alwaysListeningEnabled = isAlwaysListeningEnabledNow()
                 val externalHttpEnabled =
                     externalHttpStateFlow.value.isRunning || isExternalHttpEnabledNow()
+                val openAiCompatEnabled =
+                    openAiCompatStateFlow.value.isRunning || isOpenAiCompatEnabledNow()
                 if (!isAiBusy &&
                     !alwaysListeningEnabled &&
                     !backgroundKeepAliveEnabled &&
-                    !externalHttpEnabled
+                    !externalHttpEnabled &&
+                    !openAiCompatEnabled
                 ) {
                     AppLogger.d(TAG, "服务进入空闲且无持久后台职责，停止前台服务并移除通知")
                     stopSelfIfIdle(ignoreAppForeground = true)
@@ -1269,7 +1321,7 @@ class AIForegroundService : Service() {
         
         // 当 External HTTP 处于启用状态时，使用 START_STICKY 提高后台保活强度；
         // 其他场景仍由 EnhancedAIService 与前台交互精确控制生命周期。
-        return if (isExternalHttpEnabledNow()) START_STICKY else START_NOT_STICKY
+        return if (isExternalHttpEnabledNow() || isOpenAiCompatEnabledNow()) START_STICKY else START_NOT_STICKY
     }
 
     override fun onDestroy() {
@@ -1288,6 +1340,20 @@ class AIForegroundService : Service() {
                 lastError = null
             ),
             refreshNotification = false
+        )
+
+        val stoppedOpenAiPort = openAiCompatCurrentPort ?: openAiCompatStateFlow.value.port
+        runCatching {
+            openAiCompatServer?.stopServer()
+        }.onFailure { error ->
+            AppLogger.e(TAG, "Failed to stop OpenAI compat HTTP server", error)
+        }
+        openAiCompatServer = null
+        openAiCompatCurrentPort = null
+        openAiCompatStateFlow.value = OpenAiCompatHttpState(
+            isRunning = false,
+            port = stoppedOpenAiPort,
+            lastError = null
         )
         super.onDestroy()
         isRunning.set(false)
@@ -1353,6 +1419,110 @@ class AIForegroundService : Service() {
                     }
                 }
             }
+    }
+
+    private fun startOpenAiCompatMonitoring() {
+        if (openAiCompatMonitorJob?.isActive == true) return
+
+        if (isOpenAiCompatEnabledNow()) {
+            startOrRefreshOpenAiCompatServer()
+        } else {
+            openAiCompatStateFlow.value = openAiCompatStateFlow.value.copy(
+                isRunning = false,
+                port = runCatching { openAiCompatPreferences.getPort() }.getOrNull(),
+                lastError = null
+            )
+        }
+
+        openAiCompatMonitorJob =
+            serviceScope.launch {
+                combine(
+                    openAiCompatPreferences.enabledFlow,
+                    openAiCompatPreferences.portFlow
+                ) { enabled, port ->
+                    enabled to port
+                }.collectLatest { (enabled, port) ->
+                    AppLogger.d(TAG, "OpenAI compat config updated: enabled=$enabled, port=$port")
+                    if (enabled) {
+                        startOrRefreshOpenAiCompatServer()
+                    } else {
+                        stopOpenAiCompatServer(portOverride = port, lastError = null)
+                        stopSelfIfIdle(ignoreAppForeground = true)
+                    }
+                }
+            }
+    }
+
+    private fun startOrRefreshOpenAiCompatServer(config: OpenAiCompatConfig = openAiCompatPreferences.getConfigSync()) {
+        if (!config.enabled) {
+            AppLogger.i(TAG, "OpenAI compat API disabled, stopping runtime")
+            stopOpenAiCompatServer(portOverride = config.port, lastError = null)
+            stopSelfIfIdle(ignoreAppForeground = true)
+            return
+        }
+
+        if (!OpenAiCompatPreferences.isValidPort(config.port)) {
+            val message = "Invalid port: ${config.port}"
+            AppLogger.w(TAG, message)
+            stopOpenAiCompatServer(portOverride = config.port, lastError = message)
+            stopSelfIfIdle(ignoreAppForeground = true)
+            return
+        }
+
+        if (openAiCompatServer != null && openAiCompatCurrentPort == config.port) {
+            openAiCompatStateFlow.value = OpenAiCompatHttpState(
+                isRunning = true,
+                port = config.port,
+                lastError = null
+            )
+            return
+        }
+
+        stopOpenAiCompatServer()
+
+        try {
+            val newServer = OpenAiCompatHttpServer(applicationContext, openAiCompatPreferences, serviceScope)
+            newServer.startServer()
+            openAiCompatServer = newServer
+            openAiCompatCurrentPort = config.port
+            openAiCompatStateFlow.value = OpenAiCompatHttpState(
+                isRunning = true,
+                port = config.port,
+                lastError = null
+            )
+        } catch (e: Exception) {
+            AppLogger.e(TAG, "Failed to start OpenAI compat HTTP server", e)
+            stopOpenAiCompatServer(
+                portOverride = config.port,
+                lastError = e.message ?: "Failed to start server"
+            )
+            stopSelfIfIdle(ignoreAppForeground = true)
+        }
+    }
+
+    private fun stopOpenAiCompatServer(portOverride: Int? = null, lastError: String? = null) {
+        runCatching {
+            openAiCompatServer?.stopServer()
+        }.onFailure { error ->
+            AppLogger.e(TAG, "Failed to stop OpenAI compat HTTP server", error)
+        }
+
+        val stoppedPort = portOverride ?: openAiCompatCurrentPort ?: openAiCompatStateFlow.value.port
+        openAiCompatServer = null
+        openAiCompatCurrentPort = null
+        openAiCompatStateFlow.value = OpenAiCompatHttpState(
+            isRunning = false,
+            port = stoppedPort,
+            lastError = lastError
+        )
+    }
+
+    private fun isOpenAiCompatEnabledNow(): Boolean {
+        return runCatching {
+            openAiCompatPreferences.getConfigSync().let { config ->
+                config.enabled && OpenAiCompatPreferences.isValidPort(config.port)
+            }
+        }.getOrDefault(false)
     }
 
     private fun startWakeMonitoring() {
@@ -1424,6 +1594,8 @@ class AIForegroundService : Service() {
     private fun stopWakeMonitoring() {
         externalHttpMonitorJob?.cancel()
         externalHttpMonitorJob = null
+        openAiCompatMonitorJob?.cancel()
+        openAiCompatMonitorJob = null
         wakeMonitorJob?.cancel()
         wakeMonitorJob = null
         wakeResumeJob?.cancel()

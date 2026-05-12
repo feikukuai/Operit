@@ -36,13 +36,13 @@ import com.ai.assistance.operit.ui.features.packages.components.MarketManageDele
 import com.ai.assistance.operit.ui.features.packages.components.MarketManageItemCard
 import com.ai.assistance.operit.ui.features.packages.components.MarketManageLabelChip
 import com.ai.assistance.operit.ui.features.packages.components.MarketManagePrimaryActionButton
-import com.ai.assistance.operit.ui.features.packages.components.MarketManageReviewReasonChip
 import com.ai.assistance.operit.ui.features.packages.components.MarketManageReviewStatusChip
 import com.ai.assistance.operit.ui.features.packages.components.MarketManageScaffold
 import com.ai.assistance.operit.ui.features.packages.components.MarketManageSecondaryActionButton
+import com.ai.assistance.operit.ui.features.packages.market.ARTIFACT_MARKET_VISIBILITY_LABELS
 import com.ai.assistance.operit.ui.features.packages.market.ArtifactMarketScope
 import com.ai.assistance.operit.ui.features.packages.market.PublishArtifactType
-import com.ai.assistance.operit.ui.features.packages.market.resolveArtifactReviewSnapshot
+import com.ai.assistance.operit.ui.features.packages.market.hasAnyLabelName
 import com.ai.assistance.operit.ui.features.packages.screens.artifact.viewmodel.ArtifactMarketViewModel
 import com.ai.assistance.operit.ui.features.packages.utils.ArtifactIssueParser
 
@@ -105,7 +105,7 @@ fun ArtifactManageScreen(
         ) {
             items(userPublishedArtifacts, key = { it.id }) { issue ->
                 val info = remember(issue) { ArtifactIssueParser.parseArtifactInfo(issue) }
-                val review = remember(issue) { issue.resolveArtifactReviewSnapshot() }
+                val isApproved = issue.hasAnyLabelName(ARTIFACT_MARKET_VISIBILITY_LABELS)
                 MarketManageItemCard(
                     title = info.title,
                     description = info.description,
@@ -114,15 +114,8 @@ fun ArtifactManageScreen(
                     onClick = { onNavigateToDetail(issue) },
                     supportingContent = {
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            MarketManageReviewStatusChip(reviewState = review.state)
+                            MarketManageReviewStatusChip(isApproved = isApproved)
                             ArtifactTypeBadge(info)
-                        }
-                        if (review.reasons.isNotEmpty()) {
-                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                review.reasons.take(2).forEach { reason ->
-                                    MarketManageReviewReasonChip(reason = reason)
-                                }
-                            }
                         }
                     },
                     actions = {

@@ -45,7 +45,6 @@ fun ComputerScreen() {
         TerminalScreen(
             env = terminalEnv,
             useLocalImeHandling = false,
-            checkUpdatesOnEnter = false,
         )
     }
 } 

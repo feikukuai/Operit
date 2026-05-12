@@ -12,7 +12,6 @@ data class ToolPkgMainRegistrationCapture(
     val messageProcessingPlugins: List<String>,
     val xmlRenderPlugins: List<String>,
     val inputMenuTogglePlugins: List<String>,
-    val chatInputHooks: List<String>,
     val toolLifecycleHooks: List<String>,
     val promptInputHooks: List<String>,
     val promptHistoryHooks: List<String>,
@@ -34,7 +33,6 @@ private enum class RegistrationBucket {
     MESSAGE_PROCESSING,
     XML_RENDER,
     INPUT_MENU_TOGGLE,
-    CHAT_INPUT,
     TOOL_LIFECYCLE,
     PROMPT_INPUT,
     PROMPT_HISTORY,
@@ -68,9 +66,6 @@ internal class JsToolPkgRegistrationSession {
     fun appendXmlRenderPlugin(specJson: String) = append(RegistrationBucket.XML_RENDER, specJson)
     fun appendInputMenuTogglePlugin(specJson: String) =
         append(RegistrationBucket.INPUT_MENU_TOGGLE, specJson)
-
-    fun appendChatInputHook(specJson: String) =
-        append(RegistrationBucket.CHAT_INPUT, specJson)
 
     fun appendToolLifecycleHook(specJson: String) =
         append(RegistrationBucket.TOOL_LIFECYCLE, specJson)
@@ -113,7 +108,6 @@ internal class JsToolPkgRegistrationSession {
                 messageProcessingPlugins = read(RegistrationBucket.MESSAGE_PROCESSING),
                 xmlRenderPlugins = read(RegistrationBucket.XML_RENDER),
                 inputMenuTogglePlugins = read(RegistrationBucket.INPUT_MENU_TOGGLE),
-                chatInputHooks = read(RegistrationBucket.CHAT_INPUT),
                 toolLifecycleHooks = read(RegistrationBucket.TOOL_LIFECYCLE),
                 promptInputHooks = read(RegistrationBucket.PROMPT_INPUT),
                 promptHistoryHooks = read(RegistrationBucket.PROMPT_HISTORY),
@@ -417,7 +411,6 @@ internal fun buildToolPkgRegistrationBridgeScript(): String {
                 ['registerMessageProcessingPlugin', 'registerToolPkgMessageProcessingPlugin'],
                 ['registerXmlRenderPlugin', 'registerToolPkgXmlRenderPlugin'],
                 ['registerInputMenuTogglePlugin', 'registerToolPkgInputMenuTogglePlugin'],
-                ['registerChatInputHook', 'registerToolPkgChatInputHook'],
                 ['registerToolLifecycleHook', 'registerToolPkgToolLifecycleHook'],
                 ['registerPromptInputHook', 'registerToolPkgPromptInputHook'],
                 ['registerPromptHistoryHook', 'registerToolPkgPromptHistoryHook'],

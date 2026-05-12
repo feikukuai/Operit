@@ -246,7 +246,6 @@ private fun ArtifactMarketPane(
         onLoadMore = viewModel::loadMoreMarketData,
         config = ArtifactMarketBrowseConfig,
         itemKey = { it.projectId },
-        updatedAtSelector = { it.latestPublishedAt.orEmpty() },
         entryFactory = { item ->
             rememberArtifactMarketBrowseEntry(
                 item = item,
@@ -337,7 +336,6 @@ private fun SkillMarketPane(
         onLoadMore = viewModel::loadMoreSkillMarketData,
         config = SkillMarketBrowseConfig,
         itemKey = { it.issue.id },
-        updatedAtSelector = { it.issue.updated_at },
         entryFactory = { item ->
             rememberSkillMarketBrowseEntry(
                 item = item,
@@ -413,7 +411,6 @@ private fun McpMarketPane(
         onLoadMore = viewModel::loadMoreMCPMarketData,
         config = McpMarketBrowseConfig,
         itemKey = { it.issue.id },
-        updatedAtSelector = { it.issue.updated_at },
         entryFactory = { item ->
             rememberMcpMarketBrowseEntry(
                 item = item,

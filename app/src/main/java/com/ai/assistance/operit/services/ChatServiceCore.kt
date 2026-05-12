@@ -416,13 +416,13 @@ class ChatServiceCore(
         get() = apiConfigDelegate.enableAutoRead
 
     val contextLength: StateFlow<Float>
-        get() = apiConfigDelegate.effectiveContextLength
+        get() = apiConfigDelegate.contextLength
 
     val summaryTokenThreshold: StateFlow<Float>
-        get() = apiConfigDelegate.effectiveSummaryTokenThreshold
+        get() = apiConfigDelegate.summaryTokenThreshold
 
     val enableSummary: StateFlow<Boolean>
-        get() = apiConfigDelegate.effectiveEnableSummary
+        get() = apiConfigDelegate.enableSummary
 
     val enableTools: StateFlow<Boolean>
         get() = apiConfigDelegate.enableTools

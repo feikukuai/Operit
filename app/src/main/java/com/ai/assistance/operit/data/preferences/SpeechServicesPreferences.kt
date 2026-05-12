@@ -44,13 +44,6 @@ class SpeechServicesPreferences(private val context: Context) {
     )
 
     @Serializable
-    data class VitsTtsPackageConfig(
-        val packagePath: String = "",
-        val speakerId: String = "",
-        val options: Map<String, String> = emptyMap()
-    )
-
-    @Serializable
     data class SttHttpConfig(
         val endpointUrl: String,
         val apiKey: String,
@@ -61,7 +54,6 @@ class SpeechServicesPreferences(private val context: Context) {
         // TTS Preference Keys
         val TTS_SERVICE_TYPE = stringPreferencesKey("tts_service_type")
         val TTS_HTTP_CONFIG = stringPreferencesKey("tts_http_config")
-        val TTS_VITS_PACKAGE_CONFIG = stringPreferencesKey("tts_vits_package_config")
         val TTS_CLEANER_REGEXS = stringSetPreferencesKey("tts_cleaner_regexs")
         val TTS_SPEECH_RATE = floatPreferencesKey("tts_speech_rate")
         val TTS_PITCH = floatPreferencesKey("tts_pitch")
@@ -90,8 +82,6 @@ class SpeechServicesPreferences(private val context: Context) {
             modelName = "",
             responsePipeline = emptyList()
         )
-
-        val DEFAULT_VITS_TTS_PACKAGE_CONFIG = VitsTtsPackageConfig()
 
         val DEFAULT_STT_HTTP_PRESET = SttHttpConfig(
             endpointUrl = "https://api.openai.com/v1/audio/transcriptions",
@@ -130,15 +120,6 @@ class SpeechServicesPreferences(private val context: Context) {
             }
         } else {
             DEFAULT_HTTP_TTS_PRESET
-        }
-    }
-
-    val ttsVitsPackageConfigFlow: Flow<VitsTtsPackageConfig> = dataStore.data.map { prefs ->
-        val json = prefs[TTS_VITS_PACKAGE_CONFIG]
-        if (json == null) {
-            DEFAULT_VITS_TTS_PACKAGE_CONFIG
-        } else {
-            serializerJson.decodeFromString<VitsTtsPackageConfig>(json)
         }
     }
 
@@ -181,7 +162,6 @@ class SpeechServicesPreferences(private val context: Context) {
     suspend fun saveTtsSettings(
         serviceType: VoiceServiceFactory.VoiceServiceType,
         httpConfig: TtsHttpConfig? = null,
-        vitsConfig: VitsTtsPackageConfig? = null,
         cleanerRegexs: List<String>? = null,
         speechRate: Float? = null,
         pitch: Float? = null
@@ -216,8 +196,8 @@ class SpeechServicesPreferences(private val context: Context) {
                 VoiceServiceFactory.VoiceServiceType.OPENAI_TTS -> {
                     httpConfig?.let { prefs[TTS_HTTP_CONFIG] = serializerJson.encodeToString(it) }
                 }
-                VoiceServiceFactory.VoiceServiceType.VITS_TTS -> {
-                    vitsConfig?.let { prefs[TTS_VITS_PACKAGE_CONFIG] = serializerJson.encodeToString(it) }
+                VoiceServiceFactory.VoiceServiceType.ONNX_TTS -> {
+                    httpConfig?.let { prefs[TTS_HTTP_CONFIG] = serializerJson.encodeToString(it) }
                 }
             }
         }

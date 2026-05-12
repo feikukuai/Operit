@@ -5,11 +5,9 @@ import android.graphics.Paint
 import android.graphics.Typeface
 import android.text.SpannableStringBuilder
 import android.text.Spanned
-import android.text.TextPaint
 import android.text.style.ForegroundColorSpan
 import android.text.style.ImageSpan
-import android.text.style.LineBackgroundSpan
-import android.text.style.MetricAffectingSpan
+import android.text.style.ReplacementSpan
 import android.text.style.StrikethroughSpan
 import android.text.style.StyleSpan
 import android.text.style.URLSpan
@@ -26,6 +24,7 @@ import com.ai.assistance.operit.util.markdown.MarkdownNodeStable
 import com.ai.assistance.operit.util.markdown.MarkdownProcessorType
 import com.ai.assistance.operit.util.streamnative.NativeMarkdownSplitter
 import ru.noties.jlatexmath.JLatexMathDrawable
+import kotlin.math.ceil
 
 private const val TAG = "MarkdownInlineSpannable"
 private const val INLINE_LATEX_PLACEHOLDER = '\uFFFC'
@@ -56,86 +55,48 @@ private fun inlineCodeBackgroundColor(textColor: Color): Int {
     return textColor.copy(alpha = backgroundAlpha).toArgb()
 }
 
-private class InlineCodeStyleSpan(
-    private val textScale: Float,
-) : MetricAffectingSpan() {
-    override fun updateDrawState(textPaint: TextPaint) {
-        applyInlineCodeStyle(textPaint)
-    }
-
-    override fun updateMeasureState(textPaint: TextPaint) {
-        applyInlineCodeStyle(textPaint)
-    }
-
-    private fun applyInlineCodeStyle(textPaint: TextPaint) {
-        textPaint.typeface = getMarkdownCodeTypeface()
-        textPaint.textSize = textPaint.textSize * textScale
-        textPaint.isAntiAlias = true
-    }
-}
-
-private class InlineCodeBackgroundSpan(
+private class InlineCodeSpan(
     private val backgroundColor: Int,
     private val textScale: Float,
     private val horizontalPaddingPx: Float,
     private val verticalInsetPx: Float,
     private val cornerRadiusPx: Float,
-) : LineBackgroundSpan {
-    override fun drawBackground(
-        canvas: Canvas,
+) : ReplacementSpan() {
+    override fun getSize(
         paint: Paint,
-        left: Int,
-        right: Int,
-        top: Int,
-        baseline: Int,
-        bottom: Int,
         text: CharSequence,
         start: Int,
         end: Int,
-        lineNumber: Int
+        fm: Paint.FontMetricsInt?
+    ): Int {
+        val codePaint = createCodePaint(paint)
+        return ceil(codePaint.measureText(text, start, end) + horizontalPaddingPx * 2f).toInt()
+    }
+
+    override fun draw(
+        canvas: Canvas,
+        text: CharSequence,
+        start: Int,
+        end: Int,
+        x: Float,
+        top: Int,
+        y: Int,
+        bottom: Int,
+        paint: Paint
     ) {
-        val spanned = text as? Spanned ?: return
-        val spanStart = spanned.getSpanStart(this)
-        val spanEnd = spanned.getSpanEnd(this)
-        if (spanStart < 0 || spanEnd <= spanStart) return
-
-        val segmentStart = maxOf(start, spanStart)
-        val segmentEnd = minOf(end, spanEnd)
-        if (segmentStart >= segmentEnd) return
-
-        val basePaint =
-            TextPaint(paint).apply {
-                isAntiAlias = true
-            }
-        val codePaint =
-            TextPaint(basePaint).apply {
-                typeface = getMarkdownCodeTypeface()
-                textSize = basePaint.textSize * textScale
-            }
-
-        val prefixWidth =
-            if (segmentStart > start) {
-                basePaint.measureText(text, start, segmentStart)
-            } else {
-                0f
-            }
-        val segmentWidth = codePaint.measureText(text, segmentStart, segmentEnd)
-        val lineLeft = left.toFloat()
-        val lineRight = right.toFloat()
-        val segmentLeft = lineLeft + prefixWidth
-        val backgroundLeft = (segmentLeft - horizontalPaddingPx).coerceAtLeast(lineLeft)
-        val backgroundRight =
-            (segmentLeft + segmentWidth + horizontalPaddingPx).coerceAtMost(lineRight)
-        if (backgroundRight <= backgroundLeft) return
+        val codePaint = createCodePaint(paint)
+        val segmentWidth = codePaint.measureText(text, start, end)
+        val segmentStartX = x
+        val segmentEndX = x + segmentWidth + horizontalPaddingPx * 2f
 
         val previousColor = paint.color
         val previousStyle = paint.style
         paint.color = backgroundColor
         paint.style = Paint.Style.FILL
         canvas.drawRoundRect(
-            backgroundLeft,
+            segmentStartX,
             top + verticalInsetPx,
-            backgroundRight,
+            segmentEndX,
             bottom - verticalInsetPx,
             cornerRadiusPx,
             cornerRadiusPx,
@@ -143,19 +104,31 @@ private class InlineCodeBackgroundSpan(
         )
         paint.color = previousColor
         paint.style = previousStyle
+
+        canvas.drawText(
+            text,
+            start,
+            end,
+            x + horizontalPaddingPx,
+            y.toFloat(),
+            codePaint
+        )
     }
+
+    private fun createCodePaint(source: Paint): Paint =
+        Paint(source).apply {
+            typeface = getMarkdownCodeTypeface()
+            textSize = source.textSize * textScale
+            isAntiAlias = true
+        }
 }
 
-private fun createInlineCodeStyleSpan(): InlineCodeStyleSpan {
-    return InlineCodeStyleSpan(textScale = 0.9f)
-}
-
-private fun createInlineCodeBackgroundSpan(
+private fun createInlineCodeSpan(
     textColor: Color,
     density: Density?
-): InlineCodeBackgroundSpan {
+): InlineCodeSpan {
     val densityScale = density?.density ?: 1f
-    return InlineCodeBackgroundSpan(
+    return InlineCodeSpan(
         backgroundColor = inlineCodeBackgroundColor(textColor),
         textScale = 0.9f,
         horizontalPaddingPx = 4f * densityScale,
@@ -386,13 +359,7 @@ private fun appendInlineNode(
             val end = builder.length
             if (start < end) {
                 builder.setSpan(
-                    createInlineCodeStyleSpan(),
-                    start,
-                    end,
-                    Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
-                )
-                builder.setSpan(
-                    createInlineCodeBackgroundSpan(textColor, density),
+                    createInlineCodeSpan(textColor, density),
                     start,
                     end,
                     Spanned.SPAN_EXCLUSIVE_EXCLUSIVE

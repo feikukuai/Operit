@@ -30,7 +30,11 @@ data class ExternalChatRequest(
     @SerialName("timeout_ms")
     val timeoutMs: Long = -1L,
     @SerialName("stop_after")
-    val stopAfter: Boolean = false
+    val stopAfter: Boolean = false,
+    @SerialName("chat_model_config_id_override")
+    val chatModelConfigIdOverride: String? = null,
+    @SerialName("chat_model_index_override")
+    val chatModelIndexOverride: Int? = null
 )
 
 @Serializable
@@ -83,7 +87,11 @@ data class ExternalChatHttpRequest(
     @SerialName("response_mode")
     val responseMode: String = "sync",
     @SerialName("callback_url")
-    val callbackUrl: String? = null
+    val callbackUrl: String? = null,
+    @SerialName("chat_model_config_id_override")
+    val chatModelConfigIdOverride: String? = null,
+    @SerialName("chat_model_index_override")
+    val chatModelIndexOverride: Int? = null
 ) {
     fun normalizedResponseMode(): ExternalChatResponseMode? {
         return when (responseMode.trim().lowercase(Locale.US)) {
@@ -110,7 +118,9 @@ data class ExternalChatHttpRequest(
             initialMode = initialMode,
             autoExitAfterMs = autoExitAfterMs,
             timeoutMs = timeoutMs,
-            stopAfter = stopAfter
+            stopAfter = stopAfter,
+            chatModelConfigIdOverride = chatModelConfigIdOverride,
+            chatModelIndexOverride = chatModelIndexOverride
         )
     }
 }
