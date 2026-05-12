@@ -1,5 +1,10 @@
 import worldbookManagerScreen from "./ui/worldbook_manager/index.ui.js";
 import { ensureWorldBookStorage, readWorldBookEntries } from "./shared/worldbook_storage.js";
+import {
+  renderWorldBookContent,
+  syncWorldBookVariableContext,
+  type WorldBookVariableRenderContext
+} from "./shared/worldbook_variables.js";
 
 declare function getCallerCardId(): string | undefined;
 
@@ -16,7 +21,9 @@ interface WorldBookEntry {
   enabled?: boolean;
   priority?: number;
   scan_depth?: number;
-  inject_target?: "system" | "user";
+  inject_target?: "system" | "user" | "assistant";
+  inject_position?: "prepend" | "append" | "at_depth";
+  insertion_depth?: number;
   character_card_id?: string;
 }
 
@@ -65,6 +72,91 @@ function buildInjection(entries: WorldBookEntry[]): string {
   }
   parts.push("</worldbook>");
   return parts.join("\n");
+}
+
+function normalizeInjectPosition(entry: WorldBookEntry): "prepend" | "append" | "at_depth" {
+  return entry.inject_position === "prepend" || entry.inject_position === "at_depth"
+    ? entry.inject_position
+    : "append";
+}
+
+function applyTextInjection(
+  baseText: string,
+  prependEntries: WorldBookEntry[],
+  appendEntries: WorldBookEntry[]
+): string {
+  const parts: string[] = [];
+  if (prependEntries.length > 0) {
+    parts.push(buildInjection(prependEntries));
+  }
+  if (baseText) {
+    parts.push(baseText);
+  }
+  if (appendEntries.length > 0) {
+    parts.push(buildInjection(appendEntries));
+  }
+  return parts.join("\n");
+}
+
+function splitEntriesByPosition(entries: WorldBookEntry[]): {
+  prependEntries: WorldBookEntry[];
+  appendEntries: WorldBookEntry[];
+} {
+  const prependEntries: WorldBookEntry[] = [];
+  const appendEntries: WorldBookEntry[] = [];
+
+  for (const entry of entries) {
+    if (normalizeInjectPosition(entry) === "prepend") {
+      prependEntries.push(entry);
+    } else {
+      appendEntries.push(entry);
+    }
+  }
+
+  return { prependEntries, appendEntries };
+}
+
+function toPromptTurnKind(entry: WorldBookEntry): ToolPkg.PromptTurnKind {
+  if (entry.inject_target === "assistant") {
+    return "ASSISTANT";
+  }
+  if (entry.inject_target === "user") {
+    return "USER";
+  }
+  return "SYSTEM";
+}
+
+function insertAtDepthEntries(
+  history: ToolPkg.PromptTurn[],
+  entries: WorldBookEntry[]
+): ToolPkg.PromptTurn[] {
+  if (entries.length === 0) {
+    return history;
+  }
+
+  const grouped = new Map<string, { depth: number; kind: ToolPkg.PromptTurnKind; entries: WorldBookEntry[] }>();
+  for (const entry of entries) {
+    const depth = Math.max(0, Number(entry.insertion_depth ?? 0) || 0);
+    const kind = toPromptTurnKind(entry);
+    const key = `${kind}:${depth}`;
+    const group = grouped.get(key);
+    if (group) {
+      group.entries.push(entry);
+      continue;
+    }
+    grouped.set(key, { depth, kind, entries: [entry] });
+  }
+
+  const nextHistory = [...history];
+  const groups = [...grouped.values()].sort((left, right) => right.depth - left.depth);
+  for (const group of groups) {
+    const insertIndex = Math.max(0, nextHistory.length - group.depth);
+    nextHistory.splice(insertIndex, 0, {
+      kind: group.kind,
+      content: buildInjection(group.entries)
+    });
+  }
+  return nextHistory;
 }
 
 function matchesCharacterCard(entry: WorldBookEntry, callerCardId: string): boolean {
@@ -125,6 +217,36 @@ async function readEnabledEntries(): Promise<WorldBookEntry[]> {
   }
 }
 
+function renderEntries(
+  entries: WorldBookEntry[],
+  variableContext: WorldBookVariableRenderContext | null
+): WorldBookEntry[] {
+  if (!variableContext) {
+    return entries;
+  }
+  return entries.map((entry) => ({
+    ...entry,
+    content: renderWorldBookContent(String(entry.content || ""), variableContext)
+  }));
+}
+
+async function resolveVariableContext(
+  event: ToolPkg.SystemPromptComposeHookEvent | ToolPkg.PromptFinalizeHookEvent,
+  callerCardId: string
+): Promise<WorldBookVariableRenderContext | null> {
+  const chatId = String(event?.eventPayload?.chatId || "").trim();
+  if (!chatId) {
+    return null;
+  }
+
+  try {
+    const allEntries = await readWorldBookEntries<WorldBookEntry>();
+    return await syncWorldBookVariableContext(chatId, allEntries, callerCardId);
+  } catch (_error) {
+    return null;
+  }
+}
+
 export async function systemPromptHook(
   event: ToolPkg.SystemPromptComposeHookEvent
 ) {
@@ -135,10 +257,12 @@ export async function systemPromptHook(
 
   const enabledEntries = await readEnabledEntries();
   const callerCardId = await resolveCurrentCharacterCardId(event);
+  const variableContext = await resolveVariableContext(event, callerCardId);
   const hitEntries = enabledEntries.filter(
     (entry) =>
       entry.always_active &&
-      entry.inject_target !== "user" &&
+      entry.inject_target === "system" &&
+      normalizeInjectPosition(entry) !== "at_depth" &&
       matchesCharacterCard(entry, callerCardId)
   );
   if (hitEntries.length === 0) {
@@ -146,7 +270,9 @@ export async function systemPromptHook(
   }
 
   const currentPrompt = event.eventPayload?.systemPrompt || "";
-  return { systemPrompt: `${currentPrompt}\n${buildInjection(hitEntries)}` };
+  const renderedEntries = renderEntries(hitEntries, variableContext);
+  const { prependEntries, appendEntries } = splitEntriesByPosition(renderedEntries);
+  return { systemPrompt: applyTextInjection(currentPrompt, prependEntries, appendEntries) };
 }
 
 export async function finalizeHook(
@@ -158,21 +284,29 @@ export async function finalizeHook(
   }
 
   const enabledEntries = await readEnabledEntries();
-  const promptEntries = enabledEntries.filter((entry) => entry.inject_target === "user");
+  const promptEntries = enabledEntries.filter(
+    (entry) => entry.inject_target === "user" || normalizeInjectPosition(entry) === "at_depth"
+  );
   const keywordEntries = enabledEntries.filter((entry) => !entry.always_active);
   const payload = event.eventPayload || {};
   const history = (payload.preparedHistory || payload.chatHistory || []) as ToolPkg.PromptTurn[];
   const callerCardId = await resolveCurrentCharacterCardId(event);
+  const variableContext = await resolveVariableContext(event, callerCardId);
 
   const hitSystemEntries: WorldBookEntry[] = [];
   const hitUserEntries: WorldBookEntry[] = [];
+  const hitChatEntries: WorldBookEntry[] = [];
 
   for (const entry of promptEntries) {
     if (!matchesCharacterCard(entry, callerCardId)) {
       continue;
     }
     if (entry.always_active) {
-      hitUserEntries.push(entry);
+      if (normalizeInjectPosition(entry) === "at_depth" || entry.inject_target === "assistant") {
+        hitChatEntries.push(entry);
+      } else {
+        hitUserEntries.push(entry);
+      }
     }
   }
 
@@ -203,7 +337,9 @@ export async function finalizeHook(
 
     const scanText = texts.join("\n");
     if (scanText && matchesEntry(entry, scanText)) {
-      if (entry.inject_target === "user") {
+      if (normalizeInjectPosition(entry) === "at_depth" || entry.inject_target === "assistant") {
+        hitChatEntries.push(entry);
+      } else if (entry.inject_target === "user") {
         hitUserEntries.push(entry);
       } else {
         hitSystemEntries.push(entry);
@@ -211,7 +347,7 @@ export async function finalizeHook(
     }
   }
 
-  if (hitSystemEntries.length === 0 && hitUserEntries.length === 0) {
+  if (hitSystemEntries.length === 0 && hitUserEntries.length === 0 && hitChatEntries.length === 0) {
     return null;
   }
 
@@ -219,13 +355,14 @@ export async function finalizeHook(
   let nextProcessedInput = String(payload.processedInput || payload.rawInput || "");
 
   if (hitSystemEntries.length > 0) {
-    const sysInjection = buildInjection(hitSystemEntries);
+    const renderedSystemEntries = renderEntries(hitSystemEntries, variableContext);
+    const { prependEntries, appendEntries } = splitEntriesByPosition(renderedSystemEntries);
     let injected = false;
     const sysNext: ToolPkg.PromptTurn[] = [];
 
     for (const turn of nextHistory) {
       if (!injected && turn.kind === "SYSTEM") {
-        const nextContent = turn.content ? `${turn.content}\n${sysInjection}` : sysInjection;
+        const nextContent = applyTextInjection(turn.content || "", prependEntries, appendEntries);
         sysNext.push({ ...turn, content: nextContent });
         injected = true;
         continue;
@@ -234,14 +371,22 @@ export async function finalizeHook(
     }
 
     if (!injected) {
-      sysNext.unshift({ kind: "SYSTEM", content: sysInjection });
+      sysNext.unshift({
+        kind: "SYSTEM",
+        content: applyTextInjection("", prependEntries, appendEntries)
+      });
     }
     nextHistory = sysNext;
   }
 
   if (hitUserEntries.length > 0) {
-    const userInjection = `${buildInjection(hitUserEntries)}\n`;
-    nextProcessedInput = userInjection + nextProcessedInput;
+    const renderedUserEntries = renderEntries(hitUserEntries, variableContext);
+    const { prependEntries, appendEntries } = splitEntriesByPosition(renderedUserEntries);
+    nextProcessedInput = applyTextInjection(nextProcessedInput, prependEntries, appendEntries);
+  }
+
+  if (hitChatEntries.length > 0) {
+    nextHistory = insertAtDepthEntries(nextHistory, renderEntries(hitChatEntries, variableContext));
   }
 
   return {

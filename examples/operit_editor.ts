@@ -28,9 +28,6 @@
 - 问题核心是“配置和部署链路”，而不是普通问答
 
 【MCP：安装与排查】
-0) 市场来源：
-- OPR MCP 市场（issues）：https://github.com/AAswordman/OperitMCPMarket/issues
-- 该市场内容较少，可在其他可信来源继续搜集 MCP，再按本手册部署。
 1) 配置目录：/sdcard/Download/Operit/mcp_plugins/
 - 主配置：mcp_config.json
 - 运行状态缓存：server_status.json（非实时快照，仅用于状态记录与工具缓存，不作为排查判定依据）
@@ -91,9 +88,6 @@
 - 检查终端依赖（node/pnpm/python/uv）与 MCP 服务状态；其中 Node 类 `npx` MCP 实际依赖 `pnpm`，若缺少 `pnpm` 将无法启动
 
 【Skill：安装与排查】
-0) 市场来源：
-- OPR Skill 市场（issues）：https://github.com/AAswordman/OperitSkillMarket/issues
-- 也可从其他可信来源获取 skill，下载后解压到 skills 目录。
 1) 目录：/sdcard/Download/Operit/skills/
 2) 识别规则：每个 Skill 必须是一个文件夹，且包含 SKILL.md（skill.md 也可）。
 3) 添加方式（按这个做）：
@@ -134,6 +128,16 @@
 - 可用包列表中的条目，不保证同类型；可能是三种类型混合出现。
 - `use_package` 是三兼容入口：对 MCP/Skill/Sandbox Package 都可统一调用。
 - `ping_mcp` 工具是 `use_package` 的直通封装，用于快速探测指定包是否可被加载。
+
+【市场 Agent API（HTTP，只读）】
+- 基础前缀：`https://api.operit.app/market-stats`
+- 搜索：`/agent/search?q=<关键词>&type=mcp|skill|package|script&limit=10`
+- 详情：`/agent/items/<type>/<id>`
+- 安装计划：`/agent/items/<type>/<id>/install-plan`
+- `package` / `script` 的 install_plan 通常会返回 `download_url`、`tracked_download_url`、`sha256`、`runtime_package_id`。
+- `skill` 的 install_plan 通常会返回 `repository_url`。
+- `mcp` 的 install_plan 可能返回 `config`（可直接作为 installConfig 参考）或 `repository_url`。
+- 当前软件未对 JS 暴露统一的一键安装市场接口；需要安装时，按条目类型自行下载、解压、导入，必要时配合 `debug_install_js_package` / `debug_install_toolpkg` / `use_package`。
 
 【功能模型与模型配置】
 1) 模型配置（Model Config）：
@@ -182,7 +186,7 @@
 - `SILICONFLOW_TTS`：需填写 `api_key`、`model_name`、`voice_id`。
 - `MINIMAX_TTS`：需填写 `api_key`，可选填写 `url_template`、`model_name`、`voice_id`。默认接口为 `https://api.minimaxi.com/v1/t2a_v2`，内部固定按 `data.audio -> http_get` 解析音频。
 - `OPENAI_TTS`：需填写 `url_template`、`api_key`、`model_name`、`voice_id`。
-- `ONNX_TTS`：本地 ONNX TTS。`url_template` 填本地 `.onnx` 模型路径，`model_name` 填本地 tokenizer/config JSON 路径，`voice_id` 可选填数字 speaker id，`headers` 可选填写 `sample_rate`、`threads`、`noise_scale`、`length_scale`、`noise_w`、`text_mode`、`speaker_count`、输入名和 blank/bos/eos token 等本地参数。
+- `VITS_TTS`：本地 VITS/Piper TTS。`tts_vits_package_path` 填本地模型包 `.zip` 或已解压目录，`tts_vits_speaker_id` 可选填数字 speaker id，`tts_vits_options` 可选填写 `sample_rate`、`threads`、`noise_scale`、`length_scale`、`noise_w`、`frontend`、`text_mode`、`speaker_count`、输入名和 blank/bos/eos token 等本地参数。
 3) STT（语音转文本）可选引擎：
 - `SHERPA_NCNN`：本地识别，通常无需 API Key。
 - `OPENAI_STT`：需填写 `endpoint_url`、`api_key`、`model_name`。
@@ -192,9 +196,9 @@
 - `HTTP_TTS` 的模板没放 `{text}` 占位符（GET 通常在 URL，POST 通常在 body）。
 - `HTTP_TTS` 的 `response_pipeline` 不是合法 JSON 数组，或步骤名 / `path` 填错。
 - `OPENAI_WS_TTS` 把 HTTP 地址填成了 WebSocket 地址，或把 WebSocket 地址误填成 HTTP 地址。
-- `ONNX_TTS` 的 `url_template` 不是本地 `.onnx` 文件路径，或文件不存在。
-- `ONNX_TTS` 的 `model_name` 没填本地 tokenizer/config JSON 路径，或配置里缺少 `sample_rate` / token 映射。
-- `ONNX_TTS` 的 `headers` 不是合法 JSON（必须是对象），或把本地参数名 / 数值类型写错。
+- `VITS_TTS` 的 `tts_vits_package_path` 不是本地 `.zip` 模型包或已解压目录，或文件不存在。
+- `VITS_TTS` 模型包里没有可识别的 `.onnx` / config JSON / lexicon，或配置里缺少 `sample_rate` / token 映射。
+- `VITS_TTS` 的 `tts_vits_options` 不是合法 JSON（必须是对象），或把本地参数名 / 数值类型写错。
 - TTS/STT 的 endpoint 路径写错（比如把 chat/completions 写成 audio 接口）。
 - `model_name` 填了不存在的模型或与接口不匹配。
 - 改完配置后没有重新测试语音播报或语音识别。
@@ -270,9 +274,6 @@
 - The core issue is configuration/deployment flow rather than normal Q&A
 
 [MCP: install and troubleshooting]
-0) Market source:
-- OPR MCP market (issues): https://github.com/AAswordman/OperitMCPMarket/issues
-- This market is still small; you can continue collecting MCPs from other trusted sources, then deploy with this guide.
 1) Config directory: /sdcard/Download/Operit/mcp_plugins/
 - Main config: mcp_config.json
 - Runtime status cache: server_status.json (non-realtime snapshot for status/tool cache only; not a troubleshooting source of truth)
@@ -333,9 +334,6 @@
 - Check terminal dependencies (node/pnpm/python/uv) and MCP service status; Node-style `npx` MCPs actually depend on `pnpm`, so missing `pnpm` will prevent startup
 
 [Skill: install and troubleshooting]
-0) Market source:
-- OPR Skill market (issues): https://github.com/AAswordman/OperitSkillMarket/issues
-- You can also get skills from other trusted sources, then download and extract them into the skills directory.
 1) Directory: /sdcard/Download/Operit/skills/
 2) Recognition rule: each Skill must be a folder containing SKILL.md (skill.md is also accepted).
 3) How to add a skill (use this workflow):
@@ -376,6 +374,16 @@
 - Available package entries are not guaranteed to be a single type; mixed types are expected.
 - `use_package` is tri-compatible and can be called uniformly for MCP/Skill/Sandbox Package.
 - `ping_mcp` is a thin wrapper over `use_package` for quick package availability probing.
+
+[Market agent API (HTTP, read-only)]
+- Base prefix: `https://api.operit.app/market-stats`
+- Search: `/agent/search?q=<query>&type=mcp|skill|package|script&limit=10`
+- Detail: `/agent/items/<type>/<id>`
+- Install plan: `/agent/items/<type>/<id>/install-plan`
+- `package` / `script` install_plan usually returns `download_url`, `tracked_download_url`, `sha256`, and `runtime_package_id`.
+- `skill` install_plan usually returns `repository_url`.
+- `mcp` install_plan may return `config` (usable as installConfig reference) or `repository_url`.
+- The app does not currently expose a unified one-click market install API to JS; when installation is needed, download/extract/import by item type and use `debug_install_js_package`, `debug_install_toolpkg`, or `use_package` when appropriate.
 
 [Function model and model config]
 1) Model config:
@@ -424,7 +432,7 @@
 - `SILICONFLOW_TTS`: fill `api_key`, `model_name`, `voice_id`.
 - `MINIMAX_TTS`: fill `api_key`; optionally set `url_template`, `model_name`, and `voice_id`. Default endpoint is `https://api.minimaxi.com/v1/t2a_v2`, and audio is resolved from `data.audio` automatically.
 - `OPENAI_TTS`: fill `url_template`, `api_key`, `model_name`, `voice_id`.
-- `ONNX_TTS`: local ONNX TTS. Set `url_template` to the local `.onnx` model path, `model_name` to the local tokenizer/config JSON path, optionally set `voice_id` to a numeric speaker id, and use `headers` for local options such as `sample_rate`, `threads`, `noise_scale`, `length_scale`, `noise_w`, `text_mode`, `speaker_count`, input names, and blank/bos/eos token settings.
+- `VITS_TTS`: local VITS/Piper TTS. Set `tts_vits_package_path` to the local model package `.zip` or extracted package directory, optionally set `tts_vits_speaker_id` to a numeric speaker id, and use `tts_vits_options` for local options such as `sample_rate`, `threads`, `noise_scale`, `length_scale`, `noise_w`, `frontend`, `text_mode`, `speaker_count`, input names, and blank/bos/eos token settings.
 3) STT (speech-to-text) engines:
 - `SHERPA_NCNN`: local recognition, usually no API key required.
 - `OPENAI_STT`: fill `endpoint_url`, `api_key`, `model_name`.
@@ -434,9 +442,9 @@
 - Missing `{text}` placeholder in HTTP TTS template (typically in URL for GET, in body for POST).
 - `response_pipeline` in `HTTP_TTS` is not a valid JSON array, or a step name / `path` is incorrect.
 - `OPENAI_WS_TTS` is configured with an HTTP URL instead of a WebSocket URL, or vice versa.
-- `url_template` in `ONNX_TTS` is not a local `.onnx` file path, or the file does not exist.
-- `model_name` in `ONNX_TTS` is not a local tokenizer/config JSON path, or the config is missing `sample_rate` / token mappings.
-- `headers` in `ONNX_TTS` is not valid JSON, or local option names / numeric values are invalid.
+- `tts_vits_package_path` in `VITS_TTS` is not a local `.zip` model package or extracted package directory, or it does not exist.
+- The `VITS_TTS` package has no recognizable `.onnx` / config JSON / lexicon, or the config is missing `sample_rate` / token mappings.
+- `tts_vits_options` in `VITS_TTS` is not valid JSON, or local option names / numeric values are invalid.
 - Wrong endpoint path for TTS/STT (for example using chat/completions instead of audio endpoints).
 - `model_name` does not exist or does not match the API.
 - No real retest after saving config.
@@ -773,8 +781,8 @@
         {
           name: "tts_service_type"
           description: {
-            zh: "可选，SIMPLE_TTS/HTTP_TTS/OPENAI_WS_TTS/SILICONFLOW_TTS/MINIMAX_TTS/OPENAI_TTS/ONNX_TTS"
-            en: "Optional, SIMPLE_TTS/HTTP_TTS/OPENAI_WS_TTS/SILICONFLOW_TTS/MINIMAX_TTS/OPENAI_TTS/ONNX_TTS"
+            zh: "可选，SIMPLE_TTS/HTTP_TTS/OPENAI_WS_TTS/SILICONFLOW_TTS/MINIMAX_TTS/OPENAI_TTS/VITS_TTS"
+            en: "Optional, SIMPLE_TTS/HTTP_TTS/OPENAI_WS_TTS/SILICONFLOW_TTS/MINIMAX_TTS/OPENAI_TTS/VITS_TTS"
           }
           type: string
           required: false
@@ -782,8 +790,8 @@
         {
           name: "tts_url_template"
           description: {
-            zh: "可选，TTS URL 模板；ONNX_TTS 时表示本地 .onnx 模型路径。HTTP 系列仅支持 `{text}`、`{rate}`、`{pitch}`、`{voice}`"
-            en: "Optional TTS URL template; for ONNX_TTS this is the local .onnx model path. HTTP-style providers support only `{text}`, `{rate}`, `{pitch}`, `{voice}`"
+            zh: "可选，HTTP 类 TTS 的 URL 模板。HTTP 系列仅支持 `{text}`、`{rate}`、`{pitch}`、`{voice}`"
+            en: "Optional URL template for HTTP-style TTS providers. HTTP-style providers support only `{text}`, `{rate}`, `{pitch}`, `{voice}`"
           }
           type: string
           required: false
@@ -800,8 +808,8 @@
         {
           name: "tts_headers"
           description: {
-            zh: "可选，TTS headers 的 JSON 对象字符串；ONNX_TTS 时存放 sample_rate、noise_scale、输入名等本地参数"
-            en: "Optional JSON object string for TTS headers; for ONNX_TTS this stores local options such as sample_rate, noise_scale, and input names"
+            zh: "可选，HTTP 类 TTS headers 的 JSON 对象字符串"
+            en: "Optional JSON object string for HTTP-style TTS headers"
           }
           type: string
           required: false
@@ -845,8 +853,8 @@
         {
           name: "tts_voice_id"
           description: {
-            zh: "可选，TTS 音色 ID；ONNX_TTS 时表示模型需要的数字 speaker id"
-            en: "Optional TTS voice id; for ONNX_TTS this is the numeric speaker id required by the model"
+            zh: "可选，TTS 音色 ID"
+            en: "Optional TTS voice id"
           }
           type: string
           required: false
@@ -854,8 +862,35 @@
         {
           name: "tts_model_name"
           description: {
-            zh: "可选，TTS 模型名；ONNX_TTS 时表示本地 tokenizer/config JSON 路径"
-            en: "Optional TTS model name; for ONNX_TTS this is the local tokenizer/config JSON path"
+            zh: "可选，TTS 模型名"
+            en: "Optional TTS model name"
+          }
+          type: string
+          required: false
+        },
+        {
+          name: "tts_vits_package_path"
+          description: {
+            zh: "可选，本地 VITS/Piper TTS 模型包路径，支持 .zip 文件或已解压目录"
+            en: "Optional local VITS/Piper TTS package path, supporting a .zip file or extracted package directory"
+          }
+          type: string
+          required: false
+        },
+        {
+          name: "tts_vits_speaker_id"
+          description: {
+            zh: "可选，VITS/Piper TTS 模型包需要的数字 speaker id"
+            en: "Optional numeric speaker id required by the VITS/Piper TTS package"
+          }
+          type: string
+          required: false
+        },
+        {
+          name: "tts_vits_options"
+          description: {
+            zh: "可选，VITS/Piper TTS 模型包参数 JSON 对象字符串"
+            en: "Optional JSON object string for VITS/Piper TTS package options"
           }
           type: string
           required: false
@@ -3119,7 +3154,7 @@ type TtsServiceType =
   | "SILICONFLOW_TTS"
   | "MINIMAX_TTS"
   | "OPENAI_TTS"
-  | "ONNX_TTS";
+  | "VITS_TTS";
 
 type SttServiceType =
   | "SHERPA_NCNN"
@@ -3137,6 +3172,9 @@ type SpeechServicesConfigUpdateParams = {
   tts_locale?: string;
   tts_voice_id?: string;
   tts_model_name?: string;
+  tts_vits_package_path?: string;
+  tts_vits_speaker_id?: string;
+  tts_vits_options?: string | Record<string, string>;
   tts_response_pipeline?: string | Array<{
     type: string;
     path?: string;

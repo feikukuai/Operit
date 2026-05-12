@@ -27,7 +27,22 @@ function normalizeNumber(value, fallbackValue) {
     return Number.isFinite(numeric) ? numeric : fallbackValue;
 }
 function normalizeInjectTarget(value) {
-    return value === "user" ? "user" : "system";
+    if (value === "user") {
+        return "user";
+    }
+    if (value === "assistant") {
+        return "assistant";
+    }
+    return "system";
+}
+function normalizeInjectPosition(value) {
+    if (value === "prepend") {
+        return "prepend";
+    }
+    if (value === "at_depth") {
+        return "at_depth";
+    }
+    return "append";
 }
 function worldBookError(code, message, details) {
     return { code, message, details };
@@ -37,6 +52,9 @@ function isRecord(value) {
 }
 function hasOwn(record, key) {
     return Object.prototype.hasOwnProperty.call(record, key);
+}
+function isNullish(value) {
+    return value == null;
 }
 function toKeywordArray(value) {
     if (Array.isArray(value)) {
@@ -61,6 +79,9 @@ function readOptionalBooleanField(record, key, defaultValue, fieldLabel) {
         return defaultValue;
     }
     const value = record[key];
+    if (isNullish(value)) {
+        return defaultValue;
+    }
     if (typeof value !== "boolean") {
         throw worldBookError("INVALID_FIELD_TYPE", `${fieldLabel} 必须是布尔值`);
     }
@@ -71,6 +92,9 @@ function readOptionalNumberField(record, key, defaultValue, fieldLabel) {
         return defaultValue;
     }
     const value = record[key];
+    if (isNullish(value)) {
+        return defaultValue;
+    }
     if (typeof value !== "number" || !Number.isFinite(value)) {
         throw worldBookError("INVALID_FIELD_TYPE", `${fieldLabel} 必须是数字`);
     }
@@ -81,6 +105,9 @@ function readOptionalKeywordArrayField(record, key, fieldLabel) {
         return [];
     }
     const value = record[key];
+    if (isNullish(value)) {
+        return [];
+    }
     if (!Array.isArray(value)) {
         throw worldBookError("INVALID_FIELD_TYPE", `${fieldLabel} 必须是字符串数组`);
     }
@@ -97,6 +124,90 @@ function addWarning(warnings, warning) {
         warnings.push(warning);
     }
 }
+function addTemplateCompatibilityWarnings(content, warnings) {
+    if (/\{\{\s*get_preset_variable::/i.test(content)) {
+        addWarning(warnings, "导入源包含酒馆助手的 preset 变量读取宏，但当前宿主没有把活动预设上下文暴露给插件，这部分语法仍会保留原文。");
+    }
+    if (/\{\{\s*format_preset_variable::/i.test(content)) {
+        addWarning(warnings, "导入源包含酒馆助手的 preset 变量格式化宏，但当前宿主没有把活动预设上下文暴露给插件，这部分语法仍会保留原文。");
+    }
+    if (/\{\{\s*(?:set|inc|dec)(?:global)?var::/i.test(content)) {
+        addWarning(warnings, "导入源包含会修改变量的 SillyTavern 宏。当前插件只在回合结束后解析 <UpdateVariable>/<JSONPatch>，不会执行这些内联写变量宏。");
+    }
+    if (/\{\{\s*[.$][A-Za-z][A-Za-z0-9_-]*\s*(?:\+\+|--|\+=|-=|\|\|=?|\?\?=?|==|!=|>=|<=|>|<|=)[^}]*\}\}/.test(content)) {
+        addWarning(warnings, "导入源包含带运算或赋值的 SillyTavern 变量简写表达式。当前插件只支持只读取值写法（如 {{.var}} / {{$var}}），不会执行这类内联表达式。");
+    }
+}
+function resolveCharacterBookRoleTarget(rawRole, warnings) {
+    if (rawRole == null) {
+        return "system";
+    }
+    if (rawRole === 0 || rawRole === "system") {
+        return "system";
+    }
+    if (rawRole === 1 || rawRole === "user") {
+        return "user";
+    }
+    if (rawRole === 2 || rawRole === "assistant" || rawRole === "char") {
+        return "assistant";
+    }
+    addWarning(warnings, `角色卡世界书包含未识别的 role 值 ${String(rawRole)}，已按 system 注入处理。`);
+    return "system";
+}
+function resolveCharacterBookPlacement(rawEntry, extensions, warnings) {
+    const position = typeof rawEntry.position === "string" ? rawEntry.position.trim().toLowerCase() : "";
+    const roleValue = hasOwn(rawEntry, "role") ? rawEntry.role : extensions.role;
+    const depthValue = hasOwn(rawEntry, "depth") ? rawEntry.depth : extensions.depth;
+    switch (position) {
+        case "":
+            return {
+                inject_target: "system",
+                inject_position: "append",
+                insertion_depth: 0
+            };
+        case "before_char":
+            return {
+                inject_target: "system",
+                inject_position: "prepend",
+                insertion_depth: 0
+            };
+        case "after_char":
+            return {
+                inject_target: "system",
+                inject_position: "append",
+                insertion_depth: 0
+            };
+        case "top_an":
+            addWarning(warnings, "角色卡世界书位置 top_an 已近似映射为系统提示词顶部插入。");
+            return {
+                inject_target: "system",
+                inject_position: "prepend",
+                insertion_depth: 0
+            };
+        case "bottom_an":
+        case "after_examples":
+            addWarning(warnings, `角色卡世界书位置 ${position} 已近似映射为系统提示词尾部插入。`);
+            return {
+                inject_target: "system",
+                inject_position: "append",
+                insertion_depth: 0
+            };
+        case "at_depth":
+        case "in_chat":
+            return {
+                inject_target: resolveCharacterBookRoleTarget(roleValue, warnings),
+                inject_position: "at_depth",
+                insertion_depth: normalizeNumber(depthValue, 0)
+            };
+        default:
+            addWarning(warnings, `角色卡世界书位置 ${position} 当前未精确支持，已按系统提示词尾部插入。`);
+            return {
+                inject_target: "system",
+                inject_position: "append",
+                insertion_depth: 0
+            };
+    }
+}
 function buildImportedEntry(normalized, characterCardId, now) {
     return {
         id: generateId(),
@@ -110,6 +221,8 @@ function buildImportedEntry(normalized, characterCardId, now) {
         priority: normalized.priority,
         scan_depth: normalized.scan_depth,
         inject_target: normalized.inject_target,
+        inject_position: normalizeInjectPosition(normalized.inject_position),
+        insertion_depth: normalizeNumber(normalized.insertion_depth, 0),
         character_card_id: characterCardId,
         created_at: now,
         updated_at: now
@@ -137,7 +250,9 @@ function parseOperitEntryArray(rawEntries) {
             enabled: readOptionalBooleanField(rawEntry, "enabled", true, "Operit 条目 enabled"),
             priority: readOptionalNumberField(rawEntry, "priority", 50, "Operit 条目 priority"),
             scan_depth: readOptionalNumberField(rawEntry, "scan_depth", 0, "Operit 条目 scan_depth"),
-            inject_target: normalizeInjectTarget(rawEntry.inject_target)
+            inject_target: normalizeInjectTarget(rawEntry.inject_target),
+            inject_position: normalizeInjectPosition(rawEntry.inject_position),
+            insertion_depth: readOptionalNumberField(rawEntry, "insertion_depth", 0, "Operit 条目 insertion_depth")
         });
     }
     if (entries.length === 0) {
@@ -161,6 +276,7 @@ function parseSillyTavernRecord(rawEntry, warnings) {
     if (!name || !content) {
         return null;
     }
+    addTemplateCompatibilityWarnings(content, warnings);
     const keywords = readOptionalKeywordArrayField(rawEntry, "key", "SillyTavern 条目 key");
     const alwaysActive = readOptionalBooleanField(rawEntry, "constant", false, "SillyTavern 条目 constant");
     if (keywords.length === 0 && !alwaysActive) {
@@ -191,7 +307,9 @@ function parseSillyTavernRecord(rawEntry, warnings) {
         scan_depth: hasOwn(rawEntry, "scanDepth")
             ? readOptionalNumberField(rawEntry, "scanDepth", 0, "SillyTavern 条目 scanDepth")
             : readOptionalNumberField(rawEntry, "depth", 0, "SillyTavern 条目 depth"),
-        inject_target: "system"
+        inject_target: "system",
+        inject_position: "append",
+        insertion_depth: 0
     };
 }
 function parseSillyTavernWorldBook(raw) {
@@ -231,6 +349,7 @@ function parseCharacterBookEntry(rawEntry, warnings) {
     if (!name || !content) {
         return null;
     }
+    addTemplateCompatibilityWarnings(content, warnings);
     const keywords = readOptionalKeywordArrayField(rawEntry, "keys", "character_book 条目 keys");
     const alwaysActive = readOptionalBooleanField(rawEntry, "constant", false, "character_book 条目 constant");
     if (keywords.length === 0 && !alwaysActive) {
@@ -244,10 +363,8 @@ function parseCharacterBookEntry(rawEntry, warnings) {
     if (readOptionalBooleanField(rawEntry, "selective", false, "character_book 条目 selective")) {
         addWarning(warnings, "角色卡世界书包含 selective 逻辑，当前版本未原样支持，已按主关键词导入。");
     }
-    if (rawEntry.position != null) {
-        addWarning(warnings, "角色卡世界书包含 position 字段，当前版本未映射，已按系统提示词导入。");
-    }
     const extensions = isRecord(rawEntry.extensions) ? rawEntry.extensions : {};
+    const placement = resolveCharacterBookPlacement(rawEntry, extensions, warnings);
     return {
         name,
         content,
@@ -258,7 +375,9 @@ function parseCharacterBookEntry(rawEntry, warnings) {
         enabled: readOptionalBooleanField(rawEntry, "enabled", true, "character_book 条目 enabled"),
         priority: readOptionalNumberField(rawEntry, "insertion_order", 50, "character_book 条目 insertion_order"),
         scan_depth: readOptionalNumberField(extensions, "depth", 0, "character_book 条目 extensions.depth"),
-        inject_target: "system"
+        inject_target: placement.inject_target,
+        inject_position: placement.inject_position,
+        insertion_depth: placement.insertion_depth
     };
 }
 function parseCharacterBook(rawBook) {
@@ -301,6 +420,17 @@ function parseImportedWorldBookPayload(raw) {
         : null;
     if (embeddedCharacterBook) {
         return embeddedCharacterBook;
+    }
+    const wrappedOriginalData = isRecord(raw.originalData) ? raw.originalData : null;
+    if (wrappedOriginalData) {
+        const parsedOriginalCharacterBook = parseCharacterBook(wrappedOriginalData);
+        if (parsedOriginalCharacterBook) {
+            return parsedOriginalCharacterBook;
+        }
+        const parsedOriginalWorldBook = parseSillyTavernWorldBook(wrappedOriginalData);
+        if (parsedOriginalWorldBook) {
+            return parsedOriginalWorldBook;
+        }
     }
     const parsedWorldBook = parseSillyTavernWorldBook(raw);
     if (parsedWorldBook) {
@@ -350,6 +480,8 @@ function toWorldBookListEntry(entry) {
         is_regex: entry.is_regex || false,
         scan_depth: entry.scan_depth ?? 0,
         inject_target: entry.inject_target || "system",
+        inject_position: normalizeInjectPosition(entry.inject_position),
+        insertion_depth: normalizeNumber(entry.insertion_depth, 0),
         character_card_id: entry.character_card_id || ""
     };
 }
@@ -366,6 +498,8 @@ async function getWorldBookEntry(id) {
 async function createWorldBookEntry(params) {
     const entries = await loadEntries();
     const now = new Date().toISOString();
+    const injectTarget = normalizeInjectTarget(params.inject_target);
+    const injectPosition = injectTarget === "assistant" ? "at_depth" : normalizeInjectPosition(params.inject_position);
     const entry = {
         id: generateId(),
         name: String(params.name || ""),
@@ -377,7 +511,9 @@ async function createWorldBookEntry(params) {
         enabled: params.enabled !== false,
         priority: normalizeNumber(params.priority, 50),
         scan_depth: normalizeNumber(params.scan_depth, 0),
-        inject_target: normalizeInjectTarget(params.inject_target),
+        inject_target: injectTarget,
+        inject_position: injectPosition,
+        insertion_depth: normalizeNumber(params.insertion_depth, 0),
         character_card_id: String(params.character_card_id || "").trim(),
         created_at: now,
         updated_at: now
@@ -458,6 +594,15 @@ async function updateWorldBookEntry(params) {
     }
     if (params.inject_target != null) {
         nextEntry.inject_target = normalizeInjectTarget(params.inject_target);
+    }
+    if (params.inject_position != null) {
+        nextEntry.inject_position = normalizeInjectPosition(params.inject_position);
+    }
+    if (params.insertion_depth != null) {
+        nextEntry.insertion_depth = normalizeNumber(params.insertion_depth, nextEntry.insertion_depth ?? 0);
+    }
+    if (nextEntry.inject_target === "assistant") {
+        nextEntry.inject_position = "at_depth";
     }
     if (params.character_card_id != null) {
         nextEntry.character_card_id = String(params.character_card_id || "").trim();

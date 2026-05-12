@@ -3,11 +3,138 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.default = Screen;
 const i18n_1 = require("../../i18n");
 const worldbook_service_js_1 = require("../../shared/worldbook_service.js");
+const CONTENT_SNIPPETS = [
+    {
+        id: "format_message_variable",
+        label: "format_message_variable",
+        description: "格式化输出当前消息/会话局部变量对象",
+        content: "{{format_message_variable::stat_data}}"
+    },
+    {
+        id: "format_chat_variable",
+        label: "format_chat_variable",
+        description: "兼容 chat 命名，效果与 message 作用域一致",
+        content: "{{format_chat_variable::stat_data}}"
+    },
+    {
+        id: "format_character_variable",
+        label: "format_character_variable",
+        description: "格式化输出角色变量对象",
+        content: "{{format_character_variable::stat_data}}"
+    },
+    {
+        id: "format_global_variable",
+        label: "format_global_variable",
+        description: "格式化输出全局变量对象",
+        content: "{{format_global_variable::world_state}}"
+    },
+    {
+        id: "get_message_variable",
+        label: "get_message_variable",
+        description: "读取当前消息/会话局部变量中的单个路径",
+        content: "{{get_message_variable::stat_data.系统.积分}}"
+    },
+    {
+        id: "get_chat_variable",
+        label: "get_chat_variable",
+        description: "兼容 chat 命名，效果与 message 作用域一致",
+        content: "{{get_chat_variable::stat_data.系统.积分}}"
+    },
+    {
+        id: "get_character_variable",
+        label: "get_character_variable",
+        description: "读取角色变量中的单个路径",
+        content: "{{get_character_variable::stat_data.关系.好感}}"
+    },
+    {
+        id: "get_global_variable",
+        label: "get_global_variable",
+        description: "读取全局变量中的单个路径",
+        content: "{{get_global_variable::world_state.rules.version}}"
+    },
+    {
+        id: "getvar_macro",
+        label: "getvar",
+        description: "本地变量路径读取简写",
+        content: "<%= getvar('stat_data.心理.羁绊值') %>"
+    },
+    {
+        id: "getglobalvar_macro",
+        label: "getglobalvar",
+        description: "全局变量路径读取简写",
+        content: "<%= getglobalvar('world_state.rules.version') %>"
+    },
+    {
+        id: "getvar_braces",
+        label: "{{getvar::...}}",
+        description: "本地变量路径读取的花括号版本",
+        content: "{{getvar::stat_data.心理.羁绊值}}"
+    },
+    {
+        id: "getglobalvar_braces",
+        label: "{{getglobalvar::...}}",
+        description: "全局变量路径读取的花括号版本",
+        content: "{{getglobalvar::world_state.rules.version}}"
+    },
+    {
+        id: "dot_shorthand",
+        label: "{{.变量}}",
+        description: "本地变量顶层键简写，仅支持单层变量名",
+        content: "{{.stat_data}}"
+    },
+    {
+        id: "dollar_shorthand",
+        label: "{{$变量}}",
+        description: "全局变量顶层键简写，仅支持单层变量名",
+        content: "{{$world_state}}"
+    },
+    {
+        id: "init_var_block",
+        label: "[InitVar]初始化",
+        description: "在条目中声明变量初始化区块",
+        content: "[InitVar]初始化\n```json\n{\n  \"stat_data\": {\n    \"系统\": {\n      \"积分\": 0\n    }\n  }\n}\n```"
+    },
+    {
+        id: "update_variable_patch",
+        label: "UpdateVariable / JSONPatch",
+        description: "在助手回复后写回变量的 JSONPatch 模板",
+        content: "<UpdateVariable>\n<Analysis>描述本次变量变化原因</Analysis>\n<JSONPatch>\n```json\n[\n  {\n    \"op\": \"replace\",\n    \"path\": \"/stat_data/系统/积分\",\n    \"value\": 1\n  }\n]\n```\n</JSONPatch>\n</UpdateVariable>"
+    },
+    {
+        id: "jsonpatch_only",
+        label: "JSONPatch",
+        description: "仅输出 JSONPatch 块，运行时同样会识别",
+        content: "<JSONPatch>\n```json\n[\n  {\n    \"op\": \"replace\",\n    \"path\": \"/stat_data/系统/积分\",\n    \"value\": 1\n  }\n]\n```\n</JSONPatch>"
+    }
+];
 function resolveText() {
     const rawLocale = getLang();
     const locale = String(rawLocale || "").trim().toLowerCase();
     const preferredLocale = locale.startsWith("en") ? "en-US" : "zh-CN";
     return (0, i18n_1.resolveWorldBookI18n)(preferredLocale);
+}
+function normalizeFormInjectPosition(target, position) {
+    if (target === "assistant") {
+        return "at_depth";
+    }
+    return position === "prepend" || position === "at_depth" ? position : "append";
+}
+function appendSnippetContent(currentContent, snippetContent) {
+    const normalizedSnippet = String(snippetContent || "").trim();
+    if (!normalizedSnippet) {
+        return currentContent;
+    }
+    const normalizedCurrent = String(currentContent || "");
+    if (!normalizedCurrent.trim()) {
+        return normalizedSnippet;
+    }
+    if (normalizedCurrent.endsWith("\n\n")) {
+        return `${normalizedCurrent}${normalizedSnippet}`;
+    }
+    if (normalizedCurrent.endsWith("\n")) {
+        return `${normalizedCurrent}\n${normalizedSnippet}`;
+    }
+    return `${normalizedCurrent}\n\n${normalizedSnippet}`;
 }
 function Screen(ctx) {
     const [entries, setEntries] = ctx.useState("entries", []);
@@ -30,18 +157,28 @@ function Screen(ctx) {
     const [formPriority, setFormPriority] = ctx.useState("formPriority", "50");
     const [formScanDepth, setFormScanDepth] = ctx.useState("formScanDepth", "0");
     const [formInjectTarget, setFormInjectTarget] = ctx.useState("formInjectTarget", "system");
+    const [formInjectPosition, setFormInjectPosition] = ctx.useState("formInjectPosition", "append");
+    const [formInsertionDepth, setFormInsertionDepth] = ctx.useState("formInsertionDepth", "0");
     const [formCharacterCardId, setFormCharacterCardId] = ctx.useState("formCharacterCardId", "");
     const [showCardPicker, setShowCardPicker] = ctx.useState("showCardPicker", false);
+    const [showSnippetPicker, setShowSnippetPicker] = ctx.useState("showSnippetPicker", false);
     const [loadingCards, setLoadingCards] = ctx.useState("loadingCards", false);
     const [availableCards, setAvailableCards] = ctx.useState("availableCards", []);
     const [hasLoadedCards, setHasLoadedCards] = ctx.useState("hasLoadedCards", false);
+    const formContentRef = ctx.useRef("formContentRef", "");
     const t = resolveText();
     const colors = ctx.MaterialTheme.colorScheme;
     const { UI } = ctx;
+    const effectiveInjectPosition = normalizeFormInjectPosition(formInjectTarget, formInjectPosition);
+    function setFormContentValue(value) {
+        const normalized = String(value || "");
+        formContentRef.current = normalized;
+        setFormContent(normalized);
+    }
     function resetForm() {
         setEditId("");
         setFormName("");
-        setFormContent("");
+        setFormContentValue("");
         setFormKeywords("");
         setFormIsRegex(false);
         setFormCaseSensitive(false);
@@ -50,8 +187,11 @@ function Screen(ctx) {
         setFormPriority("50");
         setFormScanDepth("0");
         setFormInjectTarget("system");
+        setFormInjectPosition("append");
+        setFormInsertionDepth("0");
         setFormCharacterCardId("");
         setShowCardPicker(false);
+        setShowSnippetPicker(false);
         setLoadingCards(false);
     }
     function resetImportForm() {
@@ -109,6 +249,41 @@ function Screen(ctx) {
     function getCharacterCardLabel(cardId) {
         return resolveCharacterCardName(cardId) || t.dropdownBoundCard;
     }
+    function selectInjectTarget(target) {
+        setFormInjectTarget(target);
+        if (target === "assistant") {
+            setFormInjectPosition("at_depth");
+        }
+    }
+    function selectInjectPosition(position) {
+        if (formInjectTarget === "assistant" && position !== "at_depth") {
+            return;
+        }
+        setFormInjectPosition(position);
+    }
+    function insertSnippet(snippetContent) {
+        setFormContentValue(appendSnippetContent(String(formContentRef.current || ""), snippetContent));
+        setShowSnippetPicker(false);
+        ctx.showToast(t.toastSnippetInserted);
+    }
+    function getInjectTargetTag(entry) {
+        if (entry.inject_target === "assistant") {
+            return t.tagInjectAssistant;
+        }
+        if (entry.inject_target === "user") {
+            return t.tagInjectUser;
+        }
+        return t.tagInjectSystem;
+    }
+    function getInjectPositionTag(entry) {
+        if (entry.inject_position === "prepend") {
+            return t.tagPositionPrepend;
+        }
+        if (entry.inject_position === "at_depth") {
+            return t.tagPositionAtDepth(entry.insertion_depth ?? 0);
+        }
+        return t.tagPositionAppend;
+    }
     async function doToggle(id) {
         if (togglingEntryId === id) {
             return;
@@ -148,7 +323,7 @@ function Screen(ctx) {
             const entry = await (0, worldbook_service_js_1.getWorldBookEntry)(id);
             setEditId(entry.id);
             setFormName(entry.name || "");
-            setFormContent(entry.content || "");
+            setFormContentValue(entry.content || "");
             setFormKeywords((entry.keywords || []).join("，"));
             setFormIsRegex(entry.is_regex === true);
             setFormCaseSensitive(entry.case_sensitive === true);
@@ -157,8 +332,11 @@ function Screen(ctx) {
             setFormPriority(String(entry.priority ?? 50));
             setFormScanDepth(String(entry.scan_depth ?? 0));
             setFormInjectTarget(entry.inject_target || "system");
+            setFormInjectPosition(normalizeFormInjectPosition(entry.inject_target || "system", entry.inject_position));
+            setFormInsertionDepth(String(entry.insertion_depth ?? 0));
             setFormCharacterCardId(entry.character_card_id || "");
             setShowCardPicker(false);
+            setShowSnippetPicker(false);
             setLoadingCards(false);
             if (entry.character_card_id && !findCharacterCard(entry.character_card_id)) {
                 await ensureCharacterCardsLoaded(true);
@@ -266,6 +444,7 @@ function Screen(ctx) {
             return;
         }
         const isEdit = view === "edit" && !!editId;
+        const normalizedInsertionDepth = Math.max(0, Number.parseInt(formInsertionDepth, 10) || 0);
         const payload = {
             name: formName.trim(),
             content: formContent.trim(),
@@ -277,6 +456,8 @@ function Screen(ctx) {
             priority: Number.parseInt(formPriority, 10) || 50,
             scan_depth: Number.parseInt(formScanDepth, 10) || 0,
             inject_target: formInjectTarget,
+            inject_position: effectiveInjectPosition,
+            insertion_depth: normalizedInsertionDepth,
             character_card_id: formCharacterCardId.trim()
         };
         if (isEdit) {
@@ -365,9 +546,8 @@ function Screen(ctx) {
             renderTag(entry.always_active ? t.tagAlwaysActive : t.tagKeywordTrigger, colors.secondaryContainer.copy({ alpha: 0.6 }), colors.onSecondaryContainer),
             renderTag(t.tagPriority(entry.priority ?? 50), colors.secondaryContainer.copy({ alpha: 0.6 }), colors.onSecondaryContainer),
             renderTag(t.tagScanDepth(entry.scan_depth ?? 0), colors.secondaryContainer.copy({ alpha: 0.6 }), colors.onSecondaryContainer),
-            entry.inject_target === "user"
-                ? renderTag(t.tagInjectUser, colors.tertiaryContainer.copy({ alpha: 0.7 }), colors.onTertiaryContainer)
-                : renderTag(t.tagInjectSystem, colors.tertiaryContainer.copy({ alpha: 0.7 }), colors.onTertiaryContainer),
+            renderTag(getInjectTargetTag(entry), colors.tertiaryContainer.copy({ alpha: 0.7 }), colors.onTertiaryContainer),
+            renderTag(getInjectPositionTag(entry), colors.tertiaryContainer.copy({ alpha: 0.55 }), colors.onTertiaryContainer),
             entry.character_card_id
                 ? renderTag(characterCardName ? t.tagCharacterCard(characterCardName) : t.dropdownBoundCard, colors.primaryContainer.copy({ alpha: 0.7 }), colors.onPrimaryContainer)
                 : null
@@ -507,6 +687,98 @@ function Screen(ctx) {
             ].filter(Boolean))
         ]);
     }
+    function renderSnippetDialog() {
+        return UI.Box({
+            fillMaxSize: true,
+            contentAlignment: "center"
+        }, [
+            UI.Surface({
+                fillMaxSize: true,
+                containerColor: colors.scrim,
+                alpha: 0.35,
+                onClick: () => setShowSnippetPicker(false)
+            }),
+            UI.Card({
+                fillMaxWidth: true,
+                containerColor: colors.surface,
+                shape: { cornerRadius: 20 },
+                elevation: 8,
+                modifier: ctx.Modifier.padding({ horizontal: 20, vertical: 32 })
+            }, [
+                UI.Column({
+                    fillMaxWidth: true,
+                    padding: 16,
+                    spacing: 12
+                }, [
+                    UI.Row({
+                        fillMaxWidth: true,
+                        horizontalArrangement: "spaceBetween",
+                        verticalAlignment: "center"
+                    }, [
+                        UI.Column({
+                            weight: 1,
+                            spacing: 4
+                        }, [
+                            UI.Text({
+                                text: t.fieldContentTemplates,
+                                style: "titleMedium",
+                                fontWeight: "bold",
+                                color: colors.onSurface
+                            }),
+                            UI.Text({
+                                text: t.fieldContentTemplatesHint,
+                                style: "bodySmall",
+                                color: colors.onSurfaceVariant
+                            })
+                        ]),
+                        UI.IconButton({
+                            onClick: () => setShowSnippetPicker(false),
+                            icon: "close"
+                        }, [])
+                    ]),
+                    UI.LazyColumn({
+                        fillMaxWidth: true,
+                        spacing: 8,
+                        height: 360
+                    }, CONTENT_SNIPPETS.flatMap((snippet, index) => {
+                        const nodes = [
+                            UI.Box({
+                                modifier: ctx.Modifier
+                                    .fillMaxWidth()
+                                    .clip({ cornerRadius: 12 })
+                                    .clickable(() => insertSnippet(snippet.content))
+                                    .padding({ horizontal: 2, vertical: 2 })
+                            }, [
+                                UI.Column({
+                                    fillMaxWidth: true,
+                                    padding: 12,
+                                    spacing: 4
+                                }, [
+                                    UI.Text({
+                                        text: snippet.label,
+                                        color: colors.onSurface,
+                                        fontWeight: "bold"
+                                    }),
+                                    UI.Text({
+                                        text: snippet.description,
+                                        style: "bodySmall",
+                                        color: colors.onSurfaceVariant
+                                    })
+                                ])
+                            ])
+                        ];
+                        if (index < CONTENT_SNIPPETS.length - 1) {
+                            nodes.push(UI.HorizontalDivider({
+                                color: colors.outlineVariant.copy({ alpha: 0.6 }),
+                                thickness: 1
+                            }));
+                        }
+                        return nodes;
+                    }))
+                ])
+            ])
+        ]);
+    }
     function renderForm() {
         const isEdit = view === "edit";
         return UI.Column({
@@ -579,10 +851,41 @@ function Screen(ctx) {
                         label: t.fieldContent,
                         placeholder: t.fieldContentPlaceholder,
                         value: formContent,
-                        onValueChange: setFormContent,
+                        onValueChange: setFormContentValue,
                         singleLine: false,
                         minLines: 5,
                         fillMaxWidth: true
+                    }),
+                    UI.Box({
+                        fillMaxWidth: true
+                    }, [
+                        UI.OutlinedButton({
+                            onClick: () => setShowSnippetPicker(!showSnippetPicker),
+                            fillMaxWidth: true,
+                            shape: { cornerRadius: 14 }
+                        }, [
+                            UI.Row({
+                                fillMaxWidth: true,
+                                horizontalArrangement: "spaceBetween",
+                                verticalAlignment: "center"
+                            }, [
+                                UI.Text({
+                                    text: t.fieldContentTemplates,
+                                    color: colors.onSurface,
+                                    fontWeight: "medium"
+                                }),
+                                UI.Icon({
+                                    name: showSnippetPicker ? "arrowDropUp" : "arrowDropDown",
+                                    tint: colors.onSurfaceVariant,
+                                    size: 20
+                                })
+                            ])
+                        ])
+                    ]),
+                    UI.Text({
+                        text: t.fieldContentTemplatesHint,
+                        style: "bodySmall",
+                        color: colors.onSurfaceVariant
                     }),
                     UI.Text({
                         text: t.fieldCharacterCard,
@@ -814,9 +1117,14 @@ function Screen(ctx) {
                         fontWeight: "bold",
                         color: colors.onSurface
                     }),
+                    UI.Text({
+                        text: t.injectTargetHint,
+                        style: "bodySmall",
+                        color: colors.onSurfaceVariant
+                    }),
                     UI.Row({ fillMaxWidth: true, spacing: 8 }, [
                         UI.FilledTonalButton({
-                            onClick: () => setFormInjectTarget("system"),
+                            onClick: () => selectInjectTarget("system"),
                             weight: 1
                         }, [
                             UI.Text({
@@ -825,16 +1133,95 @@ function Screen(ctx) {
                             })
                         ]),
                         UI.FilledTonalButton({
-                            onClick: () => setFormInjectTarget("user"),
+                            onClick: () => selectInjectTarget("user"),
                             weight: 1
                         }, [
                             UI.Text({
                                 text: formInjectTarget === "user" ? `✓ ${t.injectTargetUser}` : t.injectTargetUser,
                                 fontWeight: formInjectTarget === "user" ? "bold" : "normal"
                             })
+                        ]),
+                        UI.FilledTonalButton({
+                            onClick: () => selectInjectTarget("assistant"),
+                            weight: 1
+                        }, [
+                            UI.Text({
+                                text: formInjectTarget === "assistant"
+                                    ? `✓ ${t.injectTargetAssistant}`
+                                    : t.injectTargetAssistant,
+                                fontWeight: formInjectTarget === "assistant" ? "bold" : "normal"
+                            })
                         ])
-                    ])
-                ])
+                    ]),
+                    UI.Spacer({ height: 8 }),
+                    UI.Text({
+                        text: t.injectPositionTitle,
+                        style: "labelMedium",
+                        fontWeight: "bold",
+                        color: colors.onSurface
+                    }),
+                    UI.Text({
+                        text: t.injectPositionHint,
+                        style: "bodySmall",
+                        color: colors.onSurfaceVariant
+                    }),
+                    UI.Row({ fillMaxWidth: true, spacing: 8 }, [
+                        UI.FilledTonalButton({
+                            onClick: () => selectInjectPosition("prepend"),
+                            weight: 1,
+                            enabled: formInjectTarget !== "assistant"
+                        }, [
+                            UI.Text({
+                                text: effectiveInjectPosition === "prepend"
+                                    ? `✓ ${t.injectPositionPrepend}`
+                                    : t.injectPositionPrepend,
+                                fontWeight: effectiveInjectPosition === "prepend" ? "bold" : "normal"
+                            })
+                        ]),
+                        UI.FilledTonalButton({
+                            onClick: () => selectInjectPosition("append"),
+                            weight: 1,
+                            enabled: formInjectTarget !== "assistant"
+                        }, [
+                            UI.Text({
+                                text: effectiveInjectPosition === "append"
+                                    ? `✓ ${t.injectPositionAppend}`
+                                    : t.injectPositionAppend,
+                                fontWeight: effectiveInjectPosition === "append" ? "bold" : "normal"
+                            })
+                        ]),
+                        UI.FilledTonalButton({
+                            onClick: () => selectInjectPosition("at_depth"),
+                            weight: 1
+                        }, [
+                            UI.Text({
+                                text: effectiveInjectPosition === "at_depth"
+                                    ? `✓ ${t.injectPositionAtDepth}`
+                                    : t.injectPositionAtDepth,
+                                fontWeight: effectiveInjectPosition === "at_depth" ? "bold" : "normal"
+                            })
+                        ])
+                    ]),
+                    effectiveInjectPosition === "at_depth"
+                        ? UI.Column({
+                            spacing: 6
+                        }, [
+                            UI.TextField({
+                                label: t.fieldInsertionDepth,
+                                placeholder: t.fieldInsertionDepthPlaceholder,
+                                value: formInsertionDepth,
+                                onValueChange: setFormInsertionDepth,
+                                singleLine: true,
+                                fillMaxWidth: true
+                            }),
+                            UI.Text({
+                                text: t.insertionDepthHint,
+                                style: "bodySmall",
+                                color: colors.onSurfaceVariant
+                            })
+                        ])
+                        : null
+                ].filter(Boolean))
             ]),
             UI.Button({
                 text: isEdit ? t.saveEditButton : t.createEntryButton,
@@ -994,11 +1381,16 @@ function Screen(ctx) {
         ])
     ];
     if (view === "edit" || view === "create") {
-        return UI.LazyColumn({
-            fillMaxSize: true,
-            spacing: 12,
-            padding: { horizontal: 12, vertical: 8 }
-        }, [renderForm()]);
+        return UI.Box({
+            fillMaxSize: true
+        }, [
+            UI.LazyColumn({
+                fillMaxSize: true,
+                spacing: 12,
+                padding: { horizontal: 12, vertical: 8 }
+            }, [renderForm()]),
+            showSnippetPicker ? renderSnippetDialog() : null
+        ].filter(Boolean));
     }
     if (view === "import") {
         return UI.LazyColumn({

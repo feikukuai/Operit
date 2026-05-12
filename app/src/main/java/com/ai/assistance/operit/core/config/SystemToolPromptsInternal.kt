@@ -1671,13 +1671,13 @@ object SystemToolPromptsInternal {
                                     ToolParameterSchema(
                                         name = "tts_service_type",
                                         type = "string",
-                                        description = "optional, SIMPLE_TTS/HTTP_TTS/OPENAI_WS_TTS/SILICONFLOW_TTS/MINIMAX_TTS/OPENAI_TTS/ONNX_TTS",
+                                        description = "optional, SIMPLE_TTS/HTTP_TTS/OPENAI_WS_TTS/SILICONFLOW_TTS/MINIMAX_TTS/OPENAI_TTS/VITS_TTS",
                                         required = false
                                     ),
                                     ToolParameterSchema(
                                         name = "tts_url_template",
                                         type = "string",
-                                        description = "optional, TTS endpoint URL template; for ONNX_TTS this is the local .onnx model path",
+                                        description = "optional, endpoint URL template for HTTP-style TTS providers",
                                         required = false
                                     ),
                                     ToolParameterSchema(
@@ -1689,7 +1689,7 @@ object SystemToolPromptsInternal {
                                     ToolParameterSchema(
                                         name = "tts_headers",
                                         type = "string",
-                                        description = "optional, TTS headers JSON object string; for ONNX_TTS this stores local options such as sample_rate/noise_scale/input names",
+                                        description = "optional, HTTP-style TTS headers JSON object string",
                                         required = false
                                     ),
                                     ToolParameterSchema(
@@ -1719,19 +1719,37 @@ object SystemToolPromptsInternal {
                                     ToolParameterSchema(
                                         name = "tts_voice_id",
                                         type = "string",
-                                        description = "optional, TTS voice id; for ONNX_TTS this is numeric speaker id when the model requires it",
+                                        description = "optional, TTS voice id",
                                         required = false
                                     ),
                                     ToolParameterSchema(
                                         name = "tts_model_name",
                                         type = "string",
-                                        description = "optional, TTS model name; for ONNX_TTS this is the local tokenizer/config JSON path",
+                                        description = "optional, TTS model name",
                                         required = false
                                     ),
                                     ToolParameterSchema(
                                         name = "tts_response_pipeline",
                                         type = "string",
                                         description = "optional, HTTP TTS response pipeline JSON array string",
+                                        required = false
+                                    ),
+                                    ToolParameterSchema(
+                                        name = "tts_vits_package_path",
+                                        type = "string",
+                                        description = "optional, local VITS/Piper TTS package path; accepts a .zip file or extracted package directory",
+                                        required = false
+                                    ),
+                                    ToolParameterSchema(
+                                        name = "tts_vits_speaker_id",
+                                        type = "string",
+                                        description = "optional, numeric speaker id for VITS/Piper TTS packages that require it",
+                                        required = false
+                                    ),
+                                    ToolParameterSchema(
+                                        name = "tts_vits_options",
+                                        type = "string",
+                                        description = "optional, VITS/Piper TTS package options JSON object string, such as sample_rate/frontend/text_mode/input names",
                                         required = false
                                     ),
                                     ToolParameterSchema(
@@ -4306,13 +4324,13 @@ object SystemToolPromptsInternal {
                                     ToolParameterSchema(
                                         name = "tts_service_type",
                                         type = "string",
-                                        description = "可选，SIMPLE_TTS/HTTP_TTS/OPENAI_WS_TTS/SILICONFLOW_TTS/MINIMAX_TTS/OPENAI_TTS/ONNX_TTS",
+                                        description = "可选，SIMPLE_TTS/HTTP_TTS/OPENAI_WS_TTS/SILICONFLOW_TTS/MINIMAX_TTS/OPENAI_TTS/VITS_TTS",
                                         required = false
                                     ),
                                     ToolParameterSchema(
                                         name = "tts_url_template",
                                         type = "string",
-                                        description = "可选，TTS 端点 URL 模板；ONNX_TTS 时表示本地 .onnx 模型路径",
+                                        description = "可选，HTTP 类 TTS 的端点 URL 模板",
                                         required = false
                                     ),
                                     ToolParameterSchema(
@@ -4324,7 +4342,7 @@ object SystemToolPromptsInternal {
                                     ToolParameterSchema(
                                         name = "tts_headers",
                                         type = "string",
-                                        description = "可选，TTS headers 的 JSON 对象字符串；ONNX_TTS 时存放 sample_rate/noise_scale/input 名称等本地参数",
+                                        description = "可选，HTTP 类 TTS headers 的 JSON 对象字符串",
                                         required = false
                                     ),
                                     ToolParameterSchema(
@@ -4354,19 +4372,37 @@ object SystemToolPromptsInternal {
                                     ToolParameterSchema(
                                         name = "tts_voice_id",
                                         type = "string",
-                                        description = "可选，TTS 音色 ID；ONNX_TTS 时表示模型需要的数字 speaker id",
+                                        description = "可选，TTS 音色 ID",
                                         required = false
                                     ),
                                     ToolParameterSchema(
                                         name = "tts_model_name",
                                         type = "string",
-                                        description = "可选，TTS 模型名；ONNX_TTS 时表示本地 tokenizer/config JSON 路径",
+                                        description = "可选，TTS 模型名",
                                         required = false
                                     ),
                                     ToolParameterSchema(
                                         name = "tts_response_pipeline",
                                         type = "string",
                                         description = "可选，HTTP TTS 响应处理管线 JSON 数组字符串",
+                                        required = false
+                                    ),
+                                    ToolParameterSchema(
+                                        name = "tts_vits_package_path",
+                                        type = "string",
+                                        description = "可选，本地 VITS/Piper TTS 模型包路径，支持 .zip 文件或已解压目录",
+                                        required = false
+                                    ),
+                                    ToolParameterSchema(
+                                        name = "tts_vits_speaker_id",
+                                        type = "string",
+                                        description = "可选，VITS/Piper TTS 模型包需要的数字 speaker id",
+                                        required = false
+                                    ),
+                                    ToolParameterSchema(
+                                        name = "tts_vits_options",
+                                        type = "string",
+                                        description = "可选，VITS/Piper TTS 模型包参数 JSON 对象字符串，例如 sample_rate/frontend/text_mode/input 名称",
                                         required = false
                                     ),
                                     ToolParameterSchema(

@@ -11,6 +11,7 @@
 - 消息处理插件。
 - XML 渲染插件。
 - 输入菜单开关插件。
+- AI 聊天输入框监听和提交 Hook。
 - 工具执行生命周期钩子。
 - Prompt 输入、历史、系统提示词、工具提示词、最终发送前的各类钩子。
 - 摘要生成阶段的各类钩子。
@@ -36,6 +37,7 @@ ToolPkg.registerMessageProcessingPlugin(...)
 - `registerToolPkgMessageProcessingPlugin(...)`
 - `registerToolPkgXmlRenderPlugin(...)`
 - `registerToolPkgInputMenuTogglePlugin(...)`
+- `registerToolPkgChatInputHook(...)`
 - `registerToolPkgToolLifecycleHook(...)`
 - `registerToolPkgPromptInputHook(...)`
 - `registerToolPkgPromptHistoryHook(...)`
@@ -86,6 +88,7 @@ type LocalizedText = string | { [lang: string]: string }
 - `message_processing`
 - `xml_render`
 - `input_menu_toggle`
+- 聊天输入框事件
 - 工具生命周期事件
 - Prompt 输入 / 历史 / 系统提示词 / 工具提示词 / 最终发送事件
 - 摘要生成事件
@@ -207,6 +210,27 @@ interface PromptTurn {
 - `action?: 'create' | 'toggle' | string`
 - `toggleId?`
 
+### `ChatInputEventPayload`
+
+字段包括：
+
+- `chatId?`
+- `text?`
+- `selectionStart?`
+- `selectionEnd?`
+- `hasAttachments?`
+- `attachmentCount?`
+- `isProcessing?`
+- `inputStyle?`
+- `source?`
+- `submitSource?`
+
+聊天输入框事件名包括：
+
+- `input_changed`
+- `submit_requested`
+- `submitted`
+
 ### `ToolLifecycleEventPayload`
 
 字段包括：
@@ -316,6 +340,21 @@ interface PromptTurn {
 - `description?`
 - `isChecked?`
 
+### 聊天输入框返回：`ChatInputHookReturn`
+
+`input_changed`、`submitted` 的返回值会被忽略。
+
+`submit_requested` 支持返回：
+
+- `null`
+- `void`
+- `string`：表示替换本次提交文本
+- `{ action: 'allow' }`
+- `{ action: 'block', message?: string }`
+- `{ action: 'replace', text: string }`
+- `{ action: 'consume', message?: string }`
+- 或对应的 `Promise`
+
 ### Prompt 相关返回
 
 - `PromptInputHookReturn`
@@ -375,6 +414,13 @@ interface PromptTurn {
 - `id`
 - `function`
 
+### `ChatInputHookRegistration`
+
+字段：
+
+- `id`
+- `function`
+
 ### 其余注册对象
 
 以下注册对象结构都很简单，字段都是：`id` + `function`：
@@ -401,6 +447,7 @@ interface PromptTurn {
 - `registerMessageProcessingPlugin(definition)`
 - `registerXmlRenderPlugin(definition)`
 - `registerInputMenuTogglePlugin(definition)`
+- `registerChatInputHook(definition)`
 - `registerToolLifecycleHook(definition)`
 - `registerPromptInputHook(definition)`
 - `registerPromptHistoryHook(definition)`
@@ -542,6 +589,36 @@ ToolPkg.registerInputMenuTogglePlugin({
       ];
     }
     return [];
+  }
+});
+```
+
+### 注册聊天输入框 Hook
+
+```ts
+ToolPkg.registerChatInputHook({
+  id: 'demo_chat_input',
+  function(event) {
+    if (event.eventName === 'input_changed') {
+      console.log('draft:', event.eventPayload.text);
+      return;
+    }
+
+    if (event.eventName === 'submit_requested') {
+      const text = event.eventPayload.text || '';
+      if (text.includes('/blocked')) {
+        return {
+          action: 'block',
+          message: '这条消息被插件阻止发送'
+        };
+      }
+      if (text.startsWith('/upper ')) {
+        return {
+          action: 'replace',
+          text: text.slice('/upper '.length).toUpperCase()
+        };
+      }
+    }
   }
 });
 ```

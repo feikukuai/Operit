@@ -100,6 +100,7 @@ fun SpeechServicesSettingsScreen(
     // --- State for TTS Settings ---
     val ttsServiceType by prefs.ttsServiceTypeFlow.collectAsState(initial = VoiceServiceFactory.VoiceServiceType.SIMPLE_TTS)
     val httpConfig by prefs.ttsHttpConfigFlow.collectAsState(initial = SpeechServicesPreferences.DEFAULT_HTTP_TTS_PRESET)
+    val vitsConfig by prefs.ttsVitsPackageConfigFlow.collectAsState(initial = SpeechServicesPreferences.DEFAULT_VITS_TTS_PACKAGE_CONFIG)
     val ttsCleanerRegexs by prefs.ttsCleanerRegexsFlow.collectAsState(initial = emptyList())
     val ttsSpeechRate by prefs.ttsSpeechRateFlow.collectAsState(initial = SpeechServicesPreferences.DEFAULT_TTS_SPEECH_RATE)
     val ttsPitch by prefs.ttsPitchFlow.collectAsState(initial = SpeechServicesPreferences.DEFAULT_TTS_PITCH)
@@ -117,15 +118,18 @@ fun SpeechServicesSettingsScreen(
     var ttsResponsePipelineInput by remember(httpConfig) {
         mutableStateOf(HttpTtsResponsePipelineStep.encodeList(httpConfig.responsePipeline))
     }
+    var vitsPackagePathInput by remember(vitsConfig) { mutableStateOf(vitsConfig.packagePath) }
+    var vitsSpeakerIdInput by remember(vitsConfig) { mutableStateOf(vitsConfig.speakerId) }
+    var vitsOptionsInput by remember(vitsConfig) { mutableStateOf(Json.encodeToString(vitsConfig.options)) }
     var ttsSpeechRateInput by remember(ttsSpeechRate) { mutableStateOf(ttsSpeechRate) }
     var ttsPitchInput by remember(ttsPitch) { mutableStateOf(ttsPitch) }
     var ttsHeadersJsonError by remember { mutableStateOf<String?>(null) }
     var ttsResponsePipelineJsonError by remember { mutableStateOf<String?>(null) }
-    var onnxTtsHeadersJsonError by remember { mutableStateOf<String?>(null) }
+    var vitsOptionsJsonError by remember { mutableStateOf<String?>(null) }
     var httpMethodDropdownExpanded by remember { mutableStateOf(false) }
     val ttsCleanerRegexsState = remember { mutableStateListOf<String>() }
     val hasHttpTtsJsonError = ttsHeadersJsonError != null || ttsResponsePipelineJsonError != null
-    val hasOnnxTtsJsonError = onnxTtsHeadersJsonError != null
+    val hasVitsTtsJsonError = vitsOptionsJsonError != null
     var simpleTtsVoices by remember { mutableStateOf<List<VoiceService.Voice>>(emptyList()) }
     var simpleTtsVoicesLoading by remember { mutableStateOf(false) }
     var simpleTtsVoicesError by remember { mutableStateOf<String?>(null) }
@@ -161,6 +165,9 @@ fun SpeechServicesSettingsScreen(
             ttsVoiceIdInput != httpConfig.voiceId ||
             ttsModelNameInput != httpConfig.modelName ||
             ttsResponsePipelineInput != HttpTtsResponsePipelineStep.encodeList(httpConfig.responsePipeline) ||
+            vitsPackagePathInput != vitsConfig.packagePath ||
+            vitsSpeakerIdInput != vitsConfig.speakerId ||
+            vitsOptionsInput != Json.encodeToString(vitsConfig.options) ||
             ttsCleanerRegexsState.toList() != ttsCleanerRegexs ||
             ttsSpeechRateInput != ttsSpeechRate ||
             ttsPitchInput != ttsPitch ||
@@ -181,6 +188,9 @@ fun SpeechServicesSettingsScreen(
         ttsVoiceIdInput,
         ttsModelNameInput,
         ttsResponsePipelineInput,
+        vitsPackagePathInput,
+        vitsSpeakerIdInput,
+        vitsOptionsInput,
         ttsSpeechRateInput,
         ttsPitchInput,
         ttsCleanerRegexsState.toList(),
@@ -191,18 +201,15 @@ fun SpeechServicesSettingsScreen(
     ) {
         if (!hasPendingChanges) return@LaunchedEffect
         if (ttsServiceTypeInput == VoiceServiceFactory.VoiceServiceType.HTTP_TTS && hasHttpTtsJsonError) return@LaunchedEffect
-        if (ttsServiceTypeInput == VoiceServiceFactory.VoiceServiceType.ONNX_TTS && hasOnnxTtsJsonError) return@LaunchedEffect
+        if (ttsServiceTypeInput == VoiceServiceFactory.VoiceServiceType.VITS_TTS && hasVitsTtsJsonError) return@LaunchedEffect
 
         kotlinx.coroutines.delay(500)
 
         if (!hasPendingChanges) return@LaunchedEffect
         if (ttsServiceTypeInput == VoiceServiceFactory.VoiceServiceType.HTTP_TTS && hasHttpTtsJsonError) return@LaunchedEffect
-        if (ttsServiceTypeInput == VoiceServiceFactory.VoiceServiceType.ONNX_TTS && hasOnnxTtsJsonError) return@LaunchedEffect
+        if (ttsServiceTypeInput == VoiceServiceFactory.VoiceServiceType.VITS_TTS && hasVitsTtsJsonError) return@LaunchedEffect
 
-        val headers = if (
-            ttsServiceTypeInput == VoiceServiceFactory.VoiceServiceType.HTTP_TTS ||
-                ttsServiceTypeInput == VoiceServiceFactory.VoiceServiceType.ONNX_TTS
-        ) {
+        val headers = if (ttsServiceTypeInput == VoiceServiceFactory.VoiceServiceType.HTTP_TTS) {
             if (ttsHeadersInput.isBlank()) {
                 emptyMap()
             } else {
@@ -227,6 +234,21 @@ fun SpeechServicesSettingsScreen(
                 httpConfig.responsePipeline
             }
 
+        val vitsOptions =
+            if (ttsServiceTypeInput == VoiceServiceFactory.VoiceServiceType.VITS_TTS) {
+                if (vitsOptionsInput.isBlank()) {
+                    emptyMap()
+                } else {
+                    try {
+                        Json.decodeFromString<Map<String, String>>(vitsOptionsInput)
+                    } catch (_: Exception) {
+                        return@LaunchedEffect
+                    }
+                }
+            } else {
+                vitsConfig.options
+            }
+
         val httpConfigData = SpeechServicesPreferences.TtsHttpConfig(
             urlTemplate = ttsUrlTemplateInput,
             apiKey = ttsApiKeyInput,
@@ -240,6 +262,12 @@ fun SpeechServicesSettingsScreen(
             responsePipeline = responsePipeline
         )
 
+        val vitsConfigData = SpeechServicesPreferences.VitsTtsPackageConfig(
+            packagePath = vitsPackagePathInput,
+            speakerId = vitsSpeakerIdInput,
+            options = vitsOptions
+        )
+
         val sttHttpConfigData = SpeechServicesPreferences.SttHttpConfig(
             endpointUrl = sttEndpointUrlInput,
             apiKey = sttApiKeyInput,
@@ -250,6 +278,7 @@ fun SpeechServicesSettingsScreen(
             prefs.saveTtsSettings(
                 serviceType = ttsServiceTypeInput,
                 httpConfig = httpConfigData,
+                vitsConfig = vitsConfigData,
                 cleanerRegexs = ttsCleanerRegexsState.toList(),
                 speechRate = ttsSpeechRateInput,
                 pitch = ttsPitchInput
@@ -378,7 +407,7 @@ fun SpeechServicesSettingsScreen(
                                     VoiceServiceFactory.VoiceServiceType.SILICONFLOW_TTS -> stringResource(R.string.speech_services_tts_type_siliconflow)
                                     VoiceServiceFactory.VoiceServiceType.MINIMAX_TTS -> stringResource(R.string.speech_services_tts_type_minimax)
                                     VoiceServiceFactory.VoiceServiceType.OPENAI_TTS -> stringResource(R.string.speech_services_tts_type_openai)
-                                    VoiceServiceFactory.VoiceServiceType.ONNX_TTS -> stringResource(R.string.speech_services_tts_type_onnx)
+                                    VoiceServiceFactory.VoiceServiceType.VITS_TTS -> stringResource(R.string.speech_services_tts_type_vits)
                                 },
                                 onValueChange = {},
                                 readOnly = true,
@@ -403,7 +432,7 @@ fun SpeechServicesSettingsScreen(
                                                     VoiceServiceFactory.VoiceServiceType.SILICONFLOW_TTS -> stringResource(R.string.speech_services_tts_type_siliconflow)
                                                     VoiceServiceFactory.VoiceServiceType.MINIMAX_TTS -> stringResource(R.string.speech_services_tts_type_minimax)
                                                     VoiceServiceFactory.VoiceServiceType.OPENAI_TTS -> stringResource(R.string.speech_services_tts_type_openai)
-                                                    VoiceServiceFactory.VoiceServiceType.ONNX_TTS -> stringResource(R.string.speech_services_tts_type_onnx)
+                                                    VoiceServiceFactory.VoiceServiceType.VITS_TTS -> stringResource(R.string.speech_services_tts_type_vits)
                                                 },
                                                 fontWeight = if (ttsServiceTypeInput == type) FontWeight.Medium else FontWeight.Normal
                                             ) 
@@ -835,10 +864,10 @@ fun SpeechServicesSettingsScreen(
                             }
                         }
 
-                        AnimatedVisibility(visible = ttsServiceTypeInput == VoiceServiceFactory.VoiceServiceType.ONNX_TTS) {
+                        AnimatedVisibility(visible = ttsServiceTypeInput == VoiceServiceFactory.VoiceServiceType.VITS_TTS) {
                             Column(modifier = Modifier.padding(top = 16.dp)) {
                                 Text(
-                                    text = stringResource(R.string.speech_services_onnx_config),
+                                    text = stringResource(R.string.speech_services_vits_config),
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Medium
                                 )
@@ -846,15 +875,15 @@ fun SpeechServicesSettingsScreen(
                                 Spacer(modifier = Modifier.height(8.dp))
 
                                 OutlinedTextField(
-                                    value = ttsUrlTemplateInput,
-                                    onValueChange = { ttsUrlTemplateInput = it },
-                                    label = { Text(stringResource(R.string.speech_services_onnx_model_path)) },
-                                    placeholder = { Text(stringResource(R.string.speech_services_onnx_model_path_placeholder)) },
+                                    value = vitsPackagePathInput,
+                                    onValueChange = { vitsPackagePathInput = it },
+                                    label = { Text(stringResource(R.string.speech_services_vits_package_path)) },
+                                    placeholder = { Text(stringResource(R.string.speech_services_vits_package_path_placeholder)) },
                                     modifier = Modifier.fillMaxWidth(),
                                     singleLine = true,
                                     supportingText = {
                                         Text(
-                                            text = stringResource(R.string.speech_services_onnx_model_path_hint),
+                                            text = stringResource(R.string.speech_services_vits_package_path_hint),
                                             style = MaterialTheme.typography.bodySmall,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
@@ -864,15 +893,15 @@ fun SpeechServicesSettingsScreen(
                                 Spacer(modifier = Modifier.height(8.dp))
 
                                 OutlinedTextField(
-                                    value = ttsModelNameInput,
-                                    onValueChange = { ttsModelNameInput = it },
-                                    label = { Text(stringResource(R.string.speech_services_onnx_config_path)) },
-                                    placeholder = { Text(stringResource(R.string.speech_services_onnx_config_path_placeholder)) },
+                                    value = vitsSpeakerIdInput,
+                                    onValueChange = { vitsSpeakerIdInput = it },
+                                    label = { Text(stringResource(R.string.speech_services_vits_speaker_id)) },
+                                    placeholder = { Text(stringResource(R.string.speech_services_vits_speaker_id_placeholder)) },
                                     modifier = Modifier.fillMaxWidth(),
                                     singleLine = true,
                                     supportingText = {
                                         Text(
-                                            text = stringResource(R.string.speech_services_onnx_config_path_hint),
+                                            text = stringResource(R.string.speech_services_vits_speaker_id_hint),
                                             style = MaterialTheme.typography.bodySmall,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
@@ -882,55 +911,37 @@ fun SpeechServicesSettingsScreen(
                                 Spacer(modifier = Modifier.height(8.dp))
 
                                 OutlinedTextField(
-                                    value = ttsVoiceIdInput,
-                                    onValueChange = { ttsVoiceIdInput = it },
-                                    label = { Text(stringResource(R.string.speech_services_onnx_speaker_id)) },
-                                    placeholder = { Text(stringResource(R.string.speech_services_onnx_speaker_id_placeholder)) },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    singleLine = true,
-                                    supportingText = {
-                                        Text(
-                                            text = stringResource(R.string.speech_services_onnx_speaker_id_hint),
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
-                                )
-
-                                Spacer(modifier = Modifier.height(8.dp))
-
-                                OutlinedTextField(
-                                    value = ttsHeadersInput,
+                                    value = vitsOptionsInput,
                                     onValueChange = {
-                                        ttsHeadersInput = it
+                                        vitsOptionsInput = it
                                         try {
                                             if (it.isBlank()) {
-                                                onnxTtsHeadersJsonError = null
+                                                vitsOptionsJsonError = null
                                             } else {
                                                 Json.decodeFromString<Map<String, String>>(it)
-                                                onnxTtsHeadersJsonError = null
+                                                vitsOptionsJsonError = null
                                             }
                                         } catch (_: Exception) {
-                                            onnxTtsHeadersJsonError = context.getString(R.string.speech_services_onnx_headers_error)
+                                            vitsOptionsJsonError = context.getString(R.string.speech_services_vits_options_error)
                                         }
                                     },
-                                    label = { Text(stringResource(R.string.speech_services_onnx_options)) },
-                                    placeholder = { Text(stringResource(R.string.speech_services_onnx_options_placeholder)) },
+                                    label = { Text(stringResource(R.string.speech_services_vits_options)) },
+                                    placeholder = { Text(stringResource(R.string.speech_services_vits_options_placeholder)) },
                                     modifier = Modifier.fillMaxWidth(),
                                     minLines = 5,
-                                    isError = onnxTtsHeadersJsonError != null,
+                                    isError = vitsOptionsJsonError != null,
                                     supportingText = {
                                         Text(
-                                            text = stringResource(R.string.speech_services_onnx_options_hint),
+                                            text = stringResource(R.string.speech_services_vits_options_hint),
                                             style = MaterialTheme.typography.bodySmall,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
                                     }
                                 )
 
-                                if (onnxTtsHeadersJsonError != null) {
+                                if (vitsOptionsJsonError != null) {
                                     Text(
-                                        text = onnxTtsHeadersJsonError!!,
+                                        text = vitsOptionsJsonError!!,
                                         color = MaterialTheme.colorScheme.error,
                                         style = MaterialTheme.typography.bodySmall,
                                         modifier = Modifier.padding(top = 4.dp)

@@ -2111,6 +2111,14 @@ data class SpeechTtsHttpConfigResultItem(
     val responsePipeline: List<HttpTtsResponsePipelineStep>
 )
 
+/** 语音服务 TTS VITS/Piper 包配置条目 */
+@Serializable
+data class SpeechTtsVitsPackageConfigResultItem(
+    val packagePath: String,
+    val speakerId: String,
+    val options: Map<String, String>
+)
+
 /** 语音服务 STT HTTP 配置条目 */
 @Serializable
 data class SpeechSttHttpConfigResultItem(
@@ -2125,6 +2133,7 @@ data class SpeechSttHttpConfigResultItem(
 data class SpeechServicesConfigResultData(
     val ttsServiceType: String,
     val ttsHttpConfig: SpeechTtsHttpConfigResultItem,
+    val ttsVitsPackageConfig: SpeechTtsVitsPackageConfigResultItem,
     val ttsCleanerRegexs: List<String>,
     val ttsSpeechRate: Float,
     val ttsPitch: Float,

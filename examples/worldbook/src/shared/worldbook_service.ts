@@ -15,7 +15,9 @@ export interface WorldBookEntry {
   enabled: boolean;
   priority: number;
   scan_depth: number;
-  inject_target: "system" | "user";
+  inject_target: "system" | "user" | "assistant";
+  inject_position?: "prepend" | "append" | "at_depth";
+  insertion_depth?: number;
   character_card_id: string;
   created_at: string;
   updated_at: string;
@@ -30,7 +32,9 @@ export interface WorldBookListEntry {
   keywords: string[];
   is_regex: boolean;
   scan_depth: number;
-  inject_target: "system" | "user";
+  inject_target: "system" | "user" | "assistant";
+  inject_position?: "prepend" | "append" | "at_depth";
+  insertion_depth?: number;
   character_card_id: string;
 }
 
@@ -46,6 +50,8 @@ export interface WorldBookMutationParams {
   priority?: number;
   scan_depth?: number;
   inject_target?: string;
+  inject_position?: string;
+  insertion_depth?: number;
   character_card_id?: string;
 }
 
@@ -93,7 +99,9 @@ interface NormalizedImportEntry {
   enabled: boolean;
   priority: number;
   scan_depth: number;
-  inject_target: "system" | "user";
+  inject_target: "system" | "user" | "assistant";
+  inject_position?: "prepend" | "append" | "at_depth";
+  insertion_depth?: number;
 }
 
 interface ParsedImportPayload {
@@ -121,8 +129,24 @@ function normalizeNumber(value: unknown, fallbackValue: number): number {
   return Number.isFinite(numeric) ? numeric : fallbackValue;
 }
 
-function normalizeInjectTarget(value: unknown): "system" | "user" {
-  return value === "user" ? "user" : "system";
+function normalizeInjectTarget(value: unknown): "system" | "user" | "assistant" {
+  if (value === "user") {
+    return "user";
+  }
+  if (value === "assistant") {
+    return "assistant";
+  }
+  return "system";
+}
+
+function normalizeInjectPosition(value: unknown): "prepend" | "append" | "at_depth" {
+  if (value === "prepend") {
+    return "prepend";
+  }
+  if (value === "at_depth") {
+    return "at_depth";
+  }
+  return "append";
 }
 
 function worldBookError(code: string, message: string, details?: unknown): WorldBookError {
@@ -135,6 +159,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function hasOwn(record: Record<string, unknown>, key: string): boolean {
   return Object.prototype.hasOwnProperty.call(record, key);
+}
+
+function isNullish(value: unknown): boolean {
+  return value == null;
 }
 
 function toKeywordArray(value: unknown): string[] {
@@ -167,6 +195,9 @@ function readOptionalBooleanField(
     return defaultValue;
   }
   const value = record[key];
+  if (isNullish(value)) {
+    return defaultValue;
+  }
   if (typeof value !== "boolean") {
     throw worldBookError("INVALID_FIELD_TYPE", `${fieldLabel} 必须是布尔值`);
   }
@@ -183,6 +214,9 @@ function readOptionalNumberField(
     return defaultValue;
   }
   const value = record[key];
+  if (isNullish(value)) {
+    return defaultValue;
+  }
   if (typeof value !== "number" || !Number.isFinite(value)) {
     throw worldBookError("INVALID_FIELD_TYPE", `${fieldLabel} 必须是数字`);
   }
@@ -198,6 +232,9 @@ function readOptionalKeywordArrayField(
     return [];
   }
   const value = record[key];
+  if (isNullish(value)) {
+    return [];
+  }
   if (!Array.isArray(value)) {
     throw worldBookError("INVALID_FIELD_TYPE", `${fieldLabel} 必须是字符串数组`);
   }
@@ -213,6 +250,115 @@ function readOptionalKeywordArrayField(
 function addWarning(warnings: string[], warning: string) {
   if (!warnings.includes(warning)) {
     warnings.push(warning);
+  }
+}
+
+function addTemplateCompatibilityWarnings(content: string, warnings: string[]) {
+  if (/\{\{\s*get_preset_variable::/i.test(content)) {
+    addWarning(
+      warnings,
+      "导入源包含酒馆助手的 preset 变量读取宏，但当前宿主没有把活动预设上下文暴露给插件，这部分语法仍会保留原文。"
+    );
+  }
+
+  if (/\{\{\s*format_preset_variable::/i.test(content)) {
+    addWarning(
+      warnings,
+      "导入源包含酒馆助手的 preset 变量格式化宏，但当前宿主没有把活动预设上下文暴露给插件，这部分语法仍会保留原文。"
+    );
+  }
+
+  if (/\{\{\s*(?:set|inc|dec)(?:global)?var::/i.test(content)) {
+    addWarning(
+      warnings,
+      "导入源包含会修改变量的 SillyTavern 宏。当前插件只在回合结束后解析 <UpdateVariable>/<JSONPatch>，不会执行这些内联写变量宏。"
+    );
+  }
+
+  if (/\{\{\s*[.$][A-Za-z][A-Za-z0-9_-]*\s*(?:\+\+|--|\+=|-=|\|\|=?|\?\?=?|==|!=|>=|<=|>|<|=)[^}]*\}\}/.test(content)) {
+    addWarning(
+      warnings,
+      "导入源包含带运算或赋值的 SillyTavern 变量简写表达式。当前插件只支持只读取值写法（如 {{.var}} / {{$var}}），不会执行这类内联表达式。"
+    );
+  }
+}
+
+function resolveCharacterBookRoleTarget(rawRole: unknown, warnings: string[]): "system" | "user" | "assistant" {
+  if (rawRole == null) {
+    return "system";
+  }
+
+  if (rawRole === 0 || rawRole === "system") {
+    return "system";
+  }
+  if (rawRole === 1 || rawRole === "user") {
+    return "user";
+  }
+  if (rawRole === 2 || rawRole === "assistant" || rawRole === "char") {
+    return "assistant";
+  }
+
+  addWarning(warnings, `角色卡世界书包含未识别的 role 值 ${String(rawRole)}，已按 system 注入处理。`);
+  return "system";
+}
+
+function resolveCharacterBookPlacement(
+  rawEntry: Record<string, unknown>,
+  extensions: Record<string, unknown>,
+  warnings: string[]
+): Pick<NormalizedImportEntry, "inject_target" | "inject_position" | "insertion_depth"> {
+  const position = typeof rawEntry.position === "string" ? rawEntry.position.trim().toLowerCase() : "";
+  const roleValue = hasOwn(rawEntry, "role") ? rawEntry.role : extensions.role;
+  const depthValue = hasOwn(rawEntry, "depth") ? rawEntry.depth : extensions.depth;
+
+  switch (position) {
+    case "":
+      return {
+        inject_target: "system",
+        inject_position: "append",
+        insertion_depth: 0
+      };
+    case "before_char":
+      return {
+        inject_target: "system",
+        inject_position: "prepend",
+        insertion_depth: 0
+      };
+    case "after_char":
+      return {
+        inject_target: "system",
+        inject_position: "append",
+        insertion_depth: 0
+      };
+    case "top_an":
+      addWarning(warnings, "角色卡世界书位置 top_an 已近似映射为系统提示词顶部插入。");
+      return {
+        inject_target: "system",
+        inject_position: "prepend",
+        insertion_depth: 0
+      };
+    case "bottom_an":
+    case "after_examples":
+      addWarning(warnings, `角色卡世界书位置 ${position} 已近似映射为系统提示词尾部插入。`);
+      return {
+        inject_target: "system",
+        inject_position: "append",
+        insertion_depth: 0
+      };
+    case "at_depth":
+    case "in_chat":
+      return {
+        inject_target: resolveCharacterBookRoleTarget(roleValue, warnings),
+        inject_position: "at_depth",
+        insertion_depth: normalizeNumber(depthValue, 0)
+      };
+    default:
+      addWarning(warnings, `角色卡世界书位置 ${position} 当前未精确支持，已按系统提示词尾部插入。`);
+      return {
+        inject_target: "system",
+        inject_position: "append",
+        insertion_depth: 0
+      };
   }
 }
 
@@ -233,6 +379,8 @@ function buildImportedEntry(
     priority: normalized.priority,
     scan_depth: normalized.scan_depth,
     inject_target: normalized.inject_target,
+    inject_position: normalizeInjectPosition(normalized.inject_position),
+    insertion_depth: normalizeNumber(normalized.insertion_depth, 0),
     character_card_id: characterCardId,
     created_at: now,
     updated_at: now
@@ -264,7 +412,9 @@ function parseOperitEntryArray(rawEntries: unknown[]): ParsedImportPayload | nul
       enabled: readOptionalBooleanField(rawEntry, "enabled", true, "Operit 条目 enabled"),
       priority: readOptionalNumberField(rawEntry, "priority", 50, "Operit 条目 priority"),
       scan_depth: readOptionalNumberField(rawEntry, "scan_depth", 0, "Operit 条目 scan_depth"),
-      inject_target: normalizeInjectTarget(rawEntry.inject_target)
+      inject_target: normalizeInjectTarget(rawEntry.inject_target),
+      inject_position: normalizeInjectPosition(rawEntry.inject_position),
+      insertion_depth: readOptionalNumberField(rawEntry, "insertion_depth", 0, "Operit 条目 insertion_depth")
     });
   }
 
@@ -295,6 +445,7 @@ function parseSillyTavernRecord(
   if (!name || !content) {
     return null;
   }
+  addTemplateCompatibilityWarnings(content, warnings);
 
   const keywords = readOptionalKeywordArrayField(rawEntry, "key", "SillyTavern 条目 key");
   const alwaysActive = readOptionalBooleanField(rawEntry, "constant", false, "SillyTavern 条目 constant");
@@ -328,7 +479,9 @@ function parseSillyTavernRecord(
     scan_depth: hasOwn(rawEntry, "scanDepth")
       ? readOptionalNumberField(rawEntry, "scanDepth", 0, "SillyTavern 条目 scanDepth")
       : readOptionalNumberField(rawEntry, "depth", 0, "SillyTavern 条目 depth"),
-    inject_target: "system"
+    inject_target: "system",
+    inject_position: "append",
+    insertion_depth: 0
   };
 }
 
@@ -378,6 +531,7 @@ function parseCharacterBookEntry(
   if (!name || !content) {
     return null;
   }
+  addTemplateCompatibilityWarnings(content, warnings);
 
   const keywords = readOptionalKeywordArrayField(rawEntry, "keys", "character_book 条目 keys");
   const alwaysActive = readOptionalBooleanField(rawEntry, "constant", false, "character_book 条目 constant");
@@ -393,11 +547,9 @@ function parseCharacterBookEntry(
   if (readOptionalBooleanField(rawEntry, "selective", false, "character_book 条目 selective")) {
     addWarning(warnings, "角色卡世界书包含 selective 逻辑，当前版本未原样支持，已按主关键词导入。");
   }
-  if (rawEntry.position != null) {
-    addWarning(warnings, "角色卡世界书包含 position 字段，当前版本未映射，已按系统提示词导入。");
-  }
 
   const extensions = isRecord(rawEntry.extensions) ? rawEntry.extensions : {};
+  const placement = resolveCharacterBookPlacement(rawEntry, extensions, warnings);
   return {
     name,
     content,
@@ -408,7 +560,9 @@ function parseCharacterBookEntry(
     enabled: readOptionalBooleanField(rawEntry, "enabled", true, "character_book 条目 enabled"),
     priority: readOptionalNumberField(rawEntry, "insertion_order", 50, "character_book 条目 insertion_order"),
     scan_depth: readOptionalNumberField(extensions, "depth", 0, "character_book 条目 extensions.depth"),
-    inject_target: "system"
+    inject_target: placement.inject_target,
+    inject_position: placement.inject_position,
+    insertion_depth: placement.insertion_depth
   };
 }
 
@@ -459,6 +613,19 @@ function parseImportedWorldBookPayload(raw: unknown): ParsedImportPayload {
     : null;
   if (embeddedCharacterBook) {
     return embeddedCharacterBook;
+  }
+
+  const wrappedOriginalData = isRecord(raw.originalData) ? raw.originalData : null;
+  if (wrappedOriginalData) {
+    const parsedOriginalCharacterBook = parseCharacterBook(wrappedOriginalData);
+    if (parsedOriginalCharacterBook) {
+      return parsedOriginalCharacterBook;
+    }
+
+    const parsedOriginalWorldBook = parseSillyTavernWorldBook(wrappedOriginalData);
+    if (parsedOriginalWorldBook) {
+      return parsedOriginalWorldBook;
+    }
   }
 
   const parsedWorldBook = parseSillyTavernWorldBook(raw);
@@ -520,6 +687,8 @@ export function toWorldBookListEntry(entry: WorldBookEntry): WorldBookListEntry 
     is_regex: entry.is_regex || false,
     scan_depth: entry.scan_depth ?? 0,
     inject_target: entry.inject_target || "system",
+    inject_position: normalizeInjectPosition(entry.inject_position),
+    insertion_depth: normalizeNumber(entry.insertion_depth, 0),
     character_card_id: entry.character_card_id || ""
   };
 }
@@ -539,6 +708,9 @@ export async function getWorldBookEntry(id: string): Promise<WorldBookEntry> {
 export async function createWorldBookEntry(params: WorldBookMutationParams): Promise<WorldBookEntry> {
   const entries = await loadEntries();
   const now = new Date().toISOString();
+  const injectTarget = normalizeInjectTarget(params.inject_target);
+  const injectPosition =
+    injectTarget === "assistant" ? "at_depth" : normalizeInjectPosition(params.inject_position);
   const entry: WorldBookEntry = {
     id: generateId(),
     name: String(params.name || ""),
@@ -550,7 +722,9 @@ export async function createWorldBookEntry(params: WorldBookMutationParams): Pro
     enabled: params.enabled !== false,
     priority: normalizeNumber(params.priority, 50),
     scan_depth: normalizeNumber(params.scan_depth, 0),
-    inject_target: normalizeInjectTarget(params.inject_target),
+    inject_target: injectTarget,
+    inject_position: injectPosition,
+    insertion_depth: normalizeNumber(params.insertion_depth, 0),
     character_card_id: String(params.character_card_id || "").trim(),
     created_at: now,
     updated_at: now
@@ -645,6 +819,15 @@ export async function updateWorldBookEntry(params: WorldBookMutationParams): Pro
   }
   if (params.inject_target != null) {
     nextEntry.inject_target = normalizeInjectTarget(params.inject_target);
+  }
+  if (params.inject_position != null) {
+    nextEntry.inject_position = normalizeInjectPosition(params.inject_position);
+  }
+  if (params.insertion_depth != null) {
+    nextEntry.insertion_depth = normalizeNumber(params.insertion_depth, nextEntry.insertion_depth ?? 0);
+  }
+  if (nextEntry.inject_target === "assistant") {
+    nextEntry.inject_position = "at_depth";
   }
   if (params.character_card_id != null) {
     nextEntry.character_card_id = String(params.character_card_id || "").trim();

@@ -12,14 +12,19 @@ import android.media.AudioTrack
 import com.ai.assistance.operit.R
 import com.ai.assistance.operit.data.preferences.SpeechServicesPreferences
 import com.ai.assistance.operit.util.AppLogger
+import java.io.BufferedInputStream
 import java.io.File
+import java.io.FileInputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.nio.DoubleBuffer
 import java.nio.FloatBuffer
 import java.nio.IntBuffer
 import java.nio.LongBuffer
+import java.security.MessageDigest
+import java.util.Locale
 import java.util.concurrent.atomic.AtomicLong
+import java.util.zip.ZipInputStream
 import kotlin.math.roundToInt
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -39,33 +44,38 @@ import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 
-/**
- * 本地 ONNX TTS provider。
- *
- * 当前实现负责 ONNX Runtime 推理和 PCM 播放；文本前端由配置文件中的 token/phoneme
- * id 映射提供，或由调用方通过 extraParams["token_ids"] / ["phoneme_ids"] 直接传入。
- */
-class OnnxVoiceProvider(
+class VitsVoiceProvider(
     private val context: Context,
-    private val config: SpeechServicesPreferences.TtsHttpConfig
+    private val config: SpeechServicesPreferences.VitsTtsPackageConfig
 ) : VoiceService {
 
     private companion object {
-        private const val TAG = "OnnxVoiceProvider"
+        private const val TAG = "VitsVoiceProvider"
         private const val SPEECH_PREVIEW_MAX = 48
         private const val DEFAULT_CHUNK_FRAMES = 2048
+        private const val PACKAGE_MANIFEST = "operit-vits-tts.json"
     }
 
     private data class RuntimeConfig(
         val sampleRate: Int,
         val tokenMap: Map<String, List<Long>>,
+        val lexicon: PackageLexicon?,
+        val frontend: String,
         val addBlank: Boolean,
         val blankId: Long?,
         val bosIds: List<Long>,
         val eosIds: List<Long>,
         val noiseScale: Float?,
         val lengthScale: Float?,
-        val noiseW: Float?
+        val noiseW: Float?,
+        val speakerCount: Int?
+    )
+
+    private data class PackageFiles(
+        val root: File,
+        val modelFile: File,
+        val configFile: File,
+        val lexiconFile: File?
     )
 
     private data class InputBindings(
@@ -74,24 +84,6 @@ class OnnxVoiceProvider(
         val scalesInputName: String?,
         val sidInputName: String?
     )
-
-    private val env: OrtEnvironment by lazy { OrtEnvironment.getEnvironment() }
-    private val initializeMutex = Mutex()
-    private val playbackMutex = Mutex()
-    private val stateLock = Any()
-    private val providerScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private val speakQueue = Channel<SpeakRequest>(Channel.UNLIMITED)
-    private val playbackQueue = Channel<PreparedSpeech>(capacity = 1)
-    private val stopGeneration = AtomicLong(0)
-
-    private var session: OrtSession? = null
-    private var runtimeConfig: RuntimeConfig? = null
-    private var inputBindings: InputBindings? = null
-    private var currentSpeakerId: String = config.voiceId.trim()
-
-    private var currentAudioTrack: AudioTrack? = null
-    private var playbackGeneration: Long = 0L
-    private var paused = false
 
     private data class SpeakRequest(
         val text: String,
@@ -107,6 +99,103 @@ class OnnxVoiceProvider(
         val pcm: ShortArray,
         val sampleRate: Int
     )
+
+    private class PackageLexicon(
+        private val entries: Map<String, LongArray>,
+        private val tokenMap: Map<String, List<Long>>
+    ) {
+        private val maxEntryChars = entries.keys.maxOfOrNull { it.codePointCount(0, it.length) } ?: 1
+
+        fun tokenize(text: String): LongArray {
+            val ids = ArrayList<Long>()
+            var index = 0
+            while (index < text.length) {
+                val codePoint = text.codePointAt(index)
+                val charCount = Character.charCount(codePoint)
+                val symbol = String(Character.toChars(codePoint))
+
+                if (Character.isWhitespace(codePoint)) {
+                    tokenMap[" "]?.let { ids.addAll(it) }
+                    index += charCount
+                    continue
+                }
+
+                if (isAsciiWordChar(codePoint)) {
+                    val start = index
+                    index += charCount
+                    while (index < text.length) {
+                        val next = text.codePointAt(index)
+                        if (!isAsciiWordChar(next)) break
+                        index += Character.charCount(next)
+                    }
+                    val word = text.substring(start, index).lowercase(Locale.ROOT)
+                    val wordIds = entries[word]
+                        ?: throw IllegalArgumentException("unknown word: $word")
+                    ids.addAll(wordIds.toList())
+                    continue
+                }
+
+                val lexiconMatch = longestEntryAt(text, index)
+                if (lexiconMatch != null) {
+                    ids.addAll(lexiconMatch.second.toList())
+                    index += lexiconMatch.first.length
+                    continue
+                }
+
+                val mapped = tokenMap[symbol]
+                    ?: throw IllegalArgumentException("unknown symbol: $symbol")
+                ids.addAll(mapped)
+                index += charCount
+            }
+            return ids.toLongArray()
+        }
+
+        private fun longestEntryAt(text: String, start: Int): Pair<String, LongArray>? {
+            var end = start
+            var count = 0
+            val pieces = ArrayList<String>()
+            while (end < text.length && count < maxEntryChars) {
+                val cp = text.codePointAt(end)
+                val part = String(Character.toChars(cp))
+                pieces.add(part)
+                end += Character.charCount(cp)
+                count++
+            }
+
+            for (size in pieces.size downTo 1) {
+                val candidate = pieces.take(size).joinToString("").lowercase(Locale.ROOT)
+                val ids = entries[candidate]
+                if (ids != null) return candidate to ids
+            }
+            return null
+        }
+
+        private fun isAsciiWordChar(codePoint: Int): Boolean {
+            return codePoint in 'a'.code..'z'.code ||
+                codePoint in 'A'.code..'Z'.code ||
+                codePoint in '0'.code..'9'.code ||
+                codePoint == '\''.code ||
+                codePoint == '-'.code
+        }
+    }
+
+    private val env: OrtEnvironment by lazy { OrtEnvironment.getEnvironment() }
+    private val initializeMutex = Mutex()
+    private val playbackMutex = Mutex()
+    private val stateLock = Any()
+    private val providerScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val speakQueue = Channel<SpeakRequest>(Channel.UNLIMITED)
+    private val playbackQueue = Channel<PreparedSpeech>(capacity = 1)
+    private val stopGeneration = AtomicLong(0)
+
+    private var session: OrtSession? = null
+    private var runtimeConfig: RuntimeConfig? = null
+    private var inputBindings: InputBindings? = null
+    private var currentSpeakerId: String = config.speakerId.trim()
+
+    private var currentAudioTrack: AudioTrack? = null
+    private var playbackGeneration: Long = 0L
+    private var paused = false
 
     private val _isInitialized = MutableStateFlow(false)
     override val isInitialized: Boolean
@@ -166,34 +255,16 @@ class OnnxVoiceProvider(
             }
 
             try {
-                val modelPath = normalizeLocalPath(config.urlTemplate)
-                val configPath = normalizeLocalPath(config.modelName)
-
-                if (modelPath.isBlank()) {
-                    throw TtsException(context.getString(R.string.onnx_tts_error_model_path_not_set))
-                }
-                if (configPath.isBlank()) {
-                    throw TtsException(context.getString(R.string.onnx_tts_error_config_path_not_set))
-                }
-
-                val modelFile = File(modelPath)
-                if (!modelFile.exists() || !modelFile.isFile) {
-                    throw TtsException(context.getString(R.string.onnx_tts_error_model_file_not_found, modelPath))
-                }
-
-                val configFile = File(configPath)
-                if (!configFile.exists() || !configFile.isFile) {
-                    throw TtsException(context.getString(R.string.onnx_tts_error_config_file_not_found, configPath))
-                }
-
-                val parsedConfig = parseRuntimeConfig(configFile)
+                val packageRoot = resolvePackageRoot(config.packagePath)
+                val packageFiles = resolvePackageFiles(packageRoot)
+                val parsedConfig = parseRuntimeConfig(packageFiles)
                 val opts = OrtSession.SessionOptions().apply {
-                    val threadCount = optionalHeaderInt("threads") ?: 1
+                    val threadCount = optionalInt("threads") ?: 1
                     setIntraOpNumThreads(threadCount)
                     setInterOpNumThreads(1)
                     setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT)
                 }
-                val createdSession = env.createSession(modelFile.absolutePath, opts)
+                val createdSession = env.createSession(packageFiles.modelFile.absolutePath, opts)
                 val bindings = try {
                     resolveInputBindings(createdSession)
                 } catch (e: Exception) {
@@ -209,14 +280,14 @@ class OnnxVoiceProvider(
 
                 AppLogger.d(
                     TAG,
-                    "Initialized ONNX TTS model=${modelFile.absolutePath} inputs=${createdSession.inputNames} outputs=${createdSession.outputNames} sampleRate=${parsedConfig.sampleRate} bindings=$bindings"
+                    "Initialized package=${packageFiles.root.absolutePath} model=${packageFiles.modelFile.name} inputs=${createdSession.inputNames} outputs=${createdSession.outputNames} sampleRate=${parsedConfig.sampleRate} frontend=${parsedConfig.frontend}"
                 )
                 true
             } catch (e: Exception) {
                 _isInitialized.value = false
-                AppLogger.e(TAG, "ONNX TTS initialize failed", e)
+                AppLogger.e(TAG, "VITS TTS initialize failed", e)
                 if (e is TtsException) throw e
-                throw TtsException(context.getString(R.string.onnx_tts_error_init_failed), cause = e)
+                throw TtsException(context.getString(R.string.vits_tts_error_init_failed), cause = e)
             }
         }
     }
@@ -256,18 +327,18 @@ class OnnxVoiceProvider(
         }
 
         val activeSession = session
-            ?: throw TtsException(context.getString(R.string.onnx_tts_error_init_failed))
+            ?: throw TtsException(context.getString(R.string.vits_tts_error_init_failed))
         val activeConfig = runtimeConfig
-            ?: throw TtsException(context.getString(R.string.onnx_tts_error_init_failed))
+            ?: throw TtsException(context.getString(R.string.vits_tts_error_init_failed))
         val bindings = inputBindings
-            ?: throw TtsException(context.getString(R.string.onnx_tts_error_init_failed))
+            ?: throw TtsException(context.getString(R.string.vits_tts_error_init_failed))
 
         try {
             val prefs = SpeechServicesPreferences(context.applicationContext)
             val effectiveRate = request.rate ?: prefs.ttsSpeechRateFlow.first()
             val ids = tokenize(request.text, activeConfig, request.extraParams)
             if (ids.isEmpty()) {
-                throw TtsException(context.getString(R.string.onnx_tts_error_tokenize_failed, "empty token ids"))
+                throw TtsException(context.getString(R.string.vits_tts_error_tokenize_failed, "empty token ids"))
             }
 
             AppLogger.d(
@@ -277,7 +348,7 @@ class OnnxVoiceProvider(
 
             val pcm = runModel(activeSession, activeConfig, bindings, ids, effectiveRate)
             if (pcm.isEmpty()) {
-                throw TtsException(context.getString(R.string.onnx_tts_error_output_empty))
+                throw TtsException(context.getString(R.string.vits_tts_error_output_empty))
             }
             if (request.generation != stopGeneration.get()) {
                 return null
@@ -285,9 +356,9 @@ class OnnxVoiceProvider(
 
             return PreparedSpeech(request, pcm, activeConfig.sampleRate)
         } catch (e: Exception) {
-            AppLogger.e(TAG, "ONNX TTS speak failed", e)
+            AppLogger.e(TAG, "VITS TTS speak failed", e)
             if (e is TtsException) throw e
-            throw TtsException(context.getString(R.string.onnx_tts_error_request_failed), cause = e)
+            throw TtsException(context.getString(R.string.vits_tts_error_request_failed), cause = e)
         }
     }
 
@@ -323,11 +394,11 @@ class OnnxVoiceProvider(
 
             bindings.scalesInputName?.let { name ->
                 val noiseScale = activeConfig.noiseScale
-                    ?: throw TtsException(context.getString(R.string.onnx_tts_error_scales_not_set, "noise_scale"))
+                    ?: throw TtsException(context.getString(R.string.vits_tts_error_scales_not_set, "noise_scale"))
                 val lengthScale = activeConfig.lengthScale
-                    ?: throw TtsException(context.getString(R.string.onnx_tts_error_scales_not_set, "length_scale"))
+                    ?: throw TtsException(context.getString(R.string.vits_tts_error_scales_not_set, "length_scale"))
                 val noiseW = activeConfig.noiseW
-                    ?: throw TtsException(context.getString(R.string.onnx_tts_error_scales_not_set, "noise_w"))
+                    ?: throw TtsException(context.getString(R.string.vits_tts_error_scales_not_set, "noise_w"))
                 val scales = floatArrayOf(noiseScale, lengthScale / effectiveRate.coerceAtLeast(0.01f), noiseW)
                 val scalesInfo = tensorInfo(activeSession, name)
                 val scalesShape = shapeForValues(scalesInfo, scales.size, name)
@@ -338,7 +409,7 @@ class OnnxVoiceProvider(
 
             bindings.sidInputName?.let { name ->
                 val speaker = currentSpeakerId.toLongOrNull()
-                    ?: throw TtsException(context.getString(R.string.onnx_tts_error_speaker_required))
+                    ?: throw TtsException(context.getString(R.string.vits_tts_error_speaker_required))
                 val sidInfo = tensorInfo(activeSession, name)
                 val sidShape = shapeForValues(sidInfo, 1, name)
                 val sidTensor = createIntegerTensor(name, longArrayOf(speaker), sidShape, sidInfo)
@@ -365,7 +436,7 @@ class OnnxVoiceProvider(
         val audioFormat = AudioFormat.ENCODING_PCM_16BIT
         val minBufferSize = AudioTrack.getMinBufferSize(sampleRate, channelMask, audioFormat)
         if (minBufferSize <= 0) {
-            throw TtsException(context.getString(R.string.onnx_tts_error_playback_failed, minBufferSize))
+            throw TtsException(context.getString(R.string.vits_tts_error_playback_failed, minBufferSize))
         }
         val bufferSize = minBufferSize.coerceAtLeast(DEFAULT_CHUNK_FRAMES * 2)
 
@@ -415,7 +486,7 @@ class OnnxVoiceProvider(
                 val count = minOf(DEFAULT_CHUNK_FRAMES, pcm.size - offset)
                 val written = track.write(pcm, offset, count, AudioTrack.WRITE_NON_BLOCKING)
                 if (written < 0) {
-                    throw TtsException(context.getString(R.string.onnx_tts_error_playback_failed, written))
+                    throw TtsException(context.getString(R.string.vits_tts_error_playback_failed, written))
                 }
                 if (written == 0) {
                     delay(10)
@@ -495,7 +566,7 @@ class OnnxVoiceProvider(
             _isSpeaking.value = false
             track != null
         } catch (e: Exception) {
-            AppLogger.e(TAG, "Stop ONNX TTS playback failed", e)
+            AppLogger.e(TAG, "Stop VITS TTS playback failed", e)
             false
         }
     }
@@ -518,7 +589,7 @@ class OnnxVoiceProvider(
             _isSpeaking.value = false
             true
         } catch (e: Exception) {
-            AppLogger.e(TAG, "Pause ONNX TTS playback failed", e)
+            AppLogger.e(TAG, "Pause VITS TTS playback failed", e)
             false
         }
     }
@@ -533,7 +604,7 @@ class OnnxVoiceProvider(
             _isSpeaking.value = true
             true
         } catch (e: Exception) {
-            AppLogger.e(TAG, "Resume ONNX TTS playback failed", e)
+            AppLogger.e(TAG, "Resume VITS TTS playback failed", e)
             false
         }
     }
@@ -558,7 +629,7 @@ class OnnxVoiceProvider(
         try {
             session?.close()
         } catch (e: Exception) {
-            AppLogger.e(TAG, "Close ONNX TTS session failed", e)
+            AppLogger.e(TAG, "Close VITS TTS session failed", e)
         } finally {
             session = null
             runtimeConfig = null
@@ -567,8 +638,8 @@ class OnnxVoiceProvider(
     }
 
     override suspend fun getAvailableVoices(): List<VoiceService.Voice> = withContext(Dispatchers.IO) {
-        val speakerCount = optionalHeaderInt("speaker_count") ?: return@withContext emptyList()
-        val locale = config.localeTag.ifBlank { "und" }
+        val speakerCount = runtimeConfig?.speakerCount ?: optionalInt("speaker_count") ?: return@withContext emptyList()
+        val locale = optionalString("locale").takeIf { it.isNotBlank() } ?: "und"
         return@withContext (0 until speakerCount).map { id ->
             VoiceService.Voice(id.toString(), "Speaker $id", locale, "NEUTRAL")
         }
@@ -579,20 +650,126 @@ class OnnxVoiceProvider(
         true
     }
 
-    private fun parseRuntimeConfig(configFile: File): RuntimeConfig {
-        val root = try {
-            JSONObject(configFile.readText(Charsets.UTF_8))
-        } catch (e: Exception) {
-            throw TtsException(context.getString(R.string.onnx_tts_error_config_parse_failed), cause = e)
+    private fun resolvePackageRoot(raw: String): File {
+        val packagePath = normalizeLocalPath(raw)
+        if (packagePath.isBlank()) {
+            throw TtsException(context.getString(R.string.vits_tts_error_package_path_not_set))
         }
 
-        val sampleRate = optionalHeaderInt("sample_rate")
+        val source = File(packagePath)
+        if (!source.exists()) {
+            throw TtsException(context.getString(R.string.vits_tts_error_package_file_not_found, packagePath))
+        }
+
+        if (source.isDirectory) return source
+        if (!source.isFile || !source.extension.equals("zip", ignoreCase = true)) {
+            throw TtsException(context.getString(R.string.vits_tts_error_package_path_invalid, packagePath))
+        }
+
+        return extractZipPackage(source)
+    }
+
+    private fun extractZipPackage(zipFile: File): File {
+        val signature = "${zipFile.absolutePath}|${zipFile.length()}|${zipFile.lastModified()}"
+        val packageDir = File(context.filesDir, "vits_tts_packages")
+        val target = File(packageDir, sha256(signature).take(16))
+        val marker = File(target, ".source")
+        if (target.isDirectory && marker.isFile && marker.readText(Charsets.UTF_8) == signature) {
+            return target
+        }
+
+        if (target.exists()) {
+            target.deleteRecursively()
+        }
+        if (!target.mkdirs() && !target.isDirectory) {
+            throw TtsException(context.getString(R.string.vits_tts_error_package_extract_failed))
+        }
+
+        val canonicalTarget = target.canonicalFile
+        try {
+            ZipInputStream(BufferedInputStream(FileInputStream(zipFile))).use { zip ->
+                var entry = zip.nextEntry
+                val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                while (entry != null) {
+                    val entryName = entry.name.replace('\\', '/')
+                    val outFile = File(target, entryName).canonicalFile
+                    if (!outFile.path.startsWith(canonicalTarget.path + File.separator)) {
+                        throw TtsException(context.getString(R.string.vits_tts_error_package_zip_entry_unsafe, entry.name))
+                    }
+
+                    if (entry.isDirectory) {
+                        outFile.mkdirs()
+                    } else {
+                        outFile.parentFile?.mkdirs()
+                        outFile.outputStream().use { out ->
+                            while (true) {
+                                val read = zip.read(buffer)
+                                if (read < 0) break
+                                out.write(buffer, 0, read)
+                            }
+                        }
+                    }
+                    zip.closeEntry()
+                    entry = zip.nextEntry
+                }
+            }
+        } catch (e: TtsException) {
+            throw e
+        } catch (e: Exception) {
+            throw TtsException(context.getString(R.string.vits_tts_error_package_zip_read_failed), cause = e)
+        }
+
+        marker.writeText(signature, Charsets.UTF_8)
+        return target
+    }
+
+    private fun resolvePackageFiles(root: File): PackageFiles {
+        val files = root.walkTopDown().filter { it.isFile }.toList()
+        val manifest = files.firstOrNull { it.name == PACKAGE_MANIFEST }?.let {
+            JSONObject(it.readText(Charsets.UTF_8))
+        }
+
+        val modelFile = manifestPath(root, manifest, "model")
+            ?: optionPath(root, "model_path")
+            ?: singleCandidate(
+                files.filter { it.extension.equals("onnx", ignoreCase = true) },
+                R.string.vits_tts_error_package_model_not_found,
+                R.string.vits_tts_error_package_model_ambiguous
+            )
+
+        val configFile = manifestPath(root, manifest, "config")
+            ?: optionPath(root, "config_path")
+            ?: File(modelFile.absolutePath + ".json").takeIf { it.isFile }
+            ?: singleCandidate(
+                files.filter { it.extension.equals("json", ignoreCase = true) && isTtsConfigJson(it) },
+                R.string.vits_tts_error_package_config_not_found,
+                R.string.vits_tts_error_package_config_ambiguous
+            )
+
+        val lexiconFile = manifestPath(root, manifest, "lexicon")
+            ?: optionPath(root, "lexicon_path")
+            ?: optionalSingleCandidate(
+                files.filter { it.name.equals("lexicon.txt", ignoreCase = true) },
+                R.string.vits_tts_error_package_lexicon_ambiguous
+            )
+
+        return PackageFiles(root, modelFile, configFile, lexiconFile)
+    }
+
+    private fun parseRuntimeConfig(packageFiles: PackageFiles): RuntimeConfig {
+        val root = try {
+            JSONObject(packageFiles.configFile.readText(Charsets.UTF_8))
+        } catch (e: Exception) {
+            throw TtsException(context.getString(R.string.vits_tts_error_config_parse_failed), cause = e)
+        }
+
+        val sampleRate = optionalInt("sample_rate")
             ?: root.optJSONObject("audio")?.optionalInt("sample_rate")
             ?: root.optionalInt("sample_rate")
-            ?: throw TtsException(context.getString(R.string.onnx_tts_error_sample_rate_not_set))
+            ?: throw TtsException(context.getString(R.string.vits_tts_error_sample_rate_not_set))
 
         if (sampleRate <= 0) {
-            throw TtsException(context.getString(R.string.onnx_tts_error_sample_rate_not_set))
+            throw TtsException(context.getString(R.string.vits_tts_error_sample_rate_not_set))
         }
 
         val tokenSource = firstTokenMapObject(root)
@@ -600,103 +777,40 @@ class OnnxVoiceProvider(
         val tokenMap = tokenSourceObject?.let { parseTokenMap(it) }
             ?: firstTokenArray(root)?.let { parseTokenArray(it) }
             ?: emptyMap()
+
+        if (tokenMap.isEmpty()) {
+            throw TtsException(context.getString(R.string.vits_tts_error_tokenize_failed, "token map is empty"))
+        }
+
         val inference = root.optJSONObject("inference")
-        val blankId = optionalHeaderLong("blank_token_id")
+        val blankId = optionalLong("blank_token_id")
             ?: tokenSourceObject?.let { readFirstTokenId(it, "_") }
             ?: tokenSourceObject?.let { readFirstTokenId(it, "") }
             ?: tokenSourceObject?.let { readFirstTokenId(it, "<blank>") }
-        val addBlank = optionalHeaderBool("add_blank")
-            ?: optionalHeaderBool("interleave_blank")
+        val addBlank = optionalBool("add_blank")
+            ?: optionalBool("interleave_blank")
             ?: (tokenSource?.first == "phoneme_id_map" && blankId != null)
+        val frontend = optionalString("frontend").ifBlank { "lexicon" }
+        val lexicon = packageFiles.lexiconFile?.let { loadLexicon(it, tokenMap) }
 
         return RuntimeConfig(
             sampleRate = sampleRate,
             tokenMap = tokenMap,
+            lexicon = lexicon,
+            frontend = frontend,
             addBlank = addBlank,
             blankId = blankId,
-            bosIds = optionalHeaderIds("bos_token_ids")
-                ?: optionalHeaderLong("bos_token_id")?.let { listOf(it) }
+            bosIds = optionalIds("bos_token_ids")
+                ?: optionalLong("bos_token_id")?.let { listOf(it) }
                 ?: tokenSourceObject?.let { readTokenIds(it, "^") }.orEmpty(),
-            eosIds = optionalHeaderIds("eos_token_ids")
-                ?: optionalHeaderLong("eos_token_id")?.let { listOf(it) }
+            eosIds = optionalIds("eos_token_ids")
+                ?: optionalLong("eos_token_id")?.let { listOf(it) }
                 ?: tokenSourceObject?.let { readTokenIds(it, "\$") }.orEmpty(),
-            noiseScale = optionalHeaderFloat("noise_scale") ?: inference?.optionalFloat("noise_scale"),
-            lengthScale = optionalHeaderFloat("length_scale") ?: inference?.optionalFloat("length_scale"),
-            noiseW = optionalHeaderFloat("noise_w") ?: inference?.optionalFloat("noise_w")
+            noiseScale = optionalFloat("noise_scale") ?: inference?.optionalFloat("noise_scale"),
+            lengthScale = optionalFloat("length_scale") ?: inference?.optionalFloat("length_scale"),
+            noiseW = optionalFloat("noise_w") ?: inference?.optionalFloat("noise_w"),
+            speakerCount = optionalInt("speaker_count") ?: root.optionalInt("num_speakers")
         )
-    }
-
-    private fun resolveInputBindings(activeSession: OrtSession): InputBindings {
-        val inputNames = activeSession.inputNames.toSet()
-        val idsInput = resolveInputName(
-            inputNames = inputNames,
-            explicitHeaderKeys = listOf("ids_input", "input_ids_name"),
-            candidates = listOf("input", "input_ids", "ids", "text", "x"),
-            requiredLabel = "input ids"
-        )
-        val lengthInput = resolveOptionalInputName(
-            inputNames = inputNames,
-            explicitHeaderKeys = listOf("length_input", "input_lengths_name"),
-            candidates = listOf("input_lengths", "text_lengths", "lengths", "x_lengths")
-        )
-        val scalesInput = resolveOptionalInputName(
-            inputNames = inputNames,
-            explicitHeaderKeys = listOf("scales_input", "scales_name"),
-            candidates = listOf("scales")
-        )
-        val sidInput = resolveOptionalInputName(
-            inputNames = inputNames,
-            explicitHeaderKeys = listOf("sid_input", "speaker_input"),
-            candidates = listOf("sid", "speaker_id", "speaker")
-        )
-
-        return InputBindings(
-            idsInputName = idsInput,
-            lengthInputName = lengthInput,
-            scalesInputName = scalesInput,
-            sidInputName = sidInput
-        )
-    }
-
-    private fun resolveInputName(
-        inputNames: Set<String>,
-        explicitHeaderKeys: List<String>,
-        candidates: List<String>,
-        requiredLabel: String
-    ): String {
-        explicitHeaderKeys.firstNotNullOfOrNull { key ->
-            config.headers[key]?.trim()?.takeIf { it.isNotBlank() }
-        }?.let { explicit ->
-            if (explicit !in inputNames) {
-                throw TtsException(context.getString(R.string.onnx_tts_error_input_not_found, explicit))
-            }
-            return explicit
-        }
-
-        return candidates.firstOrNull { it in inputNames }
-            ?: throw TtsException(
-                context.getString(
-                    R.string.onnx_tts_error_input_name_not_resolved,
-                    requiredLabel,
-                    inputNames.joinToString()
-                )
-            )
-    }
-
-    private fun resolveOptionalInputName(
-        inputNames: Set<String>,
-        explicitHeaderKeys: List<String>,
-        candidates: List<String>
-    ): String? {
-        explicitHeaderKeys.firstNotNullOfOrNull { key ->
-            config.headers[key]?.trim()?.takeIf { it.isNotBlank() }
-        }?.let { explicit ->
-            if (explicit !in inputNames) {
-                throw TtsException(context.getString(R.string.onnx_tts_error_input_not_found, explicit))
-            }
-            return explicit
-        }
-        return candidates.firstOrNull { it in inputNames }
     }
 
     private fun tokenize(
@@ -710,32 +824,35 @@ class OnnxVoiceProvider(
             return parseIds(directIds, "extra token ids").toLongArray()
         }
 
-        val textMode = config.headers["text_mode"]?.trim().orEmpty()
+        val textMode = optionalString("text_mode")
         if (textMode.equals("token_ids", ignoreCase = true) || textMode.equals("phoneme_ids", ignoreCase = true)) {
             return parseIds(text, "text token ids").toLongArray()
         }
 
-        if (activeConfig.tokenMap.isEmpty()) {
-            throw TtsException(context.getString(R.string.onnx_tts_error_tokenize_failed, "token map is empty"))
+        val bodyIds = when (activeConfig.frontend.lowercase(Locale.ROOT)) {
+            "lexicon" -> {
+                val lexicon = activeConfig.lexicon
+                    ?: throw TtsException(context.getString(R.string.vits_tts_error_raw_text_requires_lexicon))
+                try {
+                    lexicon.tokenize(text)
+                } catch (e: IllegalArgumentException) {
+                    throw TtsException(context.getString(R.string.vits_tts_error_tokenize_failed, e.message.orEmpty()), cause = e)
+                }
+            }
+            "direct_symbols" -> tokenizeSymbolsByMap(text, activeConfig.tokenMap)
+            else -> throw TtsException(context.getString(R.string.vits_tts_error_frontend_unsupported, activeConfig.frontend))
         }
+
+        if (bodyIds.isEmpty()) return bodyIds
 
         val ids = ArrayList<Long>()
         ids.addAll(activeConfig.bosIds)
-        for (symbol in tokenizeSymbolsByMap(text, activeConfig.tokenMap)) {
-            val mapped = activeConfig.tokenMap[symbol]
-                ?: throw TtsException(
-                    context.getString(
-                        R.string.onnx_tts_error_unknown_token,
-                        printableSymbol(symbol)
-                    )
-                )
-            ids.addAll(mapped)
-        }
+        ids.addAll(bodyIds.toList())
         ids.addAll(activeConfig.eosIds)
 
         if (activeConfig.addBlank && ids.isNotEmpty()) {
             val blank = activeConfig.blankId
-                ?: throw TtsException(context.getString(R.string.onnx_tts_error_blank_token_not_set))
+                ?: throw TtsException(context.getString(R.string.vits_tts_error_blank_token_not_set))
             val withBlank = ArrayList<Long>(ids.size * 2 - 1)
             ids.forEachIndexed { index, id ->
                 if (index > 0) {
@@ -749,9 +866,112 @@ class OnnxVoiceProvider(
         return ids.toLongArray()
     }
 
+    private fun loadLexicon(file: File, tokenMap: Map<String, List<Long>>): PackageLexicon {
+        val entries = LinkedHashMap<String, LongArray>()
+        try {
+            file.readLines(Charsets.UTF_8).forEachIndexed { index, line ->
+                val trimmed = line.trim()
+                if (trimmed.isEmpty()) return@forEachIndexed
+                val parts = trimmed.split(Regex("\\s+"))
+                if (parts.size < 2) {
+                    throw TtsException(context.getString(R.string.vits_tts_error_lexicon_parse_failed, index + 1))
+                }
+                val word = parts.first().lowercase(Locale.ROOT)
+                if (entries.containsKey(word)) {
+                    throw TtsException(context.getString(R.string.vits_tts_error_lexicon_duplicate_word, word))
+                }
+                val ids = ArrayList<Long>()
+                parts.drop(1).forEach { token ->
+                    val tokenIds = tokenMap[token]
+                        ?: throw TtsException(context.getString(R.string.vits_tts_error_lexicon_unknown_token, token))
+                    ids.addAll(tokenIds)
+                }
+                entries[word] = ids.toLongArray()
+            }
+        } catch (e: TtsException) {
+            throw e
+        } catch (e: Exception) {
+            throw TtsException(context.getString(R.string.vits_tts_error_lexicon_parse_failed, 0), cause = e)
+        }
+        return PackageLexicon(entries, tokenMap)
+    }
+
+    private fun resolveInputBindings(activeSession: OrtSession): InputBindings {
+        val inputNames = activeSession.inputNames.toSet()
+        val idsInput = resolveInputName(
+            inputNames = inputNames,
+            explicitOptionKeys = listOf("ids_input", "input_ids_name"),
+            candidates = listOf("input", "input_ids", "ids", "text", "x"),
+            requiredLabel = "input ids"
+        )
+        val lengthInput = resolveOptionalInputName(
+            inputNames = inputNames,
+            explicitOptionKeys = listOf("length_input", "input_lengths_name"),
+            candidates = listOf("input_lengths", "text_lengths", "lengths", "x_lengths")
+        )
+        val scalesInput = resolveOptionalInputName(
+            inputNames = inputNames,
+            explicitOptionKeys = listOf("scales_input", "scales_name"),
+            candidates = listOf("scales")
+        )
+        val sidInput = resolveOptionalInputName(
+            inputNames = inputNames,
+            explicitOptionKeys = listOf("sid_input", "speaker_input"),
+            candidates = listOf("sid", "speaker_id", "speaker")
+        )
+
+        return InputBindings(
+            idsInputName = idsInput,
+            lengthInputName = lengthInput,
+            scalesInputName = scalesInput,
+            sidInputName = sidInput
+        )
+    }
+
+    private fun resolveInputName(
+        inputNames: Set<String>,
+        explicitOptionKeys: List<String>,
+        candidates: List<String>,
+        requiredLabel: String
+    ): String {
+        explicitOptionKeys.firstNotNullOfOrNull { key ->
+            config.options[key]?.trim()?.takeIf { it.isNotBlank() }
+        }?.let { explicit ->
+            if (explicit !in inputNames) {
+                throw TtsException(context.getString(R.string.vits_tts_error_input_not_found, explicit))
+            }
+            return explicit
+        }
+
+        return candidates.firstOrNull { it in inputNames }
+            ?: throw TtsException(
+                context.getString(
+                    R.string.vits_tts_error_input_name_not_resolved,
+                    requiredLabel,
+                    inputNames.joinToString()
+                )
+            )
+    }
+
+    private fun resolveOptionalInputName(
+        inputNames: Set<String>,
+        explicitOptionKeys: List<String>,
+        candidates: List<String>
+    ): String? {
+        explicitOptionKeys.firstNotNullOfOrNull { key ->
+            config.options[key]?.trim()?.takeIf { it.isNotBlank() }
+        }?.let { explicit ->
+            if (explicit !in inputNames) {
+                throw TtsException(context.getString(R.string.vits_tts_error_input_not_found, explicit))
+            }
+            return explicit
+        }
+        return candidates.firstOrNull { it in inputNames }
+    }
+
     private fun tensorInfo(activeSession: OrtSession, name: String): TensorInfo {
         return activeSession.inputInfo[name]?.info as? TensorInfo
-            ?: throw TtsException(context.getString(R.string.onnx_tts_error_tensor_info_missing, name))
+            ?: throw TtsException(context.getString(R.string.vits_tts_error_tensor_info_missing, name))
     }
 
     private fun createIntegerTensor(
@@ -766,14 +986,14 @@ class OnnxVoiceProvider(
                 val intValues = IntArray(values.size) { index ->
                     val value = values[index]
                     if (value < Int.MIN_VALUE || value > Int.MAX_VALUE) {
-                        throw TtsException(context.getString(R.string.onnx_tts_error_integer_out_of_range, name))
+                        throw TtsException(context.getString(R.string.vits_tts_error_integer_out_of_range, name))
                     }
                     value.toInt()
                 }
                 OnnxTensor.createTensor(env, IntBuffer.wrap(intValues), shape)
             }
             else -> throw TtsException(
-                context.getString(R.string.onnx_tts_error_unsupported_input_type, name, info.type.name)
+                context.getString(R.string.vits_tts_error_unsupported_input_type, name, info.type.name)
             )
         }
     }
@@ -791,7 +1011,7 @@ class OnnxVoiceProvider(
                 OnnxTensor.createTensor(env, DoubleBuffer.wrap(doubleValues), shape)
             }
             else -> throw TtsException(
-                context.getString(R.string.onnx_tts_error_unsupported_input_type, name, info.type.name)
+                context.getString(R.string.vits_tts_error_unsupported_input_type, name, info.type.name)
             )
         }
     }
@@ -800,7 +1020,7 @@ class OnnxVoiceProvider(
         val shape = info.shape ?: return longArrayOf(valueCount.toLong())
         if (shape.isEmpty()) {
             if (valueCount != 1) {
-                throw TtsException(context.getString(R.string.onnx_tts_error_shape_unsupported, inputName))
+                throw TtsException(context.getString(R.string.vits_tts_error_shape_unsupported, inputName))
             }
             return longArrayOf()
         }
@@ -818,7 +1038,7 @@ class OnnxVoiceProvider(
 
         if (unknownIndices.isNotEmpty()) {
             if (knownProduct <= 0 || valueCount.toLong() % knownProduct != 0L) {
-                throw TtsException(context.getString(R.string.onnx_tts_error_shape_unsupported, inputName))
+                throw TtsException(context.getString(R.string.vits_tts_error_shape_unsupported, inputName))
             }
             unknownIndices.dropLast(1).forEach { index ->
                 normalized[index] = 1L
@@ -828,7 +1048,7 @@ class OnnxVoiceProvider(
 
         val product = normalized.fold(1L) { acc, dim -> acc * dim }
         if (product != valueCount.toLong()) {
-            throw TtsException(context.getString(R.string.onnx_tts_error_shape_unsupported, inputName))
+            throw TtsException(context.getString(R.string.vits_tts_error_shape_unsupported, inputName))
         }
         return normalized
     }
@@ -844,12 +1064,12 @@ class OnnxVoiceProvider(
         }
         flattenBytes(value).takeIf { it.isNotEmpty() }?.let { bytes ->
             if (bytes.size % 2 != 0) {
-                throw TtsException(context.getString(R.string.onnx_tts_error_output_unsupported))
+                throw TtsException(context.getString(R.string.vits_tts_error_output_unsupported))
             }
             val buffer = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN)
             return ShortArray(bytes.size / 2) { buffer.short }
         }
-        throw TtsException(context.getString(R.string.onnx_tts_error_output_unsupported))
+        throw TtsException(context.getString(R.string.vits_tts_error_output_unsupported))
     }
 
     private fun floatsToPcm16(samples: FloatArray): ShortArray {
@@ -996,7 +1216,7 @@ class OnnxVoiceProvider(
         return when (value) {
             is Number -> value.toLong()
             is String -> parseLong(value, label)
-            else -> throw TtsException(context.getString(R.string.onnx_tts_error_config_invalid_id, label))
+            else -> throw TtsException(context.getString(R.string.vits_tts_error_config_invalid_id, label))
         }
     }
 
@@ -1009,38 +1229,42 @@ class OnnxVoiceProvider(
 
     private fun parseLong(raw: String, label: String): Long {
         return raw.trim().toLongOrNull()
-            ?: throw TtsException(context.getString(R.string.onnx_tts_error_config_invalid_id, label))
+            ?: throw TtsException(context.getString(R.string.vits_tts_error_config_invalid_id, label))
     }
 
-    private fun optionalHeaderIds(key: String): List<Long>? {
-        val raw = config.headers[key]?.trim()?.takeIf { it.isNotBlank() } ?: return null
+    private fun optionalIds(key: String): List<Long>? {
+        val raw = config.options[key]?.trim()?.takeIf { it.isNotBlank() } ?: return null
         return parseIds(raw, key)
     }
 
-    private fun optionalHeaderLong(key: String): Long? {
-        val raw = config.headers[key]?.trim()?.takeIf { it.isNotBlank() } ?: return null
+    private fun optionalString(key: String): String {
+        return config.options[key]?.trim().orEmpty()
+    }
+
+    private fun optionalLong(key: String): Long? {
+        val raw = config.options[key]?.trim()?.takeIf { it.isNotBlank() } ?: return null
         return raw.toLongOrNull()
-            ?: throw TtsException(context.getString(R.string.onnx_tts_error_config_invalid_id, key))
+            ?: throw TtsException(context.getString(R.string.vits_tts_error_config_invalid_id, key))
     }
 
-    private fun optionalHeaderInt(key: String): Int? {
-        val raw = config.headers[key]?.trim()?.takeIf { it.isNotBlank() } ?: return null
+    private fun optionalInt(key: String): Int? {
+        val raw = config.options[key]?.trim()?.takeIf { it.isNotBlank() } ?: return null
         return raw.toIntOrNull()
-            ?: throw TtsException(context.getString(R.string.onnx_tts_error_config_invalid_int, key))
+            ?: throw TtsException(context.getString(R.string.vits_tts_error_config_invalid_int, key))
     }
 
-    private fun optionalHeaderFloat(key: String): Float? {
-        val raw = config.headers[key]?.trim()?.takeIf { it.isNotBlank() } ?: return null
+    private fun optionalFloat(key: String): Float? {
+        val raw = config.options[key]?.trim()?.takeIf { it.isNotBlank() } ?: return null
         return raw.toFloatOrNull()
-            ?: throw TtsException(context.getString(R.string.onnx_tts_error_config_invalid_float, key))
+            ?: throw TtsException(context.getString(R.string.vits_tts_error_config_invalid_float, key))
     }
 
-    private fun optionalHeaderBool(key: String): Boolean? {
-        val raw = config.headers[key]?.trim()?.takeIf { it.isNotBlank() } ?: return null
-        return when (raw.lowercase()) {
+    private fun optionalBool(key: String): Boolean? {
+        val raw = config.options[key]?.trim()?.takeIf { it.isNotBlank() } ?: return null
+        return when (raw.lowercase(Locale.ROOT)) {
             "true", "1", "yes", "y" -> true
             "false", "0", "no", "n" -> false
-            else -> throw TtsException(context.getString(R.string.onnx_tts_error_config_invalid_bool, key))
+            else -> throw TtsException(context.getString(R.string.vits_tts_error_config_invalid_bool, key))
         }
     }
 
@@ -1064,39 +1288,88 @@ class OnnxVoiceProvider(
         }
     }
 
-    private fun isCurrentPlayback(generation: Long): Boolean {
-        return synchronized(stateLock) { playbackGeneration == generation && currentAudioTrack != null }
+    private fun manifestPath(root: File, manifest: JSONObject?, key: String): File? {
+        val raw = manifest?.optString(key, "")?.trim()?.takeIf { it.isNotBlank() } ?: return null
+        return resolveRelativeFile(root, raw)
     }
 
-    private fun isPlaybackPaused(generation: Long): Boolean {
-        return synchronized(stateLock) { playbackGeneration == generation && paused }
+    private fun optionPath(root: File, key: String): File? {
+        val raw = optionalString(key).takeIf { it.isNotBlank() } ?: return null
+        return resolveRelativeFile(root, raw)
+    }
+
+    private fun resolveRelativeFile(root: File, raw: String): File {
+        val file = File(raw)
+        if (file.isAbsolute) {
+            throw TtsException(context.getString(R.string.vits_tts_error_package_path_unsafe, raw))
+        }
+
+        val canonicalRoot = root.canonicalFile
+        val resolved = File(root, raw).canonicalFile
+        if (!resolved.path.startsWith(canonicalRoot.path + File.separator)) {
+            throw TtsException(context.getString(R.string.vits_tts_error_package_path_unsafe, raw))
+        }
+        if (!resolved.isFile) {
+            throw TtsException(context.getString(R.string.vits_tts_error_package_file_not_found, raw))
+        }
+        return resolved
+    }
+
+    private fun singleCandidate(files: List<File>, missingRes: Int, ambiguousRes: Int): File {
+        if (files.isEmpty()) throw TtsException(context.getString(missingRes))
+        if (files.size > 1) throw TtsException(context.getString(ambiguousRes, files.joinToString { it.name }))
+        return files.single()
+    }
+
+    private fun optionalSingleCandidate(files: List<File>, ambiguousRes: Int): File? {
+        if (files.isEmpty()) return null
+        if (files.size > 1) throw TtsException(context.getString(ambiguousRes, files.joinToString { it.name }))
+        return files.single()
+    }
+
+    private fun isTtsConfigJson(file: File): Boolean {
+        val text = file.readText(Charsets.UTF_8)
+        return text.contains("\"phoneme_id_map\"") ||
+            text.contains("\"token_id_map\"") ||
+            text.contains("\"symbols\"")
     }
 
     private fun normalizeLocalPath(raw: String): String {
         return raw.trim().removePrefix("file://")
     }
 
-    private fun tokenizeSymbolsByMap(text: String, tokenMap: Map<String, List<Long>>): List<String> {
-        if (tokenMap.isEmpty()) return emptyList()
+    private fun tokenizeSymbolsByMap(text: String, tokenMap: Map<String, List<Long>>): LongArray {
         val sortedKeys = tokenMap.keys
             .filter { it.isNotEmpty() }
             .sortedByDescending { it.length }
-        val result = ArrayList<String>()
+        val result = ArrayList<Long>()
         var index = 0
         while (index < text.length) {
             val matched = sortedKeys.firstOrNull { key ->
                 text.regionMatches(index, key, 0, key.length, ignoreCase = false)
-            }
-            if (matched != null) {
-                result.add(matched)
-                index += matched.length
-            } else {
-                val codePoint = text.codePointAt(index)
-                result.add(String(Character.toChars(codePoint)))
-                index += Character.charCount(codePoint)
-            }
+            } ?: throw TtsException(
+                context.getString(
+                    R.string.vits_tts_error_unknown_token,
+                    printableSymbol(String(Character.toChars(text.codePointAt(index))))
+                )
+            )
+            result.addAll(tokenMap.getValue(matched))
+            index += matched.length
         }
-        return result
+        return result.toLongArray()
+    }
+
+    private fun sha256(raw: String): String {
+        val digest = MessageDigest.getInstance("SHA-256").digest(raw.toByteArray(Charsets.UTF_8))
+        return digest.joinToString("") { "%02x".format(it) }
+    }
+
+    private fun isCurrentPlayback(generation: Long): Boolean {
+        return synchronized(stateLock) { playbackGeneration == generation && currentAudioTrack != null }
+    }
+
+    private fun isPlaybackPaused(generation: Long): Boolean {
+        return synchronized(stateLock) { playbackGeneration == generation && paused }
     }
 
     private fun printableSymbol(symbol: String): String {

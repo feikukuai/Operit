@@ -922,56 +922,89 @@ internal fun buildExecutionRuntimeBridgeScript(): String {
                     );
                 }
 
-                function scheduleGlobalModuleInvocation(callback) {
-                    if (typeof callback !== 'function') {
-                        return;
-                    }
-                    // Let pending compose state-change microtasks flush before a bridged global call blocks.
-                    if (typeof setTimeout === 'function') {
-                        setTimeout(callback, 0);
-                        return;
-                    }
-                    Promise.resolve().then(callback);
+                function nextGlobalModuleBridgeCallbackId() {
+                    return (
+                        '__operit_global_bridge_' +
+                        Date.now() +
+                        '_' +
+                        Math.random().toString(36).slice(2, 10)
+                    );
+                }
+
+                function invokeGlobalToolPkgBridgeAsync(actionLabel, nativeInvoker) {
+                    return new Promise(function(resolve, reject) {
+                        var callbackId = nextGlobalModuleBridgeCallbackId();
+                        root[callbackId] = function(rawResponse) {
+                            delete root[callbackId];
+                            try {
+                                resolve(
+                                    materializeGlobalInvocationResult(
+                                        parseGlobalModuleBridgeResponse(rawResponse, actionLabel)
+                                    )
+                                );
+                            } catch (error) {
+                                reject(error);
+                            }
+                        };
+                        try {
+                            nativeInvoker(callbackId);
+                        } catch (error) {
+                            delete root[callbackId];
+                            reject(error);
+                        }
+                    });
                 }
 
                 function invokeGlobalToolPkgModuleFunctionAsync(modulePath, memberPath, argsArray) {
-                    return new Promise(function(resolve, reject) {
-                        scheduleGlobalModuleInvocation(function() {
-                            try {
-                                resolve(
-                                    materializeGlobalInvocationResult(
-                                        invokeGlobalToolPkgModuleFunction(
-                                            modulePath,
-                                            memberPath,
-                                            argsArray
-                                        )
-                                    )
-                                );
-                            } catch (error) {
-                                reject(error);
-                            }
-                        });
-                    });
+                    if (
+                        !packageTarget ||
+                        typeof NativeInterface === 'undefined' ||
+                        !NativeInterface ||
+                        typeof NativeInterface.invokeGlobalToolPkgModuleFunctionAsync !== 'function'
+                    ) {
+                        throw new Error('NativeInterface.invokeGlobalToolPkgModuleFunctionAsync is unavailable');
+                    }
+                    var normalizedModulePath = normalizePath(modulePath);
+                    var serializedMemberPath = JSON.stringify(Array.isArray(memberPath) ? memberPath : []);
+                    var serializedArgs = JSON.stringify(Array.isArray(argsArray) ? argsArray : []);
+                    return invokeGlobalToolPkgBridgeAsync(
+                        'invokeGlobalToolPkgModuleFunction(' + normalizedModulePath + ')',
+                        function(callbackId) {
+                            NativeInterface.invokeGlobalToolPkgModuleFunctionAsync(
+                                callbackId,
+                                packageTarget,
+                                normalizedModulePath,
+                                serializedMemberPath,
+                                serializedArgs
+                            );
+                        }
+                    );
                 }
 
                 function invokeGlobalToolPkgHandleFunctionAsync(handleId, memberPath, argsArray) {
-                    return new Promise(function(resolve, reject) {
-                        scheduleGlobalModuleInvocation(function() {
-                            try {
-                                resolve(
-                                    materializeGlobalInvocationResult(
-                                        invokeGlobalToolPkgHandleFunction(
-                                            handleId,
-                                            memberPath,
-                                            argsArray
-                                        )
-                                    )
-                                );
-                            } catch (error) {
-                                reject(error);
-                            }
-                        });
-                    });
+                    if (
+                        !packageTarget ||
+                        typeof NativeInterface === 'undefined' ||
+                        !NativeInterface ||
+                        typeof NativeInterface.invokeGlobalToolPkgHandleFunctionAsync !== 'function'
+                    ) {
+                        throw new Error('NativeInterface.invokeGlobalToolPkgHandleFunctionAsync is unavailable');
+                    }
+                    var normalizedHandleId = text(handleId).trim();
+                    var serializedMemberPath = JSON.stringify(Array.isArray(memberPath) ? memberPath : []);
+                    var serializedArgs = JSON.stringify(Array.isArray(argsArray) ? argsArray : []);
+                    return invokeGlobalToolPkgBridgeAsync(
+                        'invokeGlobalToolPkgHandleFunction(' + normalizedHandleId + ')',
+                        function(callbackId) {
+                            NativeInterface.invokeGlobalToolPkgHandleFunctionAsync(
+                                callbackId,
+                                packageTarget,
+                                normalizedHandleId,
+                                serializedMemberPath,
+                                serializedArgs
+                            );
+                        }
+                    );
                 }
 
                 function buildGlobalModuleValue(modulePath, memberPath, descriptor) {

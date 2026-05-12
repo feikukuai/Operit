@@ -7,6 +7,7 @@ export interface WorldBookI18n {
   toastRoleCardLoadFailedPrefix: string;
   toastToggleDone: string;
   toastDeletedPrefix: string;
+  toastSnippetInserted: string;
   toastNameRequired: string;
   toastContentRequired: string;
   toastUpdated: string;
@@ -23,6 +24,10 @@ export interface WorldBookI18n {
   tagScanDepth: (value: number) => string;
   tagInjectUser: string;
   tagInjectSystem: string;
+  tagInjectAssistant: string;
+  tagPositionPrepend: string;
+  tagPositionAppend: string;
+  tagPositionAtDepth: (value: number) => string;
   tagCharacterCard: (value: string) => string;
   tagPinned: string;
   tagRegex: string;
@@ -47,6 +52,8 @@ export interface WorldBookI18n {
   fieldKeywordsPlaceholder: string;
   fieldContent: string;
   fieldContentPlaceholder: string;
+  fieldContentTemplates: string;
+  fieldContentTemplatesHint: string;
   fieldCharacterCard: string;
   dropdownNoCharacterCard: string;
   dropdownBoundCard: string;
@@ -73,6 +80,16 @@ export interface WorldBookI18n {
   injectTargetTitle: string;
   injectTargetSystem: string;
   injectTargetUser: string;
+  injectTargetAssistant: string;
+  injectTargetHint: string;
+  injectPositionTitle: string;
+  injectPositionPrepend: string;
+  injectPositionAppend: string;
+  injectPositionAtDepth: string;
+  injectPositionHint: string;
+  fieldInsertionDepth: string;
+  fieldInsertionDepthPlaceholder: string;
+  insertionDepthHint: string;
   saveEditButton: string;
   createEntryButton: string;
   newEntryButton: string;
